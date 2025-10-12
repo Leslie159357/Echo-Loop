@@ -378,7 +378,7 @@ class PlayerProvider extends ChangeNotifier {
 
       // 使用异步for循环逐句播放
       for (int i = loopStartIdx; i < playList.length; i++) {
-        print('playList: ${playList.length}, startIndex: $startIndex, i: $i');
+        // print('playList: ${playList.length}, startIndex: $startIndex, i: $i');
         // 检查会话是否被取消
         if (sessionId != _playbackSessionId || _isDisposed) {
           _isMainPlaybackPlaying = false;
@@ -430,11 +430,11 @@ class PlayerProvider extends ChangeNotifier {
     if (sessionId != _playbackSessionId || _isDisposed) return;
 
     // 使用 setClip 限定播放范围
+    _clipStart = sentence.startTime;
     await _audioPlayer.setClip(
       start: sentence.startTime,
       end: sentence.endTime,
     );
-    _clipStart = sentence.startTime;
     // 立即通知 UI 更新，让进度条显示正确的位置
     notifyListeners();
 
@@ -641,6 +641,9 @@ class PlayerProvider extends ChangeNotifier {
         pos++;
 
       _currentBookmarkIndex = bookmarked[pos].index;
+      print(
+        'next bookmark Sentence: $_currentBookmarkIndex , sentence: ${bookmarkedSentences[pos]}',
+      );
     } else {
       if (_currentFullIndex == null)
         _currentFullIndex = 0;
@@ -658,8 +661,15 @@ class PlayerProvider extends ChangeNotifier {
         ? _currentBookmarkIndex
         : _currentFullIndex;
 
-    // 只 seek 到目标位置，不清除 clip（避免不必要的状态重置）
     if (index != null) {
+      // 清除 clip 限制，确保进度条显示绝对时间
+      if (_clipStart != Duration.zero) {
+        await _audioPlayer.setClip(start: null, end: null);
+        _clipStart = Duration.zero;
+        if (_itemPlaybackSentenceIndex != null) {
+          _itemPlaybackSentenceIndex = null;
+        }
+      }
       await _audioPlayer.seek(_sentences[index].startTime);
     }
 
@@ -678,6 +688,9 @@ class PlayerProvider extends ChangeNotifier {
       pos--;
 
       _currentBookmarkIndex = bookmarked[pos].index;
+      print(
+        'previous bookmark Sentence: $_currentBookmarkIndex, sentence: ${bookmarkedSentences[pos]}',
+      );
     } else {
       if (_currentFullIndex == null)
         _currentFullIndex = 0;
@@ -695,8 +708,15 @@ class PlayerProvider extends ChangeNotifier {
         ? _currentBookmarkIndex
         : _currentFullIndex;
 
-    // 只 seek 到目标位置，不清除 clip（避免不必要的状态重置）
     if (index != null) {
+      // 清除 clip 限制，确保进度条显示绝对时间
+      if (_clipStart != Duration.zero) {
+        await _audioPlayer.setClip(start: null, end: null);
+        _clipStart = Duration.zero;
+        if (_itemPlaybackSentenceIndex != null) {
+          _itemPlaybackSentenceIndex = null;
+        }
+      }
       await _audioPlayer.seek(_sentences[index].startTime);
     }
 

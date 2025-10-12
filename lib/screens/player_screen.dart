@@ -51,7 +51,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Consumer<PlayerProvider>(
@@ -392,6 +391,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         builder: (context, snapshot) {
           final position = snapshot.data ?? Duration.zero;
           final total = player.totalDuration ?? Duration.zero;
+          // print('position: $position, total: $total');
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -413,14 +413,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                     SubtitleParser.formatDuration(position),
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
-                  Text(
-                    () {
-                      final clampedPos = position > total ? total : position;
-                      final remaining = total - clampedPos;
-                      return '-${SubtitleParser.formatDuration(remaining)}';
-                    }(),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
+                  Text(() {
+                    final clampedPos = position > total ? total : position;
+                    final remaining = total - clampedPos;
+                    return '-${SubtitleParser.formatDuration(remaining)}';
+                  }(), style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 ],
               ),
             ],
