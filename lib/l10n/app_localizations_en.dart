@@ -246,4 +246,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copied => 'Copied to clipboard';
+
+  @override
+  String get hotkeyReplay => 'R: Replay';
+
+  @override
+  String get hotkeyPlayPause => 'Space: Play/Pause';
+
+  @override
+  String get hotkeyToggleTranscript => '↑: Show/Hide Transcript';
+
+  @override
+  String get hotkeyNavigation => '←/→: Previous/Next Sentence';
 }

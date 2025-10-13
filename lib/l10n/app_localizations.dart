@@ -571,6 +571,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied to clipboard'**
   String get copied;
+
+  /// No description provided for @hotkeyReplay.
+  ///
+  /// In en, this message translates to:
+  /// **'R: Replay'**
+  String get hotkeyReplay;
+
+  /// No description provided for @hotkeyPlayPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Space: Play/Pause'**
+  String get hotkeyPlayPause;
+
+  /// No description provided for @hotkeyToggleTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'↑: Show/Hide Transcript'**
+  String get hotkeyToggleTranscript;
+
+  /// No description provided for @hotkeyNavigation.
+  ///
+  /// In en, this message translates to:
+  /// **'←/→: Previous/Next Sentence'**
+  String get hotkeyNavigation;
 }
 
 class _AppLocalizationsDelegate

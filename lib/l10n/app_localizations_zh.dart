@@ -246,4 +246,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get copied => '已复制到剪贴板';
+
+  @override
+  String get hotkeyReplay => 'R：重播';
+
+  @override
+  String get hotkeyPlayPause => '空格：播放/暂停';
+
+  @override
+  String get hotkeyToggleTranscript => '↑：显示/隐藏字幕';
+
+  @override
+  String get hotkeyNavigation => '←/→：上一句/下一句';
 }

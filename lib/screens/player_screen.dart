@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -242,7 +244,10 @@ class _PlayerScreenState extends State<PlayerScreen>
         // 自动选择第一个收藏的句子
         if (bookmarkedSentences.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            player.selectBookmarkedSentence(bookmarkedSentences.first.index, autoPlay: false);
+            player.selectBookmarkedSentence(
+              bookmarkedSentences.first.index,
+              autoPlay: false,
+            );
           });
           return const Center(child: CircularProgressIndicator());
         }
@@ -359,13 +364,13 @@ class _PlayerScreenState extends State<PlayerScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
-        
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             border: Border(
               top: BorderSide(
-                color: Theme.of(context).dividerColor,
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
@@ -390,9 +395,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     return Padding(
       padding: EdgeInsets.fromLTRB(
         16,
-        isMobile ? 12 : 4,
+        isMobile ? 16 : 12,
         16,
-        isMobile ? 8 : 4,
+        isMobile ? 4 : 8,
       ),
       child: StreamBuilder<Duration>(
         stream: player.absolutePositionStream,
@@ -440,69 +445,154 @@ class _PlayerScreenState extends State<PlayerScreen>
     final l10n = AppLocalizations.of(context)!;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          // 显示当前模式
+          // 左侧：播放状态信息
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                player.settings.singleSentenceMode
-                    ? Icons.format_quote
-                    : Icons.article,
-                size: 14,
-                color: Colors.grey[600],
+              // 显示当前模式
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    player.settings.singleSentenceMode
+                        ? Icons.format_quote
+                        : Icons.article,
+                    size: 14,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    player.settings.singleSentenceMode
+                        ? l10n.singleSentenceMode
+                        : l10n.listMode,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                ],
               ),
-              const SizedBox(width: 3),
+              // 显示句子循环状态
+              if (player.settings.loopEnabled) ...[
+                const SizedBox(width: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.repeat_one, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 3),
+                    Text(
+                      'x${player.settings.loopCount}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ],
+              // 显示音频循环状态
+              if (player.settings.loopAudioEnabled) ...[
+                const SizedBox(width: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.repeat, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 3),
+                    Text(
+                      player.settings.loopAudio == 0
+                          ? '∞'
+                          : 'x${player.settings.loopAudio}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ],
+              // 显示播放速度
+              const SizedBox(width: 12),
               Text(
-                player.settings.singleSentenceMode
-                    ? l10n.singleSentenceMode
-                    : l10n.listMode,
+                '${player.settings.playbackSpeed}x',
                 style: TextStyle(fontSize: 11, color: Colors.grey[600]),
               ),
             ],
           ),
-          // 显示句子循环状态
-          if (player.settings.loopEnabled) ...[
-            const SizedBox(width: 12),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.repeat_one, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 3),
-                Text(
-                  'x${player.settings.loopCount}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          // 2 用 Spacer 把右侧整体推到最右
+          const Spacer(),
+          // 右侧：macOS 快捷键提示轮播
+          if (Platform.isMacOS)
+            SizedBox(
+              // 使用 Align 将子组件贴到 Row 的最右侧
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  child: _HotkeyTipsCarousel(l10n: l10n),
                 ),
-              ],
+              ),
             ),
-          ],
-          // 显示音频循环状态
-          if (player.settings.loopAudioEnabled) ...[
-            const SizedBox(width: 12),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.repeat, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 3),
-                Text(
-                  player.settings.loopAudio == 0
-                      ? '∞'
-                      : 'x${player.settings.loopAudio}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ],
-          // 显示播放速度
-          const SizedBox(width: 12),
-          Text(
-            '${player.settings.playbackSpeed}x',
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+// 快捷键提示轮播 Widget
+class _HotkeyTipsCarousel extends StatefulWidget {
+  final AppLocalizations l10n;
+
+  const _HotkeyTipsCarousel({required this.l10n});
+
+  @override
+  State<_HotkeyTipsCarousel> createState() => _HotkeyTipsCarouselState();
+}
+
+class _HotkeyTipsCarouselState extends State<_HotkeyTipsCarousel> {
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCarousel();
+  }
+
+  void _startCarousel() {
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % 4;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _getCurrentTip() {
+    switch (_currentIndex) {
+      case 0:
+        return widget.l10n.hotkeyReplay;
+      case 1:
+        return widget.l10n.hotkeyPlayPause;
+      case 2:
+        return widget.l10n.hotkeyToggleTranscript;
+      case 3:
+        return widget.l10n.hotkeyNavigation;
+      default:
+        return widget.l10n.hotkeyReplay;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Text(
+        _getCurrentTip(),
+        key: ValueKey<int>(_currentIndex),
+        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+        textAlign: TextAlign.right,
       ),
     );
   }

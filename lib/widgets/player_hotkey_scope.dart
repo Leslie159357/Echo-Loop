@@ -63,6 +63,11 @@ class PlayerHotkeyScope extends StatelessWidget {
           if (key == LogicalKeyboardKey.arrowDown) {
             return KeyEventResult.handled;
           }
+          // R 键：重播当前句子
+          if (key == LogicalKeyboardKey.keyR) {
+            if (player.hasSentences) player.replayCurrentSentence();
+            return KeyEventResult.handled;
+          }
         }
         return KeyEventResult.ignored;
       },

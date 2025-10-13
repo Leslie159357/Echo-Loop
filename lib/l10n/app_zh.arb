@@ -78,5 +78,9 @@
   "addBookmarkTip": "收藏",
   "listMode": "列表模式",
   "copy": "复制",
-  "copied": "已复制到剪贴板"
+  "copied": "已复制到剪贴板",
+  "hotkeyReplay": "R：重播",
+  "hotkeyPlayPause": "空格：播放/暂停",
+  "hotkeyToggleTranscript": "↑：显示/隐藏字幕",
+  "hotkeyNavigation": "←/→：上一句/下一句"
 }

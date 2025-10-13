@@ -85,5 +85,9 @@
   "addBookmarkTip": "Add bookmark",
   "listMode": "List Mode",
   "copy": "Copy",
-  "copied": "Copied to clipboard"
+  "copied": "Copied to clipboard",
+  "hotkeyReplay": "R: Replay",
+  "hotkeyPlayPause": "Space: Play/Pause",
+  "hotkeyToggleTranscript": "↑: Show/Hide Transcript",
+  "hotkeyNavigation": "←/→: Previous/Next Sentence"
 }
