@@ -217,7 +217,6 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
   String? _transcriptPath;
   String _audioName = '';
   bool _isLoading = false;
-  bool _isPicking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +229,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ElevatedButton.icon(
-              onPressed: _isLoading || _isPicking ? null : _pickAudioFile,
+              onPressed: _isLoading ? null : _pickAudioFile,
               icon: const Icon(Icons.audiotrack),
               label: const Text('Select Audio File'),
             ),
@@ -243,7 +242,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
             ],
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: _isLoading || _isPicking ? null : _pickTranscriptFile,
+              onPressed: _isLoading ? null : _pickTranscriptFile,
               icon: const Icon(Icons.subtitles),
               label: const Text('Select Transcript (Optional)'),
             ),
@@ -291,19 +290,26 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
   }
 
   Future<void> _pickAudioFile() async {
-    if (_isPicking) return;
-    setState(() {
-      _isPicking = true;
-    });
     try {
-      final initialDir = Platform.isMacOS
-          ? await _getDownloadsDirectory()
-          : null;
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: false,
-        initialDirectory: initialDir,
-      );
+      final FilePickerResult? result;
+      
+      if (Platform.isIOS) {
+        // iOS: 使用 custom 类型和明确的扩展名列表
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['mp3', 'm4a', 'aac', 'wav', 'flac'],
+        );
+      } else {
+        // macOS 等其他平台：保持原有逻辑
+        final initialDir = Platform.isMacOS
+            ? await _getDownloadsDirectory()
+            : null;
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.audio,
+          allowMultiple: false,
+          initialDirectory: initialDir,
+        );
+      }
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.single;
@@ -332,34 +338,37 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
           }
         }
       }
-    } on PlatformException catch (e) {
-      if (e.code != 'multiple_request') rethrow;
-    } finally {
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _isPicking = false;
-        });
-      } else {
-        _isPicking = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选择音频文件失败: $e')),
+        );
       }
     }
   }
 
   Future<void> _pickTranscriptFile() async {
-    if (_isPicking) return;
-    setState(() {
-      _isPicking = true;
-    });
     try {
-      final initialDir = Platform.isMacOS
-          ? await _getDownloadsDirectory()
-          : null;
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['srt', 'vtt'],
-        allowMultiple: false,
-        initialDirectory: initialDir,
-      );
+      final FilePickerResult? result;
+      
+      if (Platform.isIOS) {
+        // iOS: 不设置 initialDirectory
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['srt', 'vtt'],
+        );
+      } else {
+        // macOS 等其他平台：保持原有逻辑
+        final initialDir = Platform.isMacOS
+            ? await _getDownloadsDirectory()
+            : null;
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['srt', 'vtt'],
+          allowMultiple: false,
+          initialDirectory: initialDir,
+        );
+      }
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.single;
@@ -385,15 +394,11 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
           }
         }
       }
-    } on PlatformException catch (e) {
-      if (e.code != 'multiple_request') rethrow;
-    } finally {
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _isPicking = false;
-        });
-      } else {
-        _isPicking = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选择字幕文件失败: $e')),
+        );
       }
     }
   }
