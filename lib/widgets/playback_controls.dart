@@ -23,7 +23,7 @@ class PlaybackControls extends StatelessWidget {
 
   Widget _buildMobileLayout(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -46,9 +46,9 @@ class PlaybackControls extends StatelessWidget {
                 },
                 tooltip: 'Single Sentence Mode',
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildSpeedButton(context),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildToggleButton(
                 context,
                 icon: player.settings.showTranscript
@@ -64,7 +64,7 @@ class PlaybackControls extends StatelessWidget {
                 },
                 tooltip: 'Show Transcript',
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               _buildToggleButton(
                 context,
                 icon: Icons.repeat_one,
@@ -80,29 +80,32 @@ class PlaybackControls extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           // 第二行：播放控制按钮
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.skip_previous),
-                iconSize: 28,
-                onPressed: player.hasSentences
-                    ? () => player.previousSentence()
-                    : null,
-                tooltip: 'Previous Sentence',
-              ),
-              const SizedBox(width: 8),
-              _buildPlayPauseButton(context),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.skip_next),
-                iconSize: 28,
-                onPressed: player.hasSentences ? () => player.nextSentence() : null,
-                tooltip: 'Next Sentence',
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.skip_previous),
+                  iconSize: 32,
+                  onPressed: player.hasSentences
+                      ? () => player.previousSentence()
+                      : null,
+                  tooltip: 'Previous Sentence',
+                ),
+                const SizedBox(width: 12),
+                _buildPlayPauseButton(context),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.skip_next),
+                  iconSize: 32,
+                  onPressed: player.hasSentences ? () => player.nextSentence() : null,
+                  tooltip: 'Next Sentence',
+                ),
+              ],
+            ),
           ),
         ],
       ),

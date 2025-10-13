@@ -356,33 +356,44 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildControlPanel(BuildContext context, PlayerProvider player) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 1,
+              ),
+            ),
           ),
-        ],
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildProgressBar(player),
-            PlaybackControls(player: player),
-            _buildInfoBar(player),
-          ],
-        ),
-      ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildProgressBar(player, isMobile),
+                PlaybackControls(player: player),
+                // 移动端不显示底部信息栏
+                if (!isMobile) _buildInfoBar(player),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildProgressBar(PlayerProvider player) {
+  Widget _buildProgressBar(PlayerProvider player, bool isMobile) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        isMobile ? 12 : 4,
+        16,
+        isMobile ? 8 : 4,
+      ),
       child: StreamBuilder<Duration>(
         stream: player.absolutePositionStream,
         builder: (context, snapshot) {
@@ -402,7 +413,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 timeLabelTextStyle: const TextStyle(fontSize: 11),
                 timeLabelLocation: TimeLabelLocation.none,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

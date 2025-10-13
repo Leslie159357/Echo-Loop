@@ -158,31 +158,28 @@ class _MainScreenState extends State<MainScreen> {
           ),
           bottomNavigationBar: isWideScreen
               ? null
-              : SizedBox(
-                  height: 65,
-                  child: NavigationBar(
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: (index) {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
-                    },
-                    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                    destinations: [
-                      NavigationDestination(
-                        icon: const Icon(Icons.library_music, size: 22),
-                        label: l10n.library,
-                      ),
-                      NavigationDestination(
-                        icon: const Icon(Icons.play_circle, size: 22),
-                        label: l10n.player,
-                      ),
-                      NavigationDestination(
-                        icon: const Icon(Icons.account_circle, size: 22),
-                        label: l10n.account,
-                      ),
-                    ],
-                  ),
+              : NavigationBar(
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  destinations: [
+                    NavigationDestination(
+                      icon: const Icon(Icons.library_music, size: 24),
+                      label: l10n.library,
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.play_circle, size: 24),
+                      label: l10n.player,
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.account_circle, size: 24),
+                      label: l10n.account,
+                    ),
+                  ],
                 ),
         );
       },
