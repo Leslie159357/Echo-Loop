@@ -23,6 +23,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   PlayerProvider? _cachedPlayerProvider; // 缓存 Provider 引用
+  int _previousTabIndex = 0; // 记录上一次的标签索引
 
   @override
   void initState() {
@@ -33,10 +34,10 @@ class _PlayerScreenState extends State<PlayerScreen>
       await player.setPlaylistMode(PlaylistMode.full);
     });
     // Switch mode and pause playback when switching tabs (tap or swipe)
+    // 只在索引真正改变时触发，确保点击和滑动都能正确切换模式
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging ||
-          (_tabController.animation?.value !=
-              _tabController.index.toDouble())) {
+      if (_tabController.index != _previousTabIndex) {
+        _previousTabIndex = _tabController.index;
         final player = Provider.of<PlayerProvider>(context, listen: false);
         // setPlaylistMode will handle pause automatically
         player.setPlaylistMode(
@@ -62,7 +63,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _cachedPlayerProvider!.pause();
       _cachedPlayerProvider!.saveCurrentPlaybackState();
     }
-    
+
     _tabController.dispose();
     super.dispose();
   }
