@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -116,7 +117,9 @@ class _SentenceListViewState extends State<SentenceListView> {
           itemBuilder: (context, idx) {
             final sentence = widget.sentences[idx];
             final isCurrent = widget.currentIndex == sentence.index;
-            final isBookmarked = widget.bookmarkedIndices.contains(sentence.index);
+            final isBookmarked = widget.bookmarkedIndices.contains(
+              sentence.index,
+            );
 
             if (isCurrent && !_itemKeys.containsKey(sentence.index)) {
               _itemKeys[sentence.index] = GlobalKey();
@@ -160,7 +163,7 @@ class _SentenceTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final RenderBox? overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
-    
+
     final result = await showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -196,6 +199,16 @@ class _SentenceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 移动端优化：减小编号和按钮尺寸，增加文字区域宽度
+    final isMobile = Platform.isIOS || Platform.isAndroid;
+    final numberBoxSize = isMobile ? 20.0 : 28.0;
+    final numberFontSize = isMobile ? 10.0 : 11.0;
+    final numberSpacing = isMobile ? 4.0 : 10.0;
+    final iconSize = isMobile ? 16.0 : 22.0;
+    final iconButtonSize = isMobile ? 24.0 : 36.0; // 进一步减小移动端按钮
+    final iconButtonPadding = isMobile ? 4.0 : 8.0; // 减小移动端 padding
+    final rightSpacing = isMobile ? 2.0 : 4.0;
+
     return Card(
       elevation: isCurrent ? 2 : 1,
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -218,20 +231,24 @@ class _SentenceTile extends StatelessWidget {
         onSecondaryTapDown: (details) {
           _showContextMenu(context, details.globalPosition);
         },
-        onLongPressStart: (details) {
-          _showContextMenu(context, details.globalPosition);
-        },
+        // Desktop端禁用长按，避免干扰正常使用
+        onLongPressStart: isMobile
+            ? (details) => _showContextMenu(context, details.globalPosition)
+            : null,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            // 移动端右侧减小padding以补偿IconButton的内部空白，实现视觉对称
+            padding: isMobile
+                ? const EdgeInsets.only(left: 10, right: 0, top: 10, bottom: 10)
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: numberBoxSize,
+                  height: numberBoxSize,
                   decoration: BoxDecoration(
                     color: isCurrent
                         ? Theme.of(context).colorScheme.primary
@@ -242,7 +259,7 @@ class _SentenceTile extends StatelessWidget {
                     child: Text(
                       '${sentence.index + 1}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: numberFontSize,
                         fontWeight: FontWeight.bold,
                         color: isCurrent
                             ? Theme.of(context).colorScheme.onPrimary
@@ -251,7 +268,7 @@ class _SentenceTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: numberSpacing),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,6 +278,7 @@ class _SentenceTile extends StatelessWidget {
                           Text(
                             sentence.text,
                             style: const TextStyle(fontSize: 15, height: 1.4),
+                            textAlign: TextAlign.left,
                           ),
                           if (!showTranscript)
                             Positioned.fill(
@@ -284,25 +302,26 @@ class _SentenceTile extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         '${SubtitleParser.formatDuration(sentence.startTime)} - ${SubtitleParser.formatDuration(sentence.endTime)}',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
-                              fontSize: 11,
-                            ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontSize: 11,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
+                if (!isMobile) SizedBox(width: rightSpacing),
                 IconButton(
                   icon: Icon(
                     isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                     color: isBookmarked ? Colors.amber : Colors.grey,
                   ),
-                  iconSize: 22,
-                  padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  iconSize: iconSize,
+                  padding: EdgeInsets.all(iconButtonPadding),
+                  constraints: BoxConstraints(
+                    minWidth: iconButtonSize,
+                    minHeight: iconButtonSize,
+                  ),
                   onPressed: onBookmarkToggle,
                   tooltip: isBookmarked ? 'Remove bookmark' : 'Add bookmark',
                 ),
