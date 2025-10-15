@@ -285,29 +285,34 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       // Load bookmarks
+      Set<int> storedBookmarks = {};
       try {
-        _bookmarkedIndices = await StorageService.loadBookmarks(audioItem.id);
+        storedBookmarks = await StorageService.loadBookmarks(audioItem.id);
+        _bookmarkedIndices = Set.from(storedBookmarks);
       } catch (e) {
         print('Error loading bookmarks: $e');
         _bookmarkedIndices = {};
       }
 
-      //Auto-bookmark sentences wrapped in []
-      for (var sentence in _sentences) {
-        final text = sentence.text.trim();
-        if (text.startsWith('[') && text.endsWith(']')) {
-          _bookmarkedIndices.add(sentence.index);
+      // 首次加载时自动添加 [] 包裹的句子为书签
+      final isFirstLoad = storedBookmarks.isEmpty;
+      if (isFirstLoad) {
+        for (var sentence in _sentences) {
+          final text = sentence.text.trim();
+          if (text.startsWith('[') && text.endsWith(']')) {
+            _bookmarkedIndices.add(sentence.index);
+          }
+        }
+
+        // 保存首次加载的自动书签
+        if (_bookmarkedIndices.isNotEmpty) {
+          await StorageService.saveBookmarks(audioItem.id, _bookmarkedIndices);
         }
       }
 
       // Update sentence bookmark status
       for (var sentence in _sentences) {
         sentence.isBookmarked = _bookmarkedIndices.contains(sentence.index);
-      }
-
-      // Save auto-bookmarked sentences
-      if (_bookmarkedIndices.isNotEmpty) {
-        await StorageService.saveBookmarks(audioItem.id, _bookmarkedIndices);
       }
 
       // 恢复之前保存的播放状态，如果没有则初始化为第一个句子

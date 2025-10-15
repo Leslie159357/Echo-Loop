@@ -309,7 +309,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(16),
         child: GestureDetector(
           // 右键点击
           onSecondaryTapDown: (details) {
@@ -330,7 +330,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: Card(
             elevation: 4,
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,9 +362,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        SubtitleParser.formatDuration(
-                          currentSentence.startTime,
-                        ),
+                        '${SubtitleParser.formatDuration(currentSentence.startTime)} - ${SubtitleParser.formatDuration(currentSentence.endTime)}',
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                       IconButton(

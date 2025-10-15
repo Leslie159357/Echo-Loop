@@ -145,6 +145,7 @@ class _SentenceListViewState extends State<SentenceListView>
           itemPositionsListener: _itemPositionsListener,
           itemCount: widget.sentences.length,
           padding: const EdgeInsets.all(8),
+          physics: const ClampingScrollPhysics(),
           itemBuilder: (context, idx) {
             final sentence = widget.sentences[idx];
             final isCurrent = widget.currentIndex == sentence.index;
