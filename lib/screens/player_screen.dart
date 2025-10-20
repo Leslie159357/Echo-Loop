@@ -72,13 +72,14 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<PlayerProvider>(
       builder: (context, player, child) {
         return PlayerHotkeyScope(
           player: player,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(player.currentAudioItem?.name ?? 'Player'),
+              title: Text(player.currentAudioItem?.name ?? l10n.player),
               actions: [
                 IconButton(
                   icon: Icon(
@@ -89,18 +90,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                   onPressed: () =>
                       player.setAutoScroll(!player.autoScrollEnabled),
                   tooltip: player.autoScrollEnabled
-                      ? 'Disable auto-scroll'
-                      : 'Enable auto-scroll',
+                      ? l10n.disableAutoScroll
+                      : l10n.enableAutoScroll,
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings),
                   onPressed: () => _showSettingsDialog(context, player),
-                  tooltip: 'Settings',
+                  tooltip: l10n.settings,
                 ),
               ],
             ),
             body: !player.hasAudio
-                ? const Center(child: Text('No audio loaded'))
+                ? Center(child: Text(l10n.noAudioLoaded))
                 : _buildLayout(context, player),
           ),
         );

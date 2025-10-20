@@ -258,4 +258,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hotkeyNavigation => '←/→: Previous/Next Sentence';
+
+  @override
+  String get noAudioLoaded => 'No audio loaded';
+
+  @override
+  String get enableAutoScroll => 'Enable auto-scroll';
+
+  @override
+  String get disableAutoScroll => 'Disable auto-scroll';
+
+  @override
+  String get audioFileNotFound =>
+      'Audio file not found. The file may have been deleted.';
+
+  @override
+  String get pickAudioFileFailed => 'Failed to select audio file';
+
+  @override
+  String get pickTranscriptFileFailed => 'Failed to select transcript file';
+
+  @override
+  String get fileExists => 'File Exists';
+
+  @override
+  String fileExistsMessage(String name) {
+    return 'An audio file named \"$name\" already exists. Please delete the original audio first.';
+  }
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String addedOn(String date) {
+    return 'Added: $date';
+  }
 }

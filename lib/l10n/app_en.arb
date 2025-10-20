@@ -89,5 +89,29 @@
   "hotkeyReplay": "R: Replay",
   "hotkeyPlayPause": "Space: Play/Pause",
   "hotkeyToggleTranscript": "↑: Show/Hide Transcript",
-  "hotkeyNavigation": "←/→: Previous/Next Sentence"
+  "hotkeyNavigation": "←/→: Previous/Next Sentence",
+  "noAudioLoaded": "No audio loaded",
+  "enableAutoScroll": "Enable auto-scroll",
+  "disableAutoScroll": "Disable auto-scroll",
+  "audioFileNotFound": "Audio file not found. The file may have been deleted.",
+  "pickAudioFileFailed": "Failed to select audio file",
+  "pickTranscriptFileFailed": "Failed to select transcript file",
+  "fileExists": "File Exists",
+  "fileExistsMessage": "An audio file named \"{name}\" already exists. Please delete the original audio first.",
+  "@fileExistsMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "ok": "OK",
+  "addedOn": "Added: {date}",
+  "@addedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -9,19 +9,21 @@ import 'package:path/path.dart' as path;
 import '../models/audio_item.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/player_provider.dart';
+import '../l10n/app_localizations.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Audio Library'),
+        title: Text(l10n.audioLibrary),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            tooltip: 'Add Audio',
+            tooltip: l10n.addAudio,
             onPressed: () => _showAddAudioDialog(context),
           ),
         ],
@@ -44,12 +46,12 @@ class LibraryScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No audio files yet',
+                    l10n.noAudioYet,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap + to add your first audio',
+                    l10n.tapToAdd,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -82,6 +84,7 @@ class _AudioListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final playerProvider = context.watch<PlayerProvider>();
     final isCurrentlyPlaying =
         playerProvider.currentAudioItem?.id == audioItem.id;
@@ -112,7 +115,7 @@ class _AudioListTile extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                'Transcript',
+                l10n.transcript,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: 12,
@@ -121,7 +124,7 @@ class _AudioListTile extends StatelessWidget {
               const SizedBox(width: 12),
             ],
             Text(
-              'Added: ${_formatDate(audioItem.addedDate)}',
+              l10n.addedOn(_formatDate(audioItem.addedDate)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -137,7 +140,7 @@ class _AudioListTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Playing',
+                  l10n.playing,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onPrimary,
                     fontSize: 12,
@@ -148,13 +151,13 @@ class _AudioListTile extends StatelessWidget {
             const SizedBox(width: 8),
             PopupMenuButton(
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Delete'),
+                      const Icon(Icons.delete, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Text(l10n.delete),
                     ],
                   ),
                 ),
@@ -173,12 +176,11 @@ class _AudioListTile extends StatelessWidget {
           final audioFile = File(fullAudioPath);
           if (!await audioFile.exists()) {
             if (!context.mounted) return;
+            final l10n = AppLocalizations.of(context)!;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Audio file not found. The file may have been deleted.',
-                ),
-                duration: Duration(seconds: 3),
+              SnackBar(
+                content: Text(l10n.audioFileNotFound),
+                duration: const Duration(seconds: 3),
               ),
             );
             // 从库中移除无效条目
@@ -198,15 +200,16 @@ class _AudioListTile extends StatelessWidget {
   }
 
   void _confirmDelete(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Audio'),
-        content: Text('Are you sure you want to delete "${audioItem.name}"?'),
+        title: Text(l10n.deleteAudio),
+        content: Text(l10n.deleteConfirm(audioItem.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -216,7 +219,7 @@ class _AudioListTile extends StatelessWidget {
               Navigator.pop(context);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -239,8 +242,9 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Add Audio'),
+      title: Text(l10n.addAudio),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -250,7 +254,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
             ElevatedButton.icon(
               onPressed: _isLoading ? null : _pickAudioFile,
               icon: const Icon(Icons.audiotrack),
-              label: const Text('Select Audio File'),
+              label: Text(l10n.selectAudioFile),
             ),
             if (_audioPath != null) ...[
               const SizedBox(height: 8),
@@ -263,7 +267,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
             ElevatedButton.icon(
               onPressed: _isLoading ? null : _pickTranscriptFile,
               icon: const Icon(Icons.subtitles),
-              label: const Text('Select Transcript (Optional)'),
+              label: Text(l10n.selectTranscript),
             ),
             if (_transcriptPath != null) ...[
               const SizedBox(height: 8),
@@ -292,7 +296,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _audioPath == null || _isLoading ? null : _addAudio,
@@ -302,7 +306,7 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Add'),
+              : Text(l10n.add),
         ),
       ],
     );
@@ -341,9 +345,10 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('选择音频文件失败: $e')));
+        ).showSnackBar(SnackBar(content: Text('${l10n.pickAudioFileFailed}: $e')));
       }
     }
   }
@@ -382,9 +387,10 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('选择字幕文件失败: $e')));
+        ).showSnackBar(SnackBar(content: Text('${l10n.pickTranscriptFileFailed}: $e')));
       }
     }
   }
@@ -450,15 +456,16 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
 
     if (existingItem.id.isNotEmpty) {
       // 已存在同名文件，提示用户先删除原音频
+      final l10n = AppLocalizations.of(context)!;
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('文件已存在'),
-          content: Text('已存在名为 "$_audioName" 的音频文件，请先删除原音频后再导入。'),
+          title: Text(l10n.fileExists),
+          content: Text(l10n.fileExistsMessage(_audioName)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('确定'),
+              child: Text(l10n.ok),
             ),
           ],
         ),

@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => '听力大师';
+  String get appTitle => 'Fluency';
 
   @override
   String get library => '音频库';
@@ -258,4 +258,38 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get hotkeyNavigation => '←/→：上一句/下一句';
+
+  @override
+  String get noAudioLoaded => '未加载音频';
+
+  @override
+  String get enableAutoScroll => '启用自动滚动';
+
+  @override
+  String get disableAutoScroll => '禁用自动滚动';
+
+  @override
+  String get audioFileNotFound => '音频文件未找到。文件可能已被删除。';
+
+  @override
+  String get pickAudioFileFailed => '选择音频文件失败';
+
+  @override
+  String get pickTranscriptFileFailed => '选择字幕文件失败';
+
+  @override
+  String get fileExists => '文件已存在';
+
+  @override
+  String fileExistsMessage(String name) {
+    return '已存在名为「$name」的音频文件，请先删除原音频后再导入。';
+  }
+
+  @override
+  String get ok => '确定';
+
+  @override
+  String addedOn(String date) {
+    return '添加于：$date';
+  }
 }

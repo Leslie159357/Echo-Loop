@@ -1,6 +1,6 @@
 {
   "@@locale": "zh",
-  "appTitle": "听力大师",
+  "appTitle": "Fluency",
   "library": "音频库",
   "player": "播放器",
   "account": "账户",
@@ -82,5 +82,15 @@
   "hotkeyReplay": "R：重播",
   "hotkeyPlayPause": "空格：播放/暂停",
   "hotkeyToggleTranscript": "↑：显示/隐藏字幕",
-  "hotkeyNavigation": "←/→：上一句/下一句"
+  "hotkeyNavigation": "←/→：上一句/下一句",
+  "noAudioLoaded": "未加载音频",
+  "enableAutoScroll": "启用自动滚动",
+  "disableAutoScroll": "禁用自动滚动",
+  "audioFileNotFound": "音频文件未找到。文件可能已被删除。",
+  "pickAudioFileFailed": "选择音频文件失败",
+  "pickTranscriptFileFailed": "选择字幕文件失败",
+  "fileExists": "文件已存在",
+  "fileExistsMessage": "已存在名为「{name}」的音频文件，请先删除原音频后再导入。",
+  "ok": "确定",
+  "addedOn": "添加于：{date}"
 }

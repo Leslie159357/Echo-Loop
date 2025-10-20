@@ -595,6 +595,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'←/→: Previous/Next Sentence'**
   String get hotkeyNavigation;
+
+  /// No description provided for @noAudioLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'No audio loaded'**
+  String get noAudioLoaded;
+
+  /// No description provided for @enableAutoScroll.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable auto-scroll'**
+  String get enableAutoScroll;
+
+  /// No description provided for @disableAutoScroll.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable auto-scroll'**
+  String get disableAutoScroll;
+
+  /// No description provided for @audioFileNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio file not found. The file may have been deleted.'**
+  String get audioFileNotFound;
+
+  /// No description provided for @pickAudioFileFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to select audio file'**
+  String get pickAudioFileFailed;
+
+  /// No description provided for @pickTranscriptFileFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to select transcript file'**
+  String get pickTranscriptFileFailed;
+
+  /// No description provided for @fileExists.
+  ///
+  /// In en, this message translates to:
+  /// **'File Exists'**
+  String get fileExists;
+
+  /// No description provided for @fileExistsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'An audio file named \"{name}\" already exists. Please delete the original audio first.'**
+  String fileExistsMessage(String name);
+
+  /// No description provided for @ok.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get ok;
+
+  /// No description provided for @addedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Added: {date}'**
+  String addedOn(String date);
 }
 
 class _AppLocalizationsDelegate
