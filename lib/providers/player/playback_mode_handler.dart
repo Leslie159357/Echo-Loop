@@ -72,6 +72,7 @@ class PlaybackModeHandler {
     List<Sentence> playList,
     int startIndex,
   ) async {
+    state.incrementPlaybackSessionId();
     final sessionId = state.playbackSessionId;
 
     if (playList.isEmpty) return;

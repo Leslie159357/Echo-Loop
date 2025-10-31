@@ -353,6 +353,11 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> selectFullSentence(int index, {bool autoPlay = true}) async {
     if (index < 0 || index >= _state.sentences.length) return;
 
+    final shouldResume = autoPlay && _audioPlayer.playing;
+    if (shouldResume) {
+      await pause();
+    }
+
     _state.setCurrentFullIndex(index);
     _state.setLastPlayedFullIndex(index);
 
@@ -373,6 +378,11 @@ class PlayerProvider extends ChangeNotifier {
     bool autoPlay = true,
   }) async {
     if (index < 0 || index >= _state.sentences.length) return;
+
+    final shouldResume = autoPlay && _audioPlayer.playing;
+    if (shouldResume) {
+      await pause();
+    }
 
     _state.setCurrentBookmarkIndex(index);
     _state.setLastPlayedBookmarkIndex(index);
