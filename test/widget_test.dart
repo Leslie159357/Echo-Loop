@@ -1,18 +1,17 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+/// App 冒烟测试
+///
+/// 验证 App 能正常启动并显示首页。
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:fluency/main.dart';
 
+import 'helpers/test_app.dart';
+
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
-    // Create mock PackageInfo for testing
     final packageInfo = PackageInfo(
       appName: 'Fluency',
       packageName: 'top.valuespot.fluency',
@@ -20,10 +19,13 @@ void main() {
       buildNumber: '1',
     );
 
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(FluencyApp(packageInfo: packageInfo));
+    // 使用 createTestScreen 包装，提供 ProviderScope 和必要的 mock
+    await tester.pumpWidget(
+      createTestScreen(FluencyApp(packageInfo: packageInfo)),
+    );
+    await tester.pumpAndSettle();
 
-    // Verify that the app loads
+    // 验证 App 正常加载
     expect(find.text('Audio Library'), findsOneWidget);
   });
 }
