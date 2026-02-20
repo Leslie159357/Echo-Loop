@@ -4,45 +4,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:universal_io/io.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import '../l10n/app_localizations.dart';
-import '../providers/player_provider.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
+import '../providers/audio_engine/audio_engine_provider.dart';
 import '../services/subtitle_parser.dart';
 import '../widgets/playback_controls.dart';
 import '../widgets/sentence_list_view.dart';
 import '../widgets/settings_dialog.dart';
 import '../widgets/player_hotkey_scope.dart';
 
-class PlayerScreen extends StatefulWidget {
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
   @override
-  State<PlayerScreen> createState() => _PlayerScreenState();
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen>
+class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  PlayerProvider? _cachedPlayerProvider; // 缓存 Provider 引用
-  int _previousTabIndex = 0; // 记录上一次的标签索引
+  int _previousTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final player = Provider.of<PlayerProvider>(context, listen: false);
-      await player.setPlaylistMode(PlaylistMode.full);
+      await ref
+          .read(listeningPracticeProvider.notifier)
+          .setPlaylistMode(PlaylistMode.full);
     });
-    // Switch mode and pause playback when switching tabs (tap or swipe)
-    // 只在索引真正改变时触发，确保点击和滑动都能正确切换模式
     _tabController.addListener(() {
       if (_tabController.index != _previousTabIndex) {
         _previousTabIndex = _tabController.index;
-        final player = Provider.of<PlayerProvider>(context, listen: false);
-        // setPlaylistMode will handle pause automatically
-        player.setPlaylistMode(
+        ref.read(listeningPracticeProvider.notifier).setPlaylistMode(
           _tabController.index == 0
               ? PlaylistMode.full
               : PlaylistMode.bookmarks,
@@ -52,20 +49,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // 缓存 Provider 引用，以便在 dispose 中安全使用
-    _cachedPlayerProvider = Provider.of<PlayerProvider>(context, listen: false);
-  }
-
-  @override
   void dispose() {
-    // 使用缓存的 Provider 引用，避免在 dispose 中访问 context
-    if (_cachedPlayerProvider != null) {
-      _cachedPlayerProvider!.pause();
-      _cachedPlayerProvider!.saveCurrentPlaybackState();
-    }
-
+    // Save state and pause on dispose
+    ref.read(listeningPracticeProvider.notifier).pause();
+    ref.read(listeningPracticeProvider.notifier).saveCurrentPlaybackState();
     _tabController.dispose();
     super.dispose();
   }
@@ -73,56 +60,54 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Consumer<PlayerProvider>(
-      builder: (context, player, child) {
-        return PlayerHotkeyScope(
-          player: player,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(player.currentAudioItem?.name ?? l10n.player),
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    player.autoScrollEnabled
-                        ? Icons.center_focus_strong
-                        : Icons.center_focus_weak,
-                  ),
-                  onPressed: () =>
-                      player.setAutoScroll(!player.autoScrollEnabled),
-                  tooltip: player.autoScrollEnabled
-                      ? l10n.disableAutoScroll
-                      : l10n.enableAutoScroll,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () => _showSettingsDialog(context, player),
-                  tooltip: l10n.settings,
-                ),
-              ],
+    final playerState = ref.watch(listeningPracticeProvider);
+    final controller = ref.read(listeningPracticeProvider.notifier);
+
+    return PlayerHotkeyScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(playerState.currentAudioItem?.name ?? l10n.player),
+          actions: [
+            IconButton(
+              icon: Icon(
+                playerState.autoScrollEnabled
+                    ? Icons.center_focus_strong
+                    : Icons.center_focus_weak,
+              ),
+              onPressed: () =>
+                  controller.setAutoScroll(!playerState.autoScrollEnabled),
+              tooltip: playerState.autoScrollEnabled
+                  ? l10n.disableAutoScroll
+                  : l10n.enableAutoScroll,
             ),
-            body: !player.hasAudio
-                ? Center(child: Text(l10n.noAudioLoaded))
-                : _buildLayout(context, player),
-          ),
-        );
-      },
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () => _showSettingsDialog(context),
+              tooltip: l10n.settings,
+            ),
+          ],
+        ),
+        body: !playerState.hasAudio
+            ? Center(child: Text(l10n.noAudioLoaded))
+            : _buildLayout(context, playerState),
+      ),
     );
   }
 
-  Widget _buildLayout(BuildContext context, PlayerProvider player) {
+  Widget _buildLayout(BuildContext context, ListeningPracticeState playerState) {
     return Column(
       children: [
-        Expanded(child: _buildTranscriptView(player)),
-        _buildControlPanel(context, player),
+        Expanded(child: _buildTranscriptView(playerState)),
+        _buildControlPanel(context, playerState),
       ],
     );
   }
 
-  // 字幕视图：使用标签页（全文/收藏）
-  Widget _buildTranscriptView(PlayerProvider player) {
+  Widget _buildTranscriptView(ListeningPracticeState playerState) {
     final l10n = AppLocalizations.of(context)!;
+    final controller = ref.read(listeningPracticeProvider.notifier);
 
-    if (!player.hasSentences) {
+    if (!playerState.hasSentences) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -140,7 +125,6 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     return Column(
       children: [
-        // 标签栏
         TabBar(
           controller: _tabController,
           labelPadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -151,7 +135,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                 children: [
                   const Icon(Icons.article, size: 18),
                   const SizedBox(width: 8),
-                  Text('${l10n.fullText} (${player.sentences.length})'),
+                  Text(
+                    '${l10n.fullText} (${playerState.sentences.length})',
+                  ),
                 ],
               ),
             ),
@@ -162,22 +148,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                   const Icon(Icons.bookmark, size: 18),
                   const SizedBox(width: 8),
                   Text(
-                    '${l10n.bookmarked} (${player.bookmarkedSentences.length})',
+                    '${l10n.bookmarked} (${playerState.bookmarkedSentences.length})',
                   ),
                 ],
               ),
             ),
           ],
         ),
-        // 标签页内容
         Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
-              // 第一个标签页：全文
-              _buildFullTextTab(player),
-              // 第二个标签页：收藏列表
-              _buildBookmarkedTab(player),
+              _buildFullTextTab(playerState, controller),
+              _buildBookmarkedTab(playerState, controller),
             ],
           ),
         ),
@@ -185,21 +168,26 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  // 全文标签页
-  Widget _buildFullTextTab(PlayerProvider player) {
+  Widget _buildFullTextTab(
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+  ) {
     final l10n = AppLocalizations.of(context)!;
 
-    // 单句模式：只展示当前播放的句子
-    if (player.settings.singleSentenceMode) {
-      if (player.currentFullIndex == null && player.sentences.isNotEmpty) {
-        // 自动选择第一个句子（不自动播放）
+    if (playerState.settings.singleSentenceMode) {
+      if (playerState.currentFullIndex == null &&
+          playerState.sentences.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          player.selectFullSentence(0, autoPlay: false);
+          controller.selectFullSentence(0, autoPlay: false);
         });
         return const Center(child: CircularProgressIndicator());
       }
-      if (player.currentFullIndex != null) {
-        return _buildSingleSentenceView(player, player.currentFullIndex!);
+      if (playerState.currentFullIndex != null) {
+        return _buildSingleSentenceView(
+          playerState,
+          controller,
+          playerState.currentFullIndex!,
+        );
       }
       return Center(
         child: Text(
@@ -209,28 +197,30 @@ class _PlayerScreenState extends State<PlayerScreen>
       );
     }
 
-    // 非单句模式：展示所有句子列表
-    if (player.currentFullIndex == null && player.sentences.isNotEmpty) {
+    if (playerState.currentFullIndex == null &&
+        playerState.sentences.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        player.selectFullSentence(0, autoPlay: false);
+        controller.selectFullSentence(0, autoPlay: false);
       });
     }
     return SentenceListView(
-      sentences: player.sentences,
-      currentIndex: player.currentFullIndex,
-      bookmarkedIndices: player.bookmarkedIndices,
-      showTranscript: player.settings.showTranscript,
-      autoScrollEnabled: player.autoScrollEnabled,
-      onSentenceTap: (index) => player.selectFullSentence(index),
-      onBookmarkToggle: (index) => player.toggleBookmark(index),
-      onUserScroll: () => player.setAutoScroll(false),
+      sentences: playerState.sentences,
+      currentIndex: playerState.currentFullIndex,
+      bookmarkedIndices: playerState.bookmarkedIndices,
+      showTranscript: playerState.settings.showTranscript,
+      autoScrollEnabled: playerState.autoScrollEnabled,
+      onSentenceTap: (index) => controller.selectFullSentence(index),
+      onBookmarkToggle: (index) => controller.toggleBookmark(index),
+      onUserScroll: () => controller.setAutoScroll(false),
     );
   }
 
-  // 收藏标签页
-  Widget _buildBookmarkedTab(PlayerProvider player) {
+  Widget _buildBookmarkedTab(
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+  ) {
     final l10n = AppLocalizations.of(context)!;
-    final bookmarkedSentences = player.bookmarkedSentences;
+    final bookmarkedSentences = playerState.bookmarkedSentences;
 
     if (bookmarkedSentences.isEmpty) {
       return Center(
@@ -253,14 +243,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       );
     }
 
-    // 单句模式：只展示当前播放的句子（如果是收藏的）
-    if (player.settings.singleSentenceMode) {
-      if (player.currentBookmarkIndex == null ||
-          !player.bookmarkedIndices.contains(player.currentBookmarkIndex)) {
-        // 自动选择第一个收藏的句子
+    if (playerState.settings.singleSentenceMode) {
+      if (playerState.currentBookmarkIndex == null ||
+          !playerState.bookmarkedIndices
+              .contains(playerState.currentBookmarkIndex)) {
         if (bookmarkedSentences.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            player.selectBookmarkedSentence(
+            controller.selectBookmarkedSentence(
               bookmarkedSentences.first.index,
               autoPlay: false,
             );
@@ -274,15 +263,19 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         );
       }
-      return _buildSingleSentenceView(player, player.currentBookmarkIndex!);
+      return _buildSingleSentenceView(
+        playerState,
+        controller,
+        playerState.currentBookmarkIndex!,
+      );
     }
 
-    // 非单句模式：展示所有收藏的句子列表
-    if ((player.currentBookmarkIndex == null ||
-            !player.bookmarkedIndices.contains(player.currentBookmarkIndex)) &&
+    if ((playerState.currentBookmarkIndex == null ||
+            !playerState.bookmarkedIndices
+                .contains(playerState.currentBookmarkIndex)) &&
         bookmarkedSentences.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        player.selectBookmarkedSentence(
+        controller.selectBookmarkedSentence(
           bookmarkedSentences.first.index,
           autoPlay: false,
         );
@@ -290,21 +283,24 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     return SentenceListView(
       sentences: bookmarkedSentences,
-      currentIndex: player.currentBookmarkIndex,
-      bookmarkedIndices: player.bookmarkedIndices,
-      showTranscript: player.settings.showTranscript,
-      autoScrollEnabled: player.autoScrollEnabled,
-      onSentenceTap: (index) => player.selectBookmarkedSentence(index),
-      onBookmarkToggle: (index) => player.toggleBookmark(index),
-      onUserScroll: () => player.setAutoScroll(false),
+      currentIndex: playerState.currentBookmarkIndex,
+      bookmarkedIndices: playerState.bookmarkedIndices,
+      showTranscript: playerState.settings.showTranscript,
+      autoScrollEnabled: playerState.autoScrollEnabled,
+      onSentenceTap: (index) => controller.selectBookmarkedSentence(index),
+      onBookmarkToggle: (index) => controller.toggleBookmark(index),
+      onUserScroll: () => controller.setAutoScroll(false),
     );
   }
 
-  // 单句视图
-  Widget _buildSingleSentenceView(PlayerProvider player, int index) {
+  Widget _buildSingleSentenceView(
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+    int index,
+  ) {
     final l10n = AppLocalizations.of(context)!;
-    final currentSentence = player.sentences[index];
-    final isBookmarked = player.bookmarkedIndices.contains(
+    final currentSentence = playerState.sentences[index];
+    final isBookmarked = playerState.bookmarkedIndices.contains(
       currentSentence.index,
     );
     final isMobile = !kIsWeb && (Platform.isIOS || Platform.isAndroid);
@@ -313,7 +309,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: GestureDetector(
-          // 右键点击
           onSecondaryTapDown: (details) {
             _showContextMenu(
               context,
@@ -321,7 +316,6 @@ class _PlayerScreenState extends State<PlayerScreen>
               currentSentence.text,
             );
           },
-          // 长按
           onLongPressStart: isMobile
               ? (details) => _showContextMenu(
                   context,
@@ -345,7 +339,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                             ?.copyWith(fontWeight: FontWeight.normal),
                         textAlign: TextAlign.left,
                       ),
-                      if (!player.settings.showTranscript)
+                      if (!playerState.settings.showTranscript)
                         Positioned.fill(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
@@ -384,7 +378,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                           color: isBookmarked ? Colors.amber : Colors.grey,
                         ),
                         onPressed: () =>
-                            player.toggleBookmark(currentSentence.index),
+                            controller.toggleBookmark(currentSentence.index),
                         tooltip: isBookmarked
                             ? l10n.removeBookmarkTip
                             : l10n.addBookmarkTip,
@@ -400,7 +394,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  // 显示上下文菜单
   void _showContextMenu(
     BuildContext context,
     Offset position,
@@ -443,15 +436,17 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  // 显示设置对话框
-  void _showSettingsDialog(BuildContext context, PlayerProvider player) {
+  void _showSettingsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => SettingsDialog(player: player),
+      builder: (context) => const SettingsDialog(),
     );
   }
 
-  Widget _buildControlPanel(BuildContext context, PlayerProvider player) {
+  Widget _buildControlPanel(
+    BuildContext context,
+    ListeningPracticeState playerState,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
@@ -470,10 +465,9 @@ class _PlayerScreenState extends State<PlayerScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildProgressBar(player, isMobile),
-                PlaybackControls(player: player),
-                // 移动端不显示底部信息栏
-                if (!isMobile) _buildInfoBar(player),
+                _buildProgressBar(playerState, isMobile),
+                const PlaybackControls(),
+                if (!isMobile) _buildInfoBar(playerState),
               ],
             ),
           ),
@@ -482,7 +476,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  Widget _buildProgressBar(PlayerProvider player, bool isMobile) {
+  Widget _buildProgressBar(ListeningPracticeState playerState, bool isMobile) {
+    final engineNotifier = ref.read(audioEngineProvider.notifier);
+    final controller = ref.read(listeningPracticeProvider.notifier);
+    final engine = ref.watch(audioEngineProvider);
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         16,
@@ -491,11 +489,10 @@ class _PlayerScreenState extends State<PlayerScreen>
         isMobile ? 4 : 8,
       ),
       child: StreamBuilder<Duration>(
-        stream: player.absolutePositionStream,
+        stream: engineNotifier.absolutePositionStream,
         builder: (context, snapshot) {
           final position = snapshot.data ?? Duration.zero;
-          final total = player.totalDuration ?? Duration.zero;
-          // print('position: $position, total: $total');
+          final total = engine.totalDuration ?? Duration.zero;
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -503,7 +500,7 @@ class _PlayerScreenState extends State<PlayerScreen>
               ProgressBar(
                 progress: position,
                 total: total,
-                onSeek: (duration) => player.seekAbsolute(duration),
+                onSeek: (duration) => controller.seekAbsolute(duration),
                 barHeight: 3,
                 thumbRadius: 5,
                 timeLabelTextStyle: const TextStyle(fontSize: 11),
@@ -521,7 +518,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                     final clampedPos = position > total ? total : position;
                     final remaining = total - clampedPos;
                     return '-${SubtitleParser.formatDuration(remaining)}';
-                  }(), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  }(),
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.grey[600])),
                 ],
               ),
             ],
@@ -531,8 +530,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  // 底部信息栏
-  Widget _buildInfoBar(PlayerProvider player) {
+  Widget _buildInfoBar(ListeningPracticeState playerState) {
     final l10n = AppLocalizations.of(context)!;
 
     return Container(
@@ -540,16 +538,14 @@ class _PlayerScreenState extends State<PlayerScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          // 左侧：播放状态信息
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 显示当前模式
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    player.settings.singleSentenceMode
+                    playerState.settings.singleSentenceMode
                         ? Icons.format_quote
                         : Icons.article,
                     size: 14,
@@ -557,15 +553,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ),
                   const SizedBox(width: 3),
                   Text(
-                    player.settings.singleSentenceMode
+                    playerState.settings.singleSentenceMode
                         ? l10n.singleSentenceMode
                         : l10n.listMode,
                     style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   ),
                 ],
               ),
-              // 显示句子循环状态
-              if (player.settings.loopEnabled) ...[
+              if (playerState.settings.loopEnabled) ...[
                 const SizedBox(width: 12),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -573,14 +568,13 @@ class _PlayerScreenState extends State<PlayerScreen>
                     Icon(Icons.repeat_one, size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 3),
                     Text(
-                      'x${player.settings.loopCount}',
+                      'x${playerState.settings.loopCount}',
                       style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                     ),
                   ],
                 ),
               ],
-              // 显示音频循环状态
-              if (player.settings.loopAudioEnabled) ...[
+              if (playerState.settings.loopAudioEnabled) ...[
                 const SizedBox(width: 12),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -588,28 +582,24 @@ class _PlayerScreenState extends State<PlayerScreen>
                     Icon(Icons.repeat, size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 3),
                     Text(
-                      player.settings.loopAudio == 0
+                      playerState.settings.loopAudio == 0
                           ? '∞'
-                          : 'x${player.settings.loopAudio}',
+                          : 'x${playerState.settings.loopAudio}',
                       style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                     ),
                   ],
                 ),
               ],
-              // 显示播放速度
               const SizedBox(width: 12),
               Text(
-                '${player.settings.playbackSpeed}x',
+                '${playerState.settings.playbackSpeed}x',
                 style: TextStyle(fontSize: 11, color: Colors.grey[600]),
               ),
             ],
           ),
-          // 2 用 Spacer 把右侧整体推到最右
           const Spacer(),
-          // 右侧：macOS 快捷键提示轮播
           if (!kIsWeb && Platform.isMacOS)
             SizedBox(
-              // 使用 Align 将子组件贴到 Row 的最右侧
               child: Align(
                 alignment: Alignment.centerRight,
                 child: ConstrainedBox(
@@ -624,7 +614,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 }
 
-// 快捷键提示轮播 Widget
 class _HotkeyTipsCarousel extends StatefulWidget {
   final AppLocalizations l10n;
 

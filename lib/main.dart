@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/audio_library_provider.dart';
 import 'providers/collection_provider.dart';
-import 'providers/player_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/library_screen.dart';
 import 'screens/collection_screen.dart';
@@ -17,10 +16,8 @@ import 'screens/settings_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化 PackageInfo (官方推荐在 runApp 之前调用)
   final packageInfo = await PackageInfo.fromPlatform();
 
-  // 初始化音频会话，支持后台播放 (仅限原生平台)
   if (!kIsWeb) {
     try {
       final session = await AudioSession.instance;
@@ -49,10 +46,10 @@ void main() async {
     print('Web platform: skipping audio session configuration');
   }
 
-  runApp(FluencyApp(packageInfo: packageInfo));
+  runApp(ProviderScope(child: FluencyApp(packageInfo: packageInfo)));
 }
 
-class FluencyApp extends StatelessWidget {
+class FluencyApp extends ConsumerWidget {
   final PackageInfo packageInfo;
 
   const FluencyApp({super.key, required this.packageInfo});
@@ -90,60 +87,50 @@ class FluencyApp extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        Provider<PackageInfo>.value(value: packageInfo),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => AudioLibraryProvider()),
-        ChangeNotifierProvider(create: (_) => CollectionProvider()),
-        ChangeNotifierProvider(create: (_) => PlayerProvider()),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+
+    return MaterialApp(
+      title: 'Fluency',
+      debugShowCheckedModeBanner: false,
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(),
+      themeMode: settings.themeMode,
+      locale: settings.locale,
+      supportedLocales: const [Locale('en'), Locale('zh')],
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
-      child: Consumer<SettingsProvider>(
-        builder: (context, settings, child) {
-          return MaterialApp(
-            title: 'Fluency',
-            debugShowCheckedModeBanner: false,
-            theme: _buildLightTheme(),
-            darkTheme: _buildDarkTheme(),
-            themeMode: settings.themeMode,
-            locale: settings.locale,
-            supportedLocales: const [Locale('en'), Locale('zh')],
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: const MainScreen(),
-            routes: {
-              '/player': (context) => const PlayerScreen(),
-              '/settings': (context) => const SettingsScreen(),
-            },
-          );
-        },
-      ),
+      home: MainScreen(packageInfo: packageInfo),
+      routes: {
+        '/player': (context) => const PlayerScreen(),
+        '/settings': (context) => const SettingsScreen(),
+      },
     );
   }
 }
 
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+class MainScreen extends ConsumerStatefulWidget {
+  final PackageInfo packageInfo;
+
+  const MainScreen({super.key, required this.packageInfo});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends ConsumerState<MainScreen> {
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Load library on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AudioLibraryProvider>().loadLibrary();
-      context.read<CollectionProvider>().loadCollections();
+      ref.read(audioLibraryProvider.notifier).loadLibrary();
+      ref.read(collectionListProvider.notifier).loadCollections();
     });
   }
 
@@ -246,7 +233,7 @@ class _MainScreenState extends State<MainScreen> {
       case 2:
         return const PlayerScreen();
       case 3:
-        return const SettingsScreen();
+        return SettingsScreen(packageInfo: widget.packageInfo);
       default:
         return const LibraryScreen();
     }

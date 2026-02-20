@@ -1,194 +1,211 @@
-import 'package:flutter/foundation.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/collection.dart';
 import '../services/storage_service.dart';
 
-/// 合集排序方式
+part 'collection_provider.g.dart';
+
 enum CollectionSortType {
-  nameAsc,    // 名称升序
-  nameDesc,   // 名称降序
-  dateAsc,    // 创建时间升序
-  dateDesc,   // 创建时间降序
-  custom,     // 自定义排序
+  nameAsc,
+  nameDesc,
+  dateAsc,
+  dateDesc,
+  custom,
 }
 
-/// 合集视图模式
 enum CollectionViewMode {
-  grid,   // 文件夹/网格视图
-  list,   // 列表视图
+  grid,
+  list,
 }
 
-class CollectionProvider extends ChangeNotifier {
-  List<Collection> _collections = [];
-  bool _isLoading = false;
-  CollectionViewMode _viewMode = CollectionViewMode.list;
-  CollectionSortType _sortType = CollectionSortType.dateDesc;
+class CollectionState {
+  final List<Collection> rawCollections;
+  final bool isLoading;
+  final CollectionViewMode viewMode;
+  final CollectionSortType sortType;
 
-  List<Collection> get collections => _getSortedCollections();
-  bool get isLoading => _isLoading;
-  bool get isEmpty => _collections.isEmpty;
-  CollectionViewMode get viewMode => _viewMode;
-  CollectionSortType get sortType => _sortType;
+  const CollectionState({
+    this.rawCollections = const [],
+    this.isLoading = false,
+    this.viewMode = CollectionViewMode.list,
+    this.sortType = CollectionSortType.dateDesc,
+  });
 
-  /// 获取排序后的合集列表
-  List<Collection> _getSortedCollections() {
-    final sorted = List<Collection>.from(_collections);
-    _sortList(sorted);
+  bool get isEmpty => rawCollections.isEmpty;
+
+  List<Collection> get collections {
+    final sorted = List<Collection>.from(rawCollections);
+    switch (sortType) {
+      case CollectionSortType.nameAsc:
+        sorted.sort((a, b) => a.name.compareTo(b.name));
+      case CollectionSortType.nameDesc:
+        sorted.sort((a, b) => b.name.compareTo(a.name));
+      case CollectionSortType.dateAsc:
+        sorted.sort((a, b) => a.createdDate.compareTo(b.createdDate));
+      case CollectionSortType.dateDesc:
+        sorted.sort((a, b) => b.createdDate.compareTo(a.createdDate));
+      case CollectionSortType.custom:
+        sorted.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    }
     return sorted;
   }
 
-  void _sortList(List<Collection> list) {
-    switch (_sortType) {
-      case CollectionSortType.nameAsc:
-        list.sort((a, b) => a.name.compareTo(b.name));
-      case CollectionSortType.nameDesc:
-        list.sort((a, b) => b.name.compareTo(a.name));
-      case CollectionSortType.dateAsc:
-        list.sort((a, b) => a.createdDate.compareTo(b.createdDate));
-      case CollectionSortType.dateDesc:
-        list.sort((a, b) => b.createdDate.compareTo(a.createdDate));
-      case CollectionSortType.custom:
-        list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    }
+  CollectionState copyWith({
+    List<Collection>? rawCollections,
+    bool? isLoading,
+    CollectionViewMode? viewMode,
+    CollectionSortType? sortType,
+  }) {
+    return CollectionState(
+      rawCollections: rawCollections ?? this.rawCollections,
+      isLoading: isLoading ?? this.isLoading,
+      viewMode: viewMode ?? this.viewMode,
+      sortType: sortType ?? this.sortType,
+    );
+  }
+}
+
+@Riverpod(keepAlive: true)
+class CollectionList extends _$CollectionList {
+  @override
+  CollectionState build() {
+    return const CollectionState();
   }
 
-  /// 加载合集列表
   Future<void> loadCollections() async {
-    _isLoading = true;
-    notifyListeners();
-
-    _collections = await StorageService.loadCollections();
-
-    _isLoading = false;
-    notifyListeners();
+    state = state.copyWith(isLoading: true);
+    final collections = await StorageService.loadCollections();
+    state = state.copyWith(rawCollections: collections, isLoading: false);
   }
 
-  /// 创建合集
   Future<void> createCollection(String name) async {
     final collection = Collection(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
       createdDate: DateTime.now(),
-      sortOrder: _collections.length,
+      sortOrder: state.rawCollections.length,
     );
-    _collections.add(collection);
+    state = state.copyWith(
+      rawCollections: [...state.rawCollections, collection],
+    );
     await _save();
-    notifyListeners();
   }
 
-  /// 删除合集
   Future<void> deleteCollection(String id) async {
-    _collections.removeWhere((c) => c.id == id);
+    state = state.copyWith(
+      rawCollections: state.rawCollections.where((c) => c.id != id).toList(),
+    );
     await _save();
-    notifyListeners();
   }
 
-  /// 编辑合集名称
   Future<void> renameCollection(String id, String newName) async {
-    final index = _collections.indexWhere((c) => c.id == id);
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == id);
     if (index != -1) {
-      _collections[index] = _collections[index].copyWith(name: newName);
+      collections[index] = collections[index].copyWith(name: newName);
+      state = state.copyWith(rawCollections: collections);
       await _save();
-      notifyListeners();
     }
   }
 
-  /// 切换星标状态
   Future<void> toggleStar(String id) async {
-    final index = _collections.indexWhere((c) => c.id == id);
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == id);
     if (index != -1) {
-      _collections[index] = _collections[index].copyWith(
-        isStarred: !_collections[index].isStarred,
+      collections[index] = collections[index].copyWith(
+        isStarred: !collections[index].isStarred,
       );
+      state = state.copyWith(rawCollections: collections);
       await _save();
-      notifyListeners();
     }
   }
 
-  /// 添加音频到合集
-  Future<void> addAudioToCollection(String collectionId, String audioId) async {
-    final index = _collections.indexWhere((c) => c.id == collectionId);
+  Future<void> addAudioToCollection(
+    String collectionId,
+    String audioId,
+  ) async {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == collectionId);
     if (index != -1) {
-      final ids = List<String>.from(_collections[index].audioItemIds);
+      final ids = List<String>.from(collections[index].audioItemIds);
       if (!ids.contains(audioId)) {
         ids.add(audioId);
-        _collections[index] = _collections[index].copyWith(audioItemIds: ids);
+        collections[index] =
+            collections[index].copyWith(audioItemIds: ids);
+        state = state.copyWith(rawCollections: collections);
         await _save();
-        notifyListeners();
       }
     }
   }
 
-  /// 从合集中移除音频
   Future<void> removeAudioFromCollection(
-      String collectionId, String audioId) async {
-    final index = _collections.indexWhere((c) => c.id == collectionId);
+    String collectionId,
+    String audioId,
+  ) async {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == collectionId);
     if (index != -1) {
-      final ids = List<String>.from(_collections[index].audioItemIds);
+      final ids = List<String>.from(collections[index].audioItemIds);
       ids.remove(audioId);
-      _collections[index] = _collections[index].copyWith(audioItemIds: ids);
+      collections[index] =
+          collections[index].copyWith(audioItemIds: ids);
+      state = state.copyWith(rawCollections: collections);
       await _save();
-      notifyListeners();
     }
   }
 
-  /// 获取指定合集
   Collection? getCollectionById(String id) {
     try {
-      return _collections.firstWhere((c) => c.id == id);
+      return state.rawCollections.firstWhere((c) => c.id == id);
     } catch (e) {
       return null;
     }
   }
 
-  /// 切换视图模式
   void toggleViewMode() {
-    _viewMode = _viewMode == CollectionViewMode.grid
-        ? CollectionViewMode.list
-        : CollectionViewMode.grid;
-    notifyListeners();
+    state = state.copyWith(
+      viewMode: state.viewMode == CollectionViewMode.grid
+          ? CollectionViewMode.list
+          : CollectionViewMode.grid,
+    );
   }
 
-  /// 设置排序方式
   void setSortType(CollectionSortType type) {
-    _sortType = type;
-    notifyListeners();
+    state = state.copyWith(sortType: type);
   }
 
-  /// 重新排序合集（拖拽排序用）
   Future<void> reorderCollections(int oldIndex, int newIndex) async {
-    // 使用当前排序后的列表做重排
-    final sorted = _getSortedCollections();
+    final sorted = state.collections;
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
     final item = sorted.removeAt(oldIndex);
     sorted.insert(newIndex, item);
 
-    // 更新 sortOrder 并同步回 _collections
+    final collections = [...state.rawCollections];
     for (int i = 0; i < sorted.length; i++) {
-      final idx = _collections.indexWhere((c) => c.id == sorted[i].id);
+      final idx = collections.indexWhere((c) => c.id == sorted[i].id);
       if (idx != -1) {
-        _collections[idx] = _collections[idx].copyWith(sortOrder: i);
+        collections[idx] = collections[idx].copyWith(sortOrder: i);
       }
     }
 
+    state = state.copyWith(rawCollections: collections);
     await _save();
-    notifyListeners();
   }
 
-  /// 直接应用自定义排序（接受有序的 ID 列表）
   Future<void> applyCustomOrder(List<String> orderedIds) async {
+    final collections = [...state.rawCollections];
     for (int i = 0; i < orderedIds.length; i++) {
-      final idx = _collections.indexWhere((c) => c.id == orderedIds[i]);
+      final idx = collections.indexWhere((c) => c.id == orderedIds[i]);
       if (idx != -1) {
-        _collections[idx] = _collections[idx].copyWith(sortOrder: i);
+        collections[idx] = collections[idx].copyWith(sortOrder: i);
       }
     }
+    state = state.copyWith(rawCollections: collections);
     await _save();
-    notifyListeners();
   }
 
   Future<void> _save() async {
-    await StorageService.saveCollections(_collections);
+    await StorageService.saveCollections(state.rawCollections);
   }
 }

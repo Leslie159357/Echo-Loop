@@ -10,7 +10,7 @@ class PlaybackSettings {
   final int loopAudio; // 音频循环次数：0=无穷，1-10=具体次数
   final bool autoPlayNextSentenceEnabled; // 句子循环完成后是否自动播放下一句
 
-  PlaybackSettings({
+  const PlaybackSettings({
     this.loopEnabled = false,
     this.loopCount = 3,
     this.pauseInterval = const Duration(seconds: 3),

@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/collection.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'collection_detail_screen.dart';
 
 /// 合集列表页面
-class CollectionScreen extends StatelessWidget {
+class CollectionScreen extends ConsumerWidget {
   const CollectionScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final collectionState = ref.watch(collectionListProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.collections),
@@ -19,13 +21,14 @@ class CollectionScreen extends StatelessWidget {
           // 排序按钮
           _SortButton(),
           // 视图切换按钮
-          Consumer<CollectionProvider>(
-            builder: (context, provider, _) {
-              final isGrid = provider.viewMode == CollectionViewMode.grid;
+          Builder(
+            builder: (context) {
+              final isGrid = collectionState.viewMode == CollectionViewMode.grid;
               return IconButton(
                 icon: Icon(isGrid ? Icons.view_list : Icons.grid_view),
                 tooltip: isGrid ? l10n.listView : l10n.gridView,
-                onPressed: () => provider.toggleViewMode(),
+                onPressed: () =>
+                    ref.read(collectionListProvider.notifier).toggleViewMode(),
               );
             },
           ),
@@ -37,52 +40,50 @@ class CollectionScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Consumer<CollectionProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: () {
+        if (collectionState.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (provider.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.collections_bookmark_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.secondary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.noCollectionsYet,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tapToCreateCollection,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            );
-          }
+        if (collectionState.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.collections_bookmark_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.noCollectionsYet,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.tapToCreateCollection,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          );
+        }
 
-          final collections = provider.collections;
-          final isCustomSort = provider.sortType == CollectionSortType.custom;
+        final collections = collectionState.collections;
+        final isCustomSort = collectionState.sortType == CollectionSortType.custom;
 
-          if (provider.viewMode == CollectionViewMode.grid) {
-            if (isCustomSort) {
-              return _buildReorderableGridView(context, collections);
-            }
-            return _buildGridView(context, collections);
-          } else if (isCustomSort) {
-            return _buildReorderableListView(context, collections);
-          } else {
-            return _buildListView(context, collections);
+        if (collectionState.viewMode == CollectionViewMode.grid) {
+          if (isCustomSort) {
+            return _buildReorderableGridView(context, collections);
           }
-        },
-      ),
+          return _buildGridView(context, collections);
+        } else if (isCustomSort) {
+          return _buildReorderableListView(context, ref, collections);
+        } else {
+          return _buildListView(context, collections);
+        }
+      }(),
     );
   }
 
@@ -116,13 +117,13 @@ class CollectionScreen extends StatelessWidget {
 
   /// 可拖拽排序列表视图（Custom Order 模式）
   Widget _buildReorderableListView(
-      BuildContext context, List<Collection> collections) {
+      BuildContext context, WidgetRef ref, List<Collection> collections) {
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(8),
       buildDefaultDragHandles: false,
       itemCount: collections.length,
       onReorder: (oldIndex, newIndex) {
-        context.read<CollectionProvider>().reorderCollections(oldIndex, newIndex);
+        ref.read(collectionListProvider.notifier).reorderCollections(oldIndex, newIndex);
       },
       itemBuilder: (context, index) {
         return _CollectionListTile(
@@ -150,18 +151,18 @@ class CollectionScreen extends StatelessWidget {
 }
 
 /// 排序按钮
-class _SortButton extends StatelessWidget {
+class _SortButton extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     return PopupMenuButton<CollectionSortType>(
       icon: const Icon(Icons.sort),
       tooltip: l10n.sortCollections,
       onSelected: (type) {
-        context.read<CollectionProvider>().setSortType(type);
+        ref.read(collectionListProvider.notifier).setSortType(type);
       },
       itemBuilder: (context) {
-        final current = context.read<CollectionProvider>().sortType;
+        final current = ref.read(collectionListProvider).sortType;
         return [
           _sortMenuItem(l10n.sortByNameAsc, CollectionSortType.nameAsc, current),
           _sortMenuItem(l10n.sortByNameDesc, CollectionSortType.nameDesc, current),
@@ -195,13 +196,13 @@ class _SortButton extends StatelessWidget {
 }
 
 /// 文件夹网格卡片
-class _CollectionGridTile extends StatelessWidget {
+class _CollectionGridTile extends ConsumerWidget {
   final Collection collection;
 
   const _CollectionGridTile({required this.collection});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -229,8 +230,8 @@ class _CollectionGridTile extends StatelessWidget {
                           ? l10n.unstarCollection
                           : l10n.starCollection,
                       onPressed: () {
-                        context
-                            .read<CollectionProvider>()
+                        ref
+                            .read(collectionListProvider.notifier)
                             .toggleStar(collection.id);
                       },
                     ),
@@ -266,9 +267,9 @@ class _CollectionGridTile extends StatelessWidget {
                       ],
                       onSelected: (value) {
                         if (value == 'rename') {
-                          _showRenameCollectionDialog(context, collection);
+                          _showRenameCollectionDialog(context, ref, collection);
                         } else if (value == 'delete') {
-                          _showDeleteConfirmDialog(context, collection);
+                          _showDeleteConfirmDialog(context, ref, collection);
                         }
                       },
                     ),
@@ -316,7 +317,7 @@ class _CollectionGridTile extends StatelessWidget {
 }
 
 /// 列表项
-class _CollectionListTile extends StatelessWidget {
+class _CollectionListTile extends ConsumerWidget {
   final Collection collection;
   final bool showDragHandle;
   final int reorderIndex;
@@ -329,7 +330,7 @@ class _CollectionListTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -377,7 +378,7 @@ class _CollectionListTile extends StatelessWidget {
                     : l10n.starCollection,
                 padding: EdgeInsets.zero,
                 onPressed: () {
-                  context.read<CollectionProvider>().toggleStar(collection.id);
+                  ref.read(collectionListProvider.notifier).toggleStar(collection.id);
                 },
               ),
             ),
@@ -411,9 +412,9 @@ class _CollectionListTile extends StatelessWidget {
                 ],
                 onSelected: (value) {
                   if (value == 'rename') {
-                    _showRenameDialog(context);
+                    _showRenameCollectionDialog(context, ref, collection);
                   } else if (value == 'delete') {
-                    _confirmDelete(context);
+                    _showDeleteConfirmDialog(context, ref, collection);
                   }
                 },
               ),
@@ -450,29 +451,21 @@ class _CollectionListTile extends StatelessWidget {
       ),
     );
   }
-
-  void _showRenameDialog(BuildContext context) {
-    _showRenameCollectionDialog(context, collection);
-  }
-
-  void _confirmDelete(BuildContext context) {
-    _showDeleteConfirmDialog(context, collection);
-  }
 }
 
 /// 可拖拽排序的网格视图（Custom Order + Grid 模式）
-class _ReorderableCollectionGrid extends StatefulWidget {
+class _ReorderableCollectionGrid extends ConsumerStatefulWidget {
   final List<Collection> collections;
 
   const _ReorderableCollectionGrid({required this.collections});
 
   @override
-  State<_ReorderableCollectionGrid> createState() =>
+  ConsumerState<_ReorderableCollectionGrid> createState() =>
       _ReorderableCollectionGridState();
 }
 
 class _ReorderableCollectionGridState
-    extends State<_ReorderableCollectionGrid> {
+    extends ConsumerState<_ReorderableCollectionGrid> {
   late List<Collection> _items;
   int? _dragIndex;
 
@@ -505,7 +498,7 @@ class _ReorderableCollectionGridState
   /// 提交最终排序
   void _commitOrder() {
     final orderedIds = _items.map((c) => c.id).toList();
-    context.read<CollectionProvider>().applyCustomOrder(orderedIds);
+    ref.read(collectionListProvider.notifier).applyCustomOrder(orderedIds);
     setState(() => _dragIndex = null);
   }
 
@@ -562,15 +555,16 @@ class _ReorderableCollectionGridState
 }
 
 /// 创建合集对话框
-class _CreateCollectionDialog extends StatefulWidget {
+class _CreateCollectionDialog extends ConsumerStatefulWidget {
   const _CreateCollectionDialog();
 
   @override
-  State<_CreateCollectionDialog> createState() =>
+  ConsumerState<_CreateCollectionDialog> createState() =>
       _CreateCollectionDialogState();
 }
 
-class _CreateCollectionDialogState extends State<_CreateCollectionDialog> {
+class _CreateCollectionDialogState
+    extends ConsumerState<_CreateCollectionDialog> {
   final _controller = TextEditingController();
   String? _error;
 
@@ -618,8 +612,8 @@ class _CreateCollectionDialogState extends State<_CreateCollectionDialog> {
     }
 
     // 检查是否同名
-    final provider = context.read<CollectionProvider>();
-    final exists = provider.collections.any(
+    final collectionState = ref.read(collectionListProvider);
+    final exists = collectionState.collections.any(
       (c) => c.name.toLowerCase() == name.toLowerCase(),
     );
     if (exists) {
@@ -627,7 +621,7 @@ class _CreateCollectionDialogState extends State<_CreateCollectionDialog> {
       return;
     }
 
-    provider.createCollection(name);
+    ref.read(collectionListProvider.notifier).createCollection(name);
     Navigator.pop(context);
   }
 }
@@ -635,7 +629,8 @@ class _CreateCollectionDialogState extends State<_CreateCollectionDialog> {
 // ===== 公共辅助方法 =====
 
 /// 重命名合集对话框
-void _showRenameCollectionDialog(BuildContext context, Collection collection) {
+void _showRenameCollectionDialog(
+    BuildContext context, WidgetRef ref, Collection collection) {
   final l10n = AppLocalizations.of(context)!;
   final controller = TextEditingController(text: collection.name);
 
@@ -652,7 +647,7 @@ void _showRenameCollectionDialog(BuildContext context, Collection collection) {
         onSubmitted: (_) {
           final name = controller.text.trim();
           if (name.isNotEmpty) {
-            context.read<CollectionProvider>().renameCollection(
+            ref.read(collectionListProvider.notifier).renameCollection(
                   collection.id,
                   name,
                 );
@@ -669,7 +664,7 @@ void _showRenameCollectionDialog(BuildContext context, Collection collection) {
           onPressed: () {
             final name = controller.text.trim();
             if (name.isNotEmpty) {
-              context.read<CollectionProvider>().renameCollection(
+              ref.read(collectionListProvider.notifier).renameCollection(
                     collection.id,
                     name,
                   );
@@ -684,7 +679,8 @@ void _showRenameCollectionDialog(BuildContext context, Collection collection) {
 }
 
 /// 删除确认对话框
-void _showDeleteConfirmDialog(BuildContext context, Collection collection) {
+void _showDeleteConfirmDialog(
+    BuildContext context, WidgetRef ref, Collection collection) {
   final l10n = AppLocalizations.of(context)!;
   showDialog(
     context: context,
@@ -698,7 +694,9 @@ void _showDeleteConfirmDialog(BuildContext context, Collection collection) {
         ),
         TextButton(
           onPressed: () {
-            context.read<CollectionProvider>().deleteCollection(collection.id);
+            ref
+                .read(collectionListProvider.notifier)
+                .deleteCollection(collection.id);
             Navigator.pop(ctx);
           },
           style: TextButton.styleFrom(foregroundColor: Colors.red),

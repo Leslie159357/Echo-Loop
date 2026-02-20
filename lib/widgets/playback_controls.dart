@@ -1,64 +1,78 @@
 import 'package:flutter/material.dart';
-import '../providers/player_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
+import '../providers/audio_engine/audio_engine_provider.dart';
 
-class PlaybackControls extends StatelessWidget {
-  final PlayerProvider player;
-
-  const PlaybackControls({super.key, required this.player});
+class PlaybackControls extends ConsumerWidget {
+  const PlaybackControls({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(listeningPracticeProvider);
+    final controller = ref.read(listeningPracticeProvider.notifier);
+    final engineNotifier = ref.read(audioEngineProvider.notifier);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
 
         if (isMobile) {
-          return _buildMobileLayout(context);
+          return _buildMobileLayout(
+            context, ref, playerState, controller, engineNotifier,
+          );
         } else {
-          return _buildDesktopLayout(context);
+          return _buildDesktopLayout(
+            context, ref, playerState, controller, engineNotifier,
+          );
         }
       },
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context) {
+  Widget _buildMobileLayout(
+    BuildContext context,
+    WidgetRef ref,
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+    AudioEngine engineNotifier,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 第一行：功能按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildToggleButton(
                 context,
-                icon: player.settings.singleSentenceMode
+                icon: playerState.settings.singleSentenceMode
                     ? Icons.format_quote
                     : Icons.article,
-                isActive: player.settings.singleSentenceMode,
+                isActive: playerState.settings.singleSentenceMode,
                 onPressed: () {
-                  player.updateSettings(
-                    player.settings.copyWith(
-                      singleSentenceMode: !player.settings.singleSentenceMode,
+                  controller.updateSettings(
+                    playerState.settings.copyWith(
+                      singleSentenceMode:
+                          !playerState.settings.singleSentenceMode,
                     ),
                   );
                 },
                 tooltip: 'Single Sentence Mode',
               ),
               const SizedBox(width: 4),
-              _buildSpeedButton(context),
+              _buildSpeedButton(context, playerState, controller),
               const SizedBox(width: 4),
               _buildToggleButton(
                 context,
-                icon: player.settings.showTranscript
+                icon: playerState.settings.showTranscript
                     ? Icons.visibility
                     : Icons.visibility_off,
-                isActive: player.settings.showTranscript,
+                isActive: playerState.settings.showTranscript,
                 onPressed: () {
-                  player.updateSettings(
-                    player.settings.copyWith(
-                      showTranscript: !player.settings.showTranscript,
+                  controller.updateSettings(
+                    playerState.settings.copyWith(
+                      showTranscript: !playerState.settings.showTranscript,
                     ),
                   );
                 },
@@ -68,11 +82,11 @@ class PlaybackControls extends StatelessWidget {
               _buildToggleButton(
                 context,
                 icon: Icons.repeat_one,
-                isActive: player.settings.loopEnabled,
+                isActive: playerState.settings.loopEnabled,
                 onPressed: () {
-                  player.updateSettings(
-                    player.settings.copyWith(
-                      loopEnabled: !player.settings.loopEnabled,
+                  controller.updateSettings(
+                    playerState.settings.copyWith(
+                      loopEnabled: !playerState.settings.loopEnabled,
                     ),
                   );
                 },
@@ -81,7 +95,6 @@ class PlaybackControls extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // 第二行：播放控制按钮
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
@@ -90,19 +103,21 @@ class PlaybackControls extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.skip_previous),
                   iconSize: 32,
-                  onPressed: player.hasSentences
-                      ? () => player.previousSentence()
+                  onPressed: playerState.hasSentences
+                      ? () => controller.previousSentence()
                       : null,
                   tooltip: 'Previous Sentence',
                 ),
                 const SizedBox(width: 12),
-                _buildPlayPauseButton(context),
+                _buildPlayPauseButton(
+                  context, controller, engineNotifier,
+                ),
                 const SizedBox(width: 12),
                 IconButton(
                   icon: const Icon(Icons.skip_next),
                   iconSize: 32,
-                  onPressed: player.hasSentences
-                      ? () => player.nextSentence()
+                  onPressed: playerState.hasSentences
+                      ? () => controller.nextSentence()
                       : null,
                   tooltip: 'Next Sentence',
                 ),
@@ -114,61 +129,67 @@ class PlaybackControls extends StatelessWidget {
     );
   }
 
-  Widget _buildDesktopLayout(BuildContext context) {
+  Widget _buildDesktopLayout(
+    BuildContext context,
+    WidgetRef ref,
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+    AudioEngine engineNotifier,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 左侧：单句模式和速度
           _buildToggleButton(
             context,
-            icon: player.settings.singleSentenceMode
+            icon: playerState.settings.singleSentenceMode
                 ? Icons.format_quote
                 : Icons.article,
-            isActive: player.settings.singleSentenceMode,
+            isActive: playerState.settings.singleSentenceMode,
             onPressed: () {
-              player.updateSettings(
-                player.settings.copyWith(
-                  singleSentenceMode: !player.settings.singleSentenceMode,
+              controller.updateSettings(
+                playerState.settings.copyWith(
+                  singleSentenceMode:
+                      !playerState.settings.singleSentenceMode,
                 ),
               );
             },
             tooltip: 'Single Sentence Mode',
           ),
           const SizedBox(width: 6),
-          _buildSpeedButton(context),
+          _buildSpeedButton(context, playerState, controller),
           const SizedBox(width: 16),
-          // 中间：播放控制
           IconButton(
             icon: const Icon(Icons.skip_previous),
             iconSize: 28,
-            onPressed: player.hasSentences
-                ? () => player.previousSentence()
+            onPressed: playerState.hasSentences
+                ? () => controller.previousSentence()
                 : null,
             tooltip: 'Previous Sentence',
           ),
           const SizedBox(width: 6),
-          _buildPlayPauseButton(context),
+          _buildPlayPauseButton(context, controller, engineNotifier),
           const SizedBox(width: 6),
           IconButton(
             icon: const Icon(Icons.skip_next),
             iconSize: 28,
-            onPressed: player.hasSentences ? () => player.nextSentence() : null,
+            onPressed: playerState.hasSentences
+                ? () => controller.nextSentence()
+                : null,
             tooltip: 'Next Sentence',
           ),
           const SizedBox(width: 16),
-          // 右侧：字幕和循环
           _buildToggleButton(
             context,
-            icon: player.settings.showTranscript
+            icon: playerState.settings.showTranscript
                 ? Icons.visibility
                 : Icons.visibility_off,
-            isActive: player.settings.showTranscript,
+            isActive: playerState.settings.showTranscript,
             onPressed: () {
-              player.updateSettings(
-                player.settings.copyWith(
-                  showTranscript: !player.settings.showTranscript,
+              controller.updateSettings(
+                playerState.settings.copyWith(
+                  showTranscript: !playerState.settings.showTranscript,
                 ),
               );
             },
@@ -178,11 +199,11 @@ class PlaybackControls extends StatelessWidget {
           _buildToggleButton(
             context,
             icon: Icons.repeat_one,
-            isActive: player.settings.loopEnabled,
+            isActive: playerState.settings.loopEnabled,
             onPressed: () {
-              player.updateSettings(
-                player.settings.copyWith(
-                  loopEnabled: !player.settings.loopEnabled,
+              controller.updateSettings(
+                playerState.settings.copyWith(
+                  loopEnabled: !playerState.settings.loopEnabled,
                 ),
               );
             },
@@ -193,8 +214,12 @@ class PlaybackControls extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayPauseButton(BuildContext context) {
-    print('isPlaying: ${player.isPlaying}');
+  Widget _buildPlayPauseButton(
+    BuildContext context,
+    ListeningPractice controller,
+    AudioEngine engineNotifier,
+  ) {
+    final isPlaying = engineNotifier.isPlaying;
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary,
@@ -202,18 +227,18 @@ class PlaybackControls extends StatelessWidget {
       ),
       child: IconButton(
         icon: Icon(
-          player.isPlaying ? Icons.pause : Icons.play_arrow,
+          isPlaying ? Icons.pause : Icons.play_arrow,
         ),
         iconSize: 36,
         color: Theme.of(context).colorScheme.onPrimary,
         onPressed: () {
-          if (player.isPlaying) {
-            player.pause();
+          if (isPlaying) {
+            controller.pause();
           } else {
-            player.play();
+            controller.play();
           }
         },
-        tooltip: player.isPlaying ? 'Pause' : 'Play',
+        tooltip: isPlaying ? 'Pause' : 'Play',
       ),
     );
   }
@@ -236,10 +261,14 @@ class PlaybackControls extends StatelessWidget {
     );
   }
 
-  Widget _buildSpeedButton(BuildContext context) {
+  Widget _buildSpeedButton(
+    BuildContext context,
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+  ) {
     return PopupMenuButton<double>(
       icon: Text(
-        '${player.settings.playbackSpeed}x',
+        '${playerState.settings.playbackSpeed}x',
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
@@ -255,7 +284,7 @@ class PlaybackControls extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('${speed}x'),
-                if (speed == player.settings.playbackSpeed)
+                if (speed == playerState.settings.playbackSpeed)
                   Icon(
                     Icons.check,
                     size: 20,
@@ -267,7 +296,9 @@ class PlaybackControls extends StatelessWidget {
         }).toList();
       },
       onSelected: (speed) {
-        player.updateSettings(player.settings.copyWith(playbackSpeed: speed));
+        controller.updateSettings(
+          playerState.settings.copyWith(playbackSpeed: speed),
+        );
       },
     );
   }

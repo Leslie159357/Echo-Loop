@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends ConsumerWidget {
+  final PackageInfo? packageInfo;
+
+  const SettingsScreen({super.key, this.packageInfo});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final settingsProvider = context.watch<SettingsProvider>();
-    final packageInfo = context.watch<PackageInfo>();
+    final settings = ref.watch(appSettingsProvider);
+    final settingsController = ref.read(appSettingsProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings)),
@@ -21,8 +23,8 @@ class SettingsScreen extends StatelessWidget {
             context,
             title: l10n.appearance,
             children: [
-              _buildThemeModeTile(context, l10n, settingsProvider),
-              _buildLanguageTile(context, l10n, settingsProvider),
+              _buildThemeModeTile(context, l10n, settings, settingsController),
+              _buildLanguageTile(context, l10n, settings, settingsController),
             ],
           ),
           const Divider(height: 32),
@@ -33,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: Text(l10n.version),
-                subtitle: Text(packageInfo.version),
+                subtitle: Text(packageInfo?.version ?? ''),
               ),
               ListTile(
                 leading: const Icon(Icons.description_outlined),
@@ -72,28 +74,30 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildThemeModeTile(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
   ) {
     return ListTile(
-      leading: Icon(_getThemeIcon(provider.themeMode)),
+      leading: Icon(_getThemeIcon(settings.themeMode)),
       title: Text(l10n.themeMode),
-      subtitle: Text(_getThemeModeName(l10n, provider.themeMode)),
+      subtitle: Text(_getThemeModeName(l10n, settings.themeMode)),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => _showThemeModeDialog(context, l10n, provider),
+      onTap: () => _showThemeModeDialog(context, l10n, settings, controller),
     );
   }
 
   Widget _buildLanguageTile(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
   ) {
     return ListTile(
       leading: const Icon(Icons.language),
       title: Text(l10n.language),
-      subtitle: Text(_getLanguageName(l10n, provider.locale)),
+      subtitle: Text(_getLanguageName(l10n, settings.locale)),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => _showLanguageDialog(context, l10n, provider),
+      onTap: () => _showLanguageDialog(context, l10n, settings, controller),
     );
   }
 
@@ -123,7 +127,8 @@ class SettingsScreen extends StatelessWidget {
   void _showThemeModeDialog(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
   ) {
     showDialog(
       context: context,
@@ -133,28 +138,16 @@ class SettingsScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildThemeOption(
-              context,
-              l10n,
-              provider,
-              ThemeMode.system,
-              Icons.brightness_auto,
-              l10n.themeModeSystem,
+              context, l10n, settings, controller,
+              ThemeMode.system, Icons.brightness_auto, l10n.themeModeSystem,
             ),
             _buildThemeOption(
-              context,
-              l10n,
-              provider,
-              ThemeMode.light,
-              Icons.light_mode,
-              l10n.themeModeLight,
+              context, l10n, settings, controller,
+              ThemeMode.light, Icons.light_mode, l10n.themeModeLight,
             ),
             _buildThemeOption(
-              context,
-              l10n,
-              provider,
-              ThemeMode.dark,
-              Icons.dark_mode,
-              l10n.themeModeDark,
+              context, l10n, settings, controller,
+              ThemeMode.dark, Icons.dark_mode, l10n.themeModeDark,
             ),
           ],
         ),
@@ -165,19 +158,20 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildThemeOption(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
     ThemeMode mode,
     IconData icon,
     String label,
   ) {
-    final isSelected = provider.themeMode == mode;
+    final isSelected = settings.themeMode == mode;
     return ListTile(
       leading: Radio<ThemeMode>(
         value: mode,
-        groupValue: provider.themeMode,
+        groupValue: settings.themeMode,
         onChanged: (value) {
           if (value != null) {
-            provider.setThemeMode(value);
+            controller.setThemeMode(value);
             Navigator.pop(context);
           }
         },
@@ -191,7 +185,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       selected: isSelected,
       onTap: () {
-        provider.setThemeMode(mode);
+        controller.setThemeMode(mode);
         Navigator.pop(context);
       },
     );
@@ -200,7 +194,8 @@ class SettingsScreen extends StatelessWidget {
   void _showLanguageDialog(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
   ) {
     showDialog(
       context: context,
@@ -210,18 +205,12 @@ class SettingsScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildLanguageOption(
-              context,
-              l10n,
-              provider,
-              const Locale('en'),
-              l10n.languageEnglish,
+              context, l10n, settings, controller,
+              const Locale('en'), l10n.languageEnglish,
             ),
             _buildLanguageOption(
-              context,
-              l10n,
-              provider,
-              const Locale('zh'),
-              l10n.languageChinese,
+              context, l10n, settings, controller,
+              const Locale('zh'), l10n.languageChinese,
             ),
           ],
         ),
@@ -232,18 +221,19 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildLanguageOption(
     BuildContext context,
     AppLocalizations l10n,
-    SettingsProvider provider,
+    AppSettingsState settings,
+    AppSettings controller,
     Locale locale,
     String label,
   ) {
-    final isSelected = provider.locale == locale;
+    final isSelected = settings.locale == locale;
     return ListTile(
       leading: Radio<Locale>(
         value: locale,
-        groupValue: provider.locale,
+        groupValue: settings.locale,
         onChanged: (value) {
           if (value != null) {
-            provider.setLocale(value);
+            controller.setLocale(value);
             Navigator.pop(context);
           }
         },
@@ -251,7 +241,7 @@ class SettingsScreen extends StatelessWidget {
       title: Text(label),
       selected: isSelected,
       onTap: () {
-        provider.setLocale(locale);
+        controller.setLocale(locale);
         Navigator.pop(context);
       },
     );

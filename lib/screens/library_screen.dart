@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:universal_io/io.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import '../models/audio_item.dart';
 import '../providers/audio_library_provider.dart';
-import '../providers/player_provider.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
 import '../l10n/app_localizations.dart';
 
-class LibraryScreen extends StatelessWidget {
+class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final libraryState = ref.watch(audioLibraryProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.audioLibrary),
@@ -28,47 +29,45 @@ class LibraryScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Consumer<AudioLibraryProvider>(
-        builder: (context, library, child) {
-          if (library.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: () {
+        if (libraryState.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (library.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.library_music_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.secondary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.noAudioYet,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tapToAdd,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: library.audioItems.length,
-            padding: const EdgeInsets.all(8),
-            itemBuilder: (context, index) {
-              final item = library.audioItems[index];
-              return _AudioListTile(audioItem: item);
-            },
+        if (libraryState.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.library_music_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.noAudioYet,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.tapToAdd,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
           );
-        },
-      ),
+        }
+
+        return ListView.builder(
+          itemCount: libraryState.audioItems.length,
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (context, index) {
+            final item = libraryState.audioItems[index];
+            return _AudioListTile(audioItem: item);
+          },
+        );
+      }(),
     );
   }
 
@@ -77,17 +76,18 @@ class LibraryScreen extends StatelessWidget {
   }
 }
 
-class _AudioListTile extends StatelessWidget {
+class _AudioListTile extends ConsumerWidget {
   final AudioItem audioItem;
 
   const _AudioListTile({required this.audioItem});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final playerProvider = context.watch<PlayerProvider>();
-    final isCurrentlyPlaying =
-        playerProvider.currentAudioItem?.id == audioItem.id;
+    final currentAudioItem = ref.watch(
+      listeningPracticeProvider.select((s) => s.currentAudioItem),
+    );
+    final isCurrentlyPlaying = currentAudioItem?.id == audioItem.id;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -164,7 +164,7 @@ class _AudioListTile extends StatelessWidget {
               ],
               onSelected: (value) {
                 if (value == 'delete') {
-                  _confirmDelete(context);
+                  _confirmDelete(context, ref);
                 }
               },
             ),
@@ -184,10 +184,10 @@ class _AudioListTile extends StatelessWidget {
               ),
             );
             // 从库中移除无效条目
-            context.read<AudioLibraryProvider>().removeAudioItem(audioItem.id);
+            ref.read(audioLibraryProvider.notifier).removeAudioItem(audioItem.id);
             return;
           }
-          await context.read<PlayerProvider>().loadAudio(audioItem);
+          await ref.read(listeningPracticeProvider.notifier).loadAudio(audioItem);
           if (!context.mounted) return;
           Navigator.pushNamed(context, '/player');
         },
@@ -199,7 +199,7 @@ class _AudioListTile extends StatelessWidget {
     return '${date.month}/${date.day}/${date.year}';
   }
 
-  void _confirmDelete(BuildContext context) {
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
@@ -213,7 +213,7 @@ class _AudioListTile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              context.read<AudioLibraryProvider>().removeAudioItem(
+              ref.read(audioLibraryProvider.notifier).removeAudioItem(
                 audioItem.id,
               );
               Navigator.pop(context);
@@ -227,14 +227,14 @@ class _AudioListTile extends StatelessWidget {
   }
 }
 
-class _AddAudioDialog extends StatefulWidget {
+class _AddAudioDialog extends ConsumerStatefulWidget {
   const _AddAudioDialog();
 
   @override
-  State<_AddAudioDialog> createState() => _AddAudioDialogState();
+  ConsumerState<_AddAudioDialog> createState() => _AddAudioDialogState();
 }
 
-class _AddAudioDialogState extends State<_AddAudioDialog> {
+class _AddAudioDialogState extends ConsumerState<_AddAudioDialog> {
   String? _audioPath;
   String? _transcriptPath;
   String _audioName = '';
@@ -449,8 +449,9 @@ class _AddAudioDialogState extends State<_AddAudioDialog> {
     if (_audioPath == null) return;
 
     // 检查是否已存在同名文件
-    final library = context.read<AudioLibraryProvider>();
-    final existingItem = library.audioItems.firstWhere(
+    final library = ref.read(audioLibraryProvider.notifier);
+    final libraryState = ref.read(audioLibraryProvider);
+    final existingItem = libraryState.audioItems.firstWhere(
       (item) => item.name == _audioName,
       orElse: () =>
           AudioItem(id: '', name: '', audioPath: '', addedDate: DateTime.now()),

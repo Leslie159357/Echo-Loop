@@ -1,62 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
-import '../providers/player_provider.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
 
-class SettingsDialog extends StatelessWidget {
-  final PlayerProvider player;
-
-  const SettingsDialog({super.key, required this.player});
+class SettingsDialog extends ConsumerWidget {
+  const SettingsDialog({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final playerState = ref.watch(listeningPracticeProvider);
+    final controller = ref.read(listeningPracticeProvider.notifier);
 
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-        child: ListenableBuilder(
-          listenable: player,
-          builder: (context, child) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 标题栏
-                AppBar(
-                  title: Text(l10n.settings),
-                  automaticallyImplyLeading: false,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: Text(l10n.settings),
+              automaticallyImplyLeading: false,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSentenceRepeatSettings(
+                      context, l10n, playerState, controller,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildAudioLoopSettings(
+                      context, l10n, playerState, controller,
                     ),
                   ],
                 ),
-                // 设置内容
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSentenceRepeatSettings(context, l10n),
-                        const SizedBox(height: 16),
-                        _buildAudioLoopSettings(context, l10n),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // 句子重复设置
   Widget _buildSentenceRepeatSettings(
     BuildContext context,
     AppLocalizations l10n,
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,10 +68,11 @@ class SettingsDialog extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Switch(
-              value: player.settings.autoPlayNextSentenceEnabled,
+              value: playerState.settings.autoPlayNextSentenceEnabled,
               onChanged: (value) {
-                player.updateSettings(
-                  player.settings.copyWith(autoPlayNextSentenceEnabled: value),
+                controller.updateSettings(
+                  playerState.settings
+                      .copyWith(autoPlayNextSentenceEnabled: value),
                 );
               },
             ),
@@ -87,16 +87,16 @@ class SettingsDialog extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Switch(
-              value: player.settings.loopEnabled,
+              value: playerState.settings.loopEnabled,
               onChanged: (value) {
-                player.updateSettings(
-                  player.settings.copyWith(loopEnabled: value),
+                controller.updateSettings(
+                  playerState.settings.copyWith(loopEnabled: value),
                 );
               },
             ),
           ],
         ),
-        if (player.settings.loopEnabled) ...[
+        if (playerState.settings.loopEnabled) ...[
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -105,7 +105,7 @@ class SettingsDialog extends StatelessWidget {
               SizedBox(
                 width: 140,
                 child: DropdownButtonFormField<int>(
-                  value: player.settings.loopCount,
+                  value: playerState.settings.loopCount,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(
@@ -124,8 +124,8 @@ class SettingsDialog extends StatelessWidget {
                   }).toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      player.updateSettings(
-                        player.settings.copyWith(loopCount: value),
+                      controller.updateSettings(
+                        playerState.settings.copyWith(loopCount: value),
                       );
                     }
                   },
@@ -141,7 +141,7 @@ class SettingsDialog extends StatelessWidget {
               SizedBox(
                 width: 140,
                 child: DropdownButtonFormField<int>(
-                  value: player.settings.pauseInterval.inSeconds,
+                  value: playerState.settings.pauseInterval.inSeconds,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(
@@ -160,8 +160,8 @@ class SettingsDialog extends StatelessWidget {
                   }).toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      player.updateSettings(
-                        player.settings.copyWith(
+                      controller.updateSettings(
+                        playerState.settings.copyWith(
                           pauseInterval: Duration(seconds: value),
                         ),
                       );
@@ -176,8 +176,12 @@ class SettingsDialog extends StatelessWidget {
     );
   }
 
-  // 音频循环设置
-  Widget _buildAudioLoopSettings(BuildContext context, AppLocalizations l10n) {
+  Widget _buildAudioLoopSettings(
+    BuildContext context,
+    AppLocalizations l10n,
+    ListeningPracticeState playerState,
+    ListeningPractice controller,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -189,16 +193,16 @@ class SettingsDialog extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Switch(
-              value: player.settings.loopAudioEnabled,
+              value: playerState.settings.loopAudioEnabled,
               onChanged: (value) {
-                player.updateSettings(
-                  player.settings.copyWith(loopAudioEnabled: value),
+                controller.updateSettings(
+                  playerState.settings.copyWith(loopAudioEnabled: value),
                 );
               },
             ),
           ],
         ),
-        if (player.settings.loopAudioEnabled) ...[
+        if (playerState.settings.loopAudioEnabled) ...[
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -207,7 +211,7 @@ class SettingsDialog extends StatelessWidget {
               SizedBox(
                 width: 140,
                 child: DropdownButtonFormField<int>(
-                  value: player.settings.loopAudio,
+                  value: playerState.settings.loopAudio,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(
@@ -229,8 +233,8 @@ class SettingsDialog extends StatelessWidget {
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      player.updateSettings(
-                        player.settings.copyWith(loopAudio: value),
+                      controller.updateSettings(
+                        playerState.settings.copyWith(loopAudio: value),
                       );
                     }
                   },

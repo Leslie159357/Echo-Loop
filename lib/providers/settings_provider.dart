@@ -1,38 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-class SettingsProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
-  Locale _locale = const Locale('en');
-  
-  ThemeMode get themeMode => _themeMode;
-  Locale get locale => _locale;
+part 'settings_provider.g.dart';
 
-  SettingsProvider() {
+class AppSettingsState {
+  final ThemeMode themeMode;
+  final Locale locale;
+
+  const AppSettingsState({
+    this.themeMode = ThemeMode.system,
+    this.locale = const Locale('en'),
+  });
+
+  AppSettingsState copyWith({
+    ThemeMode? themeMode,
+    Locale? locale,
+  }) {
+    return AppSettingsState(
+      themeMode: themeMode ?? this.themeMode,
+      locale: locale ?? this.locale,
+    );
+  }
+}
+
+@Riverpod(keepAlive: true)
+class AppSettings extends _$AppSettings {
+  @override
+  AppSettingsState build() {
     _loadSettings();
+    return const AppSettingsState();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    
-    // Load theme mode
+
     final themeModeString = prefs.getString('theme_mode') ?? 'system';
-    _themeMode = switch (themeModeString) {
+    final themeMode = switch (themeModeString) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
       _ => ThemeMode.system,
     };
 
-    // Load locale
     final localeString = prefs.getString('locale') ?? 'en';
-    _locale = Locale(localeString);
+    final locale = Locale(localeString);
 
-    notifyListeners();
+    state = state.copyWith(themeMode: themeMode, locale: locale);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
-    _themeMode = mode;
-    notifyListeners();
+    state = state.copyWith(themeMode: mode);
 
     final prefs = await SharedPreferences.getInstance();
     final modeString = switch (mode) {
@@ -44,8 +61,7 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setLocale(Locale locale) async {
-    _locale = locale;
-    notifyListeners();
+    state = state.copyWith(locale: locale);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('locale', locale.languageCode);

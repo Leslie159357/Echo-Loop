@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../providers/player_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
+import '../providers/audio_engine/audio_engine_provider.dart';
 
 // 自定义 Intent
 class PlayPauseIntent extends Intent {
@@ -20,18 +22,20 @@ class ToggleTranscriptIntent extends Intent {
 }
 
 // 播放器快捷键作用域
-class PlayerHotkeyScope extends StatelessWidget {
+class PlayerHotkeyScope extends ConsumerWidget {
   final Widget child;
-  final PlayerProvider player;
 
   const PlayerHotkeyScope({
     super.key,
     required this.child,
-    required this.player,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(listeningPracticeProvider);
+    final controller = ref.read(listeningPracticeProvider.notifier);
+    final engineNotifier = ref.read(audioEngineProvider.notifier);
+
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -39,22 +43,22 @@ class PlayerHotkeyScope extends StatelessWidget {
           final key = event.logicalKey;
           // 空格：播放/暂停
           if (key == LogicalKeyboardKey.space) {
-            player.isPlaying ? player.pause() : player.play();
+            engineNotifier.isPlaying ? controller.pause() : controller.play();
             return KeyEventResult.handled;
           }
           // 左右箭头：上一/下一句
           if (key == LogicalKeyboardKey.arrowLeft) {
-            if (player.hasSentences) player.previousSentence();
+            if (playerState.hasSentences) controller.previousSentence();
             return KeyEventResult.handled;
           }
           if (key == LogicalKeyboardKey.arrowRight) {
-            if (player.hasSentences) player.nextSentence();
+            if (playerState.hasSentences) controller.nextSentence();
             return KeyEventResult.handled;
           }
           // 上箭头：切换字幕显示
           if (key == LogicalKeyboardKey.arrowUp) {
-            final s = player.settings;
-            player.updateSettings(
+            final s = playerState.settings;
+            controller.updateSettings(
               s.copyWith(showTranscript: !s.showTranscript),
             );
             return KeyEventResult.handled;
@@ -65,7 +69,9 @@ class PlayerHotkeyScope extends StatelessWidget {
           }
           // R 键：重播当前句子
           if (key == LogicalKeyboardKey.keyR) {
-            if (player.hasSentences) player.replayCurrentSentence();
+            if (playerState.hasSentences) {
+              controller.replayCurrentSentence();
+            }
             return KeyEventResult.handled;
           }
         }
@@ -85,26 +91,30 @@ class PlayerHotkeyScope extends StatelessWidget {
           actions: <Type, Action<Intent>>{
             PlayPauseIntent: CallbackAction<PlayPauseIntent>(
               onInvoke: (i) {
-                player.isPlaying ? player.pause() : player.play();
+                engineNotifier.isPlaying
+                    ? controller.pause()
+                    : controller.play();
                 return null;
               },
             ),
             PrevSentenceIntent: CallbackAction<PrevSentenceIntent>(
               onInvoke: (i) {
-                if (player.hasSentences) player.previousSentence();
+                if (playerState.hasSentences) {
+                  controller.previousSentence();
+                }
                 return null;
               },
             ),
             NextSentenceIntent: CallbackAction<NextSentenceIntent>(
               onInvoke: (i) {
-                if (player.hasSentences) player.nextSentence();
+                if (playerState.hasSentences) controller.nextSentence();
                 return null;
               },
             ),
             ToggleTranscriptIntent: CallbackAction<ToggleTranscriptIntent>(
               onInvoke: (i) {
-                final s = player.settings;
-                player.updateSettings(
+                final s = playerState.settings;
+                controller.updateSettings(
                   s.copyWith(showTranscript: !s.showTranscript),
                 );
                 return null;

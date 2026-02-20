@@ -1,90 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:universal_io/io.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import '../models/audio_item.dart';
 import '../models/collection.dart';
 import '../providers/collection_provider.dart';
 import '../providers/audio_library_provider.dart';
-import '../providers/player_provider.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
 import '../l10n/app_localizations.dart';
 
 /// 合集详情页面 - 展示合集中的音频，支持上传音频
-class CollectionDetailScreen extends StatelessWidget {
+class CollectionDetailScreen extends ConsumerWidget {
   final String collectionId;
 
   const CollectionDetailScreen({super.key, required this.collectionId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final collectionState = ref.watch(collectionListProvider);
+    ref.watch(audioLibraryProvider); // watch to rebuild when library changes
 
-    return Consumer2<CollectionProvider, AudioLibraryProvider>(
-      builder: (context, collectionProvider, libraryProvider, _) {
-        final collection = collectionProvider.getCollectionById(collectionId);
-        if (collection == null) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: Text('Collection not found')),
-          );
-        }
+    final collection = collectionState.rawCollections
+        .where((c) => c.id == collectionId)
+        .firstOrNull;
+    if (collection == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('Collection not found')),
+      );
+    }
 
-        // 获取合集中的音频项
-        final audioItems = collection.audioItemIds
-            .map((id) => libraryProvider.getItemById(id))
-            .whereType<AudioItem>()
-            .toList();
+    // 获取合集中的音频项
+    final audioItems = collection.audioItemIds
+        .map((id) => ref.read(audioLibraryProvider.notifier).getItemById(id))
+        .whereType<AudioItem>()
+        .toList();
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(collection.name),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: l10n.addAudioToCollection,
-                onPressed: () => _showAddAudioDialog(context, collection),
-              ),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(collection.name),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: l10n.addAudioToCollection,
+            onPressed: () => _showAddAudioDialog(context, collection),
           ),
-          body: audioItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.library_music_outlined,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.emptyCollection,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        l10n.tapToAddAudio,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+        ],
+      ),
+      body: audioItems.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.library_music_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.secondary,
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: audioItems.length,
-                  itemBuilder: (context, index) {
-                    final item = audioItems[index];
-                    return _CollectionAudioTile(
-                      audioItem: item,
-                      collectionId: collectionId,
-                    );
-                  },
-                ),
-        );
-      },
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.emptyCollection,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.tapToAddAudio,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: audioItems.length,
+              itemBuilder: (context, index) {
+                final item = audioItems[index];
+                return _CollectionAudioTile(
+                  audioItem: item,
+                  collectionId: collectionId,
+                );
+              },
+            ),
     );
   }
 
@@ -100,7 +100,7 @@ class CollectionDetailScreen extends StatelessWidget {
 }
 
 /// 合集中的音频列表项
-class _CollectionAudioTile extends StatelessWidget {
+class _CollectionAudioTile extends ConsumerWidget {
   final AudioItem audioItem;
   final String collectionId;
 
@@ -110,11 +110,12 @@ class _CollectionAudioTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final playerProvider = context.watch<PlayerProvider>();
-    final isCurrentlyPlaying =
-        playerProvider.currentAudioItem?.id == audioItem.id;
+    final currentAudioItem = ref.watch(
+      listeningPracticeProvider.select((s) => s.currentAudioItem),
+    );
+    final isCurrentlyPlaying = currentAudioItem?.id == audioItem.id;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -192,7 +193,7 @@ class _CollectionAudioTile extends StatelessWidget {
               ],
               onSelected: (value) {
                 if (value == 'remove') {
-                  _confirmRemove(context);
+                  _confirmRemove(context, ref);
                 }
               },
             ),
@@ -212,7 +213,7 @@ class _CollectionAudioTile extends StatelessWidget {
             );
             return;
           }
-          await context.read<PlayerProvider>().loadAudio(audioItem);
+          await ref.read(listeningPracticeProvider.notifier).loadAudio(audioItem);
           if (!context.mounted) return;
           Navigator.pushNamed(context, '/player');
         },
@@ -224,7 +225,7 @@ class _CollectionAudioTile extends StatelessWidget {
     return '${date.month}/${date.day}/${date.year}';
   }
 
-  void _confirmRemove(BuildContext context) {
+  void _confirmRemove(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
@@ -238,7 +239,9 @@ class _CollectionAudioTile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              context.read<CollectionProvider>().removeAudioFromCollection(
+              ref
+                  .read(collectionListProvider.notifier)
+                  .removeAudioFromCollection(
                     collectionId,
                     audioItem.id,
                   );
@@ -254,18 +257,18 @@ class _CollectionAudioTile extends StatelessWidget {
 }
 
 /// 添加音频到合集对话框 - 复用音频库的上传逻辑
-class _AddAudioToCollectionDialog extends StatefulWidget {
+class _AddAudioToCollectionDialog extends ConsumerStatefulWidget {
   final String collectionId;
 
   const _AddAudioToCollectionDialog({required this.collectionId});
 
   @override
-  State<_AddAudioToCollectionDialog> createState() =>
+  ConsumerState<_AddAudioToCollectionDialog> createState() =>
       _AddAudioToCollectionDialogState();
 }
 
 class _AddAudioToCollectionDialogState
-    extends State<_AddAudioToCollectionDialog> {
+    extends ConsumerState<_AddAudioToCollectionDialog> {
   String? _audioPath;
   String? _transcriptPath;
   String _audioName = '';
@@ -473,8 +476,9 @@ class _AddAudioToCollectionDialogState
     if (_audioPath == null) return;
 
     // 检查是否已存在同名文件
-    final library = context.read<AudioLibraryProvider>();
-    final existingItem = library.audioItems.firstWhere(
+    final library = ref.read(audioLibraryProvider.notifier);
+    final libraryState = ref.read(audioLibraryProvider);
+    final existingItem = libraryState.audioItems.firstWhere(
       (item) => item.name == _audioName,
       orElse: () =>
           AudioItem(id: '', name: '', audioPath: '', addedDate: DateTime.now()),
@@ -505,7 +509,7 @@ class _AddAudioToCollectionDialogState
 
     // 添加到合集
     if (mounted) {
-      await context.read<CollectionProvider>().addAudioToCollection(
+      await ref.read(collectionListProvider.notifier).addAudioToCollection(
             widget.collectionId,
             audioId,
           );
