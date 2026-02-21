@@ -5,6 +5,24 @@
 
 ---
 
+## 基础设施：迁移到 go_router
+
+- [x] 添加 go_router 依赖，创建路由配置（AppRoutes + appRouterProvider）
+- [x] 创建 MainShell 组件（StatefulShellRoute.indexedStack 保持 Tab 状态）
+- [x] 创建 PackageInfo Provider（替代构造函数传参）
+- [x] 改造 main.dart（MaterialApp.router + 删除 MainScreen）
+- [x] 改造 SettingsScreen（用 provider 替代构造函数参数）
+- [x] 改造 LearningPlanScreen（接收 ID 参数 + ConsumerStatefulWidget + 自行 loadAudio）
+- [x] 迁移所有导航调用（collection_screen、collection_detail_screen、learning_plan_screen）
+- [x] 更新测试基础设施（test_app.dart、test_notifiers.dart）
+- [x] 更新受影响的测试（settings_screen、learning_plan_screen、widget_test）
+- [x] 编写路由测试（app_router_test.dart，9 个测试）
+- [x] 全部验证通过（flutter analyze + flutter test 196 通过 + flutter build macos）
+
+**完成时间**: 2026-02-21
+
+---
+
 ## 实现单个音频学习流程引擎
 - [x] 用户点击一个音频之后，展示一个学习计划表，有两个大阶段：首学、复习，每个大阶段下面是具体的学习步骤：首学：全文盲听-逐句精听-难句跟读-段级复述；复习：第一轮复习(6小时后), 第二轮复习 (1天后)，第三轮复习（3天后），第四轮复习（5天后），第五轮复习（8天后），第六轮复习（11天后），第七轮复习（2周后），第八轮复习（3周后），第九轮复习（4周后）。
 

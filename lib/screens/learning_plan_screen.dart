@@ -4,32 +4,72 @@
 // 纯 UI 页面，使用静态 mock 数据展示效果。
 // 导航路径：合集详情 → 学习计划表 → 播放器
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
-import '../models/audio_item.dart';
+import '../providers/audio_library_provider.dart';
+import '../providers/listening_practice/listening_practice_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 
 /// 学习计划表页面
-class LearningPlanScreen extends StatefulWidget {
-  /// 当前音频项
-  final AudioItem audioItem;
+class LearningPlanScreen extends ConsumerStatefulWidget {
+  /// 合集 ID
+  final String collectionId;
 
-  const LearningPlanScreen({super.key, required this.audioItem});
+  /// 音频项 ID
+  final String audioItemId;
+
+  const LearningPlanScreen({
+    super.key,
+    required this.collectionId,
+    required this.audioItemId,
+  });
 
   @override
-  State<LearningPlanScreen> createState() => _LearningPlanScreenState();
+  ConsumerState<LearningPlanScreen> createState() =>
+      _LearningPlanScreenState();
 }
 
-class _LearningPlanScreenState extends State<LearningPlanScreen> {
+class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   /// 复习区域是否展开
   bool _isReviewExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    // 检查并加载音频数据
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final audioItem = ref
+          .read(audioLibraryProvider.notifier)
+          .getItemById(widget.audioItemId);
+      if (audioItem == null) return;
+
+      final practiceState = ref.read(listeningPracticeProvider);
+      if (practiceState.currentAudioItem?.id != audioItem.id) {
+        ref.read(listeningPracticeProvider.notifier).loadAudio(audioItem);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final audioItem = ref
+        .watch(audioLibraryProvider.notifier)
+        .getItemById(widget.audioItemId);
+
+    // audioItem 找不到时显示错误页面
+    if (audioItem == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(child: Text(l10n.audioFileNotFound)),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.audioItem.name)),
+      appBar: AppBar(title: Text(audioItem.name)),
       body: Column(
         children: [
           Expanded(
@@ -55,7 +95,9 @@ class _LearningPlanScreenState extends State<LearningPlanScreen> {
           _BottomButton(
             l10n: l10n,
             onPressed: () {
-              Navigator.pushNamed(context, '/player');
+              context.push(
+                AppRoutes.player(widget.collectionId, widget.audioItemId),
+              );
             },
           ),
         ],

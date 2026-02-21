@@ -13,7 +13,10 @@ Fluency 是一款 Flutter 跨平台英语听说练习应用，通过结构化的
 
 ```
 lib/
-├── main.dart                        # 应用入口，配置主题/国际化/路由
+├── main.dart                        # 应用入口，配置主题/国际化
+├── router/                          # go_router 路由配置
+│   ├── app_router.dart              #   GoRouter 配置 + 类型安全路由常量
+│   └── main_shell.dart              #   Tab 导航外壳（StatefulShellRoute）
 ├── l10n/                            # 国际化
 │   ├── app_en.arb                   # 英文模板（新增 key 在此添加）
 │   └── app_zh.arb                   # 中文翻译

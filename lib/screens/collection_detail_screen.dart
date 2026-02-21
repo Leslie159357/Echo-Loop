@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:universal_io/io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +12,7 @@ import '../providers/collection_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 
 /// 合集详情页面 - 展示合集中的音频，支持上传音频
@@ -240,14 +242,9 @@ class _CollectionAudioTile extends ConsumerWidget {
             );
             return;
           }
-          await ref
-              .read(listeningPracticeProvider.notifier)
-              .loadAudio(audioItem);
           if (!context.mounted) return;
-          Navigator.pushNamed(
-            context,
-            '/learning-plan',
-            arguments: audioItem,
+          context.push(
+            AppRoutes.learningPlan(collectionId, audioItem.id),
           );
         },
       ),

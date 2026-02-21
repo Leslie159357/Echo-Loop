@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../models/collection.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../router/app_router.dart';
 import '../theme/app_theme.dart';
-import 'collection_detail_screen.dart';
 
 /// 合集列表页面
 class CollectionScreen extends ConsumerWidget {
@@ -351,12 +352,7 @@ class _CollectionGridTile extends ConsumerWidget {
   }
 
   void _openCollection(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CollectionDetailScreen(collectionId: collection.id),
-      ),
-    );
+    context.push(AppRoutes.collectionDetail(collection.id));
   }
 }
 
@@ -494,12 +490,7 @@ class _CollectionListTile extends ConsumerWidget {
   }
 
   void _openCollection(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CollectionDetailScreen(collectionId: collection.id),
-      ),
-    );
+    context.push(AppRoutes.collectionDetail(collection.id));
   }
 }
 

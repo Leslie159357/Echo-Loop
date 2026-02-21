@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/package_info_provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/app_theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
-  final PackageInfo? packageInfo;
-
-  const SettingsScreen({super.key, this.packageInfo});
+  const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -30,7 +28,7 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.m),
-          _buildAboutSection(context, l10n),
+          _buildAboutSection(context, ref, l10n),
         ],
       ),
     );
@@ -65,7 +63,11 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   /// 构建关于信息区域
-  Widget _buildAboutSection(BuildContext context, AppLocalizations l10n) {
+  Widget _buildAboutSection(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return _buildSection(
       context,
@@ -75,7 +77,7 @@ class SettingsScreen extends ConsumerWidget {
           leading: _emojiIcon('ℹ️'),
           title: Text(l10n.version),
           trailing: Text(
-            packageInfo?.version ?? '',
+            ref.watch(packageInfoProvider).version,
             style: TextStyle(color: colorScheme.onSurfaceVariant),
           ),
         ),

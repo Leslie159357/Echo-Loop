@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fluency/l10n/app_localizations.dart';
 import 'package:fluency/screens/learning_plan_screen.dart';
 import 'package:fluency/models/audio_item.dart';
+import 'package:fluency/providers/audio_library_provider.dart';
+import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
+import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
 import 'package:fluency/theme/app_theme.dart';
+
+import '../helpers/mock_providers.dart';
 
 void main() {
   final testAudioItem = AudioItem(
@@ -17,8 +23,41 @@ void main() {
   );
 
   Widget createTestWidget({Locale locale = const Locale('en')}) {
+    final router = GoRouter(
+      initialLocation: '/collections/col-1/test-1/plan',
+      routes: [
+        GoRoute(
+          path: '/collections/:collectionId/:audioId/plan',
+          builder: (context, state) {
+            final collectionId = state.pathParameters['collectionId']!;
+            final audioId = state.pathParameters['audioId']!;
+            return LearningPlanScreen(
+              collectionId: collectionId,
+              audioItemId: audioId,
+            );
+          },
+        ),
+        GoRoute(
+          path: '/collections/:collectionId/:audioId/player',
+          builder: (context, state) =>
+              const Scaffold(body: Text('Player')),
+        ),
+      ],
+    );
+
     return ProviderScope(
-      child: MaterialApp(
+      overrides: [
+        audioLibraryProvider.overrideWith(
+          () => TestAudioLibrary(
+            AudioLibraryState(audioItems: [testAudioItem]),
+          ),
+        ),
+        listeningPracticeProvider.overrideWith(
+          () => TestListeningPractice(),
+        ),
+        audioEngineProvider.overrideWith(() => TestAudioEngine()),
+      ],
+      child: MaterialApp.router(
         locale: locale,
         supportedLocales: const [Locale('en'), Locale('zh')],
         localizationsDelegates: const [
@@ -28,10 +67,7 @@ void main() {
           GlobalCupertinoLocalizations.delegate,
         ],
         theme: AppTheme.light(),
-        home: LearningPlanScreen(audioItem: testAudioItem),
-        routes: {
-          '/player': (context) => const Scaffold(body: Text('Player')),
-        },
+        routerConfig: router,
       ),
     );
   }
@@ -81,9 +117,6 @@ void main() {
 
       expect(find.text('Review'), findsOneWidget);
       expect(find.text('0/9 completed'), findsOneWidget);
-      // AnimatedCrossFade 保留两个 child 在树中，
-      // 但折叠时 SizedBox.shrink 被显示，内容区域被隐藏（opacity=0 / size=0）
-      // 验证展开箭头朝下（未旋转）即可确认折叠状态
       final expandIcon = tester.widget<AnimatedRotation>(
         find.byType(AnimatedRotation),
       );
@@ -147,6 +180,56 @@ void main() {
       // 滚动到复习区域
       await tester.scrollUntilVisible(find.text('复习'), 200);
       expect(find.text('复习'), findsOneWidget);
+    });
+
+    testWidgets('audioItem 找不到时显示错误页面', (tester) async {
+      final router = GoRouter(
+        initialLocation: '/collections/col-1/nonexistent/plan',
+        routes: [
+          GoRoute(
+            path: '/collections/:collectionId/:audioId/plan',
+            builder: (context, state) {
+              final collectionId = state.pathParameters['collectionId']!;
+              final audioId = state.pathParameters['audioId']!;
+              return LearningPlanScreen(
+                collectionId: collectionId,
+                audioItemId: audioId,
+              );
+            },
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(), // 空音频库
+            ),
+            listeningPracticeProvider.overrideWith(
+              () => TestListeningPractice(),
+            ),
+            audioEngineProvider.overrideWith(() => TestAudioEngine()),
+          ],
+          child: MaterialApp.router(
+            supportedLocales: const [Locale('en'), Locale('zh')],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: AppTheme.light(),
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Audio file not found. The file may have been deleted.'),
+        findsOneWidget,
+      );
     });
   });
 }

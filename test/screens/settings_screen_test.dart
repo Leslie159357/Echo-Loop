@@ -6,7 +6,14 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:fluency/screens/settings_screen.dart';
+import 'package:fluency/providers/settings_provider.dart';
+import 'package:fluency/providers/audio_library_provider.dart';
+import 'package:fluency/providers/collection_provider.dart';
+import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
+import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:fluency/providers/package_info_provider.dart';
 
+import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
 
 void main() {
@@ -22,7 +29,17 @@ void main() {
       testWidgets('显示主题设置项', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -35,7 +52,17 @@ void main() {
       testWidgets('显示语言设置项', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -48,7 +75,17 @@ void main() {
       testWidgets('显示关于信息区域', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -61,7 +98,17 @@ void main() {
       testWidgets('显示外观标题', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -74,7 +121,17 @@ void main() {
       testWidgets('点击主题设置弹出选择对话框', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -93,7 +150,17 @@ void main() {
       testWidgets('选择 Dark 主题后状态更新', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -113,7 +180,17 @@ void main() {
       testWidgets('点击语言设置弹出选择对话框', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
-            SettingsScreen(packageInfo: testPackageInfo),
+            const SettingsScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(() => TestCollectionList()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+              packageInfoProvider.overrideWithValue(testPackageInfo),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -125,16 +202,6 @@ void main() {
         // 应弹出对话框，显示两个选项
         expect(find.text('English'), findsAtLeast(1));
         expect(find.text('简体中文'), findsOneWidget);
-      });
-
-      testWidgets('不传 packageInfo 时版本号为空', (tester) async {
-        await tester.pumpWidget(
-          createTestScreen(const SettingsScreen()),
-        );
-        await tester.pumpAndSettle();
-
-        // 版本号应存在但为空字符串
-        expect(find.text('Version'), findsOneWidget);
       });
     });
   });

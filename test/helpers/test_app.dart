@@ -2,11 +2,13 @@
 ///
 /// 提供 `createTestApp` 辅助函数，将被测 Widget 包装在
 /// ProviderScope + MaterialApp（含 localization delegates）中。
+/// 提供 `createTestRouter` 辅助函数，用于需要路由的测试场景。
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fluency/l10n/app_localizations.dart';
 import 'package:fluency/providers/settings_provider.dart';
 import 'package:fluency/providers/audio_library_provider.dart';
@@ -59,6 +61,8 @@ Widget createTestApp(
 }
 
 /// 创建包含 Scaffold 的测试 App（用于测试需要 Scaffold 上下文的 Screen）
+///
+/// 使用 mock GoRouter 处理导航，避免实际路由依赖。
 Widget createTestScreen(
   Widget screen, {
   List<Override>? overrides,
@@ -74,9 +78,11 @@ Widget createTestScreen(
     audioEngineProvider.overrideWith(() => TestAudioEngine()),
   ];
 
+  final router = createTestRouter(screen);
+
   return ProviderScope(
     overrides: overrides ?? defaultOverrides,
-    child: MaterialApp(
+    child: MaterialApp.router(
       locale: locale,
       supportedLocales: const [Locale('en'), Locale('zh')],
       localizationsDelegates: const [
@@ -86,20 +92,51 @@ Widget createTestScreen(
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: AppTheme.light(),
-      home: screen,
-      routes: {
-        '/player': (context) => const Scaffold(body: Text('Player')),
-        '/settings': (context) => const Scaffold(body: Text('Settings')),
-      },
-      onGenerateRoute: (settings) {
-        if (settings.name == '/learning-plan') {
-          return MaterialPageRoute(
-            builder: (context) =>
-                const Scaffold(body: Text('Learning Plan')),
-          );
-        }
-        return null;
-      },
+      routerConfig: router,
     ),
+  );
+}
+
+/// 创建测试用 GoRouter
+///
+/// 将传入的 [screen] 作为初始路由页面，
+/// 并添加常用的 stub 路由用于导航测试。
+GoRouter createTestRouter(Widget screen) {
+  return GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => screen,
+      ),
+      // stub 路由，用于验证导航跳转
+      GoRoute(
+        path: '/player',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Player')),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Settings')),
+      ),
+      GoRoute(
+        path: '/collections/:collectionId',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Collection Detail')),
+        routes: [
+          GoRoute(
+            path: ':audioId/plan',
+            builder: (context, state) =>
+                const Scaffold(body: Text('Learning Plan')),
+          ),
+          GoRoute(
+            path: ':audioId/player',
+            builder: (context, state) =>
+                const Scaffold(body: Text('Player')),
+          ),
+        ],
+      ),
+    ],
   );
 }

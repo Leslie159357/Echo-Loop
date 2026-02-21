@@ -4,11 +4,18 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:fluency/main.dart';
+import 'package:fluency/providers/settings_provider.dart';
+import 'package:fluency/providers/audio_library_provider.dart';
+import 'package:fluency/providers/collection_provider.dart';
+import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
+import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:fluency/providers/package_info_provider.dart';
 
-import 'helpers/test_app.dart';
+import 'helpers/mock_providers.dart';
 
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
@@ -19,9 +26,20 @@ void main() {
       buildNumber: '1',
     );
 
-    // 使用 createTestScreen 包装，提供 ProviderScope 和必要的 mock
     await tester.pumpWidget(
-      createTestScreen(FluencyApp(packageInfo: packageInfo)),
+      ProviderScope(
+        overrides: [
+          appSettingsProvider.overrideWith(() => TestAppSettings()),
+          audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+          collectionListProvider.overrideWith(() => TestCollectionList()),
+          listeningPracticeProvider.overrideWith(
+            () => TestListeningPractice(),
+          ),
+          audioEngineProvider.overrideWith(() => TestAudioEngine()),
+          packageInfoProvider.overrideWithValue(packageInfo),
+        ],
+        child: const FluencyApp(),
+      ),
     );
     await tester.pumpAndSettle();
 

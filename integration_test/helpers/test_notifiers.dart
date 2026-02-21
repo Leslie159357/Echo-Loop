@@ -15,6 +15,7 @@ import 'package:fluency/providers/audio_library_provider.dart';
 import 'package:fluency/providers/collection_provider.dart';
 import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
 import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:fluency/providers/package_info_provider.dart';
 
 // ========== 测试 Notifier ==========
 
@@ -138,7 +139,8 @@ Widget createTestApp() {
       collectionListProvider.overrideWith(() => TestCollectionList()),
       listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
       audioEngineProvider.overrideWith(() => TestAudioEngine()),
+      packageInfoProvider.overrideWithValue(_testPackageInfo),
     ],
-    child: FluencyApp(packageInfo: _testPackageInfo),
+    child: const FluencyApp(),
   );
 }
