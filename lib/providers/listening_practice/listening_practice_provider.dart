@@ -61,9 +61,27 @@ class ListeningPractice extends _$ListeningPractice {
     _playerStateSub = null;
   }
 
-  /// 恢复 stream 监听（退出盲听模式时调用）
+  /// 恢复 stream 监听（退出学习模式时调用）
   void resumeListeners() {
     _setupListeners();
+  }
+
+  /// 外部标注后同步书签状态（精听退出时调用）
+  ///
+  /// 重新从数据库加载书签并更新句子的 isBookmarked 状态，
+  /// 确保 LP 的内存状态与数据库一致。
+  Future<void> syncBookmarks() async {
+    if (state.currentAudioItem == null) return;
+    final bookmarkDao = ref.read(bookmarkDaoProvider);
+    final bookmarkedIndices = await BookmarkManager.loadBookmarks(
+      state.currentAudioItem!.id,
+      dao: bookmarkDao,
+    );
+    BookmarkManager.updateSentenceBookmarkStatus(
+      state.sentences,
+      bookmarkedIndices,
+    );
+    state = state.copyWith(bookmarkedIndices: bookmarkedIndices);
   }
 
   Future<void> _loadSettings() async {

@@ -17,6 +17,7 @@ import '../screens/settings_screen.dart';
 import '../screens/learning_plan_screen.dart';
 import '../screens/player_screen.dart';
 import '../screens/blind_listen_player_screen.dart';
+import '../screens/intensive_listen_player_screen.dart';
 import 'main_shell.dart';
 
 /// 全局根导航器 key
@@ -44,8 +45,14 @@ abstract class AppRoutes {
   /// 盲听播放器页路径
   static String blindListenPlayer(String? collectionId, String audioId) =>
       collectionId != null
-          ? '/collections/$collectionId/$audioId/blind-listen'
-          : '/audio/$audioId/blind-listen';
+      ? '/collections/$collectionId/$audioId/blind-listen'
+      : '/audio/$audioId/blind-listen';
+
+  /// 精听播放器页路径
+  static String intensiveListenPlayer(String? collectionId, String audioId) =>
+      collectionId != null
+      ? '/collections/$collectionId/$audioId/intensive-listen'
+      : '/audio/$audioId/intensive-listen';
 
   /// 独立音频学习计划页路径（不依赖合集）
   static String audioLearningPlan(String audioId) => '/audio/$audioId/plan';
@@ -108,10 +115,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final audioId = state.pathParameters['audioId']!;
-          return LearningPlanScreen(
-            collectionId: null,
-            audioItemId: audioId,
-          );
+          return LearningPlanScreen(collectionId: null, audioItemId: audioId);
         },
       ),
       GoRoute(
@@ -125,6 +129,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final audioId = state.pathParameters['audioId']!;
           return BlindListenPlayerScreen(
+            collectionId: null,
+            audioItemId: audioId,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/audio/:audioId/intensive-listen',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final audioId = state.pathParameters['audioId']!;
+          return IntensiveListenPlayerScreen(
             collectionId: null,
             audioItemId: audioId,
           );
@@ -163,6 +178,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final collectionId = state.pathParameters['collectionId']!;
               final audioId = state.pathParameters['audioId']!;
               return BlindListenPlayerScreen(
+                collectionId: collectionId,
+                audioItemId: audioId,
+              );
+            },
+          ),
+          GoRoute(
+            path: ':audioId/intensive-listen',
+            parentNavigatorKey: rootNavigatorKey,
+            builder: (context, state) {
+              final collectionId = state.pathParameters['collectionId']!;
+              final audioId = state.pathParameters['audioId']!;
+              return IntensiveListenPlayerScreen(
                 collectionId: collectionId,
                 audioItemId: audioId,
               );

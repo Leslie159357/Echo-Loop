@@ -6,7 +6,7 @@ part of 'listening_practice_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$listeningPracticeHash() => r'f3d01503913ff3167b3208e1007c63365c43344b';
+String _$listeningPracticeHash() => r'cf4a4bfb5483f417268d45942fc15244040b35d4';
 
 /// See also [ListeningPractice].
 @ProviderFor(ListeningPractice)

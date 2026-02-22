@@ -213,6 +213,27 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
     state = state.copyWith(progressMap: newMap);
   }
 
+  /// 保存精听断点句子索引
+  Future<void> saveIntensiveListenSentenceIndex(
+    String audioItemId,
+    int? sentenceIndex,
+  ) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+
+    final updated = progress.copyWith(
+      intensiveListenSentenceIndex: sentenceIndex,
+      clearIntensiveListenSentenceIndex: sentenceIndex == null,
+      updatedAt: DateTime.now(),
+    );
+
+    await _persistProgress(updated);
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = updated;
+    state = state.copyWith(progressMap: newMap);
+  }
+
   /// 将进度持久化到数据库
   Future<void> _persistProgress(LearningProgress progress) async {
     final dao = ref.read(learningProgressDaoProvider);
@@ -227,6 +248,9 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
         currentStageStartedAt: Value(progress.currentStageStartedAt),
         totalStudyDurationMs: Value(progress.totalStudyDurationMs),
         blindListenPassCount: Value(progress.blindListenPassCount),
+        intensiveListenSentenceIndex: Value(
+          progress.intensiveListenSentenceIndex,
+        ),
         updatedAt: Value(progress.updatedAt),
       ),
     );
@@ -244,6 +268,7 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
       currentStageStartedAt: row.currentStageStartedAt,
       totalStudyDurationMs: row.totalStudyDurationMs,
       blindListenPassCount: row.blindListenPassCount,
+      intensiveListenSentenceIndex: row.intensiveListenSentenceIndex,
       updatedAt: row.updatedAt,
     );
   }

@@ -9,10 +9,12 @@ import 'dart:async';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../models/playback_settings.dart';
+import '../../models/sentence.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import '../learning_progress_provider.dart';
 import '../listening_practice/listening_practice_provider.dart';
 import 'blind_listen_player_provider.dart';
+import 'intensive_listen_player_provider.dart';
 
 part 'learning_session_provider.g.dart';
 
@@ -20,6 +22,9 @@ part 'learning_session_provider.g.dart';
 enum LearningMode {
   /// 全文盲听
   blindListen,
+
+  /// 逐句精听
+  intensiveListen,
 }
 
 /// 学习会话状态
@@ -165,21 +170,71 @@ class LearningSession extends _$LearningSession {
     await blindPlayer.resetAndPlay();
   }
 
+  /// 进入逐句精听模式
+  ///
+  /// 1. 保存当前用户播放设置
+  /// 2. 暂停 LP 的 stream 监听
+  /// 3. 初始化 IntensiveListenPlayer，从数据库读取断点句子索引
+  Future<void> enterIntensiveListenMode(
+    String audioItemId,
+    List<Sentence> sentences, {
+    bool isFreePlay = false,
+  }) async {
+    final practice = ref.read(listeningPracticeProvider.notifier);
+    final currentSettings = ref.read(listeningPracticeProvider).settings;
+
+    // 从数据库读取断点句子索引
+    final progress = ref
+        .read(learningProgressNotifierProvider)
+        .progressMap[audioItemId];
+    final startIndex = progress?.intensiveListenSentenceIndex ?? 0;
+
+    state = state.copyWith(
+      learningMode: LearningMode.intensiveListen,
+      blindListenCompleted: false,
+      audioItemId: audioItemId,
+      savedSettings: currentSettings,
+      isFreePlay: isFreePlay,
+    );
+
+    // 暂停 LP 的 stream 监听
+    practice.suspendListeners();
+
+    // 初始化精听播放器
+    final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
+    await intensivePlayer.initialize(sentences, startIndex: startIndex);
+  }
+
   /// 退出学习模式
   ///
-  /// 停止盲听播放、释放 BlindListenPlayer 资源、恢复 LP 监听。
+  /// 根据当前学习模式分支处理：停止播放、释放资源、恢复 LP 监听。
   Future<void> exitLearningMode() async {
+    final mode = state.learningMode;
+
     _playerStateSub?.cancel();
     _playerStateSub = null;
 
-    // 停止盲听播放并释放资源
-    final blindPlayer = ref.read(blindListenPlayerProvider.notifier);
-    await blindPlayer.pause();
-    blindPlayer.disposePlayer();
+    if (mode == LearningMode.blindListen) {
+      // 停止盲听播放并释放资源
+      final blindPlayer = ref.read(blindListenPlayerProvider.notifier);
+      await blindPlayer.pause();
+      blindPlayer.disposePlayer();
+    } else if (mode == LearningMode.intensiveListen) {
+      // 释放精听播放器资源
+      final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
+      intensivePlayer.disposePlayer();
+    }
+
+    // 通用：清除 clip 防止残留影响 LP 的 absolutePositionStream
+    final engine = ref.read(audioEngineProvider.notifier);
+    await engine.clearClip();
 
     // 恢复 LP 的 stream 监听
     final practice = ref.read(listeningPracticeProvider.notifier);
     practice.resumeListeners();
+
+    // 同步精听期间新增的书签到 LP 内存状态
+    await practice.syncBookmarks();
 
     // 停止引擎播放（确保干净退出）
     await practice.stop();
