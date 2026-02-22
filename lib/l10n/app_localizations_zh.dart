@@ -660,4 +660,139 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noTranscriptWarning => '尚未上传字幕，需要字幕才能开始学习流程。';
+
+  @override
+  String get intensiveListenAppBarTitle => '逐句精听';
+
+  @override
+  String intensiveListenProgress(int current, int total) {
+    return '精听 $current/$total';
+  }
+
+  @override
+  String intensiveListenPlayCount(int current, int total) {
+    return '第 $current/$total 遍';
+  }
+
+  @override
+  String get intensiveListenPeek => '偷看字幕';
+
+  @override
+  String get intensiveListenHideSubtitle => '隐藏字幕';
+
+  @override
+  String get intensiveListenCantUnderstand => '听不懂';
+
+  @override
+  String get intensiveListenMarkedDifficult => '已自动标记为难句，点此取消';
+
+  @override
+  String get intensiveListenNotDifficult => '点击标记为难句';
+
+  @override
+  String get intensiveListenTranslationPlaceholder => '翻译功能将在未来版本中提供';
+
+  @override
+  String get intensiveListenAnalysisPlaceholder => '分析功能将在未来版本中提供';
+
+  @override
+  String get intensiveListenWordDictTitle => '词典';
+
+  @override
+  String get intensiveListenWordDictPlaceholder => '词典功能即将上线';
+
+  @override
+  String get intensiveListenContinue => '继续';
+
+  @override
+  String get intensiveListenReplayingWithSubtitle => '带字幕重播中...';
+
+  @override
+  String intensiveListenPauseBetweenPlays(int seconds) {
+    return '$seconds秒后播放下一遍';
+  }
+
+  @override
+  String intensiveListenPauseBetweenSentences(int seconds) {
+    return '$seconds秒后播放下一句';
+  }
+
+  @override
+  String get intensiveListenCompleteTitle => '精听完成';
+
+  @override
+  String intensiveListenCompleteMessage(int total, int difficult) {
+    return '你已完成全部 $total 个句子的精听。共标记 $difficult 个难句。';
+  }
+
+  @override
+  String get intensiveListenCompleteNext => '下一步';
+
+  @override
+  String get exitIntensiveListenTitle => '退出精听？';
+
+  @override
+  String get exitIntensiveListenMessage => '进度已保存，下次可从断点继续。';
+
+  @override
+  String get intensiveListenBriefingTitle => '逐句精听';
+
+  @override
+  String get intensiveListenBriefingSubtitle => '首学 - 逐句精听';
+
+  @override
+  String get intensiveListenBriefingTip => '逐句盲听，听不懂时点击「听不懂」查看文本并标记难句。';
+
+  @override
+  String intensiveListenBriefingSentenceCount(int count) {
+    return '共 $count 个句子';
+  }
+
+  @override
+  String get intensiveListenNoSubtitle => '无字幕';
+
+  @override
+  String get intensiveListenNoSubtitleMessage => '该音频没有字幕，请先上传字幕文件。';
+
+  @override
+  String get intensiveListenSettings => '精听设置';
+
+  @override
+  String get intensiveListenRepeatCount => '每句循环次数';
+
+  @override
+  String intensiveListenRepeatCountValue(int count) {
+    return '$count 次';
+  }
+
+  @override
+  String get intensiveListenPauseLabel => '句间停顿';
+
+  @override
+  String get intensiveListenPauseSmart => '智能间隔';
+
+  @override
+  String get intensiveListenPauseFixed => '固定间隔';
+
+  @override
+  String get intensiveListenPauseMultiplierMode => '句长倍数';
+
+  @override
+  String get intensiveListenSettingsTemporaryHint => '设置仅对本次精听有效';
+
+  @override
+  String get intensiveListenPauseSmartDesc => '根据句子长度自动判定';
+
+  @override
+  String intensiveListenPauseFixedUnit(int seconds) {
+    return '$seconds秒';
+  }
+
+  @override
+  String intensiveListenPauseMultiplierValue(String value) {
+    return '$value倍';
+  }
+
+  @override
+  String get intensiveListenPauseMultiplierLabel => '倍数';
 }

@@ -668,4 +668,150 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noTranscriptWarning =>
       'No transcript uploaded. A transcript is required to start the learning flow.';
+
+  @override
+  String get intensiveListenAppBarTitle => 'Intensive Listening';
+
+  @override
+  String intensiveListenProgress(int current, int total) {
+    return 'Intensive $current/$total';
+  }
+
+  @override
+  String intensiveListenPlayCount(int current, int total) {
+    return 'Play $current/$total';
+  }
+
+  @override
+  String get intensiveListenPeek => 'Peek';
+
+  @override
+  String get intensiveListenHideSubtitle => 'Hide';
+
+  @override
+  String get intensiveListenCantUnderstand => 'Can\'t understand';
+
+  @override
+  String get intensiveListenMarkedDifficult =>
+      'Auto-marked difficult, tap to undo';
+
+  @override
+  String get intensiveListenNotDifficult => 'Tap to mark as difficult';
+
+  @override
+  String get intensiveListenTranslationPlaceholder =>
+      'Translation will be available in a future version';
+
+  @override
+  String get intensiveListenAnalysisPlaceholder =>
+      'Analysis will be available in a future version';
+
+  @override
+  String get intensiveListenWordDictTitle => 'Word Dictionary';
+
+  @override
+  String get intensiveListenWordDictPlaceholder =>
+      'Dictionary feature coming soon';
+
+  @override
+  String get intensiveListenContinue => 'Continue';
+
+  @override
+  String get intensiveListenReplayingWithSubtitle =>
+      'Replaying with subtitles...';
+
+  @override
+  String intensiveListenPauseBetweenPlays(int seconds) {
+    return 'Next play in ${seconds}s';
+  }
+
+  @override
+  String intensiveListenPauseBetweenSentences(int seconds) {
+    return 'Next sentence in ${seconds}s';
+  }
+
+  @override
+  String get intensiveListenCompleteTitle => 'Intensive Listening Complete';
+
+  @override
+  String intensiveListenCompleteMessage(int total, int difficult) {
+    return 'You\'ve completed intensive listening for all $total sentences. $difficult sentence(s) marked as difficult.';
+  }
+
+  @override
+  String get intensiveListenCompleteNext => 'Next Step';
+
+  @override
+  String get exitIntensiveListenTitle => 'Exit Intensive Listening?';
+
+  @override
+  String get exitIntensiveListenMessage =>
+      'Your progress will be saved. You can continue from where you left off.';
+
+  @override
+  String get intensiveListenBriefingTitle => 'Intensive Listening';
+
+  @override
+  String get intensiveListenBriefingSubtitle =>
+      'First Study - Intensive Listening';
+
+  @override
+  String get intensiveListenBriefingTip =>
+      'Listen sentence by sentence. Tap \'Can\'t understand\' to reveal text and mark difficult sentences.';
+
+  @override
+  String intensiveListenBriefingSentenceCount(int count) {
+    return '$count sentences';
+  }
+
+  @override
+  String get intensiveListenNoSubtitle => 'No Subtitle Available';
+
+  @override
+  String get intensiveListenNoSubtitleMessage =>
+      'This audio has no subtitle. Please upload a subtitle file first.';
+
+  @override
+  String get intensiveListenSettings => 'Settings';
+
+  @override
+  String get intensiveListenRepeatCount => 'Repeat per sentence';
+
+  @override
+  String intensiveListenRepeatCountValue(int count) {
+    return '$count time(s)';
+  }
+
+  @override
+  String get intensiveListenPauseLabel => 'Pause between sentences';
+
+  @override
+  String get intensiveListenPauseSmart => 'Smart';
+
+  @override
+  String get intensiveListenPauseFixed => 'Fixed';
+
+  @override
+  String get intensiveListenPauseMultiplierMode => 'Multiplier';
+
+  @override
+  String get intensiveListenSettingsTemporaryHint =>
+      'Settings apply to this session only';
+
+  @override
+  String get intensiveListenPauseSmartDesc =>
+      'Auto-adjusted by sentence length';
+
+  @override
+  String intensiveListenPauseFixedUnit(int seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String intensiveListenPauseMultiplierValue(String value) {
+    return '${value}x';
+  }
+
+  @override
+  String get intensiveListenPauseMultiplierLabel => 'Multiplier';
 }

@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/playback_settings.dart';
 
 /// SharedPreferences 存储服务
-/// 迁移后仅保留 PlaybackSettings 的存取（纯设置项，无查询需求）
+/// 保留纯设置项的存取（PlaybackSettings）
 class StorageService {
   static const String _settingsKey = 'playback_settings';
 

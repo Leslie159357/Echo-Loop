@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:fluency/models/audio_item.dart';
 import 'package:fluency/models/collection.dart';
+import 'package:fluency/models/intensive_listen_settings.dart';
 import 'package:fluency/models/playback_settings.dart';
 import 'package:fluency/models/audio_engine_state.dart';
 import 'package:fluency/providers/settings_provider.dart';
@@ -17,6 +18,7 @@ import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/database/enums.dart';
 import 'package:fluency/models/learning_progress.dart';
 import 'package:fluency/models/sentence.dart';
@@ -287,6 +289,11 @@ class TestListeningPractice extends ListeningPractice {
   void resumeListeners() {
     // 测试中不做任何操作
   }
+
+  @override
+  Future<void> syncBookmarks() async {
+    // 测试中不做任何操作
+  }
 }
 
 /// 创建测试用 LearningProgress
@@ -402,6 +409,19 @@ class TestLearningSession extends LearningSession {
   }
 
   @override
+  Future<void> enterIntensiveListenMode(
+    String audioItemId,
+    List<Sentence> sentences, {
+    bool isFreePlay = false,
+  }) async {
+    state = state.copyWith(
+      learningMode: LearningMode.intensiveListen,
+      audioItemId: audioItemId,
+      isFreePlay: isFreePlay,
+    );
+  }
+
+  @override
   Future<void> replayBlindListen() async {
     state = state.copyWith(blindListenCompleted: false);
   }
@@ -468,6 +488,139 @@ class TestBlindListenPlayer extends BlindListenPlayer {
   @override
   void disposePlayer() {
     state = const BlindListenPlayerState();
+  }
+}
+
+/// 测试用 IntensiveListenPlayer — 不依赖音频引擎
+class TestIntensiveListenPlayer extends IntensiveListenPlayer {
+  final IntensiveListenState _initialState;
+  final List<Sentence> _testSentences;
+
+  TestIntensiveListenPlayer([
+    this._initialState = const IntensiveListenState(),
+    this._testSentences = const [],
+  ]);
+
+  @override
+  IntensiveListenState build() => _initialState;
+
+  @override
+  Sentence? get currentSentence =>
+      _testSentences.isNotEmpty &&
+          state.currentSentenceIndex < _testSentences.length
+      ? _testSentences[state.currentSentenceIndex]
+      : null;
+
+  @override
+  List<Sentence> get sentences => List.unmodifiable(_testSentences);
+
+  @override
+  int get currentIndex => state.currentSentenceIndex;
+
+  @override
+  Future<void> initialize(
+    List<Sentence> sentences, {
+    int startIndex = 0,
+  }) async {
+    state = IntensiveListenState(
+      currentSentenceIndex: startIndex,
+      totalSentences: sentences.length,
+    );
+  }
+
+  @override
+  void updateSettings(IntensiveListenSettings newSettings) {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  Future<void> pause() async {
+    state = state.copyWith(isPlaying: false);
+  }
+
+  @override
+  Future<void> resume() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  Future<void> goToNext() async {
+    if (state.currentSentenceIndex < state.totalSentences - 1) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex + 1,
+        currentPlayCount: 1,
+        isAnnotationMode: false,
+        isAnnotationReplay: false,
+        isTextRevealed: false,
+      );
+    }
+  }
+
+  @override
+  Future<void> goToPrevious() async {
+    if (state.currentSentenceIndex > 0) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex - 1,
+        currentPlayCount: 1,
+        isAnnotationMode: false,
+        isAnnotationReplay: false,
+        isTextRevealed: false,
+      );
+    }
+  }
+
+  @override
+  void enterAnnotationMode() {
+    final newDifficult = Set<int>.from(state.difficultSentences);
+    newDifficult.add(state.currentSentenceIndex);
+    state = state.copyWith(
+      isAnnotationMode: true,
+      isPlaying: false,
+      difficultSentences: newDifficult,
+    );
+  }
+
+  @override
+  Future<void> exitAnnotationMode() async {
+    state = state.copyWith(
+      isAnnotationMode: false,
+      isAnnotationReplay: false,
+      isPlaying: true,
+    );
+  }
+
+  @override
+  Future<void> replayInAnnotationMode() async {
+    if (!state.isAnnotationMode) return;
+    // 测试中模拟重播：设置 isPlaying 然后立即停止
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  void toggleDifficultSentence() {
+    final idx = state.currentSentenceIndex;
+    final newSet = Set<int>.from(state.difficultSentences);
+    if (newSet.contains(idx)) {
+      newSet.remove(idx);
+    } else {
+      newSet.add(idx);
+    }
+    state = state.copyWith(difficultSentences: newSet);
+  }
+
+  @override
+  void toggleTextReveal() {
+    state = state.copyWith(isTextRevealed: !state.isTextRevealed);
+  }
+
+  @override
+  void disposePlayer() {
+    state = const IntensiveListenState();
   }
 }
 

@@ -204,5 +204,69 @@
   "replace": "替换",
   "sentenceCountLabel": "{count} 句",
   "wordCountLabel": "{count} 词",
-  "noTranscriptWarning": "尚未上传字幕，需要字幕才能开始学习流程。"
+  "noTranscriptWarning": "尚未上传字幕，需要字幕才能开始学习流程。",
+  "intensiveListenAppBarTitle": "逐句精听",
+  "intensiveListenProgress": "精听 {current}/{total}",
+  "intensiveListenPlayCount": "第 {current}/{total} 遍",
+  "intensiveListenPeek": "偷看字幕",
+  "intensiveListenHideSubtitle": "隐藏字幕",
+  "intensiveListenCantUnderstand": "听不懂",
+  "intensiveListenMarkedDifficult": "已自动标记为难句，点此取消",
+  "intensiveListenNotDifficult": "点击标记为难句",
+  "intensiveListenTranslationPlaceholder": "翻译功能将在未来版本中提供",
+  "intensiveListenAnalysisPlaceholder": "分析功能将在未来版本中提供",
+  "intensiveListenWordDictTitle": "词典",
+  "intensiveListenWordDictPlaceholder": "词典功能即将上线",
+  "intensiveListenContinue": "继续",
+  "intensiveListenReplayingWithSubtitle": "带字幕重播中...",
+  "intensiveListenPauseBetweenPlays": "{seconds}秒后播放下一遍",
+  "@intensiveListenPauseBetweenPlays": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseBetweenSentences": "{seconds}秒后播放下一句",
+  "@intensiveListenPauseBetweenSentences": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenCompleteTitle": "精听完成",
+  "intensiveListenCompleteMessage": "你已完成全部 {total} 个句子的精听。共标记 {difficult} 个难句。",
+  "intensiveListenCompleteNext": "下一步",
+  "exitIntensiveListenTitle": "退出精听？",
+  "exitIntensiveListenMessage": "进度已保存，下次可从断点继续。",
+  "intensiveListenBriefingTitle": "逐句精听",
+  "intensiveListenBriefingSubtitle": "首学 - 逐句精听",
+  "intensiveListenBriefingTip": "逐句盲听，听不懂时点击「听不懂」查看文本并标记难句。",
+  "intensiveListenBriefingSentenceCount": "共 {count} 个句子",
+  "intensiveListenNoSubtitle": "无字幕",
+  "intensiveListenNoSubtitleMessage": "该音频没有字幕，请先上传字幕文件。",
+  "intensiveListenSettings": "精听设置",
+  "intensiveListenRepeatCount": "每句循环次数",
+  "intensiveListenRepeatCountValue": "{count} 次",
+  "@intensiveListenRepeatCountValue": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseLabel": "句间停顿",
+  "intensiveListenPauseSmart": "智能间隔",
+  "intensiveListenPauseFixed": "固定间隔",
+  "intensiveListenPauseMultiplierMode": "句长倍数",
+  "intensiveListenSettingsTemporaryHint": "设置仅对本次精听有效",
+  "intensiveListenPauseSmartDesc": "根据句子长度自动判定",
+  "intensiveListenPauseFixedUnit": "{seconds}秒",
+  "@intensiveListenPauseFixedUnit": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseMultiplierValue": "{value}倍",
+  "@intensiveListenPauseMultiplierValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+  "intensiveListenPauseMultiplierLabel": "倍数"
 }

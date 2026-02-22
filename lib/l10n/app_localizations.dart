@@ -1327,6 +1327,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No transcript uploaded. A transcript is required to start the learning flow.'**
   String get noTranscriptWarning;
+
+  /// No description provided for @intensiveListenAppBarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Intensive Listening'**
+  String get intensiveListenAppBarTitle;
+
+  /// No description provided for @intensiveListenProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Intensive {current}/{total}'**
+  String intensiveListenProgress(int current, int total);
+
+  /// No description provided for @intensiveListenPlayCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Play {current}/{total}'**
+  String intensiveListenPlayCount(int current, int total);
+
+  /// No description provided for @intensiveListenPeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Peek'**
+  String get intensiveListenPeek;
+
+  /// No description provided for @intensiveListenHideSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get intensiveListenHideSubtitle;
+
+  /// No description provided for @intensiveListenCantUnderstand.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t understand'**
+  String get intensiveListenCantUnderstand;
+
+  /// No description provided for @intensiveListenMarkedDifficult.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-marked difficult, tap to undo'**
+  String get intensiveListenMarkedDifficult;
+
+  /// No description provided for @intensiveListenNotDifficult.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to mark as difficult'**
+  String get intensiveListenNotDifficult;
+
+  /// No description provided for @intensiveListenTranslationPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation will be available in a future version'**
+  String get intensiveListenTranslationPlaceholder;
+
+  /// No description provided for @intensiveListenAnalysisPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis will be available in a future version'**
+  String get intensiveListenAnalysisPlaceholder;
+
+  /// No description provided for @intensiveListenWordDictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Word Dictionary'**
+  String get intensiveListenWordDictTitle;
+
+  /// No description provided for @intensiveListenWordDictPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Dictionary feature coming soon'**
+  String get intensiveListenWordDictPlaceholder;
+
+  /// No description provided for @intensiveListenContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get intensiveListenContinue;
+
+  /// No description provided for @intensiveListenReplayingWithSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaying with subtitles...'**
+  String get intensiveListenReplayingWithSubtitle;
+
+  /// No description provided for @intensiveListenPauseBetweenPlays.
+  ///
+  /// In en, this message translates to:
+  /// **'Next play in {seconds}s'**
+  String intensiveListenPauseBetweenPlays(int seconds);
+
+  /// No description provided for @intensiveListenPauseBetweenSentences.
+  ///
+  /// In en, this message translates to:
+  /// **'Next sentence in {seconds}s'**
+  String intensiveListenPauseBetweenSentences(int seconds);
+
+  /// No description provided for @intensiveListenCompleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Intensive Listening Complete'**
+  String get intensiveListenCompleteTitle;
+
+  /// No description provided for @intensiveListenCompleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve completed intensive listening for all {total} sentences. {difficult} sentence(s) marked as difficult.'**
+  String intensiveListenCompleteMessage(int total, int difficult);
+
+  /// No description provided for @intensiveListenCompleteNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next Step'**
+  String get intensiveListenCompleteNext;
+
+  /// No description provided for @exitIntensiveListenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit Intensive Listening?'**
+  String get exitIntensiveListenTitle;
+
+  /// No description provided for @exitIntensiveListenMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your progress will be saved. You can continue from where you left off.'**
+  String get exitIntensiveListenMessage;
+
+  /// No description provided for @intensiveListenBriefingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Intensive Listening'**
+  String get intensiveListenBriefingTitle;
+
+  /// No description provided for @intensiveListenBriefingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'First Study - Intensive Listening'**
+  String get intensiveListenBriefingSubtitle;
+
+  /// No description provided for @intensiveListenBriefingTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Listen sentence by sentence. Tap \'Can\'t understand\' to reveal text and mark difficult sentences.'**
+  String get intensiveListenBriefingTip;
+
+  /// No description provided for @intensiveListenBriefingSentenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sentences'**
+  String intensiveListenBriefingSentenceCount(int count);
+
+  /// No description provided for @intensiveListenNoSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No Subtitle Available'**
+  String get intensiveListenNoSubtitle;
+
+  /// No description provided for @intensiveListenNoSubtitleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This audio has no subtitle. Please upload a subtitle file first.'**
+  String get intensiveListenNoSubtitleMessage;
+
+  /// No description provided for @intensiveListenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get intensiveListenSettings;
+
+  /// No description provided for @intensiveListenRepeatCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat per sentence'**
+  String get intensiveListenRepeatCount;
+
+  /// No description provided for @intensiveListenRepeatCountValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} time(s)'**
+  String intensiveListenRepeatCountValue(int count);
+
+  /// No description provided for @intensiveListenPauseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause between sentences'**
+  String get intensiveListenPauseLabel;
+
+  /// No description provided for @intensiveListenPauseSmart.
+  ///
+  /// In en, this message translates to:
+  /// **'Smart'**
+  String get intensiveListenPauseSmart;
+
+  /// No description provided for @intensiveListenPauseFixed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fixed'**
+  String get intensiveListenPauseFixed;
+
+  /// No description provided for @intensiveListenPauseMultiplierMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiplier'**
+  String get intensiveListenPauseMultiplierMode;
+
+  /// No description provided for @intensiveListenSettingsTemporaryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings apply to this session only'**
+  String get intensiveListenSettingsTemporaryHint;
+
+  /// No description provided for @intensiveListenPauseSmartDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-adjusted by sentence length'**
+  String get intensiveListenPauseSmartDesc;
+
+  /// No description provided for @intensiveListenPauseFixedUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String intensiveListenPauseFixedUnit(int seconds);
+
+  /// No description provided for @intensiveListenPauseMultiplierValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}x'**
+  String intensiveListenPauseMultiplierValue(String value);
+
+  /// No description provided for @intensiveListenPauseMultiplierLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiplier'**
+  String get intensiveListenPauseMultiplierLabel;
 }
 
 class _AppLocalizationsDelegate

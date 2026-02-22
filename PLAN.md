@@ -25,6 +25,7 @@ lib/
 │   ├── collection.dart              #   合集（包含多个 AudioItem）
 │   ├── sentence.dart                #   字幕句子（时间轴 + 书签状态）
 │   ├── playback_settings.dart       #   播放设置（循环、速度、间隔等）
+│   ├── intensive_listen_settings.dart #  精听设置（循环次数、停顿模式）
 │   ├── audio_engine_state.dart      #   音频引擎状态快照
 │   ├── listening_practice_state.dart#   学习会话完整状态
 │   └── learning_progress.dart       #   学习进度（阶段、进度计算）

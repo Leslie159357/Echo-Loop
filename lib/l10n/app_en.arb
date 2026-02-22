@@ -316,5 +316,92 @@
       "count": { "type": "int" }
     }
   },
-  "noTranscriptWarning": "No transcript uploaded. A transcript is required to start the learning flow."
+  "noTranscriptWarning": "No transcript uploaded. A transcript is required to start the learning flow.",
+  "intensiveListenAppBarTitle": "Intensive Listening",
+  "intensiveListenProgress": "Intensive {current}/{total}",
+  "@intensiveListenProgress": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "intensiveListenPlayCount": "Play {current}/{total}",
+  "@intensiveListenPlayCount": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "intensiveListenPeek": "Peek",
+  "intensiveListenHideSubtitle": "Hide",
+  "intensiveListenCantUnderstand": "Can't understand",
+  "intensiveListenMarkedDifficult": "Auto-marked difficult, tap to undo",
+  "intensiveListenNotDifficult": "Tap to mark as difficult",
+  "intensiveListenTranslationPlaceholder": "Translation will be available in a future version",
+  "intensiveListenAnalysisPlaceholder": "Analysis will be available in a future version",
+  "intensiveListenWordDictTitle": "Word Dictionary",
+  "intensiveListenWordDictPlaceholder": "Dictionary feature coming soon",
+  "intensiveListenContinue": "Continue",
+  "intensiveListenReplayingWithSubtitle": "Replaying with subtitles...",
+  "intensiveListenPauseBetweenPlays": "Next play in {seconds}s",
+  "@intensiveListenPauseBetweenPlays": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseBetweenSentences": "Next sentence in {seconds}s",
+  "@intensiveListenPauseBetweenSentences": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenCompleteTitle": "Intensive Listening Complete",
+  "intensiveListenCompleteMessage": "You've completed intensive listening for all {total} sentences. {difficult} sentence(s) marked as difficult.",
+  "@intensiveListenCompleteMessage": {
+    "placeholders": {
+      "total": { "type": "int" },
+      "difficult": { "type": "int" }
+    }
+  },
+  "intensiveListenCompleteNext": "Next Step",
+  "exitIntensiveListenTitle": "Exit Intensive Listening?",
+  "exitIntensiveListenMessage": "Your progress will be saved. You can continue from where you left off.",
+  "intensiveListenBriefingTitle": "Intensive Listening",
+  "intensiveListenBriefingSubtitle": "First Study - Intensive Listening",
+  "intensiveListenBriefingTip": "Listen sentence by sentence. Tap 'Can't understand' to reveal text and mark difficult sentences.",
+  "intensiveListenBriefingSentenceCount": "{count} sentences",
+  "@intensiveListenBriefingSentenceCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "intensiveListenNoSubtitle": "No Subtitle Available",
+  "intensiveListenNoSubtitleMessage": "This audio has no subtitle. Please upload a subtitle file first.",
+  "intensiveListenSettings": "Settings",
+  "intensiveListenRepeatCount": "Repeat per sentence",
+  "intensiveListenRepeatCountValue": "{count} time(s)",
+  "@intensiveListenRepeatCountValue": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseLabel": "Pause between sentences",
+  "intensiveListenPauseSmart": "Smart",
+  "intensiveListenPauseFixed": "Fixed",
+  "intensiveListenPauseMultiplierMode": "Multiplier",
+  "intensiveListenSettingsTemporaryHint": "Settings apply to this session only",
+  "intensiveListenPauseSmartDesc": "Auto-adjusted by sentence length",
+  "intensiveListenPauseFixedUnit": "{seconds}s",
+  "@intensiveListenPauseFixedUnit": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "intensiveListenPauseMultiplierValue": "{value}x",
+  "@intensiveListenPauseMultiplierValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+  "intensiveListenPauseMultiplierLabel": "Multiplier"
 }
