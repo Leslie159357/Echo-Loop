@@ -218,8 +218,9 @@ void intensiveListenTests() {
       expect(find.text('Intensive Listening Complete'), findsOneWidget);
       // 验证步骤进度信息
       expect(find.textContaining('2/4'), findsOneWidget);
-      // 精听后的步骤（listenAndRepeat）没有播放器，显示"返回计划"按钮
+      // 精听后的步骤（listenAndRepeat）有播放器，显示"继续"和"返回计划"两个按钮
       expect(find.text('Back to Plan'), findsOneWidget);
+      expect(find.textContaining('Continue'), findsOneWidget);
     });
 
     testWidgets('精听中退出保存断点', (tester) async {

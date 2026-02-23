@@ -29,6 +29,7 @@ import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
+import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
 import 'package:fluency/providers/package_info_provider.dart';
 
 // ========== 测试数据工厂 ==========
@@ -457,6 +458,23 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
+  Future<void> saveShadowingSentenceIndex(
+    String audioItemId,
+    int? sentenceIndex,
+  ) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      shadowingSentenceIndex: sentenceIndex,
+      clearShadowingSentenceIndex: sentenceIndex == null,
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
   Future<void> deleteProgress(String audioItemId) async {
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap.remove(audioItemId);
@@ -537,6 +555,19 @@ class TestLearningSession extends LearningSession {
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.intensiveListen,
+      audioItemId: audioItemId,
+      isFreePlay: isFreePlay,
+    );
+  }
+
+  @override
+  Future<void> enterListenAndRepeatMode(
+    String audioItemId,
+    List<Sentence> sentences, {
+    bool isFreePlay = false,
+  }) async {
+    state = state.copyWith(
+      learningMode: LearningMode.listenAndRepeat,
       audioItemId: audioItemId,
       isFreePlay: isFreePlay,
     );
@@ -756,6 +787,132 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
   }
 }
 
+/// 测试用 ListenAndRepeatPlayer — 不依赖音频引擎
+class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
+  List<Sentence> _testSentences = [];
+
+  @override
+  ListenAndRepeatPlayerState build() => const ListenAndRepeatPlayerState();
+
+  @override
+  Sentence? get currentSentence =>
+      _testSentences.isNotEmpty &&
+          state.currentSentenceIndex < _testSentences.length
+      ? _testSentences[state.currentSentenceIndex]
+      : null;
+
+  @override
+  List<Sentence> get sentences => List.unmodifiable(_testSentences);
+
+  @override
+  int get currentIndex => state.currentSentenceIndex;
+
+  @override
+  Future<void> initialize(
+    List<Sentence> sentences, {
+    int startIndex = 0,
+    int targetPlayCount = 3,
+  }) async {
+    _testSentences = List.of(sentences);
+    state = ListenAndRepeatPlayerState(
+      currentSentenceIndex: startIndex.clamp(0, sentences.length - 1),
+      totalSentences: sentences.length,
+      targetPlayCount: targetPlayCount,
+    );
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  Future<void> pause() async {
+    state = state.copyWith(
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+    );
+  }
+
+  @override
+  Future<void> resume() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  void updateSettings(IntensiveListenSettings newSettings) {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  Future<void> goToNext() async {
+    if (state.currentSentenceIndex < state.totalSentences - 1) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex + 1,
+        currentPlayCount: 1,
+      );
+    }
+  }
+
+  @override
+  Future<void> goToPrevious() async {
+    if (state.currentSentenceIndex > 0) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex - 1,
+        currentPlayCount: 1,
+      );
+    }
+  }
+
+  @override
+  Sentence? removeDifficultMark() {
+    if (_testSentences.isEmpty) return null;
+
+    final removedIndex = state.currentSentenceIndex;
+    final removed = _testSentences[removedIndex];
+    _testSentences = List.from(_testSentences)..removeAt(removedIndex);
+
+    if (_testSentences.isEmpty) {
+      state = state.copyWith(
+        isCompleted: true,
+        isPlaying: false,
+        totalSentences: 0,
+      );
+      return removed;
+    }
+
+    final newIndex = removedIndex >= _testSentences.length
+        ? _testSentences.length - 1
+        : removedIndex;
+
+    state = state.copyWith(
+      currentSentenceIndex: newIndex,
+      totalSentences: _testSentences.length,
+      currentPlayCount: 1,
+      isPlaying: false,
+    );
+
+    return removed;
+  }
+
+  @override
+  void disposePlayer() {
+    _testSentences = [];
+    state = const ListenAndRepeatPlayerState();
+  }
+
+  /// 直接设置 state（测试辅助方法）
+  void setState(ListenAndRepeatPlayerState newState) {
+    state = newState;
+  }
+
+  /// 设置测试句子（测试辅助方法）
+  void setTestSentences(List<Sentence> sentences) {
+    _testSentences = List.of(sentences);
+  }
+}
+
 /// 测试用 BookmarkDao — 所有方法 no-op
 ///
 /// 精听播放器退出时会通过 BookmarkDao 保存难句书签，
@@ -791,6 +948,9 @@ Widget createTestApp() {
       blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
       intensiveListenPlayerProvider.overrideWith(
         () => TestIntensiveListenPlayer(),
+      ),
+      listenAndRepeatPlayerProvider.overrideWith(
+        () => TestListenAndRepeatPlayer(),
       ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
@@ -840,6 +1000,9 @@ Widget createTestAppWithAudio({
       blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
       intensiveListenPlayerProvider.overrideWith(
         () => TestIntensiveListenPlayer(),
+      ),
+      listenAndRepeatPlayerProvider.overrideWith(
+        () => TestListenAndRepeatPlayer(),
       ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),

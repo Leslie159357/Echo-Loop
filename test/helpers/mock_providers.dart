@@ -21,6 +21,7 @@ import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
+import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
 import 'package:fluency/database/enums.dart';
 import 'package:fluency/models/learning_progress.dart';
 import 'package:fluency/models/sentence.dart';
@@ -559,6 +560,19 @@ class TestLearningSession extends LearningSession {
   }
 
   @override
+  Future<void> enterListenAndRepeatMode(
+    String audioItemId,
+    List<Sentence> sentences, {
+    bool isFreePlay = false,
+  }) async {
+    state = state.copyWith(
+      learningMode: LearningMode.listenAndRepeat,
+      audioItemId: audioItemId,
+      isFreePlay: isFreePlay,
+    );
+  }
+
+  @override
   Future<void> exitLearningMode() async {
     state = const LearningSessionState();
   }
@@ -753,6 +767,132 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
   @override
   void disposePlayer() {
     state = const IntensiveListenState();
+  }
+}
+
+/// 测试用 ListenAndRepeatPlayer — 不依赖音频引擎
+class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
+  final ListenAndRepeatPlayerState _initialState;
+  List<Sentence> _testSentences;
+
+  TestListenAndRepeatPlayer([
+    this._initialState = const ListenAndRepeatPlayerState(),
+    this._testSentences = const [],
+  ]);
+
+  @override
+  ListenAndRepeatPlayerState build() => _initialState;
+
+  @override
+  Sentence? get currentSentence =>
+      _testSentences.isNotEmpty &&
+          state.currentSentenceIndex < _testSentences.length
+      ? _testSentences[state.currentSentenceIndex]
+      : null;
+
+  @override
+  List<Sentence> get sentences => List.unmodifiable(_testSentences);
+
+  @override
+  int get currentIndex => state.currentSentenceIndex;
+
+  @override
+  Future<void> initialize(
+    List<Sentence> sentences, {
+    int startIndex = 0,
+    int targetPlayCount = 3,
+  }) async {
+    _testSentences = sentences.map((s) => s.copyWith()).toList();
+    state = ListenAndRepeatPlayerState(
+      currentSentenceIndex: startIndex.clamp(0, sentences.length - 1),
+      totalSentences: sentences.length,
+      targetPlayCount: targetPlayCount,
+    );
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  Future<void> pause() async {
+    state = state.copyWith(
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+    );
+  }
+
+  @override
+  Future<void> resume() async {
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  void updateSettings(IntensiveListenSettings newSettings) {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  Future<void> goToNext() async {
+    if (state.currentSentenceIndex < state.totalSentences - 1) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex + 1,
+        currentPlayCount: 1,
+        isPauseBetweenPlays: false,
+        isPauseBetweenSentences: false,
+      );
+    }
+  }
+
+  @override
+  Future<void> goToPrevious() async {
+    if (state.currentSentenceIndex > 0) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex - 1,
+        currentPlayCount: 1,
+        isPauseBetweenPlays: false,
+        isPauseBetweenSentences: false,
+      );
+    }
+  }
+
+  @override
+  Sentence? removeDifficultMark() {
+    if (_testSentences.isEmpty) return null;
+
+    final removedIndex = state.currentSentenceIndex;
+    final removed = _testSentences[removedIndex];
+    _testSentences = List.from(_testSentences)..removeAt(removedIndex);
+
+    if (_testSentences.isEmpty) {
+      state = state.copyWith(
+        isCompleted: true,
+        isPlaying: false,
+        totalSentences: 0,
+      );
+      return removed;
+    }
+
+    final newIndex = removedIndex >= _testSentences.length
+        ? _testSentences.length - 1
+        : removedIndex;
+
+    state = state.copyWith(
+      currentSentenceIndex: newIndex,
+      totalSentences: _testSentences.length,
+      currentPlayCount: 1,
+      isPlaying: false,
+    );
+
+    return removed;
+  }
+
+  @override
+  void disposePlayer() {
+    _testSentences = [];
+    state = const ListenAndRepeatPlayerState();
   }
 }
 
