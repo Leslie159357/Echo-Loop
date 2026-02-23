@@ -161,9 +161,13 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final audioItem = ref
-        .watch(audioLibraryProvider.notifier)
-        .getItemById(widget.audioItemId);
+    final audioItem = ref.watch(
+      audioLibraryProvider.select(
+        (s) => s.audioItems
+            .where((i) => i.id == widget.audioItemId)
+            .firstOrNull,
+      ),
+    );
 
     // 监听学习进度
     final progress = ref.watch(
@@ -459,12 +463,21 @@ class _FirstStudySection extends ConsumerWidget {
           final isCurrent =
               progress?.isCurrentSubStage(firstLearnStage, subStage) ?? false;
 
-          // 盲听步骤显示已听遍数
+          // 盲听步骤显示已听遍数 + 难度
           String? subtitle;
           if (subStage == SubStageType.blindListen) {
             final passCount = progress?.blindListenPassCount ?? 0;
+            final parts = <String>[];
             if (passCount > 0) {
-              subtitle = l10n.blindListenPassInfo(passCount);
+              parts.add(l10n.blindListenPassInfo(passCount));
+            }
+            // 盲听已完成时显示用户选择的难度
+            if (progress?.isSubStageCompleted(firstLearnStage, subStage) ??
+                false) {
+              parts.add(l10n.difficultyLabel(progress!.difficulty.label));
+            }
+            if (parts.isNotEmpty) {
+              subtitle = parts.join(' · ');
             }
           }
 

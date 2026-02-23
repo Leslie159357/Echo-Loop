@@ -795,4 +795,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get intensiveListenPauseMultiplierLabel => '倍数';
+
+  @override
+  String blindListenCountdown(int seconds) {
+    return '$seconds秒后播放下一遍';
+  }
+
+  @override
+  String difficultyLabel(String difficulty) {
+    return '难度: $difficulty';
+  }
 }

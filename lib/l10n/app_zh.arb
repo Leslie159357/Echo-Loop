@@ -268,5 +268,17 @@
       "value": { "type": "String" }
     }
   },
-  "intensiveListenPauseMultiplierLabel": "倍数"
+  "intensiveListenPauseMultiplierLabel": "倍数",
+  "blindListenCountdown": "{seconds}秒后播放下一遍",
+  "@blindListenCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "difficultyLabel": "难度: {difficulty}",
+  "@difficultyLabel": {
+    "placeholders": {
+      "difficulty": { "type": "String" }
+    }
+  }
 }

@@ -814,4 +814,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get intensiveListenPauseMultiplierLabel => 'Multiplier';
+
+  @override
+  String blindListenCountdown(int seconds) {
+    return 'Next play in ${seconds}s';
+  }
+
+  @override
+  String difficultyLabel(String difficulty) {
+    return 'Difficulty: $difficulty';
+  }
 }

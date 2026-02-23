@@ -1561,6 +1561,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Multiplier'**
   String get intensiveListenPauseMultiplierLabel;
+
+  /// No description provided for @blindListenCountdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Next play in {seconds}s'**
+  String blindListenCountdown(int seconds);
+
+  /// No description provided for @difficultyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Difficulty: {difficulty}'**
+  String difficultyLabel(String difficulty);
 }
 
 class _AppLocalizationsDelegate

@@ -403,5 +403,17 @@
       "value": { "type": "String" }
     }
   },
-  "intensiveListenPauseMultiplierLabel": "Multiplier"
+  "intensiveListenPauseMultiplierLabel": "Multiplier",
+  "blindListenCountdown": "Next play in {seconds}s",
+  "@blindListenCountdown": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "difficultyLabel": "Difficulty: {difficulty}",
+  "@difficultyLabel": {
+    "placeholders": {
+      "difficulty": { "type": "String" }
+    }
+  }
 }

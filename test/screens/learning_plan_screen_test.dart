@@ -410,6 +410,28 @@ void main() {
       );
     });
 
+    testWidgets('盲听已完成时显示难度信息', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.intensiveListen,
+            difficulty: DifficultyLevel.hard,
+            blindListenPassCount: 2,
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      // 盲听步骤已完成，应显示遍数 + 难度
+      expect(find.textContaining('Listened 2 time(s)'), findsOneWidget);
+      expect(find.textContaining('Difficulty:'), findsOneWidget);
+    });
+
     testWidgets('已完成状态显示正确', (tester) async {
       final progressState = LearningProgressState(
         progressMap: {

@@ -47,10 +47,13 @@ class _BlindListenPlayerScreenState
   /// 是否正在显示完成对话框（防止重复弹出）
   bool _isShowingDialog = false;
 
-  /// 倒计时剩余秒数（null = 不显示倒计时）
-  int? _countdownSeconds;
+  /// 倒计时剩余时长（null = 不显示倒计时）
+  Duration? _countdownRemaining;
 
-  /// 倒计时定时器
+  /// 倒计时总时长
+  static const _countdownTotal = Duration(seconds: 5);
+
+  /// 倒计时定时器（100ms 精度）
   Timer? _countdownTimer;
 
   @override
@@ -74,7 +77,7 @@ class _BlindListenPlayerScreenState
   /// - 未达目标遍数 → 显示 5 秒倒计时 → 自动播放下一遍
   /// - 已达/超过目标遍数 → 弹完成对话框（难度选择 + 再听一遍）
   void _handlePlaybackCompleted() {
-    if (_isShowingDialog || _countdownSeconds != null) return;
+    if (_isShowingDialog || _countdownRemaining != null) return;
 
     final session = ref.read(learningSessionProvider);
 
@@ -93,24 +96,27 @@ class _BlindListenPlayerScreenState
   /// 开始 5 秒倒计时，结束后自动播放下一遍
   void _startCountdown() {
     setState(() {
-      _countdownSeconds = 5;
+      _countdownRemaining = _countdownTotal;
     });
 
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    const tick = Duration(milliseconds: 100);
+    _countdownTimer = Timer.periodic(tick, (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      setState(() {
-        _countdownSeconds = _countdownSeconds! - 1;
-      });
-      if (_countdownSeconds! <= 0) {
+      final next = _countdownRemaining! - tick;
+      if (next <= Duration.zero) {
         timer.cancel();
         setState(() {
-          _countdownSeconds = null;
+          _countdownRemaining = null;
         });
         // 倒计时结束 → 自动播放下一遍
         ref.read(learningSessionProvider.notifier).replayBlindListen();
+      } else {
+        setState(() {
+          _countdownRemaining = next;
+        });
       }
     });
   }
@@ -120,7 +126,7 @@ class _BlindListenPlayerScreenState
     _countdownTimer?.cancel();
     _countdownTimer = null;
     setState(() {
-      _countdownSeconds = null;
+      _countdownRemaining = null;
     });
     // 跳过倒计时 → 自动播放下一遍
     ref.read(learningSessionProvider.notifier).replayBlindListen();
@@ -235,80 +241,89 @@ class _BlindListenPlayerScreenState
             ),
           ],
         ),
-        body: Stack(
+        body: Column(
           children: [
-            // 主体内容
-            Column(
-              children: [
-                // 中央区域 — 大播放按钮 + 耳机图标
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 耳机图标
-                        Icon(
-                          Icons.headphones,
-                          size: 80,
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-
-                        // 播放/暂停按钮
-                        GestureDetector(
-                          onTap: () {
-                            final player = ref.read(
-                              blindListenPlayerProvider.notifier,
-                            );
-                            if (playerState.isPlaying) {
-                              player.pause();
-                            } else {
-                              player.play();
-                            }
-                          },
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              playerState.isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              size: 40,
-                              color: theme.colorScheme.onPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
+            // 中央区域 — 大播放按钮 + 耳机图标
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 耳机图标
+                    Icon(
+                      Icons.headphones,
+                      size: 80,
+                      color: theme.colorScheme.primary.withValues(
+                        alpha: 0.3,
+                      ),
                     ),
-                  ),
-                ),
+                    const SizedBox(height: AppSpacing.xl),
 
-                // 底部进度条
-                _ProgressSection(formatDuration: _formatDuration),
-              ],
+                    // 播放/暂停按钮
+                    GestureDetector(
+                      onTap: () {
+                        final player = ref.read(
+                          blindListenPlayerProvider.notifier,
+                        );
+                        if (playerState.isPlaying) {
+                          player.pause();
+                        } else {
+                          player.play();
+                        }
+                      },
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.3,
+                              ),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          playerState.isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                          size: 40,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.l),
+
+                    // 倒计时 / 遍数信息区域（固定高度，避免布局跳动）
+                    SizedBox(
+                      height: 64,
+                      child: _countdownRemaining != null
+                          ? _CountdownIndicator(
+                              remaining: _countdownRemaining!,
+                              total: _countdownTotal,
+                              l10n: l10n,
+                              onSkip: _skipCountdown,
+                            )
+                          : Center(
+                              child: Text(
+                                l10n.blindListenPassLabel(currentPass),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
             ),
 
-            // 倒计时覆盖层
-            if (_countdownSeconds != null)
-              _CountdownOverlay(
-                seconds: _countdownSeconds!,
-                onSkip: _skipCountdown,
-              ),
+            // 底部进度条
+            _ProgressSection(formatDuration: _formatDuration),
           ],
         ),
       ),
@@ -392,64 +407,50 @@ class _ProgressSection extends ConsumerWidget {
   }
 }
 
-/// 倒计时覆盖层
-class _CountdownOverlay extends StatelessWidget {
-  final int seconds;
+/// 内联倒计时指示器 — 文字标签 + 线性进度条 + 跳过按钮
+class _CountdownIndicator extends StatelessWidget {
+  final Duration remaining;
+  final Duration total;
+  final AppLocalizations l10n;
   final VoidCallback onSkip;
 
-  const _CountdownOverlay({required this.seconds, required this.onSkip});
+  const _CountdownIndicator({
+    required this.remaining,
+    required this.total,
+    required this.l10n,
+    required this.onSkip,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final totalMs = total.inMilliseconds;
+    final remainingMs = remaining.inMilliseconds;
+    final progress = totalMs > 0 ? 1.0 - (remainingMs / totalMs) : 1.0;
+    final seconds = (remainingMs / 1000).ceil();
 
-    return Container(
-      color: theme.colorScheme.scrim.withValues(alpha: 0.6),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 倒计时圆圈
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: theme.colorScheme.primary, width: 4),
-              ),
-              child: Center(
-                child: Text(
-                  '$seconds',
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    color: theme.colorScheme.onInverseSurface,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.m),
-
-            // 提示文字
-            Text(
-              l10n.countdownNextPlay,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onInverseSurface,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.l),
-
-            // 跳过按钮
-            TextButton(
-              onPressed: onSkip,
-              child: Text(
-                l10n.skipCountdown,
-                style: TextStyle(color: theme.colorScheme.onInverseSurface),
-              ),
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          l10n.blindListenCountdown(seconds),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.s),
+        SizedBox(
+          width: 120,
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        TextButton(
+          onPressed: onSkip,
+          child: Text(l10n.skipCountdown),
+        ),
+      ],
     );
   }
 }
