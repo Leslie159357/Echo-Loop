@@ -142,10 +142,11 @@ void main() {
 
       expect(find.text('Review'), findsOneWidget);
       expect(find.text('0/7 completed'), findsOneWidget);
-      final expandIcon = tester.widget<AnimatedRotation>(
+      // 复习区域的 AnimatedRotation 是第二个（首学区域有第一个）
+      final expandIcons = tester.widgetList<AnimatedRotation>(
         find.byType(AnimatedRotation),
-      );
-      expect(expandIcon.turns, 0.0);
+      ).toList();
+      expect(expandIcons.last.turns, 0.0);
     });
 
     testWidgets('点击复习标题展开复习区域', (tester) async {

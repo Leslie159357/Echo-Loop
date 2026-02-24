@@ -30,7 +30,9 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/retell_player_provider.dart';
 import 'package:fluency/providers/package_info_provider.dart';
+import 'package:fluency/models/retell_settings.dart';
 
 // ========== 测试数据工厂 ==========
 
@@ -523,6 +525,36 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
+  Future<void> saveRetellParagraphIndex(
+    String audioItemId,
+    int? paragraphIndex,
+  ) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      retellParagraphIndex: paragraphIndex,
+      clearRetellParagraphIndex: paragraphIndex == null,
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
+  Future<void> incrementRetellPassCount(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      retellPassCount: (progress.retellPassCount ?? 0) + 1,
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
   Future<void> deleteProgress(String audioItemId) async {
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap.remove(audioItemId);
@@ -616,6 +648,20 @@ class TestLearningSession extends LearningSession {
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.listenAndRepeat,
+      audioItemId: audioItemId,
+      isFreePlay: isFreePlay,
+    );
+  }
+
+  @override
+  Future<void> enterRetellMode(
+    String audioItemId,
+    List<List<Sentence>> paragraphs,
+    Map<int, Set<int>> keywordsMap, {
+    bool isFreePlay = false,
+  }) async {
+    state = state.copyWith(
+      learningMode: LearningMode.retell,
       audioItemId: audioItemId,
       isFreePlay: isFreePlay,
     );
@@ -961,6 +1007,173 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
   }
 }
 
+/// 测试用 RetellPlayer — 不依赖音频引擎
+class TestRetellPlayer extends RetellPlayer {
+  List<List<Sentence>> _testParagraphs = [];
+  Map<int, Set<int>> _testKeywords = {};
+
+  @override
+  RetellPlayerState build() => const RetellPlayerState();
+
+  @override
+  List<Sentence> get currentParagraphSentences =>
+      _testParagraphs.isNotEmpty &&
+              state.currentParagraphIndex < _testParagraphs.length
+          ? _testParagraphs[state.currentParagraphIndex]
+          : [];
+
+  @override
+  List<List<Sentence>> get paragraphs => List.unmodifiable(_testParagraphs);
+
+  @override
+  Map<int, Set<int>> get keywordsMap => Map.unmodifiable(_testKeywords);
+
+  @override
+  Duration get currentParagraphDuration {
+    final sentences = currentParagraphSentences;
+    if (sentences.isEmpty) return Duration.zero;
+    return sentences.last.endTime - sentences.first.startTime;
+  }
+
+  @override
+  void initialize(
+    List<List<Sentence>> paragraphs,
+    Map<int, Set<int>> keywordsMap, {
+    int? startSentenceIndex,
+  }) {
+    _testParagraphs = paragraphs;
+    _testKeywords = keywordsMap;
+    var safeIndex = 0;
+    if (startSentenceIndex != null && paragraphs.isNotEmpty) {
+      for (var i = 0; i < paragraphs.length; i++) {
+        if (paragraphs[i].any((s) => s.index == startSentenceIndex)) {
+          safeIndex = i;
+          break;
+        }
+      }
+    }
+    state = RetellPlayerState(
+      currentParagraphIndex: safeIndex,
+      totalParagraphs: paragraphs.length,
+    );
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    if (_testParagraphs.isEmpty) {
+      state = state.copyWith(isCompleted: true);
+      return;
+    }
+    state = state.copyWith(
+      phase: RetellPhase.listening,
+      isPlaying: true,
+      playingSentenceIndex: 0,
+    );
+  }
+
+  @override
+  Future<void> restart() async {
+    state = RetellPlayerState(
+      currentParagraphIndex: 0,
+      totalParagraphs: _testParagraphs.length,
+      settings: state.settings,
+      displayMode: RetellDisplayMode.keywordsOnly,
+      phase: RetellPhase.listening,
+      isPlaying: true,
+      playingSentenceIndex: 0,
+    );
+  }
+
+  @override
+  Future<void> pause() async {
+    state = state.copyWith(isPlaying: false, isRetellCountdown: false);
+  }
+
+  @override
+  Future<void> resume() async {
+    if (state.phase == RetellPhase.listening) {
+      state = state.copyWith(isPlaying: true);
+    }
+  }
+
+  @override
+  Future<void> goToNextParagraph() async {
+    if (state.currentParagraphIndex >= state.totalParagraphs - 1) {
+      state = state.copyWith(isCompleted: true, isPlaying: false);
+      return;
+    }
+    state = state.copyWith(
+      currentParagraphIndex: state.currentParagraphIndex + 1,
+      phase: RetellPhase.listening,
+      currentRepeatCount: 1,
+      playingSentenceIndex: 0,
+      isRetellCountdown: false,
+      isPlaying: true,
+      displayMode: RetellDisplayMode.keywordsOnly,
+    );
+  }
+
+  @override
+  Future<void> goToPreviousParagraph() async {
+    if (state.currentParagraphIndex <= 0) return;
+    state = state.copyWith(
+      currentParagraphIndex: state.currentParagraphIndex - 1,
+      phase: RetellPhase.listening,
+      currentRepeatCount: 1,
+      playingSentenceIndex: 0,
+      isRetellCountdown: false,
+      isPlaying: true,
+      displayMode: RetellDisplayMode.keywordsOnly,
+    );
+  }
+
+  @override
+  Future<void> skipRetelling() async {
+    await goToNextParagraph();
+  }
+
+  @override
+  void setDisplayMode(RetellDisplayMode mode) {
+    state = state.copyWith(displayMode: mode);
+  }
+
+  @override
+  void updateSettings(RetellSettings newSettings) {
+    final ratioChanged = newSettings.keywordRatio != state.settings.keywordRatio;
+    state = state.copyWith(settings: newSettings);
+    if (ratioChanged) {
+      regenerateKeywords();
+    }
+  }
+
+  @override
+  void regenerateKeywords() {
+    // 测试环境不实际重新生成，保持已设置的关键词
+  }
+
+  @override
+  void disposePlayer() {
+    _testParagraphs = [];
+    _testKeywords = {};
+    state = const RetellPlayerState();
+  }
+
+  /// 直接设置 state（测试辅助方法）
+  void setState(RetellPlayerState newState) {
+    state = newState;
+  }
+
+  /// 设置测试段落数据（测试辅助方法）
+  void setTestParagraphs(List<List<Sentence>> paragraphs) {
+    _testParagraphs = paragraphs;
+  }
+
+  /// 设置测试关键词数据（测试辅助方法）
+  void setTestKeywords(Map<int, Set<int>> keywords) {
+    _testKeywords = keywords;
+  }
+}
+
 /// 测试用 BookmarkDao — 支持 watchByAudioId 返回可控 Stream
 ///
 /// 精听播放器退出时会通过 BookmarkDao 保存难句书签，
@@ -1013,6 +1226,7 @@ Widget createTestApp() {
       listenAndRepeatPlayerProvider.overrideWith(
         () => TestListenAndRepeatPlayer(),
       ),
+      retellPlayerProvider.overrideWith(() => TestRetellPlayer()),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
     ],
@@ -1065,6 +1279,7 @@ Widget createTestAppWithAudio({
       listenAndRepeatPlayerProvider.overrideWith(
         () => TestListenAndRepeatPlayer(),
       ),
+      retellPlayerProvider.overrideWith(() => TestRetellPlayer()),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
     ],

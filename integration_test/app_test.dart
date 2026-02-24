@@ -17,6 +17,7 @@ import 'groups/learning_flow_tests.dart';
 import 'groups/audio_star_tests.dart';
 import 'groups/tag_tests.dart';
 import 'groups/stats_display_tests.dart';
+import 'groups/retell_tests.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -32,4 +33,5 @@ void main() {
   listenAndRepeatTests();
   learningFlowTests();
   statsDisplayTests();
+  retellTests();
 }

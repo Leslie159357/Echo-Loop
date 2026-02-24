@@ -213,7 +213,17 @@
 
 **完成时间**: 2026-02-24
 
-- [ ] 实现首学流程 — 段级复述模式
+- [x] 实现首学流程 — 段级复述模式
+
+**完成时间**: 2026-02-24
+
+- [x] 修复复述播放器 5 个 Bug — ① 播放/暂停按钮不工作（pause 补 stopPlayback + _playCurrentParagraph 局部变量 guard + playRangeOnce/playClipOnce 移除过宽完成条件）② 切换显示模式句子布局跳动（每词独立渲染 _WordBlock 替代合并 _MaskedBlock）③ 学习计划页首学区域折叠支持（_FirstStudySection 新增 isExpanded/onToggle + AnimatedCrossFade）④ 自由练习完成显示错误文案（三分支判断 isFreePlay + 新增 retellCompleteFreePlay i18n key）⑤ 句子 Tile 交互优化（移除整体 GestureDetector + 添加展开按钮 + 可见单词点击回调 + 展开显示翻译/解析 placeholder）
+
+**完成时间**: 2026-02-24
+
+- [x] 复述播放器 UI/UX 优化 — ① 关键词→可见词文案优化 + KeywordMethod 三选一（关闭/随机/AI）② 显示模式 SegmentedButton 主界面展示 ③ 底部控制栏统一风格（跟读同款圆形大按钮）④ 阶段指示器重构（listening 分行 + retelling 倒计时 120px 短进度条 + 100ms 平滑更新）⑤ 断点保存改用句子索引（分段无关）⑥ 完成对话框重构（步骤进度+统计+再来一遍/完成双操作）⑦ 句子编号改用全局索引
+
+**完成时间**: 2026-02-24
 - [ ] 实现复习调度引擎（R1-R28 间隔计算与提醒）
 - [ ] 实现学习进度记录与断点续学
 
