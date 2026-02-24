@@ -187,10 +187,12 @@ class _IntensiveListenSettingsSheet extends ConsumerWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: AppSpacing.xs),
-            Text(
-              l10n.intensiveListenPauseSmartDesc,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            Expanded(
+              child: Text(
+                l10n.intensiveListenPauseSmartDesc,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],

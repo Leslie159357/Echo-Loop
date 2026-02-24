@@ -187,10 +187,12 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: AppSpacing.xs),
-            Text(
-              l10n.listenAndRepeatPauseSmartDesc,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            Expanded(
+              child: Text(
+                l10n.listenAndRepeatPauseSmartDesc,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],

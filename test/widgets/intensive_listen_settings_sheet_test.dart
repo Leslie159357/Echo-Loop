@@ -102,7 +102,7 @@ void main() {
       await openSheet(tester);
 
       // 默认 smart 模式显示说明
-      expect(find.text('根据句子长度自动判定'), findsOneWidget);
+      expect(find.text('根据难度、句子长度和学习阶段自动调整'), findsOneWidget);
     });
 
     testWidgets('切换到固定间隔模式显示 ChoiceChip', (tester) async {
