@@ -43,5 +43,12 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
     end
+
+    # sqlite3 Pod 的 C 源码在新版 Xcode SDK 下产生大量隐式转换警告，抑制之。
+    if target.name == 'sqlite3'
+      target.build_configurations.each do |config|
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+      end
+    end
   end
 end
