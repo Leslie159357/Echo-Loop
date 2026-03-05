@@ -338,6 +338,32 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen> {
             // 阶段指示器
             _PhaseIndicator(state: state, l10n: l10n),
 
+            // 倒计时控制按钮（仅在复述倒计时期间显示）
+            if (state.isRetellCountdown)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: state.isCountdownPaused
+                        ? () => player.resumeCountdown()
+                        : () => player.pauseCountdown(),
+                    icon: Icon(
+                      state.isCountdownPaused ? Icons.play_arrow : Icons.pause,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.l),
+                  IconButton(
+                    onPressed: () => player.toggleCountdownFastForward(),
+                    icon: Icon(
+                      Icons.fast_forward,
+                      color: state.isCountdownFastForward
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+
             const SizedBox(height: AppSpacing.s),
 
             // 底部控制
@@ -458,15 +484,18 @@ class _BottomControls extends StatelessWidget {
     final isFirst = state.currentParagraphIndex <= 0;
     final isLast = state.currentParagraphIndex >= state.totalParagraphs - 1;
 
-    // 中间大按钮：listening → play/pause，retelling → 跳过倒计时
+    // 中间大按钮：listening → play/pause，retelling countdown → replay
     final IconData centerIcon;
     final VoidCallback centerOnPressed;
     if (state.phase == RetellPhase.listening) {
       centerIcon = state.isPlaying ? Icons.pause : Icons.play_arrow;
       centerOnPressed = state.isPlaying ? player.pause : player.resume;
+    } else if (state.isRetellCountdown) {
+      centerIcon = Icons.play_arrow;
+      centerOnPressed = player.replayDuringCountdown;
     } else {
-      centerIcon = Icons.fast_forward;
-      centerOnPressed = player.skipRetelling;
+      centerIcon = Icons.play_arrow;
+      centerOnPressed = player.resume;
     }
 
     return Row(

@@ -1156,8 +1156,31 @@ class TestRetellPlayer extends RetellPlayer {
   }
 
   @override
-  Future<void> skipRetelling() async {
-    await goToNextParagraph();
+  void pauseCountdown() {
+    state = state.copyWith(isCountdownPaused: true);
+  }
+
+  @override
+  void resumeCountdown() {
+    state = state.copyWith(isCountdownPaused: false);
+  }
+
+  @override
+  void toggleCountdownFastForward() {
+    state = state.copyWith(
+      isCountdownFastForward: !state.isCountdownFastForward,
+    );
+  }
+
+  @override
+  Future<void> replayDuringCountdown() async {
+    state = state.copyWith(
+      phase: RetellPhase.listening,
+      isRetellCountdown: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+      isPlaying: true,
+    );
   }
 
   @override

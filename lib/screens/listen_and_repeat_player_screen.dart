@@ -207,9 +207,9 @@ class _ListenAndRepeatPlayerScreenState
         barrierDismissible: false,
         builder: (ctx) => _FreePlayCompleteDialog(
           title: AppLocalizations.of(ctx)!.listenAndRepeatCompleteTitle,
-          message: AppLocalizations.of(ctx)!.listenAndRepeatCompleteMessage(
-            playerState.totalSentences,
-          ),
+          message: AppLocalizations.of(
+            ctx,
+          )!.listenAndRepeatCompleteMessage(playerState.totalSentences),
         ),
       );
 
@@ -403,29 +403,65 @@ class _ListenAndRepeatPlayerScreenState
                     ),
                     const SizedBox(height: AppSpacing.m),
 
-                    // 遍数 / 停顿倒计时
+                    // 遍数（始终显示）+ 停顿倒计时（倒计时期间显示）
                     SizedBox(
-                      height: 64,
-                      child: Center(
-                        child: playerState.isPauseBetweenPlays
-                            ? _PauseCountdownIndicator(
+                      height: 80,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            l10n.listenAndRepeatPlayCount(
+                              playerState.currentPlayCount,
+                              playerState.settings.repeatCount,
+                            ),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (playerState.isPauseBetweenPlays)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: AppSpacing.xs,
+                              ),
+                              child: _PauseCountdownIndicator(
                                 remaining: playerState.pauseRemaining,
                                 total: playerState.pauseDuration,
                                 isBetweenSentences:
                                     playerState.isPauseBetweenSentences,
                                 l10n: l10n,
-                              )
-                            : Text(
-                                l10n.listenAndRepeatPlayCount(
-                                  playerState.currentPlayCount,
-                                  playerState.settings.repeatCount,
-                                ),
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
                               ),
+                            ),
+                        ],
                       ),
                     ),
+                    // 倒计时控制按钮（仅在倒计时期间显示）
+                    if (playerState.isPauseBetweenPlays)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            onPressed: playerState.isCountdownPaused
+                                ? () => player.resumeCountdown()
+                                : () => player.pauseCountdown(),
+                            icon: Icon(
+                              playerState.isCountdownPaused
+                                  ? Icons.play_arrow
+                                  : Icons.pause,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.l),
+                          IconButton(
+                            onPressed: () =>
+                                player.toggleCountdownFastForward(),
+                            icon: Icon(
+                              Icons.fast_forward,
+                              color: playerState.isCountdownFastForward
+                                  ? theme.colorScheme.primary
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -437,7 +473,9 @@ class _ListenAndRepeatPlayerScreenState
               onPrevious: () => player.goToPrevious(),
               onNext: () => player.goToNext(),
               onPlayPause: () {
-                if (playerState.isPlaying) {
+                if (playerState.isPauseBetweenPlays) {
+                  player.replayDuringCountdown();
+                } else if (playerState.isPlaying) {
                   player.pause();
                 } else {
                   player.resume();
@@ -758,10 +796,7 @@ class _FreePlayCompleteDialog extends StatelessWidget {
   final String title;
   final String message;
 
-  const _FreePlayCompleteDialog({
-    required this.title,
-    required this.message,
-  });
+  const _FreePlayCompleteDialog({required this.title, required this.message});
 
   @override
   Widget build(BuildContext context) {
