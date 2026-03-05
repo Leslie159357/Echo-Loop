@@ -29,6 +29,7 @@ import '../widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart';
 import '../widgets/retell/retell_briefing_sheet.dart';
 import '../widgets/review/review_briefing_sheet.dart';
+import '../widgets/manage_subtitles_sheet.dart';
 import '../providers/listening_practice/bookmark_manager.dart';
 import '../database/providers.dart';
 import '../providers/learning_session/sentence_playback_engine.dart';
@@ -497,7 +498,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
                 _AudioInfoRow(l10n: l10n, audioItem: audioItem),
                 if (!hasTranscript) ...[
                   const SizedBox(height: AppSpacing.s),
-                  _NoTranscriptBanner(l10n: l10n),
+                  _NoTranscriptBanner(l10n: l10n, audioItem: audioItem),
                 ],
                 const SizedBox(height: AppSpacing.l),
                 _FirstStudySection(
@@ -1659,11 +1660,12 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-/// 无字幕提醒横幅 — 提示用户需要上传字幕
+/// 无字幕提醒横幅 — 提示用户需要上传字幕，支持直接打开字幕管理
 class _NoTranscriptBanner extends StatelessWidget {
   final AppLocalizations l10n;
+  final AudioItem audioItem;
 
-  const _NoTranscriptBanner({required this.l10n});
+  const _NoTranscriptBanner({required this.l10n, required this.audioItem});
 
   @override
   Widget build(BuildContext context) {
@@ -1687,6 +1689,16 @@ class _NoTranscriptBanner extends StatelessWidget {
                   color: theme.colorScheme.onErrorContainer,
                 ),
               ),
+            ),
+            TextButton(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (_) =>
+                      ManageSubtitlesSheet(audioItem: audioItem),
+                );
+              },
+              child: Text(l10n.addSubtitle),
             ),
           ],
         ),

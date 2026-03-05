@@ -684,6 +684,11 @@
     }
   },
   "noSubtitleYet": "No subtitle yet",
+  "addSubtitlePromptTitle": "Add Subtitle?",
+  "addSubtitlePromptMessage": "Add a subtitle now for learning?",
+  "selectCollection": "Collection (Optional)",
+  "noCollection": "None",
+  "addSubtitle": "Add Subtitle",
   "retryTranscription": "Retry",
   "transcriptionFailedMessage": "Error: {message}",
   "@transcriptionFailedMessage": {

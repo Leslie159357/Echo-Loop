@@ -2276,6 +2276,36 @@ abstract class AppLocalizations {
   /// **'No subtitle yet'**
   String get noSubtitleYet;
 
+  /// No description provided for @addSubtitlePromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Subtitle?'**
+  String get addSubtitlePromptTitle;
+
+  /// No description provided for @addSubtitlePromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a subtitle now for learning?'**
+  String get addSubtitlePromptMessage;
+
+  /// No description provided for @selectCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Collection (Optional)'**
+  String get selectCollection;
+
+  /// No description provided for @noCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get noCollection;
+
+  /// No description provided for @addSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Subtitle'**
+  String get addSubtitle;
+
   /// No description provided for @retryTranscription.
   ///
   /// In en, this message translates to:

@@ -12,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_audio_dialog.dart';
 import '../widgets/audio_list_view.dart';
+import '../widgets/manage_subtitles_sheet.dart';
 
 /// 合集详情页面 - 展示合集中的音频，支持上传音频
 class CollectionDetailScreen extends ConsumerWidget {
@@ -66,13 +67,48 @@ class CollectionDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// 显示添加音频对话框
-  void _showAddAudioDialog(BuildContext context, Collection collection) {
-    showDialog(
+  /// 显示添加音频对话框，添加成功后弹字幕确认
+  void _showAddAudioDialog(BuildContext context, Collection collection) async {
+    final result = await showDialog<AudioItem>(
       context: context,
       builder: (context) => AddAudioDialog(collectionId: collection.id),
     );
+    if (result != null && context.mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      final wantSubtitle = await _showSubtitlePrompt(context, l10n);
+      if (wantSubtitle && context.mounted) {
+        showModalBottomSheet(
+          context: context,
+          builder: (_) => ManageSubtitlesSheet(audioItem: result),
+        );
+      }
+    }
   }
+}
+
+/// 添加音频后弹出字幕确认对话框
+Future<bool> _showSubtitlePrompt(
+  BuildContext context,
+  AppLocalizations l10n,
+) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(l10n.addSubtitlePromptTitle),
+      content: Text(l10n.addSubtitlePromptMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(l10n.cancel),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(l10n.addSubtitle),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
 }
 
 /// 合集空状态视图

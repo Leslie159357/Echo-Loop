@@ -102,85 +102,88 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(0, AppSpacing.m, 0, AppSpacing.s),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 拖动手柄
-            Center(
-              child: Container(
-                width: 32,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.m),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 拖动手柄
+              Center(
+                child: Container(
+                  width: 32,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.m),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            // 标题行 + 删除按钮
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.manageSubtitles,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+              // 标题行 + 删除按钮
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.manageSubtitles,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    // 删除按钮（仅有字幕且非进度模式时显示）
+                    if (audioItem.hasTranscript && !isTaskActive)
+                      IconButton(
+                        onPressed: () =>
+                            _handleDeleteSubtitle(context, audioItem),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        color: theme.colorScheme.onSurfaceVariant,
+                        tooltip: l10n.deleteSubtitle,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.m),
+              // 进度模式 或 选择模式
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: isTaskActive || taskState is TranscriptionCompleted
+                    ? _buildProgressView(l10n, theme, taskState)
+                    : taskState is TranscriptionFailed
+                    ? _buildErrorView(l10n, theme, taskState, audioItem)
+                    : _buildRadioOptions(l10n, theme, audioItem),
+              ),
+              const SizedBox(height: AppSpacing.m),
+              // 操作按钮（进度模式下隐藏）
+              if (!isTaskActive && taskState is! TranscriptionCompleted)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: taskState is TranscriptionFailed
+                          ? () => _handleAction(context, audioItem)
+                          : _getActionEnabled(audioItem)
+                          ? () => _handleAction(context, audioItem)
+                          : null,
+                      child: Text(
+                        taskState is TranscriptionFailed
+                            ? l10n.retryTranscription
+                            : _selectedAction == _SubtitleAction.localUpload
+                            ? l10n.uploadTranscript
+                            : _isAiDisabled(audioItem)
+                            ? l10n.alreadyTranscribedWithOption
+                            : l10n.startTranscription,
                       ),
                     ),
                   ),
-                  // 删除按钮（仅有字幕且非进度模式时显示）
-                  if (audioItem.hasTranscript && !isTaskActive)
-                    IconButton(
-                      onPressed: () =>
-                          _handleDeleteSubtitle(context, audioItem),
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      color: theme.colorScheme.onSurfaceVariant,
-                      tooltip: l10n.deleteSubtitle,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.m),
-            // 进度模式 或 选择模式
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: isTaskActive || taskState is TranscriptionCompleted
-                  ? _buildProgressView(l10n, theme, taskState)
-                  : taskState is TranscriptionFailed
-                  ? _buildErrorView(l10n, theme, taskState, audioItem)
-                  : _buildRadioOptions(l10n, theme, audioItem),
-            ),
-            const SizedBox(height: AppSpacing.m),
-            // 操作按钮（进度模式下隐藏）
-            if (!isTaskActive && taskState is! TranscriptionCompleted)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: taskState is TranscriptionFailed
-                        ? () => _handleAction(context, audioItem)
-                        : _getActionEnabled(audioItem)
-                        ? () => _handleAction(context, audioItem)
-                        : null,
-                    child: Text(
-                      taskState is TranscriptionFailed
-                          ? l10n.retryTranscription
-                          : _selectedAction == _SubtitleAction.localUpload
-                          ? l10n.uploadTranscript
-                          : _isAiDisabled(audioItem)
-                          ? l10n.alreadyTranscribedWithOption
-                          : l10n.startTranscription,
-                    ),
-                  ),
                 ),
-              ),
-            const SizedBox(height: AppSpacing.s),
-          ],
+              const SizedBox(height: AppSpacing.s),
+            ],
+          ),
         ),
       ),
     );

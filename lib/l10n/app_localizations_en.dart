@@ -1248,6 +1248,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noSubtitleYet => 'No subtitle yet';
 
   @override
+  String get addSubtitlePromptTitle => 'Add Subtitle?';
+
+  @override
+  String get addSubtitlePromptMessage => 'Add a subtitle now for learning?';
+
+  @override
+  String get selectCollection => 'Collection (Optional)';
+
+  @override
+  String get noCollection => 'None';
+
+  @override
+  String get addSubtitle => 'Add Subtitle';
+
+  @override
   String get retryTranscription => 'Retry';
 
   @override

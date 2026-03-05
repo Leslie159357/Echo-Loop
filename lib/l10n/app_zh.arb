@@ -542,6 +542,11 @@
     }
   },
   "noSubtitleYet": "暂无字幕",
+  "addSubtitlePromptTitle": "添加字幕？",
+  "addSubtitlePromptMessage": "现在添加字幕用于学习吗？",
+  "selectCollection": "合集（可选）",
+  "noCollection": "无",
+  "addSubtitle": "添加字幕",
   "retryTranscription": "重试",
   "transcriptionFailedMessage": "错误：{message}",
   "@transcriptionFailedMessage": {

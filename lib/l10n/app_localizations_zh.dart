@@ -1212,6 +1212,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noSubtitleYet => '暂无字幕';
 
   @override
+  String get addSubtitlePromptTitle => '添加字幕？';
+
+  @override
+  String get addSubtitlePromptMessage => '现在添加字幕用于学习吗？';
+
+  @override
+  String get selectCollection => '合集（可选）';
+
+  @override
+  String get noCollection => '无';
+
+  @override
+  String get addSubtitle => '添加字幕';
+
+  @override
   String get retryTranscription => '重试';
 
   @override

@@ -4,10 +4,12 @@
 // 使用 IndexedStack 保持两个视图状态。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/audio_item.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/audio_list_view.dart';
 import '../widgets/add_audio_dialog.dart';
+import '../widgets/manage_subtitles_sheet.dart';
 import 'collection_screen.dart';
 
 // AudioSortButton 已提取到 audio_list_view.dart 中作为公开组件
@@ -100,16 +102,51 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         IconButton(
           icon: const Icon(Icons.add),
           tooltip: l10n.addAudio,
-          onPressed: () {
-            showDialog(
+          onPressed: () async {
+            final result = await showDialog<AudioItem>(
               context: context,
               builder: (context) => const AddAudioDialog(),
             );
+            if (result != null && context.mounted) {
+              final l = AppLocalizations.of(context)!;
+              final wantSubtitle = await _showSubtitlePrompt(context, l);
+              if (wantSubtitle && context.mounted) {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (_) => ManageSubtitlesSheet(audioItem: result),
+                );
+              }
+            }
           },
         ),
       ];
     }
   }
+}
+
+/// 添加音频后弹出字幕确认对话框
+Future<bool> _showSubtitlePrompt(
+  BuildContext context,
+  AppLocalizations l10n,
+) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(l10n.addSubtitlePromptTitle),
+      content: Text(l10n.addSubtitlePromptMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(l10n.cancel),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(l10n.addSubtitle),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
 }
 
 /// 合集列表视图体（不含 Scaffold/AppBar）

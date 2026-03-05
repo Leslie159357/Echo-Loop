@@ -2,7 +2,9 @@
 //
 // 支持两种模式：
 // - 有 collectionId：添加音频后自动关联到指定合集
-// - 无 collectionId：只添加到音频库，不关联合集
+// - 无 collectionId：显示合集下拉框，可选择归入合集
+//
+// 添加成功后弹出字幕确认对话框，返回 AudioItem 表示用户选择添加字幕。
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,11 +17,15 @@ import '../providers/collection_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/audio_duration.dart';
-import '../utils/transcript_stats.dart';
 
 /// 添加音频对话框 — collectionId 可选
+///
+///
+/// 返回值：
+/// - `AudioItem` — 用户选择"添加字幕"
+/// - `null` — 取消或选择"不需要"
 class AddAudioDialog extends ConsumerStatefulWidget {
-  /// 合集 ID（为 null 时只添加到音频库）
+  /// 合集 ID（为 null 时显示合集下拉框）
   final String? collectionId;
 
   const AddAudioDialog({super.key, this.collectionId});
@@ -30,9 +36,11 @@ class AddAudioDialog extends ConsumerStatefulWidget {
 
 class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
   String? _audioPath;
-  String? _transcriptPath;
   String _audioName = '';
   bool _isLoading = false;
+
+  /// 用户选择的合集 ID（仅 collectionId == null 时使用）
+  String? _selectedCollectionId;
 
   @override
   Widget build(BuildContext context) {
@@ -59,32 +67,10 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _isLoading ? null : _pickTranscriptFile,
-              icon: const Icon(Icons.subtitles),
-              label: Text(l10n.selectTranscript),
-            ),
-            if (_transcriptPath != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      path.basename(_transcriptPath!),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () {
-                      setState(() {
-                        _transcriptPath = null;
-                      });
-                    },
-                  ),
-                ],
-              ),
+            // 无 collectionId 时显示合集下拉框
+            if (widget.collectionId == null) ...[
+              const SizedBox(height: 16),
+              _buildCollectionDropdown(l10n),
             ],
           ],
         ),
@@ -105,6 +91,34 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
               : Text(l10n.add),
         ),
       ],
+    );
+  }
+
+  /// 构建合集下拉选择框
+  Widget _buildCollectionDropdown(AppLocalizations l10n) {
+    final collections =
+        ref.watch(collectionListProvider).rawCollections;
+    return DropdownButtonFormField<String?>(
+      value: _selectedCollectionId,
+      decoration: InputDecoration(
+        labelText: l10n.selectCollection,
+        isDense: true,
+      ),
+      items: [
+        DropdownMenuItem<String?>(
+          value: null,
+          child: Text(l10n.noCollection),
+        ),
+        ...collections.map(
+          (c) => DropdownMenuItem<String?>(
+            value: c.id,
+            child: Text(c.name),
+          ),
+        ),
+      ],
+      onChanged: _isLoading
+          ? null
+          : (value) => setState(() => _selectedCollectionId = value),
     );
   }
 
@@ -142,46 +156,6 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${l10n.pickAudioFileFailed}: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickTranscriptFile() async {
-    try {
-      final FilePickerResult? result;
-
-      if (!kIsWeb && Platform.isIOS) {
-        result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['srt', 'lrc', 'txt', 'vtt', 'ass', 'ssa'],
-          allowMultiple: false,
-        );
-      } else {
-        final initialDir = !kIsWeb && Platform.isMacOS
-            ? await _getDownloadsDirectory()
-            : null;
-        result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['srt', 'lrc', 'txt', 'vtt', 'ass', 'ssa'],
-          initialDirectory: initialDir,
-          allowMultiple: false,
-        );
-      }
-
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.single;
-        final dest = await _savePickedFileToSandbox(file, 'transcripts');
-        if (!mounted) return;
-        setState(() {
-          _transcriptPath = dest;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.pickTranscriptFileFailed}: $e')),
         );
       }
     }
@@ -238,7 +212,8 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
     if (_audioPath == null) return;
 
     final l10n = AppLocalizations.of(context)!;
-    final collectionId = widget.collectionId;
+    // 确定最终使用的合集 ID（外部传入优先，否则使用下拉框选择）
+    final collectionId = widget.collectionId ?? _selectedCollectionId;
 
     // 有合集时检查合集中是否已存在同名音频
     if (collectionId != null) {
@@ -275,7 +250,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
       }
     }
 
-    // 检查音频库中是否已存在同名音频（忽略格式后缀）
+    // 检查音频库中是否已存在同名音频
     final library = ref.read(audioLibraryProvider.notifier);
     final libraryState = ref.read(audioLibraryProvider);
     final existingItem = libraryState.audioItems
@@ -283,11 +258,13 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
         .firstOrNull;
 
     String audioId;
+    AudioItem resultItem;
 
     if (existingItem != null) {
       if (collectionId != null) {
         // 有合集：音频已存在于库中，直接关联
         audioId = existingItem.id;
+        resultItem = existingItem;
       } else {
         // 无合集：提示重复，拒绝上传
         if (mounted) {
@@ -313,31 +290,19 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
         _isLoading = true;
       });
 
-      // 导入时提取音频时长
       final duration = await getAudioDurationSeconds(_audioPath!);
-
-      // 导入时统计字幕句子数和单词数
-      int sentenceCount = 0;
-      int wordCount = 0;
-      if (_transcriptPath != null) {
-        final stats = await getTranscriptStats(_transcriptPath!);
-        sentenceCount = stats.$1;
-        wordCount = stats.$2;
-      }
 
       final audioItem = AudioItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: _audioName,
         audioPath: _audioPath!,
-        transcriptPath: _transcriptPath,
         addedDate: DateTime.now(),
         totalDuration: duration,
-        sentenceCount: sentenceCount,
-        wordCount: wordCount,
       );
 
       await library.addAudioItem(audioItem);
       audioId = audioItem.id;
+      resultItem = audioItem;
     }
 
     // 有合集时关联到合集
@@ -348,7 +313,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
     }
 
     if (mounted) {
-      Navigator.pop(context);
+      Navigator.pop(context, resultItem);
     }
   }
 }
