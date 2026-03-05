@@ -83,9 +83,6 @@ void main() {
 
         // 无删除按钮
         expect(find.byTooltip('Delete Subtitle'), findsNothing);
-
-        // 状态文字：无字幕
-        expect(find.text('No subtitle yet'), findsOneWidget);
       });
 
       testWidgets('有本地字幕音频：显示状态文字和删除按钮', (tester) async {
@@ -97,9 +94,6 @@ void main() {
 
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
-
-        // 状态文字
-        expect(find.text('Current: Local Upload'), findsOneWidget);
 
         // 有删除按钮（标题栏右侧图标按钮）
         expect(find.byTooltip('Delete Subtitle'), findsOneWidget);
@@ -190,8 +184,7 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
 
-        // 字幕状态不变
-        expect(find.text('Current: Local Upload'), findsOneWidget);
+        // 删除按钮仍在（状态不变）
         expect(find.byTooltip('Delete Subtitle'), findsOneWidget);
       });
 

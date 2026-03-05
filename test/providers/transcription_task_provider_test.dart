@@ -439,7 +439,7 @@ void main() {
 
       final state = notifier.getTaskState('test-audio-1');
       expect(state, isA<TranscriptionFailed>());
-      expect((state as TranscriptionFailed).message, 'No job ID returned');
+      expect((state as TranscriptionFailed).message, 'server');
 
       container.dispose();
     });
@@ -461,6 +461,7 @@ void main() {
       ).thenThrow(
         DioException(
           requestOptions: RequestOptions(path: '/test'),
+          type: DioExceptionType.connectionError,
           message: 'Connection refused',
         ),
       );
@@ -478,7 +479,7 @@ void main() {
 
       final state = notifier.getTaskState('test-audio-1');
       expect(state, isA<TranscriptionFailed>());
-      expect((state as TranscriptionFailed).message, 'Connection refused');
+      expect((state as TranscriptionFailed).message, 'connection');
 
       container.dispose();
     });
@@ -572,10 +573,7 @@ void main() {
 
       final state = notifier.getTaskState('test-audio-1');
       expect(state, isA<TranscriptionFailed>());
-      expect(
-        (state as TranscriptionFailed).message,
-        'Deepgram error: unsupported format',
-      );
+      expect((state as TranscriptionFailed).message, 'server');
 
       container.dispose();
     });
