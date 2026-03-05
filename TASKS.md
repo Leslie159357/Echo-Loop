@@ -44,9 +44,20 @@
 
   **完成时间**: 2026-03-05
 
+### UI 优化与错误处理
+
+- [x] #13 管理字幕弹窗 UI 优化（卡片式选项、删除按钮移至标题栏）
+- [x] #14 简化转录错误提示（短码 + i18n 本地化）
+- [x] #15 移除字幕来源状态标签（避免歧义）
+- [x] #16 提取全局 API 配置（`lib/config/api_config.dart`）
+- [x] #17 iOS 原生网络权限触发（Method Channel + URLSession）
+- [x] #18 iOS ATS 例外配置（NSAllowsArbitraryLoads）
+
+  **完成时间**: 2026-03-05
+
 ### 验证结果
 
-- flutter analyze: 通过（35 info，无错误）
+- flutter analyze: 通过（info，无错误）
 - flutter test: 全部通过
 - flutter test integration_test -d macos: 全部通过（61 个）
 - flutter build macos: 通过

@@ -24,6 +24,13 @@
 - SRT 格式转换 + AudioListTile 进度指示
 - 两级缓存：音频 SHA256 去重 + 字幕语言去重
 
+### Phase 3（UI 优化 + iOS 适配）
+- 管理字幕弹窗 UI 重构（卡片式选项、删除按钮移至标题栏、移除状态标签）
+- 转录错误提示简化（短码 + i18n 本地化）
+- 全局 API 配置提取（`lib/config/api_config.dart`）
+- iOS 网络权限：通过 Method Channel 调用原生 URLSession 触发系统弹窗
+- iOS ATS 例外配置（NSAllowsArbitraryLoads + NSLocalNetworkUsageDescription）
+
 ### 测试覆盖
 - 65+ 个测试全部通过（模型 31 + Widget 10 + SRT 8 + SHA256 5 + API 11）
 
