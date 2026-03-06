@@ -22,6 +22,7 @@ import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 import '../widgets/intensive_listen/intensive_listen_settings_sheet.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart';
+import '../providers/sentence_ai_provider.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/player_hotkey_scope.dart';
 
@@ -536,6 +537,7 @@ class _IntensiveListenPlayerScreenState
                           l10n: l10n,
                           onContinue: () => player.exitAnnotationMode(),
                           onToggleDifficult: _toggleAndSaveDifficult,
+                          aiNotifier: ref.read(sentenceAiNotifierProvider),
                         )
                       : _NormalModeView(
                           key: const ValueKey('normal'),
@@ -896,6 +898,9 @@ class _AnnotationModeView extends StatelessWidget {
   final VoidCallback onContinue;
   final VoidCallback onToggleDifficult;
 
+  /// AI 翻译/解析服务
+  final SentenceAiNotifier? aiNotifier;
+
   const _AnnotationModeView({
     super.key,
     required this.text,
@@ -903,10 +908,18 @@ class _AnnotationModeView extends StatelessWidget {
     required this.l10n,
     required this.onContinue,
     required this.onToggleDifficult,
+    this.aiNotifier,
   });
 
   @override
   Widget build(BuildContext context) {
+    final ai = aiNotifier;
+    final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
+    final cachedAnalysis = ai?.getCachedAnalysis(text);
+    final cachedAnalysisText = cachedAnalysis != null
+        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.usage}'
+        : null;
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.l),
       child: Column(
@@ -914,9 +927,24 @@ class _AnnotationModeView extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               child: SentenceAnnotationCard(
+                key: ValueKey(text),
                 text: text,
                 isDifficult: isDifficult,
                 onToggle: onToggleDifficult,
+                onRequestTranslation: ai != null
+                    ? () async {
+                        final result = await ai.getTranslation(text);
+                        return result.translation;
+                      }
+                    : null,
+                onRequestAnalysis: ai != null
+                    ? () async {
+                        final result = await ai.getAnalysis(text);
+                        return '${result.grammar}\n${result.vocabulary}\n${result.usage}';
+                      }
+                    : null,
+                cachedTranslation: cachedTranslation,
+                cachedAnalysis: cachedAnalysisText,
               ),
             ),
           ),
