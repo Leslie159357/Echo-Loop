@@ -1,7 +1,28 @@
 # Fluency 项目规划
 
-> 最后更新：2026-03-05
-> 当前任务：管理字幕功能已完成（Phase 1 + Phase 2）
+> 最后更新：2026-03-06
+> 当前任务：AI 翻译 & AI 解析功能已完成
+
+---
+
+## 已完成：AI 翻译 & AI 解析功能
+
+**完成时间**: 2026-03-06
+
+在精听标注模式中集成 AI 翻译和 AI 解析功能，替换原有静态占位区域：
+
+### 后端
+- PostgreSQL 缓存表（sentence_translations / sentence_analyses）
+- 两个独立 API（POST /api/v1/ai/translate, POST /api/v1/ai/analyze）
+- 共享工具（text-normalize, generate-with-retry + 模型 fallback 链）
+
+### Flutter
+- 四级缓存：L1 内存 Map → L2 SQLite → L3 Next.js → L4 PostgreSQL
+- 可折叠 AiContentSection 组件（shimmer 骨架屏、错误重试）
+- 精听页面集成（lazy load，用户点击展开才请求）
+
+### 测试覆盖
+- 58 个新测试，总计 717 个测试全部通过
 
 ---
 

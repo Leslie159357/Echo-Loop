@@ -1,7 +1,7 @@
 # Fluency 任务清单
 
-> 最后更新：2026-03-05
-> 当前焦点：管理字幕功能（AI 转录）
+> 最后更新：2026-03-06
+> 当前焦点：AI 翻译 & AI 解析功能
 
 ## 历史归档
 - [Milestone 2 - 学习流程引擎](./docs/tasks-archive/milestone-2-learning-engine.md)
@@ -61,6 +61,51 @@
 - flutter test: 全部通过
 - flutter test integration_test -d macos: 全部通过（61 个）
 - flutter build macos: 通过
+
+---
+
+## 已完成：AI 翻译 & AI 解析功能
+
+### 后端（Next.js）
+
+- [x] 新增 `sentence_translations` 和 `sentence_analyses` PostgreSQL 表 + DB 迁移
+- [x] 共享工具：`text-normalize.ts`（归一化 + SHA256 hash）
+- [x] 共享工具：`generate-with-retry.ts`（AI 生成 + Zod 校验 + 模型 fallback）
+- [x] `POST /api/v1/ai/translate` API Route（DB 缓存 → LLM 生成）
+- [x] `POST /api/v1/ai/analyze` API Route（DB 缓存 → LLM 生成）
+
+### Flutter 数据层
+
+- [x] 数据模型：`SentenceTranslation` + `SentenceAnalysis`（`lib/models/sentence_ai_result.dart`）
+- [x] 归一化工具：`normalizeForCache()` + `hashText()`（`lib/utils/text_normalize.dart`）
+- [x] SQLite 缓存表：`SentenceAiCache` + `SentenceAiCacheDao`（DB v13→v14）
+- [x] API 客户端：`SentenceAiApiClient`（`lib/services/sentence_ai_api_client.dart`，60s timeout）
+- [x] 状态管理：`SentenceAiNotifier`（L1 内存 → L2 SQLite → L3 API 三级缓存 + 防重复请求）
+
+### Flutter UI 层
+
+- [x] `AiContentSection` 可折叠组件（4 态：收起/加载中/已加载/错误，shimmer 骨架屏）
+- [x] `SentenceAnnotationCard` 改造（替换静态 placeholder 为 AiContentSection）
+- [x] 精听页面集成（`_AnnotationModeView` 接入 SentenceAiNotifier）
+- [x] 国际化（新增 aiTranslation/aiAnalysis/aiLoadFailed/aiRetry，移除旧 placeholder key）
+
+### 测试覆盖（58 个新测试）
+
+- [x] 数据模型序列化测试
+- [x] 归一化 + hash 函数测试
+- [x] SentenceAiCacheDao 测试（6 个）
+- [x] SentenceAiApiClient 测试（8 个）
+- [x] SentenceAiNotifier Provider 测试（9 个）
+- [x] AiContentSection Widget 测试（13 个）
+- [x] SentenceAnnotationCard Widget 测试
+
+### 验证结果
+
+- flutter analyze: 通过（36 info，无错误/警告）
+- flutter test: 全部通过（717 个）
+- flutter build macos: 通过（73.8MB）
+
+  **完成时间**: 2026-03-06
 
 ---
 
