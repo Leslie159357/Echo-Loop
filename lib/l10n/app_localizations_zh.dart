@@ -710,10 +710,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenNotDifficult => '点击标记为难句';
 
   @override
-  String get intensiveListenTranslationPlaceholder => '翻译功能将在未来版本中提供';
+  String get aiTranslation => '翻译';
 
   @override
-  String get intensiveListenAnalysisPlaceholder => '分析功能将在未来版本中提供';
+  String get aiAnalysis => '解析';
+
+  @override
+  String get aiLoadFailed => '加载失败，点击重试';
+
+  @override
+  String get aiRetry => '重试';
+
+  @override
+  String get aiGrammar => '语法';
+
+  @override
+  String get aiVocabulary => '词汇';
+
+  @override
+  String get aiUsage => '用法';
 
   @override
   String get intensiveListenWordDictNotFound => '未收录该单词';

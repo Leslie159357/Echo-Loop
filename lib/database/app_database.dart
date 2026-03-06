@@ -14,6 +14,7 @@ import 'tables/learning_progresses.dart';
 import 'tables/stage_completions.dart';
 import 'tables/tags.dart';
 import 'tables/audio_item_tags.dart';
+import 'tables/sentence_ai_cache.dart';
 import 'daos/audio_item_dao.dart';
 import 'daos/collection_dao.dart';
 import 'daos/bookmark_dao.dart';
@@ -21,6 +22,7 @@ import 'daos/playback_state_dao.dart';
 import 'daos/learning_progress_dao.dart';
 import 'daos/stage_completion_dao.dart';
 import 'daos/tag_dao.dart';
+import 'daos/sentence_ai_cache_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -38,6 +40,7 @@ part 'app_database.g.dart';
     StageCompletions,
     Tags,
     AudioItemTags,
+    SentenceAiCache,
   ],
   daos: [
     AudioItemDao,
@@ -47,13 +50,14 @@ part 'app_database.g.dart';
     LearningProgressDao,
     StageCompletionDao,
     TagDao,
+    SentenceAiCacheDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration {
@@ -84,6 +88,10 @@ class AppDatabase extends _$AppDatabase {
             'difficult_practice_sentence_index',
             'INTEGER',
           );
+        }
+        // v13→v14：新增 sentence_ai_cache 表（AI 翻译/解析缓存）
+        if (from < 14) {
+          await m.createTable(sentenceAiCache);
         }
         // v12→v13：audio_items 新增 transcript_source, audio_sha256, transcript_language 列
         if (from < 13) {

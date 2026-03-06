@@ -1412,17 +1412,47 @@ abstract class AppLocalizations {
   /// **'Tap to mark as difficult'**
   String get intensiveListenNotDifficult;
 
-  /// No description provided for @intensiveListenTranslationPlaceholder.
+  /// No description provided for @aiTranslation.
   ///
   /// In en, this message translates to:
-  /// **'Translation will be available in a future version'**
-  String get intensiveListenTranslationPlaceholder;
+  /// **'Translation'**
+  String get aiTranslation;
 
-  /// No description provided for @intensiveListenAnalysisPlaceholder.
+  /// No description provided for @aiAnalysis.
   ///
   /// In en, this message translates to:
-  /// **'Analysis will be available in a future version'**
-  String get intensiveListenAnalysisPlaceholder;
+  /// **'Analysis'**
+  String get aiAnalysis;
+
+  /// No description provided for @aiLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load, tap to retry'**
+  String get aiLoadFailed;
+
+  /// No description provided for @aiRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get aiRetry;
+
+  /// No description provided for @aiGrammar.
+  ///
+  /// In en, this message translates to:
+  /// **'Grammar'**
+  String get aiGrammar;
+
+  /// No description provided for @aiVocabulary.
+  ///
+  /// In en, this message translates to:
+  /// **'Vocabulary'**
+  String get aiVocabulary;
+
+  /// No description provided for @aiUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get aiUsage;
 
   /// No description provided for @intensiveListenWordDictNotFound.
   ///

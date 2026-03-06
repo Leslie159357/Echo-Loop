@@ -5149,6 +5149,424 @@ class AudioItemTagsCompanion extends UpdateCompanion<AudioItemTag> {
   }
 }
 
+class $SentenceAiCacheTable extends SentenceAiCache
+    with TableInfo<$SentenceAiCacheTable, SentenceAiCacheData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SentenceAiCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _textHashMeta = const VerificationMeta(
+    'textHash',
+  );
+  @override
+  late final GeneratedColumn<String> textHash = GeneratedColumn<String>(
+    'text_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resultMeta = const VerificationMeta('result');
+  @override
+  late final GeneratedColumn<String> result = GeneratedColumn<String>(
+    'result',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastAccessedAtMeta = const VerificationMeta(
+    'lastAccessedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastAccessedAt =
+      GeneratedColumn<DateTime>(
+        'last_accessed_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    textHash,
+    type,
+    result,
+    createdAt,
+    lastAccessedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sentence_ai_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SentenceAiCacheData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('text_hash')) {
+      context.handle(
+        _textHashMeta,
+        textHash.isAcceptableOrUnknown(data['text_hash']!, _textHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_textHashMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('result')) {
+      context.handle(
+        _resultMeta,
+        result.isAcceptableOrUnknown(data['result']!, _resultMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_resultMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('last_accessed_at')) {
+      context.handle(
+        _lastAccessedAtMeta,
+        lastAccessedAt.isAcceptableOrUnknown(
+          data['last_accessed_at']!,
+          _lastAccessedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastAccessedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {textHash, type},
+  ];
+  @override
+  SentenceAiCacheData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SentenceAiCacheData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      textHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}text_hash'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      result: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}result'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      lastAccessedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_accessed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SentenceAiCacheTable createAlias(String alias) {
+    return $SentenceAiCacheTable(attachedDatabase, alias);
+  }
+}
+
+class SentenceAiCacheData extends DataClass
+    implements Insertable<SentenceAiCacheData> {
+  /// 自增主键
+  final int id;
+
+  /// 句子文本的 SHA-256 哈希值（归一化后）
+  final String textHash;
+
+  /// 结果类型：'translation' 或 'analysis'
+  final String type;
+
+  /// API 返回的 JSON 字符串
+  final String result;
+
+  /// 创建时间
+  final DateTime createdAt;
+
+  /// 最后访问时间（用于 LRU 清理）
+  final DateTime lastAccessedAt;
+  const SentenceAiCacheData({
+    required this.id,
+    required this.textHash,
+    required this.type,
+    required this.result,
+    required this.createdAt,
+    required this.lastAccessedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['text_hash'] = Variable<String>(textHash);
+    map['type'] = Variable<String>(type);
+    map['result'] = Variable<String>(result);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt);
+    return map;
+  }
+
+  SentenceAiCacheCompanion toCompanion(bool nullToAbsent) {
+    return SentenceAiCacheCompanion(
+      id: Value(id),
+      textHash: Value(textHash),
+      type: Value(type),
+      result: Value(result),
+      createdAt: Value(createdAt),
+      lastAccessedAt: Value(lastAccessedAt),
+    );
+  }
+
+  factory SentenceAiCacheData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SentenceAiCacheData(
+      id: serializer.fromJson<int>(json['id']),
+      textHash: serializer.fromJson<String>(json['textHash']),
+      type: serializer.fromJson<String>(json['type']),
+      result: serializer.fromJson<String>(json['result']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      lastAccessedAt: serializer.fromJson<DateTime>(json['lastAccessedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'textHash': serializer.toJson<String>(textHash),
+      'type': serializer.toJson<String>(type),
+      'result': serializer.toJson<String>(result),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'lastAccessedAt': serializer.toJson<DateTime>(lastAccessedAt),
+    };
+  }
+
+  SentenceAiCacheData copyWith({
+    int? id,
+    String? textHash,
+    String? type,
+    String? result,
+    DateTime? createdAt,
+    DateTime? lastAccessedAt,
+  }) => SentenceAiCacheData(
+    id: id ?? this.id,
+    textHash: textHash ?? this.textHash,
+    type: type ?? this.type,
+    result: result ?? this.result,
+    createdAt: createdAt ?? this.createdAt,
+    lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+  );
+  SentenceAiCacheData copyWithCompanion(SentenceAiCacheCompanion data) {
+    return SentenceAiCacheData(
+      id: data.id.present ? data.id.value : this.id,
+      textHash: data.textHash.present ? data.textHash.value : this.textHash,
+      type: data.type.present ? data.type.value : this.type,
+      result: data.result.present ? data.result.value : this.result,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      lastAccessedAt: data.lastAccessedAt.present
+          ? data.lastAccessedAt.value
+          : this.lastAccessedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SentenceAiCacheData(')
+          ..write('id: $id, ')
+          ..write('textHash: $textHash, ')
+          ..write('type: $type, ')
+          ..write('result: $result, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, textHash, type, result, createdAt, lastAccessedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SentenceAiCacheData &&
+          other.id == this.id &&
+          other.textHash == this.textHash &&
+          other.type == this.type &&
+          other.result == this.result &&
+          other.createdAt == this.createdAt &&
+          other.lastAccessedAt == this.lastAccessedAt);
+}
+
+class SentenceAiCacheCompanion extends UpdateCompanion<SentenceAiCacheData> {
+  final Value<int> id;
+  final Value<String> textHash;
+  final Value<String> type;
+  final Value<String> result;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> lastAccessedAt;
+  const SentenceAiCacheCompanion({
+    this.id = const Value.absent(),
+    this.textHash = const Value.absent(),
+    this.type = const Value.absent(),
+    this.result = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.lastAccessedAt = const Value.absent(),
+  });
+  SentenceAiCacheCompanion.insert({
+    this.id = const Value.absent(),
+    required String textHash,
+    required String type,
+    required String result,
+    required DateTime createdAt,
+    required DateTime lastAccessedAt,
+  }) : textHash = Value(textHash),
+       type = Value(type),
+       result = Value(result),
+       createdAt = Value(createdAt),
+       lastAccessedAt = Value(lastAccessedAt);
+  static Insertable<SentenceAiCacheData> custom({
+    Expression<int>? id,
+    Expression<String>? textHash,
+    Expression<String>? type,
+    Expression<String>? result,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? lastAccessedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (textHash != null) 'text_hash': textHash,
+      if (type != null) 'type': type,
+      if (result != null) 'result': result,
+      if (createdAt != null) 'created_at': createdAt,
+      if (lastAccessedAt != null) 'last_accessed_at': lastAccessedAt,
+    });
+  }
+
+  SentenceAiCacheCompanion copyWith({
+    Value<int>? id,
+    Value<String>? textHash,
+    Value<String>? type,
+    Value<String>? result,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? lastAccessedAt,
+  }) {
+    return SentenceAiCacheCompanion(
+      id: id ?? this.id,
+      textHash: textHash ?? this.textHash,
+      type: type ?? this.type,
+      result: result ?? this.result,
+      createdAt: createdAt ?? this.createdAt,
+      lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (textHash.present) {
+      map['text_hash'] = Variable<String>(textHash.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (result.present) {
+      map['result'] = Variable<String>(result.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (lastAccessedAt.present) {
+      map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SentenceAiCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('textHash: $textHash, ')
+          ..write('type: $type, ')
+          ..write('result: $result, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5165,6 +5583,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $TagsTable tags = $TagsTable(this);
   late final $AudioItemTagsTable audioItemTags = $AudioItemTagsTable(this);
+  late final $SentenceAiCacheTable sentenceAiCache = $SentenceAiCacheTable(
+    this,
+  );
   late final AudioItemDao audioItemDao = AudioItemDao(this as AppDatabase);
   late final CollectionDao collectionDao = CollectionDao(this as AppDatabase);
   late final BookmarkDao bookmarkDao = BookmarkDao(this as AppDatabase);
@@ -5178,6 +5599,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final TagDao tagDao = TagDao(this as AppDatabase);
+  late final SentenceAiCacheDao sentenceAiCacheDao = SentenceAiCacheDao(
+    this as AppDatabase,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5192,6 +5616,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     stageCompletions,
     tags,
     audioItemTags,
+    sentenceAiCache,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -9439,6 +9864,231 @@ typedef $$AudioItemTagsTableProcessedTableManager =
       AudioItemTag,
       PrefetchHooks Function({bool tagId, bool audioItemId})
     >;
+typedef $$SentenceAiCacheTableCreateCompanionBuilder =
+    SentenceAiCacheCompanion Function({
+      Value<int> id,
+      required String textHash,
+      required String type,
+      required String result,
+      required DateTime createdAt,
+      required DateTime lastAccessedAt,
+    });
+typedef $$SentenceAiCacheTableUpdateCompanionBuilder =
+    SentenceAiCacheCompanion Function({
+      Value<int> id,
+      Value<String> textHash,
+      Value<String> type,
+      Value<String> result,
+      Value<DateTime> createdAt,
+      Value<DateTime> lastAccessedAt,
+    });
+
+class $$SentenceAiCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $SentenceAiCacheTable> {
+  $$SentenceAiCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get textHash => $composableBuilder(
+    column: $table.textHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get result => $composableBuilder(
+    column: $table.result,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SentenceAiCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $SentenceAiCacheTable> {
+  $$SentenceAiCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get textHash => $composableBuilder(
+    column: $table.textHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get result => $composableBuilder(
+    column: $table.result,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SentenceAiCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SentenceAiCacheTable> {
+  $$SentenceAiCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get textHash =>
+      $composableBuilder(column: $table.textHash, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get result =>
+      $composableBuilder(column: $table.result, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$SentenceAiCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SentenceAiCacheTable,
+          SentenceAiCacheData,
+          $$SentenceAiCacheTableFilterComposer,
+          $$SentenceAiCacheTableOrderingComposer,
+          $$SentenceAiCacheTableAnnotationComposer,
+          $$SentenceAiCacheTableCreateCompanionBuilder,
+          $$SentenceAiCacheTableUpdateCompanionBuilder,
+          (
+            SentenceAiCacheData,
+            BaseReferences<
+              _$AppDatabase,
+              $SentenceAiCacheTable,
+              SentenceAiCacheData
+            >,
+          ),
+          SentenceAiCacheData,
+          PrefetchHooks Function()
+        > {
+  $$SentenceAiCacheTableTableManager(
+    _$AppDatabase db,
+    $SentenceAiCacheTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SentenceAiCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SentenceAiCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SentenceAiCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> textHash = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> result = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> lastAccessedAt = const Value.absent(),
+              }) => SentenceAiCacheCompanion(
+                id: id,
+                textHash: textHash,
+                type: type,
+                result: result,
+                createdAt: createdAt,
+                lastAccessedAt: lastAccessedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String textHash,
+                required String type,
+                required String result,
+                required DateTime createdAt,
+                required DateTime lastAccessedAt,
+              }) => SentenceAiCacheCompanion.insert(
+                id: id,
+                textHash: textHash,
+                type: type,
+                result: result,
+                createdAt: createdAt,
+                lastAccessedAt: lastAccessedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SentenceAiCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SentenceAiCacheTable,
+      SentenceAiCacheData,
+      $$SentenceAiCacheTableFilterComposer,
+      $$SentenceAiCacheTableOrderingComposer,
+      $$SentenceAiCacheTableAnnotationComposer,
+      $$SentenceAiCacheTableCreateCompanionBuilder,
+      $$SentenceAiCacheTableUpdateCompanionBuilder,
+      (
+        SentenceAiCacheData,
+        BaseReferences<
+          _$AppDatabase,
+          $SentenceAiCacheTable,
+          SentenceAiCacheData
+        >,
+      ),
+      SentenceAiCacheData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9460,4 +10110,6 @@ class $AppDatabaseManager {
   $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
   $$AudioItemTagsTableTableManager get audioItemTags =>
       $$AudioItemTagsTableTableManager(_db, _db.audioItemTags);
+  $$SentenceAiCacheTableTableManager get sentenceAiCache =>
+      $$SentenceAiCacheTableTableManager(_db, _db.sentenceAiCache);
 }

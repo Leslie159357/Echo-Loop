@@ -719,12 +719,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get intensiveListenNotDifficult => 'Tap to mark as difficult';
 
   @override
-  String get intensiveListenTranslationPlaceholder =>
-      'Translation will be available in a future version';
+  String get aiTranslation => 'Translation';
 
   @override
-  String get intensiveListenAnalysisPlaceholder =>
-      'Analysis will be available in a future version';
+  String get aiAnalysis => 'Analysis';
+
+  @override
+  String get aiLoadFailed => 'Failed to load, tap to retry';
+
+  @override
+  String get aiRetry => 'Retry';
+
+  @override
+  String get aiGrammar => 'Grammar';
+
+  @override
+  String get aiVocabulary => 'Vocabulary';
+
+  @override
+  String get aiUsage => 'Usage';
 
   @override
   String get intensiveListenWordDictNotFound => 'Word not found in dictionary';
