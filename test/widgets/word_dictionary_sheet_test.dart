@@ -47,9 +47,14 @@ Widget _buildTestPage(String word) {
 }
 
 /// 打开弹窗并等待渲染
+///
+/// 先 pump 让异步 lookup 完成（避免 CircularProgressIndicator 动画
+/// 导致 pumpAndSettle 永远等不到 settle），再 pumpAndSettle 等弹窗动画结束。
 Future<void> _openSheet(WidgetTester tester, String word) async {
   await tester.pumpWidget(_buildTestPage(word));
   await tester.tap(find.text('Open'));
+  await tester.pump();
+  await tester.pump();
   await tester.pumpAndSettle();
 }
 

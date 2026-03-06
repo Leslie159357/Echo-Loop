@@ -1274,7 +1274,11 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
 
   @override
   Future<void> resume() async {
-    if (state.isAnnotationMode) return;
+    if (state.isAnnotationMode) {
+      // 跟读模式恢复：从第 1 遍重新开始
+      state = state.copyWith(isPlaying: true, currentPlayCount: 1);
+      return;
+    }
     state = state.copyWith(isPlaying: true);
   }
 
@@ -1282,24 +1286,19 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
   void enterAnnotationMode() {
     state = state.copyWith(
       isAnnotationMode: true,
-      isPlaying: false,
+      isPlaying: true,
+      currentPlayCount: 1,
       isTextRevealed: false,
     );
   }
 
   @override
-  Future<void> exitAnnotationMode() async {
+  Future<void> skipShadowReading() async {
     state = state.copyWith(
       isAnnotationMode: false,
-      isAnnotationReplay: false,
-      isPlaying: true,
+      isPlaying: false,
+      isPauseBetweenPlays: false,
     );
-  }
-
-  @override
-  Future<void> replayInAnnotationMode() async {
-    if (!state.isAnnotationMode) return;
-    state = state.copyWith(isPlaying: true);
   }
 
   @override
@@ -1334,7 +1333,6 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
       currentPlayCount: 1,
       isPlaying: false,
       isAnnotationMode: false,
-      isAnnotationReplay: false,
       isTextRevealed: false,
     );
 
@@ -1348,7 +1346,6 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
         currentSentenceIndex: state.currentSentenceIndex + 1,
         currentPlayCount: 1,
         isAnnotationMode: false,
-        isAnnotationReplay: false,
         isTextRevealed: false,
       );
     }
@@ -1361,7 +1358,6 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
         currentSentenceIndex: state.currentSentenceIndex - 1,
         currentPlayCount: 1,
         isAnnotationMode: false,
-        isAnnotationReplay: false,
         isTextRevealed: false,
       );
     }

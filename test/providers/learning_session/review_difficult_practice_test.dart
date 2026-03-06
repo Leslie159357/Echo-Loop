@@ -20,8 +20,8 @@ void main() {
       expect(state.pauseRemaining, Duration.zero);
       expect(state.pauseDuration, Duration.zero);
       expect(state.isAnnotationMode, false);
-      expect(state.isAnnotationReplay, false);
       expect(state.isTextRevealed, false);
+      expect(state.targetRepeatCount, 3);
       expect(state.isCompleted, false);
     });
 
@@ -55,20 +55,12 @@ void main() {
       expect(annotation.totalSentences, 3);
     });
 
-    test('copyWith — 进入标注重播', () {
-      const state = ReviewDifficultPracticeState(
-        isAnnotationMode: true,
-        totalSentences: 5,
-      );
-      final replay = state.copyWith(
-        isAnnotationMode: false,
-        isAnnotationReplay: true,
-        isPlaying: true,
-      );
+    test('copyWith — targetRepeatCount', () {
+      const state = ReviewDifficultPracticeState();
+      expect(state.targetRepeatCount, 3);
 
-      expect(replay.isAnnotationMode, false);
-      expect(replay.isAnnotationReplay, true);
-      expect(replay.isPlaying, true);
+      final updated = state.copyWith(targetRepeatCount: 5);
+      expect(updated.targetRepeatCount, 5);
     });
 
     test('copyWith — 偷看字幕', () {
@@ -87,10 +79,7 @@ void main() {
         totalSentences: 5,
         isPlaying: true,
       );
-      final completed = state.copyWith(
-        isCompleted: true,
-        isPlaying: false,
-      );
+      final completed = state.copyWith(isCompleted: true, isPlaying: false);
 
       expect(completed.isCompleted, true);
       expect(completed.isPlaying, false);
@@ -130,7 +119,6 @@ void main() {
       final nextSentence = state.copyWith(
         currentSentenceIndex: 2,
         isAnnotationMode: false,
-        isAnnotationReplay: false,
         isTextRevealed: false,
         isPauseBetweenPlays: false,
         isPauseBetweenSentences: false,
@@ -139,8 +127,111 @@ void main() {
 
       expect(nextSentence.currentSentenceIndex, 2);
       expect(nextSentence.isAnnotationMode, false);
-      expect(nextSentence.isAnnotationReplay, false);
       expect(nextSentence.isTextRevealed, false);
+    });
+
+    test('copyWith — 进入跟读模式的状态转换', () {
+      const state = ReviewDifficultPracticeState(
+        totalSentences: 5,
+        isPlaying: false,
+      );
+
+      // 模拟 _startShadowReading 设置的状态
+      final shadowReading = state.copyWith(
+        isAnnotationMode: true,
+        isPlaying: true,
+        currentPlayCount: 1,
+        isPauseBetweenPlays: false,
+        isPauseBetweenSentences: false,
+        isTextRevealed: false,
+        isCountdownPaused: false,
+        isCountdownFastForward: false,
+      );
+
+      expect(shadowReading.isAnnotationMode, true);
+      expect(shadowReading.isPlaying, true);
+      expect(shadowReading.currentPlayCount, 1);
+      expect(shadowReading.targetRepeatCount, 3);
+    });
+
+    test('copyWith — 跟读循环遍数递增', () {
+      const state = ReviewDifficultPracticeState(
+        isAnnotationMode: true,
+        isPlaying: true,
+        currentPlayCount: 1,
+        targetRepeatCount: 3,
+      );
+
+      final secondPlay = state.copyWith(currentPlayCount: 2);
+      expect(secondPlay.currentPlayCount, 2);
+      expect(secondPlay.isAnnotationMode, true);
+
+      final thirdPlay = secondPlay.copyWith(currentPlayCount: 3);
+      expect(thirdPlay.currentPlayCount, 3);
+    });
+
+    test('copyWith — 跟读完成后状态重置', () {
+      const state = ReviewDifficultPracticeState(
+        isAnnotationMode: true,
+        isPlaying: true,
+        currentPlayCount: 3,
+        targetRepeatCount: 3,
+      );
+
+      // 模拟 onAllPlaysCompleted 回调
+      final completed = state.copyWith(
+        isAnnotationMode: false,
+        isPlaying: false,
+        isPauseBetweenPlays: false,
+      );
+
+      expect(completed.isAnnotationMode, false);
+      expect(completed.isPlaying, false);
+      expect(completed.isPauseBetweenPlays, false);
+    });
+
+    test('copyWith — 跟读留白状态', () {
+      const state = ReviewDifficultPracticeState(
+        isAnnotationMode: true,
+        isPlaying: true,
+        currentPlayCount: 1,
+      );
+
+      // 模拟 onPauseStarted 回调
+      final pausing = state.copyWith(
+        isPauseBetweenPlays: true,
+        isPlaying: false,
+        isCountdownPaused: false,
+        isCountdownFastForward: false,
+        pauseDuration: const Duration(seconds: 8),
+        pauseRemaining: const Duration(seconds: 8),
+      );
+
+      expect(pausing.isPauseBetweenPlays, true);
+      expect(pausing.isPlaying, false);
+      expect(pausing.isAnnotationMode, true);
+      expect(pausing.pauseDuration, const Duration(seconds: 8));
+    });
+
+    test('copyWith — 倒计时控制字段', () {
+      const state = ReviewDifficultPracticeState();
+
+      expect(state.isCountdownPaused, false);
+      expect(state.isCountdownFastForward, false);
+
+      final paused = state.copyWith(isCountdownPaused: true);
+      expect(paused.isCountdownPaused, true);
+
+      final ff = state.copyWith(isCountdownFastForward: true);
+      expect(ff.isCountdownFastForward, true);
+
+      // 同时设置
+      final both = state.copyWith(
+        isCountdownPaused: true,
+        isCountdownFastForward: true,
+      );
+      expect(both.isCountdownPaused, true);
+      expect(both.isCountdownFastForward, true);
     });
   });
 }

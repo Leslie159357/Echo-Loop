@@ -22,6 +22,7 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
 import 'package:fluency/providers/transcription_task_provider.dart';
 import 'package:fluency/services/transcription_api_client.dart';
 import 'package:fluency/database/enums.dart';
@@ -897,6 +898,181 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
   void disposePlayer() {
     _testSentences = [];
     state = const ListenAndRepeatPlayerState();
+  }
+}
+
+/// 测试用 ReviewDifficultPractice — 不依赖音频引擎
+class TestReviewDifficultPractice extends ReviewDifficultPractice {
+  final ReviewDifficultPracticeState _initialState;
+  List<Sentence> _testSentences;
+
+  TestReviewDifficultPractice([
+    this._initialState = const ReviewDifficultPracticeState(),
+    this._testSentences = const [],
+  ]);
+
+  @override
+  ReviewDifficultPracticeState build() => _initialState;
+
+  @override
+  Sentence? get currentSentence =>
+      _testSentences.isNotEmpty &&
+          state.currentSentenceIndex < _testSentences.length
+      ? _testSentences[state.currentSentenceIndex]
+      : null;
+
+  @override
+  List<Sentence> get sentences => List.unmodifiable(_testSentences);
+
+  @override
+  int get currentIndex => state.currentSentenceIndex;
+
+  @override
+  void initialize(List<Sentence> sentences, {int startIndex = 0}) {
+    _testSentences = sentences.map((s) => s.copyWith()).toList();
+    final validIndex = _testSentences.isEmpty
+        ? 0
+        : startIndex.clamp(0, _testSentences.length - 1);
+    state = ReviewDifficultPracticeState(
+      currentSentenceIndex: validIndex,
+      totalSentences: _testSentences.length,
+    );
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    if (_testSentences.isEmpty) {
+      state = state.copyWith(isCompleted: true);
+      return;
+    }
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  void pause() {
+    state = state.copyWith(
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+    );
+  }
+
+  @override
+  Future<void> resume() async {
+    if (state.isAnnotationMode) {
+      state = state.copyWith(isPlaying: true, currentPlayCount: 1);
+      return;
+    }
+    state = state.copyWith(isPlaying: true);
+  }
+
+  @override
+  void enterAnnotationMode() {
+    if (state.isAnnotationMode) return;
+    state = state.copyWith(
+      isAnnotationMode: true,
+      isPlaying: true,
+      currentPlayCount: 1,
+      isPauseBetweenPlays: false,
+      isTextRevealed: false,
+    );
+  }
+
+  @override
+  Future<void> skipShadowReading() async {
+    state = state.copyWith(
+      isAnnotationMode: false,
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+    );
+  }
+
+  @override
+  void setTextRevealed(bool revealed) {
+    state = state.copyWith(isTextRevealed: revealed);
+  }
+
+  @override
+  Sentence? removeDifficultMark() {
+    if (_testSentences.isEmpty) return null;
+
+    final removedIndex = state.currentSentenceIndex;
+    final removed = _testSentences[removedIndex];
+    _testSentences = List.from(_testSentences)..removeAt(removedIndex);
+
+    if (_testSentences.isEmpty) {
+      state = state.copyWith(
+        isCompleted: true,
+        isPlaying: false,
+        totalSentences: 0,
+      );
+      return removed;
+    }
+
+    final newIndex = removedIndex >= _testSentences.length
+        ? _testSentences.length - 1
+        : removedIndex;
+
+    state = state.copyWith(
+      currentSentenceIndex: newIndex,
+      totalSentences: _testSentences.length,
+      currentPlayCount: 1,
+      isPlaying: false,
+      isAnnotationMode: false,
+      isTextRevealed: false,
+    );
+
+    return removed;
+  }
+
+  @override
+  Future<void> goToNext() async {
+    if (state.currentSentenceIndex < state.totalSentences - 1) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex + 1,
+        currentPlayCount: 1,
+        isAnnotationMode: false,
+        isTextRevealed: false,
+      );
+    }
+  }
+
+  @override
+  Future<void> goToPrevious() async {
+    if (state.currentSentenceIndex > 0) {
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex - 1,
+        currentPlayCount: 1,
+        isAnnotationMode: false,
+        isTextRevealed: false,
+      );
+    }
+  }
+
+  @override
+  Future<void> replayDuringCountdown() async {
+    if (state.isAnnotationMode) {
+      state = state.copyWith(
+        isPlaying: true,
+        currentPlayCount: 1,
+        isPauseBetweenPlays: false,
+      );
+    } else {
+      state = state.copyWith(
+        isPlaying: true,
+        isPauseBetweenPlays: false,
+        isPauseBetweenSentences: false,
+        isCountdownPaused: false,
+        isCountdownFastForward: false,
+      );
+    }
+  }
+
+  @override
+  void disposePlayer() {
+    _testSentences = [];
+    state = const ReviewDifficultPracticeState();
   }
 }
 
