@@ -69,8 +69,15 @@ class _IntensiveListenPlayerScreenState
 
     final session = ref.read(learningSessionProvider);
     if (session.isFreePlay) {
-      if (mounted) context.pop();
+      // 保存难句书签 + 难句数快照（与非 freePlay 路径一致）
+      await _saveDifficultSentences();
+      final totalDifficultCount = await _loadTotalDifficultCount();
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveDifficultCount(widget.audioItemId, totalDifficultCount);
+
       await ref.read(learningSessionProvider.notifier).exitLearningMode();
+      if (mounted) context.pop();
       return;
     }
 
@@ -113,10 +120,10 @@ class _IntensiveListenPlayerScreenState
         .read(learningProgressNotifierProvider.notifier)
         .saveDifficultCount(widget.audioItemId, totalDifficultCount);
 
-    // 先 pop 页面，再 exitLearningMode（dispose 会重置 state，
-    // 若先 dispose 再 pop 会导致星标状态闪烁）
-    if (mounted) context.pop();
+    // 先 exitLearningMode 同步书签到 LP，再 pop 页面
+    // （pop 后 widget 销毁，ref.read 可能失效）
     await ref.read(learningSessionProvider.notifier).exitLearningMode();
+    if (mounted) context.pop();
   }
 
   /// 保存精听断点进度
@@ -189,10 +196,10 @@ class _IntensiveListenPlayerScreenState
     final player = ref.read(intensiveListenPlayerProvider.notifier);
     final bookmarkDao = ref.read(bookmarkDaoProvider);
 
-    // 初始书签集合（深拷贝句子保留了原始 isBookmarked）
+    // 初始书签集合 — 使用位置索引，与 difficultSentences 保持一致
     final initialBookmarks = <int>{
-      for (final s in player.sentences)
-        if (s.isBookmarked) s.index,
+      for (final (i, s) in player.sentences.indexed)
+        if (s.isBookmarked) i,
     };
 
     // 新增的难句书签
@@ -208,12 +215,17 @@ class _IntensiveListenPlayerScreenState
       }
     }
 
-    // 取消标记的书签
-    final removed = initialBookmarks.difference(playerState.difficultSentences);
-    if (removed.isNotEmpty) {
+    // 取消标记的书签 — 位置索引转换为句子索引后传给 DB
+    final removedPositions =
+        initialBookmarks.difference(playerState.difficultSentences);
+    if (removedPositions.isNotEmpty) {
+      final removedSentenceIndices = <int>{
+        for (final pos in removedPositions)
+          if (pos < player.sentences.length) player.sentences[pos].index,
+      };
       await BookmarkManager.removeBookmarksFromDb(
         widget.audioItemId,
-        removed,
+        removedSentenceIndices,
         dao: bookmarkDao,
       );
     }
@@ -538,6 +550,12 @@ class _IntensiveListenPlayerScreenState
                           onContinue: () => player.exitAnnotationMode(),
                           onToggleDifficult: _toggleAndSaveDifficult,
                           aiNotifier: ref.read(sentenceAiNotifierProvider),
+                          audioItemId: widget.audioItemId,
+                          sentenceIndex: playerState.currentSentenceIndex,
+                          sentenceStartMs:
+                              currentSentence?.startTime.inMilliseconds,
+                          sentenceEndMs:
+                              currentSentence?.endTime.inMilliseconds,
                         )
                       : _NormalModeView(
                           key: const ValueKey('normal'),
@@ -901,6 +919,18 @@ class _AnnotationModeView extends StatelessWidget {
   /// AI 翻译/解析服务
   final SentenceAiNotifier? aiNotifier;
 
+  /// 来源音频 ID（用于词典弹窗收藏单词）
+  final String? audioItemId;
+
+  /// 当前句子索引
+  final int? sentenceIndex;
+
+  /// 当前句子起始时间（毫秒）
+  final int? sentenceStartMs;
+
+  /// 当前句子结束时间（毫秒）
+  final int? sentenceEndMs;
+
   const _AnnotationModeView({
     super.key,
     required this.text,
@@ -909,6 +939,10 @@ class _AnnotationModeView extends StatelessWidget {
     required this.onContinue,
     required this.onToggleDifficult,
     this.aiNotifier,
+    this.audioItemId,
+    this.sentenceIndex,
+    this.sentenceStartMs,
+    this.sentenceEndMs,
   });
 
   @override
@@ -945,6 +979,10 @@ class _AnnotationModeView extends StatelessWidget {
                     : null,
                 cachedTranslation: cachedTranslation,
                 cachedAnalysis: cachedAnalysisText,
+                audioItemId: audioItemId,
+                sentenceIndex: sentenceIndex,
+                sentenceStartMs: sentenceStartMs,
+                sentenceEndMs: sentenceEndMs,
               ),
             ),
           ),

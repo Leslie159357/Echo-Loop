@@ -2,18 +2,29 @@
 ///
 /// 点击单词时弹出，显示音标、释义、柯林斯星级和考试标签。
 /// 未查到结果时显示"未收录"提示。
+/// 支持收藏/取消收藏单词。
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/dict_entry.dart';
+import '../../providers/saved_word_provider.dart';
 import '../../services/dictionary_service.dart';
 import '../../theme/app_theme.dart';
 
 /// 显示词典底部弹窗
+///
+/// [audioItemId]、[sentenceIndex]、[sentenceText] 为可选来源信息，
+/// 用于收藏单词时记录来源。
 Future<void> showWordDictionarySheet({
   required BuildContext context,
   required String word,
+  String? audioItemId,
+  int? sentenceIndex,
+  String? sentenceText,
+  int? sentenceStartMs,
+  int? sentenceEndMs,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -21,25 +32,60 @@ Future<void> showWordDictionarySheet({
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (context) => WordDictionarySheet(word: word),
+    builder: (context) => WordDictionarySheet(
+      word: word,
+      audioItemId: audioItemId,
+      sentenceIndex: sentenceIndex,
+      sentenceText: sentenceText,
+      sentenceStartMs: sentenceStartMs,
+      sentenceEndMs: sentenceEndMs,
+    ),
   );
 }
 
 /// 词典弹窗内容
-class WordDictionarySheet extends StatefulWidget {
+class WordDictionarySheet extends ConsumerStatefulWidget {
   /// 查询的单词
   final String word;
 
-  const WordDictionarySheet({super.key, required this.word});
+  /// 来源音频 ID（可选）
+  final String? audioItemId;
+
+  /// 来源句子索引（可选）
+  final int? sentenceIndex;
+
+  /// 来源句子文本（可选）
+  final String? sentenceText;
+
+  /// 来源句子起始时间（毫秒）
+  final int? sentenceStartMs;
+
+  /// 来源句子结束时间（毫秒）
+  final int? sentenceEndMs;
+
+  const WordDictionarySheet({
+    super.key,
+    required this.word,
+    this.audioItemId,
+    this.sentenceIndex,
+    this.sentenceText,
+    this.sentenceStartMs,
+    this.sentenceEndMs,
+  });
 
   @override
-  State<WordDictionarySheet> createState() => _WordDictionarySheetState();
+  ConsumerState<WordDictionarySheet> createState() =>
+      _WordDictionarySheetState();
 }
 
-class _WordDictionarySheetState extends State<WordDictionarySheet> {
+class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
   DictEntry? _entry;
   bool _loading = true;
   bool _notFound = false;
+
+  /// 用于收藏的 lemmatized 单词（优先使用词典返回的原形）
+  String get _lemmaWord =>
+      _entry?.word.toLowerCase() ?? widget.word.toLowerCase();
 
   @override
   void initState() {
@@ -55,6 +101,37 @@ class _WordDictionarySheetState extends State<WordDictionarySheet> {
       _notFound = entry == null;
       _loading = false;
     });
+  }
+
+  /// 切换收藏状态
+  Future<void> _toggleSave(bool currentlySaved) async {
+    final notifier = ref.read(savedWordListProvider.notifier);
+    if (currentlySaved) {
+      await notifier.removeWord(_lemmaWord);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.favoritesWordRemoved),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } else {
+      await notifier.saveWord(
+        word: _lemmaWord,
+        audioItemId: widget.audioItemId,
+        sentenceIndex: widget.sentenceIndex,
+        sentenceText: widget.sentenceText,
+        sentenceStartMs: widget.sentenceStartMs,
+        sentenceEndMs: widget.sentenceEndMs,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.favoritesWordSaved),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   @override
@@ -137,15 +214,8 @@ class _WordDictionarySheetState extends State<WordDictionarySheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 单词
-        Text(
-          entry.word,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: -0.3,
-          ),
-        ),
+        // 单词 + 收藏按钮
+        _buildTitleRow(theme, entry),
         const SizedBox(height: 6),
 
         // 音标 + 星级 + 考试标签（紧凑一行）
@@ -157,6 +227,38 @@ class _WordDictionarySheetState extends State<WordDictionarySheet> {
           _buildTranslation(theme, entry.translation!),
 
         const SizedBox(height: AppSpacing.s),
+      ],
+    );
+  }
+
+  /// 标题行：单词 + 收藏按钮
+  Widget _buildTitleRow(ThemeData theme, DictEntry entry) {
+    final isSavedAsync = ref.watch(isWordSavedProvider(_lemmaWord));
+    final isSaved = isSavedAsync.valueOrNull ?? false;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            entry.word,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: () => _toggleSave(isSaved),
+          icon: Icon(
+            isSaved ? Icons.bookmark : Icons.bookmark_border,
+            color: isSaved
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          tooltip: isSaved ? l10n.favoritesUnsaveWord : l10n.favoritesSaveWord,
+        ),
       ],
     );
   }
@@ -259,7 +361,8 @@ class _WordDictionarySheetState extends State<WordDictionarySheet> {
   /// 识别 "vt." "n." "a." "adv." 等词性前缀，
   /// 以蓝色小标签显示词性，后接释义正文。
   Widget _buildDefinitionLine(ThemeData theme, String line) {
-    final posMatch = RegExp(r'^([a-z]+\.(?:\s*&\s*[a-z]+\.)*)\s*').firstMatch(line);
+    final posMatch =
+        RegExp(r'^([a-z]+\.(?:\s*&\s*[a-z]+\.)*)\s*').firstMatch(line);
 
     if (posMatch == null) {
       // 无词性前缀，直接显示

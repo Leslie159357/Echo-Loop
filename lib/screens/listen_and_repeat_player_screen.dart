@@ -415,6 +415,8 @@ class _ListenAndRepeatPlayerScreenState
                                   text: currentSentence.text,
                                   isDifficult: true,
                                   onToggle: _handleRemoveDifficult,
+                                  audioItemId: widget.audioItemId,
+                                  sentenceIndex: player.currentIndex,
                                 )
                               : const SizedBox.shrink(),
                         ),

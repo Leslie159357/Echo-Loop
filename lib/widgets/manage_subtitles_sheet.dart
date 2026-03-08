@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:universal_io/io.dart';
 import '../models/audio_item.dart';
+import '../database/providers.dart';
 import '../providers/audio_library_provider.dart';
-import '../providers/learning_progress_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/transcription_task_provider.dart';
 import '../services/transcription_api_client.dart';
@@ -35,7 +35,7 @@ class ManageSubtitlesSheet extends ConsumerStatefulWidget {
 }
 
 class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
-  _SubtitleAction _selectedAction = _SubtitleAction.aiTranscription;
+  _SubtitleAction _selectedAction = _SubtitleAction.localUpload;
   String _selectedLanguage = 'en';
 
   @override
@@ -687,13 +687,6 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   ) async {
     final l10n = AppLocalizations.of(context)!;
 
-    // 检查是否有学习进度
-    final hasProgress = ref.read(
-      learningProgressNotifierProvider.select(
-        (s) => s.progressMap[audioItem.id]?.isStarted ?? false,
-      ),
-    );
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -702,7 +695,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
           color: Theme.of(ctx).colorScheme.error,
         ),
         title: Text(l10n.deleteSubtitleConfirm),
-        content: hasProgress ? Text(l10n.deleteSubtitleWarning) : null,
+        content: Text(l10n.deleteSubtitleWarning),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -766,7 +759,10 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
           ),
         );
 
-    // 4. 清除 listeningPracticeProvider 中缓存的句子数据
+    // 4. 删除该音频的所有收藏句子
+    await ref.read(bookmarkDaoProvider).removeAllForAudio(audioItem.id);
+
+    // 5. 清除 listeningPracticeProvider 中缓存的句子数据
     final practiceState = ref.read(listeningPracticeProvider);
     if (practiceState.currentAudioItem?.id == audioItem.id) {
       ref

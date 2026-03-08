@@ -342,6 +342,13 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen> {
                         onWordTap: (word) => showWordDictionarySheet(
                           context: context,
                           word: word,
+                          audioItemId: widget.audioItemId,
+                          sentenceIndex: index,
+                          sentenceText: sentence.text,
+                          sentenceStartMs:
+                              sentence.startTime.inMilliseconds,
+                          sentenceEndMs:
+                              sentence.endTime.inMilliseconds,
                         ),
                       );
                     },

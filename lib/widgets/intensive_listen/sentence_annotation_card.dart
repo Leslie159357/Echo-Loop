@@ -37,6 +37,18 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 已缓存的解析文本（grammar\nvocabulary\nusage 格式）
   final String? cachedAnalysis;
 
+  /// 来源音频 ID（用于词典弹窗收藏单词时记录来源）
+  final String? audioItemId;
+
+  /// 来源句子索引
+  final int? sentenceIndex;
+
+  /// 来源句子起始时间（毫秒）
+  final int? sentenceStartMs;
+
+  /// 来源句子结束时间（毫秒）
+  final int? sentenceEndMs;
+
   const SentenceAnnotationCard({
     super.key,
     required this.text,
@@ -46,6 +58,10 @@ class SentenceAnnotationCard extends StatefulWidget {
     this.onRequestAnalysis,
     this.cachedTranslation,
     this.cachedAnalysis,
+    this.audioItemId,
+    this.sentenceIndex,
+    this.sentenceStartMs,
+    this.sentenceEndMs,
   });
 
   @override
@@ -84,7 +100,15 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
             '',
           );
           if (cleanWord.isNotEmpty) {
-            showWordDictionarySheet(context: context, word: cleanWord);
+            showWordDictionarySheet(
+              context: context,
+              word: cleanWord,
+              audioItemId: widget.audioItemId,
+              sentenceIndex: widget.sentenceIndex,
+              sentenceText: widget.text,
+              sentenceStartMs: widget.sentenceStartMs,
+              sentenceEndMs: widget.sentenceEndMs,
+            );
           }
         };
       _recognizers.add(recognizer);

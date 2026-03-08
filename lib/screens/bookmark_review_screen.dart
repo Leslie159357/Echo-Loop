@@ -1,180 +1,84 @@
-/// 复习难句补练页面
+/// 收藏句子复习页面
 ///
-/// 仅加载已标记为难句的句子，逐句执行：
-/// 1. 盲听一遍（不显示字幕）
-/// 2. 句间停顿 → 自动推进下一句
-/// 3. 用户可随时「偷看」字幕或按「听不懂」进入跟读模式
-/// 4. 跟读模式：播放句子（显示字幕）→ 留白让用户跟读 → 重复 3 遍 → 自动推进
+/// 从 Favorites Tab 进入，加载所有收藏句子，按音频分组乱序后逐句复习。
+/// 交互模式与难句补练页面（ReviewDifficultPracticeScreen）一致：
+/// 盲听 1 遍 → 句间停顿 → 自动推进；偷看字幕、听不懂进入跟读模式。
 ///
-/// 交互与逐句精听页面（IntensiveListenPlayerScreen）一致。
-/// R1+ 可取消难句标记（听懂的句子 unbookmark）。
-/// 完成后弹完成对话框，支持"继续下一步"或"返回计划"。
+/// 额外功能：
+/// - 显示当前句子来源音频名称
+/// - 跨音频自动切换（loadAudio）
+/// - 取消收藏当前句子
+/// - 完成后支持"再来一遍"（重新乱序）
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
-import '../providers/learning_progress_provider.dart';
-import '../providers/learning_session/learning_session_provider.dart';
+import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/player_hotkey_scope.dart';
 
-/// 复习难句补练页面
-class ReviewDifficultPracticeScreen extends ConsumerStatefulWidget {
-  /// 合集 ID（独立音频路由时为 null）
-  final String? collectionId;
-
-  /// 音频项 ID
-  final String audioItemId;
-
-  const ReviewDifficultPracticeScreen({
-    super.key,
-    this.collectionId,
-    required this.audioItemId,
-  });
+/// 收藏句子复习页面
+class BookmarkReviewScreen extends ConsumerStatefulWidget {
+  const BookmarkReviewScreen({super.key});
 
   @override
-  ConsumerState<ReviewDifficultPracticeScreen> createState() =>
-      _ReviewDifficultPracticeScreenState();
+  ConsumerState<BookmarkReviewScreen> createState() =>
+      _BookmarkReviewScreenState();
 }
 
-class _ReviewDifficultPracticeScreenState
-    extends ConsumerState<ReviewDifficultPracticeScreen> {
+class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen> {
   bool _isShowingDialog = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(reviewDifficultPracticeProvider.notifier).startPlaying();
+      ref.read(bookmarkReviewProvider.notifier).startPlaying();
     });
+  }
+
+  @override
+  void dispose() {
+    // dispose 时清理 provider 资源
+    // 使用 addPostFrameCallback 避免在 dispose 中直接读取 ref
+    super.dispose();
   }
 
   /// 处理退出
   Future<void> _handleExit() async {
-    final player = ref.read(reviewDifficultPracticeProvider.notifier);
+    final player = ref.read(bookmarkReviewProvider.notifier);
     player.pause();
     if (!mounted) return;
 
-    final session = ref.read(learningSessionProvider);
-    final l10n = AppLocalizations.of(context)!;
-    final playerState = ref.read(reviewDifficultPracticeProvider);
-
-    // 已完成或自由练习模式直接退出
-    if (playerState.isCompleted || session.isFreePlay) {
-      await _exit();
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.exitReviewDifficultPracticeTitle),
-        content: Text(l10n.exitReviewDifficultPracticeConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.confirmExit),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true || !mounted) {
-      // 取消退出 → 恢复播放（标注模式下不恢复）
-      if (mounted) {
-        final currentState = ref.read(reviewDifficultPracticeProvider);
-        if (!currentState.isAnnotationMode) {
-          player.resume();
-        }
-      }
-      return;
-    }
-
-    await _exit();
-  }
-
-  /// 执行退出（保存断点后退出）
-  Future<void> _exit() async {
-    // 保存当前句子索引作为断点
-    final player = ref.read(reviewDifficultPracticeProvider.notifier);
-    await ref
-        .read(learningProgressNotifierProvider.notifier)
-        .saveDifficultPracticeSentenceIndex(
-          widget.audioItemId,
-          player.currentIndex,
-        );
-
-    await ref.read(learningSessionProvider.notifier).exitLearningMode();
+    // 收藏复习无需保存断点，直接退出
+    player.disposePlayer();
     if (mounted) context.pop();
   }
 
-  /// 取消当前句子的难句标记
-  Future<void> _handleRemoveDifficult() async {
-    final player = ref.read(reviewDifficultPracticeProvider.notifier);
-    final removed = player.removeDifficultMark();
+  /// 取消当前句子的收藏
+  Future<void> _handleRemoveBookmark() async {
+    final player = ref.read(bookmarkReviewProvider.notifier);
+    final removed = player.removeBookmark();
 
     if (removed != null) {
       final bookmarkDao = ref.read(bookmarkDaoProvider);
-      await bookmarkDao.removeBookmark(widget.audioItemId, removed.index);
-    }
-
-    // 如果还有句子且未完成，自动开始播放下一句
-    final playerState = ref.read(reviewDifficultPracticeProvider);
-    if (!playerState.isCompleted && playerState.totalSentences > 0) {
-      await player.startPlaying();
-    }
-  }
-
-  /// 获取当前步骤上下文
-  ({
-    int stepIndex,
-    int totalSteps,
-    String stageName,
-    String? nextStepName,
-    bool isLastStep,
-  })
-  _getStepContext() {
-    final progress = ref
-        .read(learningProgressNotifierProvider)
-        .progressMap[widget.audioItemId];
-
-    if (progress == null) {
-      return (
-        stepIndex: 0,
-        totalSteps: 1,
-        stageName: '',
-        nextStepName: null,
-        isLastStep: true,
+      await bookmarkDao.removeBookmark(
+        removed.audioItemId,
+        removed.originalSentenceIndex,
       );
     }
 
-    final stage = progress.currentStage;
-    final subStages = stage.subStages;
-    final currentIdx = subStages.indexOf(progress.currentSubStage);
-    final isLast = currentIdx >= subStages.length - 1;
-
-    String? nextStepName;
-    if (!isLast) {
-      final nextSubStage = subStages[currentIdx + 1];
-      nextStepName = nextSubStage.label;
+    // 如果还有句子且未完成，自动开始播放下一句
+    final playerState = ref.read(bookmarkReviewProvider);
+    if (!playerState.isCompleted && playerState.totalSentences > 0) {
+      await player.startPlaying();
     }
-
-    return (
-      stepIndex: currentIdx,
-      totalSteps: subStages.length,
-      stageName: stage.label,
-      nextStepName: nextStepName,
-      isLastStep: isLast,
-    );
   }
 
   /// 处理完成
@@ -182,83 +86,28 @@ class _ReviewDifficultPracticeScreenState
     if (_isShowingDialog || !mounted) return;
     _isShowingDialog = true;
 
-    final session = ref.read(learningSessionProvider);
-
-    // 自由练习模式：弹窗询问"完成"或"再练一遍"
-    if (session.isFreePlay) {
-      final playerState = ref.read(reviewDifficultPracticeProvider);
-      final l10n = AppLocalizations.of(context)!;
-
-      final result = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => _FreePlayCompleteDialog(
-          title: l10n.reviewDifficultPracticeCompleteTitle,
-          message: l10n.reviewDifficultPracticeCompleteMessage(
-            playerState.totalSentences,
-          ),
-        ),
-      );
-
-      _isShowingDialog = false;
-      if (!mounted) return;
-
-      // 清除断点（已全部完成）
-      await ref
-          .read(learningProgressNotifierProvider.notifier)
-          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
-
-      if (result == true) {
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      } else {
-        // 再练一遍
-        await ref.read(reviewDifficultPracticeProvider.notifier).resetToStart();
-      }
-      return;
-    }
-
-    final playerState = ref.read(reviewDifficultPracticeProvider);
-    final stepCtx = _getStepContext();
+    final playerState = ref.read(bookmarkReviewProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _CompleteDialog(
         totalSentences: playerState.totalSentences,
-        stepIndex: stepCtx.stepIndex,
-        totalSteps: stepCtx.totalSteps,
-        stageName: stepCtx.stageName,
-        nextStepName: stepCtx.nextStepName,
-        isLastStep: stepCtx.isLastStep,
+        l10n: l10n,
       ),
     );
 
     _isShowingDialog = false;
     if (!mounted) return;
 
-    if (result != null) {
-      // 清除断点（已全部完成）并推进子步骤
-      try {
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .completeCurrentSubStage(widget.audioItemId);
-      } catch (e) {
-        debugPrint('难句补练完成处理出错: $e');
-      }
-
-      if (result == true && stepCtx.nextStepName != null) {
-        // 继续下一步 → 退出当前模式，返回计划页让路由分发
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      } else {
-        // 返回计划页
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      }
+    if (result == true) {
+      // 完成退出
+      ref.read(bookmarkReviewProvider.notifier).disposePlayer();
+      if (mounted) context.pop();
+    } else {
+      // 再来一遍
+      await ref.read(bookmarkReviewProvider.notifier).resetToStart();
     }
   }
 
@@ -267,11 +116,11 @@ class _ReviewDifficultPracticeScreenState
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final playerState = ref.watch(reviewDifficultPracticeProvider);
-    final player = ref.read(reviewDifficultPracticeProvider.notifier);
+    final playerState = ref.watch(bookmarkReviewProvider);
+    final player = ref.read(bookmarkReviewProvider.notifier);
 
     // 监听完成状态
-    ref.listen<ReviewDifficultPracticeState>(reviewDifficultPracticeProvider, (
+    ref.listen<ReviewDifficultPracticeState>(bookmarkReviewProvider, (
       prev,
       next,
     ) {
@@ -280,7 +129,8 @@ class _ReviewDifficultPracticeScreenState
       }
     });
 
-    final currentSentence = player.currentSentence;
+    final currentBookmark = player.currentBookmarkSentence;
+    final currentSentence = currentBookmark?.sentence;
 
     // 句子时长和时间戳
     final hasDuration =
@@ -317,7 +167,7 @@ class _ReviewDifficultPracticeScreenState
         },
         child: Scaffold(
           appBar: AppBar(
-            title: Text(l10n.reviewDifficultPracticeTitle),
+            title: Text(l10n.bookmarkReviewTitle),
             centerTitle: true,
             leading: IconButton(
               icon: const Icon(Icons.close),
@@ -329,6 +179,7 @@ class _ReviewDifficultPracticeScreenState
               // 进度区域
               _ProgressSection(
                 playerState: playerState,
+                audioName: currentBookmark?.audioName,
                 l10n: l10n,
                 durationText: durationText,
                 timestampText: timestampText,
@@ -344,12 +195,12 @@ class _ReviewDifficultPracticeScreenState
                           text: currentSentence?.text ?? '',
                           playerState: playerState,
                           l10n: l10n,
-                          onRemoveDifficult: _handleRemoveDifficult,
+                          onRemoveBookmark: _handleRemoveBookmark,
                           onPauseCountdown: () => playerState.isCountdownPaused
                               ? player.resumeCountdown()
                               : player.pauseCountdown(),
-                          audioItemId: widget.audioItemId,
-                          sentenceIndex: player.currentIndex,
+                          audioItemId: currentBookmark?.audioItemId,
+                          sentenceIndex: currentBookmark?.originalSentenceIndex,
                         )
                       : _NormalModeView(
                           key: const ValueKey('normal'),
@@ -359,7 +210,7 @@ class _ReviewDifficultPracticeScreenState
                           onPeekStart: () => player.setTextRevealed(true),
                           onPeekEnd: () => player.setTextRevealed(false),
                           onCantUnderstand: () => player.enterAnnotationMode(),
-                          onRemoveDifficult: _handleRemoveDifficult,
+                          onRemoveBookmark: _handleRemoveBookmark,
                           onPauseCountdown: () => playerState.isCountdownPaused
                               ? player.resumeCountdown()
                               : player.pauseCountdown(),
@@ -391,15 +242,17 @@ class _ReviewDifficultPracticeScreenState
   }
 }
 
-/// 顶部进度条区域
+/// 顶部进度条区域（含音频来源名称）
 class _ProgressSection extends StatelessWidget {
   final ReviewDifficultPracticeState playerState;
+  final String? audioName;
   final AppLocalizations l10n;
   final String? durationText;
   final String? timestampText;
 
   const _ProgressSection({
     required this.playerState,
+    this.audioName,
     required this.l10n,
     this.durationText,
     this.timestampText,
@@ -433,7 +286,7 @@ class _ProgressSection extends StatelessWidget {
           Row(
             children: [
               Text(
-                l10n.reviewDifficultPracticeProgress(current, total),
+                l10n.bookmarkReviewProgress(current, total),
                 style: subtitleStyle,
               ),
               const Spacer(),
@@ -444,6 +297,34 @@ class _ProgressSection extends StatelessWidget {
               ],
             ],
           ),
+          // 来源音频名称
+          if (audioName != null) ...[
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(
+                  Icons.audiotrack,
+                  size: 12,
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    l10n.bookmarkReviewFromAudio(audioName!),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -458,7 +339,7 @@ class _NormalModeView extends StatelessWidget {
   final VoidCallback onPeekStart;
   final VoidCallback onPeekEnd;
   final VoidCallback onCantUnderstand;
-  final VoidCallback onRemoveDifficult;
+  final VoidCallback onRemoveBookmark;
   final VoidCallback onPauseCountdown;
   final String? sentenceText;
 
@@ -470,7 +351,7 @@ class _NormalModeView extends StatelessWidget {
     required this.onPeekStart,
     required this.onPeekEnd,
     required this.onCantUnderstand,
-    required this.onRemoveDifficult,
+    required this.onRemoveBookmark,
     required this.onPauseCountdown,
     this.sentenceText,
   });
@@ -483,9 +364,9 @@ class _NormalModeView extends StatelessWidget {
         children: [
           const SizedBox(height: AppSpacing.s),
 
-          // 难句标记行
+          // 收藏标记行（点击取消收藏）
           GestureDetector(
-            onTap: onRemoveDifficult,
+            onTap: onRemoveBookmark,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -500,7 +381,7 @@ class _NormalModeView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.star, color: Colors.amber, size: 18),
+                const Icon(Icons.bookmark, color: Colors.amber, size: 18),
               ],
             ),
           ),
@@ -518,7 +399,7 @@ class _NormalModeView extends StatelessWidget {
             ),
           ),
 
-          // 倒计时控制（上） + 盲听状态标签（下）
+          // 倒计时控制 + 盲听状态标签
           SizedBox(
             height: 72,
             child: Column(
@@ -618,8 +499,6 @@ class _HiddenTextPlaceholder extends StatelessWidget {
 }
 
 /// 倒计时控制按钮
-///
-/// 圆形按钮，外围带进度环，内部显示暂停/恢复图标，右侧显示秒数。
 class _CountdownChip extends StatelessWidget {
   final Duration remaining;
   final Duration total;
@@ -684,12 +563,12 @@ class _CountdownChip extends StatelessWidget {
   }
 }
 
-/// 跟读模式视图（听不懂 → 显示字幕 + 播放 N 遍跟读循环）
+/// 跟读模式视图
 class _ShadowReadingView extends StatelessWidget {
   final String text;
   final ReviewDifficultPracticeState playerState;
   final AppLocalizations l10n;
-  final VoidCallback onRemoveDifficult;
+  final VoidCallback onRemoveBookmark;
   final VoidCallback onPauseCountdown;
   final String? audioItemId;
   final int? sentenceIndex;
@@ -699,7 +578,7 @@ class _ShadowReadingView extends StatelessWidget {
     required this.text,
     required this.playerState,
     required this.l10n,
-    required this.onRemoveDifficult,
+    required this.onRemoveBookmark,
     required this.onPauseCountdown,
     this.audioItemId,
     this.sentenceIndex,
@@ -715,27 +594,26 @@ class _ShadowReadingView extends StatelessWidget {
         children: [
           const SizedBox(height: AppSpacing.s),
 
-          // 句子卡片（含难句标记、可点击查词、翻译/分析占位）
+          // 句子卡片
           Expanded(
             child: SingleChildScrollView(
               child: SentenceAnnotationCard(
                 text: text,
                 isDifficult: true,
-                onToggle: onRemoveDifficult,
+                onToggle: onRemoveBookmark,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
               ),
             ),
           ),
 
-          // 底部固定区域：跟读提示 / 倒计时 + 遍数/播放状态
+          // 底部固定区域：跟读提示 / 倒计时
           SizedBox(
             height: 116,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (playerState.isPauseBetweenPlays) ...[
-                  // 跟读提示
                   Text(
                     l10n.listenAndRepeatYourTurnHint,
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -752,7 +630,6 @@ class _ShadowReadingView extends StatelessWidget {
                   ),
                 ],
                 if (playerState.isPlaying) ...[
-                  // 播放中提示：先听，听完后跟读
                   Text(
                     l10n.listenAndRepeatListenHint,
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -793,7 +670,7 @@ class _ShadowReadingView extends StatelessWidget {
   }
 }
 
-/// 操作按钮（偷看字幕 / 听不懂）
+/// 操作按钮（偷看字幕）
 class _ActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -828,8 +705,6 @@ class _ActionChip extends StatelessWidget {
 }
 
 /// 底部播放控制
-///
-/// 布局：[上一句] --- [播放/暂停] --- [下一句]
 class _PlaybackControls extends StatelessWidget {
   final ReviewDifficultPracticeState playerState;
   final VoidCallback onPrevious;
@@ -906,7 +781,7 @@ class _PlaybackControls extends StatelessWidget {
   }
 }
 
-/// 导航按钮（上一句/下一句）
+/// 导航按钮
 class _NavButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
@@ -931,27 +806,15 @@ class _NavButton extends StatelessWidget {
   }
 }
 
-/// 完成对话框
+/// 收藏复习完成对话框
 class _CompleteDialog extends StatelessWidget {
   final int totalSentences;
-  final int stepIndex;
-  final int totalSteps;
-  final String stageName;
-  final String? nextStepName;
-  final bool isLastStep;
+  final AppLocalizations l10n;
 
-  const _CompleteDialog({
-    required this.totalSentences,
-    required this.stepIndex,
-    required this.totalSteps,
-    required this.stageName,
-    this.nextStepName,
-    this.isLastStep = false,
-  });
+  const _CompleteDialog({required this.totalSentences, required this.l10n});
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     return PopScope(
@@ -961,101 +824,13 @@ class _CompleteDialog extends StatelessWidget {
           children: [
             Icon(Icons.check_circle, color: theme.colorScheme.primary),
             const SizedBox(width: AppSpacing.s),
-            Flexible(child: Text(l10n.reviewDifficultPracticeCompleteTitle)),
+            Flexible(child: Text(l10n.bookmarkReviewComplete)),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.stepProgressLabel(stepIndex + 1, totalSteps, stageName),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s),
-            Text(
-              l10n.reviewDifficultPracticeCompleteMessage(totalSentences),
-              style: theme.textTheme.bodyMedium,
-            ),
-          ],
+        content: Text(
+          l10n.bookmarkReviewCompleteMessage(totalSentences),
+          style: theme.textTheme.bodyMedium,
         ),
-        actions: _buildActions(context, l10n),
-      ),
-    );
-  }
-
-  List<Widget> _buildActions(BuildContext context, AppLocalizations l10n) {
-    if (nextStepName != null) {
-      return [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(l10n.backToPlan),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.s),
-            Expanded(
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(l10n.continueToStep(nextStepName!)),
-              ),
-            ),
-          ],
-        ),
-      ];
-    } else if (isLastStep) {
-      return [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.completeReview),
-          ),
-        ),
-      ];
-    } else {
-      return [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.backToPlan),
-          ),
-        ),
-      ];
-    }
-  }
-}
-
-/// 难句补练自由练习完成对话框
-///
-/// 返回 `true` 表示完成退出，`false` 表示再练一遍。
-class _FreePlayCompleteDialog extends StatelessWidget {
-  final String title;
-  final String message;
-
-  const _FreePlayCompleteDialog({required this.title, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: theme.colorScheme.primary),
-            const SizedBox(width: AppSpacing.s),
-            Flexible(child: Text(title)),
-          ],
-        ),
-        content: Text(message, style: theme.textTheme.bodyMedium),
         actions: [
           Row(
             children: [
@@ -1069,7 +844,7 @@ class _FreePlayCompleteDialog extends StatelessWidget {
               Expanded(
                 child: FilledButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(l10n.practiceAgain),
+                  child: Text(l10n.bookmarkReviewAgain),
                 ),
               ),
             ],
