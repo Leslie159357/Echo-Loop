@@ -29,7 +29,7 @@ void navigationTests() {
       // 切换到收藏页
       await tester.tap(find.byIcon(Icons.favorite_border));
       await tester.pumpAndSettle();
-      expect(find.text('Favorites feature coming soon'), findsOneWidget);
+      expect(find.text('No saved sentences yet'), findsOneWidget);
 
       // 切换到我的页
       await tester.tap(find.byIcon(Icons.person_outline));

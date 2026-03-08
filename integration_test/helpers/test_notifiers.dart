@@ -19,7 +19,7 @@ import 'package:fluency/models/playback_settings.dart';
 import 'package:fluency/models/sentence.dart';
 import 'package:fluency/database/enums.dart';
 import 'package:fluency/database/app_database.dart'
-    show Bookmark, BookmarksCompanion;
+    show Bookmark, BookmarksCompanion, SavedWord;
 import 'package:fluency/database/daos/bookmark_dao.dart';
 import 'package:fluency/database/providers.dart';
 import 'package:fluency/providers/settings_provider.dart';
@@ -41,6 +41,13 @@ import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
 import 'package:fluency/services/sentence_ai_api_client.dart';
 import 'package:fluency/providers/sentence_ai_provider.dart';
 import 'package:fluency/providers/daily_study_time_provider.dart';
+import 'package:fluency/providers/saved_word_provider.dart';
+
+/// 测试用 SavedWordList（返回空列表，不依赖数据库）
+class TestSavedWordList extends SavedWordList {
+  @override
+  Stream<List<SavedWord>> build() => Stream.value([]);
+}
 
 /// 测试用 DailyStudyTime（直接返回 0，不依赖 SharedPreferences）
 class TestDailyStudyTime extends DailyStudyTime {
@@ -1475,6 +1482,32 @@ class TestBookmarkDao implements BookmarkDao {
   }
 
   @override
+  Stream<List<BookmarkWithAudio>> watchAllWithAudioName() {
+    final allBookmarks = <BookmarkWithAudio>[];
+    for (final entry in _store.entries) {
+      for (final index in entry.value) {
+        allBookmarks.add(
+          BookmarkWithAudio(
+            bookmark: Bookmark(
+              id: index,
+              audioItemId: entry.key,
+              sentenceIndex: index,
+              sentenceText: 'test sentence $index',
+              startTime: 0.0,
+              endTime: 1.0,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+              syncStatus: 0,
+            ),
+            audioName: 'Test Audio',
+          ),
+        );
+      }
+    }
+    return Stream.value(allBookmarks);
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) {
     final memberName = invocation.memberName.toString();
     if (memberName.contains('watchByAudioId')) {
@@ -1528,6 +1561,7 @@ Widget createTestApp() {
         ),
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
+      savedWordListProvider.overrideWith(() => TestSavedWordList()),
     ],
     child: const FluencyApp(),
   );
@@ -1592,6 +1626,7 @@ Widget createTestAppWithAudio({
         ),
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
+      savedWordListProvider.overrideWith(() => TestSavedWordList()),
     ],
     child: _AudioPreloadWrapper(
       audioItem: audioItem,

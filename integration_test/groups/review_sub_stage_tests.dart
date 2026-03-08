@@ -119,8 +119,8 @@ void reviewSubStageTests() {
         ),
       );
 
-      // 点击"Continue Learning"
-      await tester.tap(find.text('Continue Learning'));
+      // 点击"Continue Learning"（用 last 避免匹配学习页 Hero Card 的同名文本）
+      await tester.tap(find.text('Continue Learning').last);
       await tester.pumpAndSettle();
 
       // 验证弹出复习简报 → 含"Start Practice"按钮
@@ -151,8 +151,8 @@ void reviewSubStageTests() {
       );
       await navigateToLearningPlan(tester);
 
-      // 点击"Continue Learning"
-      await tester.tap(find.text('Continue Learning'));
+      // 点击"Continue Learning"（用 last 避免匹配学习页 Hero Card 的同名文本）
+      await tester.tap(find.text('Continue Learning').last);
       await tester.pumpAndSettle();
 
       // 应该直接弹出复述简报（含时长选择），而非先弹复习简报

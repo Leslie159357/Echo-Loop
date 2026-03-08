@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/enums.dart';
 import 'package:fluency/models/audio_item.dart';
 import 'package:fluency/providers/audio_library_provider.dart';
 import 'package:fluency/providers/collection_provider.dart';
@@ -110,7 +109,11 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        // AI 默认选中 + en 默认选中 → 按钮显示"已使用该选项转录"
+        // 切换到 AI 选项
+        await tester.tap(find.text('AI Transcription'));
+        await tester.pumpAndSettle();
+
+        // AI 选中 + en 默认选中 → 按钮显示"已使用该选项转录"
         expect(
           find.text('Already transcribed with this option'),
           findsAtLeast(1),
@@ -127,19 +130,19 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        // 默认 AI → FilledButton 显示"开始转录"
+        // 默认本地上传 → FilledButton 显示"上传字幕"
         expect(
-          find.widgetWithText(FilledButton, 'Start Transcription'),
+          find.widgetWithText(FilledButton, 'Upload Transcript'),
           findsOneWidget,
         );
 
-        // 切换到本地上传
-        await tester.tap(find.text('Local Upload'));
+        // 切换到 AI 转录
+        await tester.tap(find.text('AI Transcription'));
         await tester.pumpAndSettle();
 
-        // FilledButton 显示"上传字幕"
+        // FilledButton 显示"开始转录"
         expect(
-          find.widgetWithText(FilledButton, 'Upload Transcript'),
+          find.widgetWithText(FilledButton, 'Start Transcription'),
           findsOneWidget,
         );
       });
@@ -199,6 +202,10 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
+        // 切换到 AI 选项
+        await tester.tap(find.text('AI Transcription'));
+        await tester.pumpAndSettle();
+
         // 切换语言到 multi
         await tester.tap(find.text('Mixed Languages'));
         await tester.pumpAndSettle();
@@ -211,24 +218,12 @@ void main() {
       });
     });
 
-    group('有学习进度时的删除警告', () {
-      testWidgets('有学习进度时删除确认显示警告', (tester) async {
+    group('删除字幕警告', () {
+      testWidgets('删除确认显示收藏句子警告', (tester) async {
         final item = createTestAudioItem().copyWith(
           transcriptSource: TranscriptSource.local,
         );
-        // isStarted 为 true 需要非初始状态
-        final progress = createTestLearningProgress(
-          audioItemId: item.id,
-          currentSubStage: SubStageType.intensiveListen,
-        );
-        await tester.pumpWidget(
-          buildSheet(
-            item,
-            progressState: LearningProgressState(
-              progressMap: {item.id: progress},
-            ),
-          ),
-        );
+        await tester.pumpWidget(buildSheet(item));
         await tester.pumpAndSettle();
 
         await tester.tap(find.text('Open'));
@@ -237,9 +232,11 @@ void main() {
         await tester.tap(find.byTooltip('Delete Subtitle'));
         await tester.pumpAndSettle();
 
-        // 显示警告文字
+        // 显示收藏句子删除警告
         expect(
-          find.text('Deleting the subtitle will affect learning progress.'),
+          find.text(
+            'Deleting the subtitle will also remove all bookmarked sentences for this audio.',
+          ),
           findsOneWidget,
         );
       });
@@ -254,7 +251,13 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        // AI 默认选中 → 语言选择显示
+        // 默认本地上传 → 语言选择隐藏
+        expect(find.text('Select Language'), findsNothing);
+
+        // 切换到 AI → 语言选择显示
+        await tester.tap(find.text('AI Transcription'));
+        await tester.pumpAndSettle();
+
         expect(find.text('Select Language'), findsOneWidget);
         expect(find.text('English'), findsOneWidget);
         expect(find.text('Mixed Languages'), findsOneWidget);
@@ -268,7 +271,12 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        // 切换到本地上传
+        // 切换到 AI
+        await tester.tap(find.text('AI Transcription'));
+        await tester.pumpAndSettle();
+        expect(find.text('Select Language'), findsOneWidget);
+
+        // 切换回本地上传
         await tester.tap(find.text('Local Upload'));
         await tester.pumpAndSettle();
 

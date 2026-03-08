@@ -1,7 +1,7 @@
 /// 精听播放器集成测试
 ///
-/// 验证精听播放器的 UI 展示、偷看字幕、导航、标注模式、完成对话框和退出保存断点。
-/// 包含 7 个测试场景。
+/// 验证精听播放器的 UI 展示、偷看字幕、导航、标注模式、完成对话框、
+/// 退出保存断点、难句书签持久化。
 library;
 
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluency/main.dart';
 import 'package:fluency/database/enums.dart';
+import 'package:fluency/database/providers.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
@@ -282,6 +283,181 @@ void intensiveListenTests() {
       final progressState = container2.read(learningProgressNotifierProvider);
       final progress = progressState.progressMap['test-audio-1'];
       expect(progress?.intensiveListenSentenceIndex, equals(2));
+    });
+
+    testWidgets('看不懂标记难句 → 退出 → 书签持久化到数据库', (tester) async {
+      await tester.pumpWidget(
+        createTestAppWithAudio(
+          progressOverride: createTestLearningProgress(
+            currentSubStage: SubStageType.intensiveListen,
+            currentStageStartedAt: DateTime.now(),
+          ),
+        ),
+      );
+      await navigateToIntensiveListen(tester);
+
+      // 点击"Can't understand"进入标注模式 → 自动标记当前句子为难句
+      await tester.tap(find.text("Can't understand"));
+      await tester.pumpAndSettle();
+
+      // 验证进入标注模式
+      expect(find.byType(SentenceAnnotationCard), findsOneWidget);
+
+      // 退出标注模式
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      // 点击关闭按钮触发退出
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      // 确认退出对话框
+      expect(find.text('Exit Intensive Listening?'), findsOneWidget);
+      await tester.tap(find.text('Exit'));
+      await tester.pumpAndSettle();
+
+      // 验证精听页面已退出
+      expect(find.byType(IntensiveListenPlayerScreen), findsNothing);
+
+      // 验证书签已持久化到数据库
+      final context = tester.element(find.byType(FluencyApp));
+      final container2 = ProviderScope.containerOf(context);
+      final bookmarkDao =
+          container2.read(bookmarkDaoProvider) as TestBookmarkDao;
+      final bookmarkedIndices =
+          await bookmarkDao.getBookmarkedIndices('test-audio-1');
+      // 第一句（index 0）被标记为难句
+      expect(bookmarkedIndices, contains(0));
+
+      // 验证难句数快照已保存到 learning_progress
+      final progressState = container2.read(learningProgressNotifierProvider);
+      final progress = progressState.progressMap['test-audio-1'];
+      expect(progress?.intensiveListenDifficultCount, equals(1));
+    });
+
+    testWidgets('freePlay 模式退出时也持久化难句书签', (tester) async {
+      await tester.pumpWidget(
+        createTestAppWithAudio(
+          progressOverride: createTestLearningProgress(
+            currentSubStage: SubStageType.intensiveListen,
+            currentStageStartedAt: DateTime.now(),
+          ),
+        ),
+      );
+
+      // 导航到精听并设置为 freePlay 模式
+      await tester.pumpAndSettle();
+      final ctx = tester.element(find.byType(FluencyApp));
+      final container = ProviderScope.containerOf(ctx);
+
+      final session =
+          container.read(learningSessionProvider.notifier)
+              as TestLearningSession;
+      session.setState(
+        const LearningSessionState(
+          learningMode: LearningMode.intensiveListen,
+          audioItemId: 'test-audio-1',
+          isFreePlay: true,
+        ),
+      );
+
+      final player =
+          container.read(intensiveListenPlayerProvider.notifier)
+              as TestIntensiveListenPlayer;
+      final sentences = createTestSentences();
+      player.setTestSentences(sentences);
+      player.setState(
+        IntensiveListenState(
+          currentSentenceIndex: 0,
+          totalSentences: sentences.length,
+        ),
+      );
+
+      container
+          .read(appRouterProvider)
+          .push('/collections/test-collection-1/test-audio-1/intensive-listen');
+      await tester.pumpAndSettle();
+
+      // 点击"Can't understand" → 标注模式 → 自动标记难句
+      await tester.tap(find.text("Can't understand"));
+      await tester.pumpAndSettle();
+
+      // 退出标注模式
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      // freePlay 模式点击关闭直接退出（无确认对话框）
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      // 验证精听页面已退出
+      expect(find.byType(IntensiveListenPlayerScreen), findsNothing);
+
+      // 验证书签已持久化到数据库
+      final container2 = ProviderScope.containerOf(
+        tester.element(find.byType(FluencyApp)),
+      );
+      final bookmarkDao =
+          container2.read(bookmarkDaoProvider) as TestBookmarkDao;
+      final bookmarkedIndices =
+          await bookmarkDao.getBookmarkedIndices('test-audio-1');
+      expect(bookmarkedIndices, contains(0));
+
+      // 验证难句数快照已保存
+      final progressState = container2.read(learningProgressNotifierProvider);
+      final progress = progressState.progressMap['test-audio-1'];
+      expect(progress?.intensiveListenDifficultCount, equals(1));
+    });
+
+    testWidgets('多句标记难句 → 退出 → 全部持久化', (tester) async {
+      await tester.pumpWidget(
+        createTestAppWithAudio(
+          progressOverride: createTestLearningProgress(
+            currentSubStage: SubStageType.intensiveListen,
+            currentStageStartedAt: DateTime.now(),
+          ),
+        ),
+      );
+      await navigateToIntensiveListen(tester);
+
+      // 第 1 句：点击"看不懂"
+      await tester.tap(find.text("Can't understand"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      // 导航到第 3 句（索引 2）
+      await tester.tap(find.byIcon(Icons.skip_next_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.skip_next_rounded));
+      await tester.pumpAndSettle();
+
+      // 第 3 句：点击"看不懂"
+      await tester.tap(find.text("Can't understand"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      // 退出
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Exit'));
+      await tester.pumpAndSettle();
+
+      // 验证两个书签都已持久化
+      final context = tester.element(find.byType(FluencyApp));
+      final container2 = ProviderScope.containerOf(context);
+      final bookmarkDao =
+          container2.read(bookmarkDaoProvider) as TestBookmarkDao;
+      final bookmarkedIndices =
+          await bookmarkDao.getBookmarkedIndices('test-audio-1');
+      expect(bookmarkedIndices, containsAll([0, 2]));
+      expect(bookmarkedIndices.length, equals(2));
+
+      // 验证难句数快照
+      final progressState = container2.read(learningProgressNotifierProvider);
+      final progress = progressState.progressMap['test-audio-1'];
+      expect(progress?.intensiveListenDifficultCount, equals(2));
     });
   });
 }

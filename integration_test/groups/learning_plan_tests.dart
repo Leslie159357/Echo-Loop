@@ -135,8 +135,8 @@ void learningPlanTests() {
       );
       await navigateToLearningPlan(tester);
 
-      // 点击"Continue Learning"
-      await tester.tap(find.text('Continue Learning'));
+      // 点击"Continue Learning"（用 last 避免匹配学习页 Hero Card 的同名文本）
+      await tester.tap(find.text('Continue Learning').last);
       await tester.pumpAndSettle();
 
       // 验证弹出的是精听简报（而非盲听简报）

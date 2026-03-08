@@ -16,7 +16,7 @@ import '../helpers/test_notifiers.dart';
 /// 管理字幕相关集成测试
 void manageSubtitlesTests() {
   group('流程：管理字幕', () {
-    testWidgets('无字幕音频 — 打开弹窗，显示选项卡片，AI 默认选中', (tester) async {
+    testWidgets('无字幕音频 — 打开弹窗，显示选项卡片，本地上传默认选中', (tester) async {
       // 创建无字幕音频
       await tester.pumpWidget(
         createTestAppWithAudio(
@@ -46,10 +46,8 @@ void manageSubtitlesTests() {
       expect(find.text('Local Upload'), findsOneWidget);
       expect(find.text('AI Transcription'), findsOneWidget);
 
-      // AI 默认选中 → 语言选择器可见
-      expect(find.text('Select Language'), findsOneWidget);
-      expect(find.text('English'), findsWidgets);
-      expect(find.text('Mixed Languages'), findsOneWidget);
+      // 本地上传默认选中 → 语言选择器不可见
+      expect(find.text('Select Language'), findsNothing);
 
       // 无字幕时不显示删除图标按钮
       expect(find.byIcon(Icons.delete_outline), findsNothing);
@@ -201,7 +199,11 @@ void manageSubtitlesTests() {
       // 状态显示 AI
       expect(find.textContaining('AI'), findsWidgets);
 
-      // AI 默认选中 + en 默认语言 → 禁用提示可见（提示文字 + 按钮文字各出现一次）
+      // 切换到 AI 选项
+      await tester.tap(find.text('AI Transcription'));
+      await tester.pumpAndSettle();
+
+      // AI 选中 + en 默认语言 → 禁用提示可见（提示文字 + 按钮文字各出现一次）
       expect(find.text('Already transcribed with this option'), findsWidgets);
 
       // 操作按钮不可点击
@@ -240,26 +242,16 @@ void manageSubtitlesTests() {
       await tester.tap(find.text('Manage Subtitles'));
       await tester.pumpAndSettle();
 
-      // AI 默认选中 → 按钮文字为"开始转录"
-      expect(
-        find.widgetWithText(FilledButton, 'Start Transcription'),
-        findsOneWidget,
-      );
-
-      // 切换到 Local Upload
-      await tester.tap(find.text('Local Upload'));
-      await tester.pumpAndSettle();
-
-      // 按钮文字变为"上传字幕"
+      // 本地上传默认选中 → 按钮文字为"上传字幕"
       expect(
         find.widgetWithText(FilledButton, 'Upload Transcript'),
         findsOneWidget,
       );
 
-      // 语言选择器消失
+      // 语言选择器不可见
       expect(find.text('Select Language'), findsNothing);
 
-      // 切换回 AI
+      // 切换到 AI
       await tester.tap(find.text('AI Transcription'));
       await tester.pumpAndSettle();
 
