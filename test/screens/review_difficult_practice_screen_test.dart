@@ -248,6 +248,63 @@ void main() {
       expect(find.text('Test sentence number 1.'), findsOneWidget);
     });
 
+    testWidgets('偷看字幕点击切换 — 初始隐藏显示听觉图标', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.hearing), findsOneWidget);
+      expect(find.text('Test sentence number 1.'), findsNothing);
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看字幕点击切换 — 点击显示文本', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test sentence number 1.'), findsOneWidget);
+      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看字幕点击切换 — 再次点击隐藏', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 点击显示
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+      expect(find.text('Test sentence number 1.'), findsOneWidget);
+
+      // 再次点击隐藏
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+      expect(find.text('Test sentence number 1.'), findsNothing);
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
+
     testWidgets('句间停顿显示倒计时控件', (tester) async {
       await tester.pumpWidget(
         createTestWidget(
@@ -308,7 +365,6 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-
           ),
         ),
       );
@@ -491,7 +547,6 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-
           ),
         ),
       );
@@ -527,7 +582,6 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-
           ),
         ),
       );

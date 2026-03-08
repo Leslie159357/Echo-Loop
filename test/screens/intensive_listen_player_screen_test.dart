@@ -552,6 +552,95 @@ void main() {
       expect(find.text('Tap to mark as difficult'), findsOneWidget);
     });
 
+    testWidgets('偷看字幕点击切换 — 初始隐藏', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 隐藏状态：听觉图标可见，句子文本不可见
+      expect(find.byIcon(Icons.hearing), findsOneWidget);
+      expect(find.text('Test sentence number 1.'), findsNothing);
+      // 偷看按钮显示 visibility_outlined 图标
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看字幕点击切换 — 点击显示', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 点击偷看按钮
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+
+      // 文本已显示
+      expect(find.text('Test sentence number 1.'), findsOneWidget);
+      // 偷看按钮图标变为 visibility_off
+      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看字幕点击切换 — 再次点击隐藏', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 点击显示
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+      expect(find.text('Test sentence number 1.'), findsOneWidget);
+
+      // 再次点击隐藏
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+      expect(find.text('Test sentence number 1.'), findsNothing);
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看字幕切换句子后自动重置', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isPlaying: true,
+            isTextRevealed: false,
+            currentSentenceIndex: 0,
+            totalSentences: 5,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 偷看当前句子
+      await tester.tap(find.text('Peek'));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+
+      // 切到下一句（TestIntensiveListenPlayer.goToNext 会 reset isTextRevealed）
+      final nextIcon = find.byIcon(Icons.skip_next_rounded);
+      await tester.tap(nextIcon);
+      await tester.pumpAndSettle();
+
+      // 下一句应自动隐藏
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
+
     testWidgets('标注模式下导航按钮可用（非重播状态）', (tester) async {
       await tester.pumpWidget(
         createTestWidget(

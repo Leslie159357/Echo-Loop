@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:fluency/models/audio_item.dart';
 import 'package:fluency/models/collection.dart';
 import 'package:fluency/models/tag.dart';
+import 'package:fluency/models/difficult_practice_settings.dart';
 import 'package:fluency/models/intensive_listen_settings.dart';
 import 'package:fluency/models/playback_settings.dart';
 import 'package:fluency/models/audio_engine_state.dart';
@@ -991,6 +992,11 @@ class TestReviewDifficultPractice extends ReviewDifficultPractice {
   @override
   void setTextRevealed(bool revealed) {
     state = state.copyWith(isTextRevealed: revealed);
+  }
+
+  @override
+  void updateSettings(DifficultPracticeSettings newSettings) {
+    state = state.copyWith(settings: newSettings, isPlaying: false);
   }
 
   @override
