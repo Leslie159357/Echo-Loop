@@ -222,6 +222,16 @@
 
   **完成时间**: 2026-03-08
 
+## 已完成：难句补练 & 收藏复习页面添加设置
+- [x] DifficultPracticeSettings 模型（盲听/跟读循环次数 + 句间停顿模式）
+- [x] ReviewDifficultPracticeProvider / BookmarkReviewProvider 支持 settings + updateSettings
+- [x] 设置底部弹窗（DifficultPracticeSettingsSheet，复用精听设置 UI 模式）
+- [x] AppBar 添加设置按钮（难句补练 + 收藏复习两个页面）
+- [x] 国际化（4 个新 key，停顿相关复用精听已有 key）
+- [x] 单元测试（DifficultPracticeSettings 模型 11 个）
+
+  **完成时间**: 2026-03-08
+
 ## 优化UI，使得用户看起来更舒服而不单调
 - 支持自定义背景、背景音
 

@@ -4,6 +4,7 @@
 // Provider 的播放逻辑依赖 SentencePlaybackEngine，
 // 集成测试在 integration_test 中覆盖。
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluency/models/difficult_practice_settings.dart';
 import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
 
 void main() {
@@ -55,11 +56,13 @@ void main() {
       expect(annotation.totalSentences, 3);
     });
 
-    test('copyWith — targetRepeatCount', () {
+    test('copyWith — settings (targetRepeatCount via settings)', () {
       const state = ReviewDifficultPracticeState();
       expect(state.targetRepeatCount, 3);
 
-      final updated = state.copyWith(targetRepeatCount: 5);
+      final updated = state.copyWith(
+        settings: const DifficultPracticeSettings(shadowReadingRepeatCount: 5),
+      );
       expect(updated.targetRepeatCount, 5);
     });
 
@@ -159,7 +162,6 @@ void main() {
         isAnnotationMode: true,
         isPlaying: true,
         currentPlayCount: 1,
-        targetRepeatCount: 3,
       );
 
       final secondPlay = state.copyWith(currentPlayCount: 2);
@@ -175,7 +177,6 @@ void main() {
         isAnnotationMode: true,
         isPlaying: true,
         currentPlayCount: 3,
-        targetRepeatCount: 3,
       );
 
       // 模拟 onAllPlaysCompleted 回调

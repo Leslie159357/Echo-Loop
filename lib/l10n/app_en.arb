@@ -840,6 +840,11 @@
   "@bookmarkReviewFromAudio": {
     "placeholders": { "name": { "type": "String" } }
   },
+  "difficultPracticeSettings": "Practice Settings",
+  "difficultPracticeSettingsHint": "Settings apply to this session only",
+  "difficultPracticeBlindListenRepeat": "Blind listen repeats",
+  "difficultPracticeShadowReadingRepeat": "Shadow reading repeats",
+
   "bookmarkReviewProgress": "{current}/{total} sentences",
   "@bookmarkReviewProgress": {
     "placeholders": {

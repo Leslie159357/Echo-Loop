@@ -1456,6 +1456,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get difficultPracticeSettings => '练习设置';
+
+  @override
+  String get difficultPracticeSettingsHint => '设置仅对本次练习有效';
+
+  @override
+  String get difficultPracticeBlindListenRepeat => '盲听循环次数';
+
+  @override
+  String get difficultPracticeShadowReadingRepeat => '跟读循环次数';
+
+  @override
   String bookmarkReviewProgress(int current, int total) {
     return '$current/$total 句';
   }

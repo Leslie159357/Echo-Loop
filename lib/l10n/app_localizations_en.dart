@@ -1493,6 +1493,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get difficultPracticeSettings => 'Practice Settings';
+
+  @override
+  String get difficultPracticeSettingsHint =>
+      'Settings apply to this session only';
+
+  @override
+  String get difficultPracticeBlindListenRepeat => 'Blind listen repeats';
+
+  @override
+  String get difficultPracticeShadowReadingRepeat => 'Shadow reading repeats';
+
+  @override
   String bookmarkReviewProgress(int current, int total) {
     return '$current/$total sentences';
   }

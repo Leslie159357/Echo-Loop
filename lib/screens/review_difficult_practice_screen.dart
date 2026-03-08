@@ -20,6 +20,7 @@ import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/difficult_practice/difficult_practice_settings_sheet.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/player_hotkey_scope.dart';
 
@@ -323,6 +324,14 @@ class _ReviewDifficultPracticeScreenState
               icon: const Icon(Icons.close),
               onPressed: _handleExit,
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.tune),
+                tooltip: l10n.difficultPracticeSettings,
+                onPressed: () =>
+                    showDifficultPracticeSettingsSheet(context: context),
+              ),
+            ],
           ),
           body: Column(
             children: [
@@ -544,7 +553,12 @@ class _NormalModeView extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.s),
                       Text(
-                        l10n.reviewDifficultPracticeBlindListen,
+                        playerState.settings.blindListenRepeatCount > 1
+                            ? l10n.listenAndRepeatPlayCount(
+                                playerState.currentPlayCount,
+                                playerState.settings.blindListenRepeatCount,
+                              )
+                            : l10n.reviewDifficultPracticeBlindListen,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w500,

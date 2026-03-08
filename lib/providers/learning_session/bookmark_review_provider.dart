@@ -12,7 +12,6 @@
 library;
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -20,6 +19,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../database/daos/bookmark_dao.dart';
 import '../../models/audio_item.dart';
 import '../../models/bookmark_sentence.dart';
+import '../../models/difficult_practice_settings.dart';
 import '../../models/sentence.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import 'review_difficult_practice_provider.dart';
@@ -107,6 +107,14 @@ class BookmarkReview extends _$BookmarkReview {
       currentSentenceIndex: 0,
       totalSentences: _sentences.length,
     );
+  }
+
+  /// 更新练习设置（仅会话内生效）
+  ///
+  /// 更新后中断当前播放，以新设置重新开始当前句子。
+  void updateSettings(DifficultPracticeSettings newSettings) {
+    _engine.invalidateSession();
+    state = state.copyWith(settings: newSettings, isPlaying: false);
   }
 
   /// 获取当前句子索引
@@ -335,7 +343,7 @@ class BookmarkReview extends _$BookmarkReview {
     }
   }
 
-  /// 开始播放当前句子（盲听 1 遍）
+  /// 开始播放当前句子（盲听 N 遍）
   Future<void> _startSentence() async {
     final bookmarkSentence = currentBookmarkSentence;
     if (bookmarkSentence == null) return;
@@ -357,6 +365,8 @@ class BookmarkReview extends _$BookmarkReview {
       return;
     }
 
+    final repeatCount = state.settings.blindListenRepeatCount;
+
     state = state.copyWith(
       isPlaying: true,
       currentPlayCount: 1,
@@ -364,14 +374,40 @@ class BookmarkReview extends _$BookmarkReview {
       isPauseBetweenSentences: false,
     );
 
+    // 盲听循环：1 遍时无遍间停顿，多遍时使用跟读停顿策略
     await _engine.playSentenceLoop(
       sentence: sentence,
-      repeatCount: 1,
-      pauseCalculator: (_) => Duration.zero,
-      onPlayCountChanged: (_) {},
-      onPauseStarted: (_) {},
-      onPauseEnded: () {},
-      onTick: (_) {},
+      repeatCount: repeatCount,
+      pauseCalculator: repeatCount > 1
+          ? listenAndRepeatPauseCalculator
+          : (_) => Duration.zero,
+      onPlayCountChanged: repeatCount > 1
+          ? (count) {
+              state = state.copyWith(currentPlayCount: count, isPlaying: true);
+            }
+          : (_) {},
+      onPauseStarted: repeatCount > 1
+          ? (dur) {
+              state = state.copyWith(
+                isPauseBetweenPlays: true,
+                isPlaying: false,
+                isCountdownPaused: false,
+                isCountdownFastForward: false,
+                pauseDuration: dur,
+                pauseRemaining: dur,
+              );
+            }
+          : (_) {},
+      onPauseEnded: repeatCount > 1
+          ? () {
+              state = state.copyWith(isPauseBetweenPlays: false);
+            }
+          : () {},
+      onTick: repeatCount > 1
+          ? (remaining) {
+              state = state.copyWith(pauseRemaining: remaining);
+            }
+          : (_) {},
       onAllPlaysCompleted: () async {
         await _autoAdvance();
       },
@@ -433,11 +469,10 @@ class BookmarkReview extends _$BookmarkReview {
     final isLastSentence =
         state.currentSentenceIndex >= state.totalSentences - 1;
 
+    // 使用设置计算句间停顿时长
     final sentence = currentSentence;
     final pauseDur = sentence != null
-        ? Duration(
-            milliseconds: math.max(sentence.duration.inMilliseconds, 1000),
-          )
+        ? state.settings.calculateInterSentencePause(sentence.duration)
         : const Duration(seconds: 1);
 
     await _engine.autoAdvance(

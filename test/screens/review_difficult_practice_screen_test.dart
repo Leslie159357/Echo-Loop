@@ -42,7 +42,6 @@ void main() {
     int currentSentenceIndex = 0,
     int totalSentences = 5,
     int currentPlayCount = 1,
-    int targetRepeatCount = 3,
     bool isPlaying = true,
     bool isAnnotationMode = false,
     bool isTextRevealed = false,
@@ -58,7 +57,6 @@ void main() {
       currentSentenceIndex: currentSentenceIndex,
       totalSentences: totalSentences,
       currentPlayCount: currentPlayCount,
-      targetRepeatCount: targetRepeatCount,
       isPlaying: isPlaying,
       isAnnotationMode: isAnnotationMode,
       isTextRevealed: isTextRevealed,
@@ -310,7 +308,7 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-            targetRepeatCount: 3,
+
           ),
         ),
       );
@@ -493,7 +491,7 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-            targetRepeatCount: 3,
+
           ),
         ),
       );
@@ -529,7 +527,7 @@ void main() {
             isAnnotationMode: true,
             isPlaying: true,
             currentPlayCount: 2,
-            targetRepeatCount: 3,
+
           ),
         ),
       );

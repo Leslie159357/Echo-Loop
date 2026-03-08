@@ -11,8 +11,8 @@
 library;
 
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../models/difficult_practice_settings.dart';
 import '../../models/sentence.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import 'sentence_playback_engine.dart';
@@ -32,8 +32,11 @@ class ReviewDifficultPracticeState {
   /// 当前遍数（1-based）
   final int currentPlayCount;
 
-  /// 跟读模式目标遍数（默认 3）
-  final int targetRepeatCount;
+  /// 练习设置（盲听/跟读循环次数、句间停顿）
+  final DifficultPracticeSettings settings;
+
+  /// 跟读模式目标遍数（由 settings.shadowReadingRepeatCount 提供）
+  int get targetRepeatCount => settings.shadowReadingRepeatCount;
 
   /// 是否正在播放
   final bool isPlaying;
@@ -69,7 +72,7 @@ class ReviewDifficultPracticeState {
     this.currentSentenceIndex = 0,
     this.totalSentences = 0,
     this.currentPlayCount = 1,
-    this.targetRepeatCount = 3,
+    this.settings = const DifficultPracticeSettings(),
     this.isPlaying = false,
     this.isPauseBetweenPlays = false,
     this.isPauseBetweenSentences = false,
@@ -86,7 +89,7 @@ class ReviewDifficultPracticeState {
     int? currentSentenceIndex,
     int? totalSentences,
     int? currentPlayCount,
-    int? targetRepeatCount,
+    DifficultPracticeSettings? settings,
     bool? isPlaying,
     bool? isPauseBetweenPlays,
     bool? isPauseBetweenSentences,
@@ -102,7 +105,7 @@ class ReviewDifficultPracticeState {
       currentSentenceIndex: currentSentenceIndex ?? this.currentSentenceIndex,
       totalSentences: totalSentences ?? this.totalSentences,
       currentPlayCount: currentPlayCount ?? this.currentPlayCount,
-      targetRepeatCount: targetRepeatCount ?? this.targetRepeatCount,
+      settings: settings ?? this.settings,
       isPlaying: isPlaying ?? this.isPlaying,
       isPauseBetweenPlays: isPauseBetweenPlays ?? this.isPauseBetweenPlays,
       isPauseBetweenSentences:
@@ -157,6 +160,14 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       currentSentenceIndex: validIndex,
       totalSentences: _sentences.length,
     );
+  }
+
+  /// 更新练习设置（仅会话内生效）
+  ///
+  /// 更新后中断当前播放，以新设置重新开始当前句子。
+  void updateSettings(DifficultPracticeSettings newSettings) {
+    _engine.invalidateSession();
+    state = state.copyWith(settings: newSettings, isPlaying: false);
   }
 
   /// 获取当前句子索引（用于断点保存）
@@ -425,7 +436,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     );
   }
 
-  /// 开始播放当前句子（盲听 1 遍）
+  /// 开始播放当前句子（盲听 N 遍）
   Future<void> _startSentence() async {
     final sentence = currentSentence;
     if (sentence == null) return;
@@ -436,6 +447,8 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       return;
     }
 
+    final repeatCount = state.settings.blindListenRepeatCount;
+
     state = state.copyWith(
       isPlaying: true,
       currentPlayCount: 1,
@@ -443,15 +456,40 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       isPauseBetweenSentences: false,
     );
 
-    // 播放一遍盲听
+    // 盲听循环：1 遍时无遍间停顿，多遍时使用跟读停顿策略
     await _engine.playSentenceLoop(
       sentence: sentence,
-      repeatCount: 1,
-      pauseCalculator: (_) => Duration.zero,
-      onPlayCountChanged: (_) {},
-      onPauseStarted: (_) {},
-      onPauseEnded: () {},
-      onTick: (_) {},
+      repeatCount: repeatCount,
+      pauseCalculator: repeatCount > 1
+          ? listenAndRepeatPauseCalculator
+          : (_) => Duration.zero,
+      onPlayCountChanged: repeatCount > 1
+          ? (count) {
+              state = state.copyWith(currentPlayCount: count, isPlaying: true);
+            }
+          : (_) {},
+      onPauseStarted: repeatCount > 1
+          ? (dur) {
+              state = state.copyWith(
+                isPauseBetweenPlays: true,
+                isPlaying: false,
+                isCountdownPaused: false,
+                isCountdownFastForward: false,
+                pauseDuration: dur,
+                pauseRemaining: dur,
+              );
+            }
+          : (_) {},
+      onPauseEnded: repeatCount > 1
+          ? () {
+              state = state.copyWith(isPauseBetweenPlays: false);
+            }
+          : () {},
+      onTick: repeatCount > 1
+          ? (remaining) {
+              state = state.copyWith(pauseRemaining: remaining);
+            }
+          : (_) {},
       onAllPlaysCompleted: () async {
         // 盲听完成 → 句间停顿 → 自动推进
         await _autoAdvance();
@@ -464,12 +502,10 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     final isLastSentence =
         state.currentSentenceIndex >= state.totalSentences - 1;
 
-    // 计算句间停顿时长：max(句长, 1000ms)
+    // 使用设置计算句间停顿时长
     final sentence = currentSentence;
     final pauseDur = sentence != null
-        ? Duration(
-            milliseconds: math.max(sentence.duration.inMilliseconds, 1000),
-          )
+        ? state.settings.calculateInterSentencePause(sentence.duration)
         : const Duration(seconds: 1);
 
     await _engine.autoAdvance(

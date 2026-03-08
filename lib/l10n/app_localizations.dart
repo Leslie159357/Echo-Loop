@@ -2672,6 +2672,30 @@ abstract class AppLocalizations {
   /// **'From: {name}'**
   String bookmarkReviewFromAudio(String name);
 
+  /// No description provided for @difficultPracticeSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Practice Settings'**
+  String get difficultPracticeSettings;
+
+  /// No description provided for @difficultPracticeSettingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings apply to this session only'**
+  String get difficultPracticeSettingsHint;
+
+  /// No description provided for @difficultPracticeBlindListenRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Blind listen repeats'**
+  String get difficultPracticeBlindListenRepeat;
+
+  /// No description provided for @difficultPracticeShadowReadingRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Shadow reading repeats'**
+  String get difficultPracticeShadowReadingRepeat;
+
   /// No description provided for @bookmarkReviewProgress.
   ///
   /// In en, this message translates to:

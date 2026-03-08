@@ -617,5 +617,10 @@
   "bookmarkReviewAgain": "再来一遍",
   "bookmarkReviewAudioSkipped": "音频不可用，跳过该句",
   "bookmarkReviewFromAudio": "来自：{name}",
+  "difficultPracticeSettings": "练习设置",
+  "difficultPracticeSettingsHint": "设置仅对本次练习有效",
+  "difficultPracticeBlindListenRepeat": "盲听循环次数",
+  "difficultPracticeShadowReadingRepeat": "跟读循环次数",
+
   "bookmarkReviewProgress": "{current}/{total} 句"
 }
