@@ -22,6 +22,7 @@ import '../screens/listen_and_repeat_player_screen.dart';
 import '../screens/retell_player_screen.dart';
 import '../screens/review_difficult_practice_screen.dart';
 import '../screens/bookmark_review_screen.dart';
+import '../screens/flashcard_screen.dart';
 import 'main_shell.dart';
 
 /// 全局根导航器 key
@@ -79,14 +80,14 @@ abstract class AppRoutes {
   /// 收藏句子复习页路径
   static const bookmarkReview = '/bookmark-review';
 
+  /// Flashcard 单词卡片复习页路径
+  static const flashcard = '/flashcard';
+
   /// 难句补练页路径
-  static String reviewDifficultPractice(
-    String? collectionId,
-    String audioId,
-  ) =>
+  static String reviewDifficultPractice(String? collectionId, String audioId) =>
       collectionId != null
-          ? '/collections/$collectionId/$audioId/review-difficult-practice'
-          : '/audio/$audioId/review-difficult-practice';
+      ? '/collections/$collectionId/$audioId/review-difficult-practice'
+      : '/audio/$audioId/review-difficult-practice';
 }
 
 /// GoRouter Provider（keepAlive，不可 invalidate）
@@ -142,6 +143,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/bookmark-review',
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const BookmarkReviewScreen(),
+      ),
+      // Flashcard 单词卡片复习（全屏）
+      GoRoute(
+        path: '/flashcard',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const FlashcardScreen(),
       ),
       // 独立音频路由（不依赖合集）
       GoRoute(

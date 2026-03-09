@@ -16,6 +16,7 @@ import '../l10n/app_localizations.dart';
 import '../models/audio_item.dart' as model;
 import '../models/dict_entry.dart';
 import '../providers/audio_engine/audio_engine_provider.dart';
+import '../providers/flashcard/flashcard_provider.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/saved_word_provider.dart';
 import '../providers/sentence_ai_provider.dart';
@@ -625,13 +626,51 @@ class _WordsView extends ConsumerWidget {
             horizontal: AppSpacing.m,
             vertical: AppSpacing.s,
           ),
-          itemCount: words.length,
+          // +1 for flashcard entry button
+          itemCount: words.length + 1,
           itemBuilder: (context, index) {
-            final w = words[index];
+            if (index == 0) {
+              if (words.length < 2) return const SizedBox.shrink();
+              return _StartFlashcardButton(words: words);
+            }
+            final w = words[index - 1];
             return _SavedWordTile(key: ValueKey(w.id), savedWord: w);
           },
         );
       },
+    );
+  }
+}
+
+/// "开始测验"按钮 — 初始化 FlashcardNotifier 并导航到 Flashcard 页面
+class _StartFlashcardButton extends ConsumerWidget {
+  final List<SavedWord> words;
+
+  const _StartFlashcardButton({required this.words});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.s),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.tonal(
+          onPressed: () {
+            ref.read(flashcardNotifierProvider.notifier).initialize(words);
+            context.push(AppRoutes.flashcard);
+          },
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.style_outlined, size: 18),
+              const SizedBox(width: 8),
+              Text('${l10n.flashcardStartQuiz} (${words.length})'),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

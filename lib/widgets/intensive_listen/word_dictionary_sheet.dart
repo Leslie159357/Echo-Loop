@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/dict_entry.dart';
 import '../../providers/saved_word_provider.dart';
 import '../../services/dictionary_service.dart';
+import '../../services/tts_service.dart';
 import '../../theme/app_theme.dart';
 
 /// 显示词典底部弹窗
@@ -249,6 +250,15 @@ class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
             ),
           ),
         ),
+        // TTS 发音按钮
+        IconButton(
+          onPressed: () => TtsService.instance.speak(entry.word),
+          icon: Icon(
+            Icons.volume_up,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          tooltip: l10n.flashcardTts,
+        ),
         IconButton(
           onPressed: () => _toggleSave(isSaved),
           icon: Icon(
@@ -361,8 +371,9 @@ class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
   /// 识别 "vt." "n." "a." "adv." 等词性前缀，
   /// 以蓝色小标签显示词性，后接释义正文。
   Widget _buildDefinitionLine(ThemeData theme, String line) {
-    final posMatch =
-        RegExp(r'^([a-z]+\.(?:\s*&\s*[a-z]+\.)*)\s*').firstMatch(line);
+    final posMatch = RegExp(
+      r'^([a-z]+\.(?:\s*&\s*[a-z]+\.)*)\s*',
+    ).firstMatch(line);
 
     if (posMatch == null) {
       // 无词性前缀，直接显示
