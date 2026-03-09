@@ -1,0 +1,309 @@
+/// 步骤完成通用对话框
+///
+/// 合并了精听、跟读、复述、难句补练、盲听等多个播放器页面的完成对话框。
+/// 统一的布局：标题行（图标 + 标题 + 可选再听按钮）、步骤进度、自定义内容、
+/// 可选难度选择器、底部操作按钮。
+///
+/// 按钮布局根据上下文分三种情况：
+/// 1. 有下一步可继续：[返回计划] [继续：X]
+/// 2. 末步骤：[完成首学/复习]（全宽）
+/// 3. 非末步骤但下一步不可用：[返回计划]（全宽）
+///
+/// 不可通过返回键或点击外部区域关闭。
+library;
+
+import 'package:flutter/material.dart';
+import '../../database/enums.dart';
+import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
+
+/// 步骤完成对话框返回结果
+///
+/// [continueToNext] 为 true 表示用户选择"继续下一步"，
+/// false 表示"返回计划"或"完成阶段"。
+/// [difficulty] 仅在 [showDifficultySelector] 为 true 时有值。
+typedef StepCompleteResult = ({
+  bool continueToNext,
+  DifficultyLevel? difficulty,
+});
+
+/// 显示步骤完成对话框
+///
+/// 返回 `null` 表示用户选择"再来一遍"（仅在 [replayLabel] 非 null 时可能），
+/// 返回 [StepCompleteResult] 表示用户点击了操作按钮。
+///
+/// [title] 对话框标题文本。
+/// [contentBody] 自定义内容区域（如完成统计信息）。
+/// [stepIndex] 当前完成的步骤序号（0-based），null 表示不显示步骤进度。
+/// [totalSteps] 当前阶段总步骤数。
+/// [stageName] 当前阶段名称（如"首学"）。
+/// [nextStepName] 下一步名称（null 表示下一步不可用或不存在）。
+/// [isLastStep] 是否为当前阶段的最后一步。
+/// [showDifficultySelector] 是否显示 5 档难度选择器。
+/// [replayLabel] "再来一遍"按钮文本，null 则不显示。
+Future<StepCompleteResult?> showStepCompleteDialog({
+  required BuildContext context,
+  required String title,
+  Widget? contentBody,
+  int? stepIndex,
+  int? totalSteps,
+  String? stageName,
+  String? nextStepName,
+  bool isLastStep = false,
+  bool showDifficultySelector = false,
+  String? replayLabel,
+}) {
+  return showDialog<StepCompleteResult?>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => StepCompleteDialog(
+      title: title,
+      contentBody: contentBody,
+      stepIndex: stepIndex,
+      totalSteps: totalSteps,
+      stageName: stageName,
+      nextStepName: nextStepName,
+      isLastStep: isLastStep,
+      showDifficultySelector: showDifficultySelector,
+      replayLabel: replayLabel,
+    ),
+  );
+}
+
+/// 步骤完成通用对话框组件
+class StepCompleteDialog extends StatefulWidget {
+  /// 对话框标题
+  final String title;
+
+  /// 自定义内容区域
+  final Widget? contentBody;
+
+  /// 当前步骤序号（0-based），null 则不显示步骤进度
+  final int? stepIndex;
+
+  /// 总步骤数
+  final int? totalSteps;
+
+  /// 阶段名称
+  final String? stageName;
+
+  /// 下一步名称（null = 不可用）
+  final String? nextStepName;
+
+  /// 是否为最后一步
+  final bool isLastStep;
+
+  /// 是否显示难度选择器
+  final bool showDifficultySelector;
+
+  /// "再来一遍"按钮文本，null 则不显示
+  final String? replayLabel;
+
+  const StepCompleteDialog({
+    super.key,
+    required this.title,
+    this.contentBody,
+    this.stepIndex,
+    this.totalSteps,
+    this.stageName,
+    this.nextStepName,
+    this.isLastStep = false,
+    this.showDifficultySelector = false,
+    this.replayLabel,
+  });
+
+  @override
+  State<StepCompleteDialog> createState() => _StepCompleteDialogState();
+}
+
+class _StepCompleteDialogState extends State<StepCompleteDialog> {
+  /// 选中的难度等级（null = 未选择）
+  DifficultyLevel? _selectedDifficulty;
+
+  /// 操作按钮是否可用
+  ///
+  /// 显示难度选择器时必须选择难度后才可用，否则直接可用。
+  bool get _actionsEnabled =>
+      !widget.showDifficultySelector || _selectedDifficulty != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // 不显示难度选择器时，设置默认值以简化返回逻辑
+    if (!widget.showDifficultySelector) {
+      _selectedDifficulty = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: theme.colorScheme.primary),
+            const SizedBox(width: AppSpacing.s),
+            Expanded(child: Text(widget.title)),
+            // "再来一遍"按钮（右上角）
+            if (widget.replayLabel != null)
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: Text(widget.replayLabel!),
+              ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 步骤进度信息
+            if (widget.stepIndex != null &&
+                widget.totalSteps != null &&
+                widget.stageName != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text(
+                  l10n.stepProgressLabel(
+                    widget.stepIndex! + 1,
+                    widget.totalSteps!,
+                    widget.stageName!,
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            // 自定义内容
+            if (widget.contentBody != null) widget.contentBody!,
+            // 难度选择器
+            if (widget.showDifficultySelector) ...[
+              const SizedBox(height: AppSpacing.l),
+              Text(
+                l10n.selectDifficulty,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s),
+              _buildDifficultySelector(l10n),
+            ],
+          ],
+        ),
+        actions: _buildActions(context, l10n),
+      ),
+    );
+  }
+
+  /// 构建 5 档难度选择器
+  Widget _buildDifficultySelector(AppLocalizations l10n) {
+    final difficultyLabels = {
+      DifficultyLevel.veryEasy: l10n.difficultyVeryEasy,
+      DifficultyLevel.easy: l10n.difficultyEasy,
+      DifficultyLevel.medium: l10n.difficultyMedium,
+      DifficultyLevel.hard: l10n.difficultyHard,
+      DifficultyLevel.veryHard: l10n.difficultyVeryHard,
+    };
+
+    return Wrap(
+      spacing: AppSpacing.s,
+      runSpacing: AppSpacing.s,
+      children: DifficultyLevel.values.map((level) {
+        final isSelected = _selectedDifficulty == level;
+        return ChoiceChip(
+          label: Text(difficultyLabels[level] ?? level.label),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              _selectedDifficulty = selected ? level : null;
+            });
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  /// 构建底部操作按钮
+  ///
+  /// 三种情况：
+  /// 1. 有下一步可继续：[返回计划 Outlined] [继续：X Filled] 同一行
+  /// 2. 末步骤：[完成首学/复习 Filled]（全宽）
+  /// 3. 非末步骤但下一步不可用：[返回计划 Filled]（全宽）
+  List<Widget> _buildActions(BuildContext context, AppLocalizations l10n) {
+    if (widget.nextStepName != null) {
+      // 情况 1：有下一步可继续
+      return [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _actionsEnabled
+                    ? () => Navigator.of(context).pop((
+                        continueToNext: false,
+                        difficulty: _selectedDifficulty,
+                      ))
+                    : null,
+                child: Text(l10n.backToPlan),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.s),
+            Expanded(
+              child: FilledButton(
+                onPressed: _actionsEnabled
+                    ? () => Navigator.of(context).pop((
+                        continueToNext: true,
+                        difficulty: _selectedDifficulty,
+                      ))
+                    : null,
+                child: Text(l10n.continueToStep(widget.nextStepName!)),
+              ),
+            ),
+          ],
+        ),
+      ];
+    } else if (widget.isLastStep) {
+      // 情况 2：末步骤
+      final l10nCtx = AppLocalizations.of(context)!;
+      final isFirstStudy =
+          widget.stageName == l10nCtx.firstStudy ||
+          widget.stageName == LearningStage.firstLearn.label;
+      final completeText = isFirstStudy
+          ? l10n.completeFirstStudy
+          : l10n.completeReview;
+
+      return [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _actionsEnabled
+                ? () => Navigator.of(context).pop((
+                    continueToNext: false,
+                    difficulty: _selectedDifficulty,
+                  ))
+                : null,
+            child: Text(completeText),
+          ),
+        ),
+      ];
+    } else {
+      // 情况 3：非末步骤但下一步不可用
+      return [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _actionsEnabled
+                ? () => Navigator.of(context).pop((
+                    continueToNext: false,
+                    difficulty: _selectedDifficulty,
+                  ))
+                : null,
+            child: Text(l10n.backToPlan),
+          ),
+        ),
+      ];
+    }
+  }
+}
