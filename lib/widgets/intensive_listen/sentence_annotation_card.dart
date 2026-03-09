@@ -165,25 +165,30 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
             children: _buildWordSpans(theme),
           ),
         ),
-        const SizedBox(height: AppSpacing.l),
+        // AI 翻译区域（仅在有回调或缓存时显示）
+        if (widget.onRequestTranslation != null ||
+            widget.cachedTranslation != null) ...[
+          const SizedBox(height: AppSpacing.l),
+          AiContentSection(
+            icon: Icons.translate,
+            title: l10n.aiTranslation,
+            onRequest: widget.onRequestTranslation,
+            cachedContent: widget.cachedTranslation,
+          ),
+        ],
 
-        // AI 翻译区域
-        AiContentSection(
-          icon: Icons.translate,
-          title: l10n.aiTranslation,
-          onRequest: widget.onRequestTranslation,
-          cachedContent: widget.cachedTranslation,
-        ),
-        const SizedBox(height: AppSpacing.s),
-
-        // AI 解析区域
-        AiContentSection(
-          icon: Icons.auto_awesome,
-          title: l10n.aiAnalysis,
-          onRequest: widget.onRequestAnalysis,
-          cachedContent: widget.cachedAnalysis,
-          contentBuilder: (content) => _AnalysisContent(content: content),
-        ),
+        // AI 解析区域（仅在有回调或缓存时显示）
+        if (widget.onRequestAnalysis != null ||
+            widget.cachedAnalysis != null) ...[
+          const SizedBox(height: AppSpacing.s),
+          AiContentSection(
+            icon: Icons.auto_awesome,
+            title: l10n.aiAnalysis,
+            onRequest: widget.onRequestAnalysis,
+            cachedContent: widget.cachedAnalysis,
+            contentBuilder: (content) => _AnalysisContent(content: content),
+          ),
+        ],
       ],
     );
   }

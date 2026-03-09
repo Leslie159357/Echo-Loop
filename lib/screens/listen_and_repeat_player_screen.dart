@@ -22,6 +22,7 @@ import '../theme/app_theme.dart';
 import '../models/retell_settings.dart';
 import '../utils/keyword_extraction.dart';
 import '../utils/paragraph_grouping.dart';
+import '../providers/sentence_ai_provider.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_settings_sheet.dart';
 import '../widgets/retell/retell_briefing_sheet.dart';
@@ -112,6 +113,35 @@ class _ListenAndRepeatPlayerScreenState
     await ref
         .read(learningProgressNotifierProvider.notifier)
         .saveShadowingSentenceIndex(widget.audioItemId, player.currentIndex);
+  }
+
+  /// 构建带 AI 翻译/解析回调的句子卡片
+  Widget _buildAnnotationCard(String text, int sentenceIndex) {
+    final ai = ref.read(sentenceAiNotifierProvider);
+    final cachedTranslation = ai.getCachedTranslation(text)?.translation;
+    final cachedAnalysis = ai.getCachedAnalysis(text);
+    final cachedAnalysisText = cachedAnalysis != null
+        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.usage}'
+        : null;
+
+    return SentenceAnnotationCard(
+      key: ValueKey(text),
+      text: text,
+      isDifficult: true,
+      onToggle: _handleRemoveDifficult,
+      audioItemId: widget.audioItemId,
+      sentenceIndex: sentenceIndex,
+      onRequestTranslation: () async {
+        final result = await ai.getTranslation(text);
+        return result.translation;
+      },
+      onRequestAnalysis: () async {
+        final result = await ai.getAnalysis(text);
+        return '${result.grammar}\n${result.vocabulary}\n${result.usage}';
+      },
+      cachedTranslation: cachedTranslation,
+      cachedAnalysis: cachedAnalysisText,
+    );
   }
 
   /// 取消当前句子的难句收藏
@@ -411,12 +441,9 @@ class _ListenAndRepeatPlayerScreenState
                       Expanded(
                         child: SingleChildScrollView(
                           child: currentSentence != null
-                              ? SentenceAnnotationCard(
-                                  text: currentSentence.text,
-                                  isDifficult: true,
-                                  onToggle: _handleRemoveDifficult,
-                                  audioItemId: widget.audioItemId,
-                                  sentenceIndex: player.currentIndex,
+                              ? _buildAnnotationCard(
+                                  currentSentence.text,
+                                  player.currentIndex,
                                 )
                               : const SizedBox.shrink(),
                         ),

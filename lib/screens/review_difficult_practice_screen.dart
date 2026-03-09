@@ -20,6 +20,7 @@ import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../theme/app_theme.dart';
+import '../providers/sentence_ai_provider.dart';
 import '../widgets/difficult_practice/difficult_practice_settings_sheet.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/player_hotkey_scope.dart';
@@ -357,6 +358,7 @@ class _ReviewDifficultPracticeScreenState
                           onPauseCountdown: () => playerState.isCountdownPaused
                               ? player.resumeCountdown()
                               : player.pauseCountdown(),
+                          aiNotifier: ref.read(sentenceAiNotifierProvider),
                           audioItemId: widget.audioItemId,
                           sentenceIndex: player.currentIndex,
                         )
@@ -704,6 +706,7 @@ class _ShadowReadingView extends StatelessWidget {
   final AppLocalizations l10n;
   final VoidCallback onRemoveDifficult;
   final VoidCallback onPauseCountdown;
+  final SentenceAiNotifier? aiNotifier;
   final String? audioItemId;
   final int? sentenceIndex;
 
@@ -714,6 +717,7 @@ class _ShadowReadingView extends StatelessWidget {
     required this.l10n,
     required this.onRemoveDifficult,
     required this.onPauseCountdown,
+    this.aiNotifier,
     this.audioItemId,
     this.sentenceIndex,
   });
@@ -721,6 +725,12 @@ class _ShadowReadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final ai = aiNotifier;
+    final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
+    final cachedAnalysis = ai?.getCachedAnalysis(text);
+    final cachedAnalysisText = cachedAnalysis != null
+        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.usage}'
+        : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
@@ -728,15 +738,30 @@ class _ShadowReadingView extends StatelessWidget {
         children: [
           const SizedBox(height: AppSpacing.s),
 
-          // 句子卡片（含难句标记、可点击查词、翻译/分析占位）
+          // 句子卡片（含难句标记、可点击查词、AI 翻译/解析）
           Expanded(
             child: SingleChildScrollView(
               child: SentenceAnnotationCard(
+                key: ValueKey(text),
                 text: text,
                 isDifficult: true,
                 onToggle: onRemoveDifficult,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
+                onRequestTranslation: ai != null
+                    ? () async {
+                        final result = await ai.getTranslation(text);
+                        return result.translation;
+                      }
+                    : null,
+                onRequestAnalysis: ai != null
+                    ? () async {
+                        final result = await ai.getAnalysis(text);
+                        return '${result.grammar}\n${result.vocabulary}\n${result.usage}';
+                      }
+                    : null,
+                cachedTranslation: cachedTranslation,
+                cachedAnalysis: cachedAnalysisText,
               ),
             ),
           ),

@@ -19,6 +19,7 @@ import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
+import '../providers/sentence_ai_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/difficult_practice/difficult_practice_settings_sheet.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
@@ -208,6 +209,7 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen> {
                           onPauseCountdown: () => playerState.isCountdownPaused
                               ? player.resumeCountdown()
                               : player.pauseCountdown(),
+                          aiNotifier: ref.read(sentenceAiNotifierProvider),
                           audioItemId: currentBookmark?.audioItemId,
                           sentenceIndex: currentBookmark?.originalSentenceIndex,
                         )
@@ -583,6 +585,7 @@ class _ShadowReadingView extends StatelessWidget {
   final AppLocalizations l10n;
   final VoidCallback onRemoveBookmark;
   final VoidCallback onPauseCountdown;
+  final SentenceAiNotifier? aiNotifier;
   final String? audioItemId;
   final int? sentenceIndex;
 
@@ -593,6 +596,7 @@ class _ShadowReadingView extends StatelessWidget {
     required this.l10n,
     required this.onRemoveBookmark,
     required this.onPauseCountdown,
+    this.aiNotifier,
     this.audioItemId,
     this.sentenceIndex,
   });
@@ -600,6 +604,12 @@ class _ShadowReadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final ai = aiNotifier;
+    final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
+    final cachedAnalysis = ai?.getCachedAnalysis(text);
+    final cachedAnalysisText = cachedAnalysis != null
+        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.usage}'
+        : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
@@ -607,15 +617,30 @@ class _ShadowReadingView extends StatelessWidget {
         children: [
           const SizedBox(height: AppSpacing.s),
 
-          // 句子卡片
+          // 句子卡片（含 AI 翻译/解析）
           Expanded(
             child: SingleChildScrollView(
               child: SentenceAnnotationCard(
+                key: ValueKey(text),
                 text: text,
                 isDifficult: true,
                 onToggle: onRemoveBookmark,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
+                onRequestTranslation: ai != null
+                    ? () async {
+                        final result = await ai.getTranslation(text);
+                        return result.translation;
+                      }
+                    : null,
+                onRequestAnalysis: ai != null
+                    ? () async {
+                        final result = await ai.getAnalysis(text);
+                        return '${result.grammar}\n${result.vocabulary}\n${result.usage}';
+                      }
+                    : null,
+                cachedTranslation: cachedTranslation,
+                cachedAnalysis: cachedAnalysisText,
               ),
             ),
           ),
