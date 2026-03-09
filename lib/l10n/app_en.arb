@@ -854,5 +854,45 @@
       "current": { "type": "int" },
       "total": { "type": "int" }
     }
-  }
+  },
+
+  "flashcardTitle": "Flashcards",
+  "flashcardViewAnswer": "Ready? View answer",
+  "flashcardTapToFlip": "Tap to flip back",
+  "flashcardUnsaveHint": "Unsave when mastered",
+  "flashcardProgress": "{current}/{total}",
+  "@flashcardProgress": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "flashcardComplete": "Review Complete",
+  "flashcardWordsReviewed": "Reviewed {count} words",
+  "@flashcardWordsReviewed": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "flashcardWordsRemoved": "Unsaved {count} words",
+  "@flashcardWordsRemoved": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "flashcardPracticeAgain": "Practice Again",
+  "flashcardFinish": "Done",
+  "flashcardSettingsTitle": "Card Settings",
+  "flashcardTimerMode": "Auto Advance",
+  "flashcardTimerFixed": "Fixed",
+  "flashcardTimerSmart": "Smart",
+  "flashcardTimerOff": "Off",
+  "flashcardSortMode": "Sort Order",
+  "flashcardSortAlphaAsc": "A → Z",
+  "flashcardSortAlphaDesc": "Z → A",
+  "flashcardSortTimeAsc": "Oldest",
+  "flashcardSortTimeDesc": "Newest",
+  "flashcardSortRandom": "Random",
+  "flashcardSortSmart": "Smart",
+  "flashcardNoDefinition": "No definition",
+  "flashcardStartQuiz": "Start Review",
+  "flashcardTts": "Pronounce",
+  "flashcardAutoPlaySentence": "Auto-play Sentence",
+  "flashcardAutoPlayWord": "Auto-play Word"
 }

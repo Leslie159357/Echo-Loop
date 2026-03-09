@@ -42,6 +42,8 @@ import 'package:fluency/services/sentence_ai_api_client.dart';
 import 'package:fluency/providers/sentence_ai_provider.dart';
 import 'package:fluency/providers/daily_study_time_provider.dart';
 import 'package:fluency/providers/saved_word_provider.dart';
+import 'package:fluency/providers/flashcard/flashcard_provider.dart';
+import 'package:fluency/models/flashcard_settings.dart';
 
 /// 测试用 SavedWordList（返回空列表，不依赖数据库）
 class TestSavedWordList extends SavedWordList {
@@ -1518,6 +1520,108 @@ class TestBookmarkDao implements BookmarkDao {
   }
 }
 
+// ========== Flashcard 测试替身 ==========
+
+/// 集成测试用 FlashcardNotifier — 不访问 SharedPreferences / TTS / 音频引擎
+class TestFlashcardNotifier extends FlashcardNotifier {
+  @override
+  FlashcardState build() => const FlashcardState();
+
+  @override
+  Future<void> initialize(List<SavedWord> words) async {
+    final items =
+        words.map((w) => FlashcardWordItem(savedWord: w)).toList();
+    state = FlashcardState(words: items, currentIndex: 0);
+  }
+
+  @override
+  void flipCard() {
+    if (state.isCompleted || state.words.isEmpty) return;
+    state = state.copyWith(isShowingBack: !state.isShowingBack);
+  }
+
+  @override
+  void nextCard() {
+    if (state.currentIndex >= state.words.length - 1) {
+      state = state.copyWith(isCompleted: true);
+      return;
+    }
+    state = state.copyWith(
+      currentIndex: state.currentIndex + 1,
+      isShowingBack: false,
+    );
+  }
+
+  @override
+  void previousCard() {
+    if (state.currentIndex <= 0) return;
+    state = state.copyWith(
+      currentIndex: state.currentIndex - 1,
+      isShowingBack: false,
+    );
+  }
+
+  @override
+  void pause() => state = state.copyWith(isPaused: true);
+
+  @override
+  void resume() => state = state.copyWith(isPaused: false);
+
+  @override
+  void togglePause() => state = state.copyWith(isPaused: !state.isPaused);
+
+  @override
+  Future<void> disposePlayer() async => state = const FlashcardState();
+
+  @override
+  Future<void> reset() async {
+    final words = state.words;
+    state = FlashcardState(words: words, currentIndex: 0);
+  }
+
+  @override
+  Future<void> unsaveCurrentWord() async {
+    if (state.words.isEmpty) return;
+    final newWords = List<FlashcardWordItem>.from(state.words)
+      ..removeAt(state.currentIndex);
+    final newIndex =
+        state.currentIndex >= newWords.length && newWords.isNotEmpty
+            ? newWords.length - 1
+            : state.currentIndex;
+    if (newWords.isEmpty) {
+      state = state.copyWith(
+        words: newWords,
+        isCompleted: true,
+        removedCount: state.removedCount + 1,
+      );
+    } else {
+      state = state.copyWith(
+        words: newWords,
+        currentIndex: newIndex,
+        isShowingBack: false,
+        removedCount: state.removedCount + 1,
+      );
+    }
+  }
+
+  @override
+  Future<void> updateSettings(FlashcardSettings newSettings) async {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  void speakCurrentWord() {}
+
+  @override
+  Future<void> onWordPlayed() async {}
+
+  @override
+  Future<void> onSentencePlayed(String sentenceText) async {}
+
+  /// 直接设置状态（测试用）
+  void setState(FlashcardState newState) => state = newState;
+}
+
 // ========== App 工厂 ==========
 
 final _testPackageInfo = PackageInfo(
@@ -1562,6 +1666,9 @@ Widget createTestApp() {
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
+      flashcardNotifierProvider.overrideWith(
+        () => TestFlashcardNotifier(),
+      ),
     ],
     child: const FluencyApp(),
   );
@@ -1627,6 +1734,9 @@ Widget createTestAppWithAudio({
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
+      flashcardNotifierProvider.overrideWith(
+        () => TestFlashcardNotifier(),
+      ),
     ],
     child: _AudioPreloadWrapper(
       audioItem: audioItem,

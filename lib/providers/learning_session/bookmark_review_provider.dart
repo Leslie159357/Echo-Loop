@@ -21,7 +21,11 @@ import '../../models/audio_item.dart';
 import '../../models/bookmark_sentence.dart';
 import '../../models/difficult_practice_settings.dart';
 import '../../models/sentence.dart';
+import '../../services/study_time_service.dart';
+import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../daily_study_time_provider.dart';
+import '../study_stats_provider.dart';
 import 'review_difficult_practice_provider.dart';
 import 'sentence_playback_engine.dart';
 
@@ -42,12 +46,21 @@ class BookmarkReview extends _$BookmarkReview {
   /// 获取 AudioItemDao 的回调（通过 ref 注入）
   late dynamic Function(String) _getAudioItemById;
 
+  /// 学习时长存储服务
+  final StudyTimeService _studyTimeService = StudyTimeService();
+
+  /// 学习计时器
+  final Stopwatch _studyStopwatch = Stopwatch();
+
   @override
   ReviewDifficultPracticeState build() {
     _engine = SentencePlaybackEngine(
       getEngine: () => ref.read(audioEngineProvider.notifier),
     );
-    ref.onDispose(() => _engine.cleanup());
+    ref.onDispose(() {
+      _engine.cleanup();
+      _saveAndRefreshStudyTime();
+    });
     return const ReviewDifficultPracticeState();
   }
 
@@ -107,6 +120,10 @@ class BookmarkReview extends _$BookmarkReview {
       currentSentenceIndex: 0,
       totalSentences: _sentences.length,
     );
+
+    // 启动学习计时
+    _studyStopwatch.reset();
+    _studyStopwatch.start();
   }
 
   /// 更新练习设置（仅会话内生效）
@@ -144,6 +161,7 @@ class BookmarkReview extends _$BookmarkReview {
   /// 暂停播放
   void pause() {
     _engine.invalidateSession();
+    _studyStopwatch.stop();
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -154,6 +172,7 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 恢复播放
   Future<void> resume() async {
+    _studyStopwatch.start();
     if (state.isAnnotationMode) {
       _startShadowReading();
       return;
@@ -276,6 +295,8 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 重置到第一句并重新乱序播放（"再来一遍"）
   Future<void> resetToStart() async {
+    // 先保存已累计时间
+    _saveAndRefreshStudyTime();
     _engine.cleanup();
 
     // 重新按音频分组乱序
@@ -298,6 +319,7 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 释放资源
   void disposePlayer() {
+    _saveAndRefreshStudyTime();
     _engine.cleanup();
     _sentences = [];
     state = const ReviewDifficultPracticeState();
@@ -366,6 +388,7 @@ class BookmarkReview extends _$BookmarkReview {
     }
 
     final repeatCount = state.settings.blindListenRepeatCount;
+    final wordCount = countWords(sentence.text);
 
     state = state.copyWith(
       isPlaying: true,
@@ -388,6 +411,8 @@ class BookmarkReview extends _$BookmarkReview {
           : (_) {},
       onPauseStarted: repeatCount > 1
           ? (dur) {
+              // 每遍播完计入输入词数
+              _addInputWords(wordCount);
               state = state.copyWith(
                 isPauseBetweenPlays: true,
                 isPlaying: false,
@@ -409,6 +434,8 @@ class BookmarkReview extends _$BookmarkReview {
             }
           : (_) {},
       onAllPlaysCompleted: () async {
+        // 最后一遍（或唯一一遍）播完计入输入词数
+        _addInputWords(wordCount);
         await _autoAdvance();
       },
     );
@@ -418,6 +445,8 @@ class BookmarkReview extends _$BookmarkReview {
   void _startShadowReading() {
     final sentence = currentSentence;
     if (sentence == null || sentence.duration <= Duration.zero) return;
+
+    final wordCount = countWords(sentence.text);
 
     state = state.copyWith(
       isAnnotationMode: true,
@@ -438,6 +467,9 @@ class BookmarkReview extends _$BookmarkReview {
         state = state.copyWith(currentPlayCount: count, isPlaying: true);
       },
       onPauseStarted: (dur) {
+        // 播放完成 = 输入，停顿开始 = 用户跟读 = 输出
+        _addInputWords(wordCount);
+        _addOutputWords(wordCount);
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -454,6 +486,8 @@ class BookmarkReview extends _$BookmarkReview {
         state = state.copyWith(pauseRemaining: remaining);
       },
       onAllPlaysCompleted: () async {
+        // 最后一遍只有输入，没有跟读停顿
+        _addInputWords(wordCount);
         state = state.copyWith(
           isAnnotationMode: false,
           isPlaying: false,
@@ -462,6 +496,38 @@ class BookmarkReview extends _$BookmarkReview {
         await _autoAdvance();
       },
     );
+  }
+
+  /// 停止计时并保存已记录的学习时长，刷新统计 UI
+  Future<void> _saveAndRefreshStudyTime() async {
+    if (!_studyStopwatch.isRunning &&
+        _studyStopwatch.elapsed == Duration.zero) {
+      return;
+    }
+    _studyStopwatch.stop();
+    final seconds = _studyStopwatch.elapsed.inSeconds;
+    _studyStopwatch.reset();
+    if (seconds > 0) {
+      await _studyTimeService.addStudyTime(seconds);
+    }
+    ref.read(dailyStudyTimeProvider.notifier).refresh();
+    ref.read(studyStatsNotifierProvider.notifier).refresh();
+  }
+
+  /// 累加输入词数并刷新统计 UI
+  Future<void> _addInputWords(int count) async {
+    if (count > 0) {
+      await _studyTimeService.addInputWords(count);
+      ref.read(studyStatsNotifierProvider.notifier).refresh();
+    }
+  }
+
+  /// 累加输出词数并刷新统计 UI
+  Future<void> _addOutputWords(int count) async {
+    if (count > 0) {
+      await _studyTimeService.addOutputWords(count);
+      ref.read(studyStatsNotifierProvider.notifier).refresh();
+    }
   }
 
   /// 自动推进到下一句（含句间停顿）

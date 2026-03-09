@@ -20,6 +20,7 @@ import 'groups/stats_display_tests.dart';
 import 'groups/retell_tests.dart';
 import 'groups/review_sub_stage_tests.dart';
 import 'groups/manage_subtitles_tests.dart';
+import 'groups/flashcard_tests.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -38,4 +39,5 @@ void main() {
   retellTests();
   reviewSubStageTests();
   manageSubtitlesTests();
+  flashcardTests();
 }

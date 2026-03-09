@@ -16,6 +16,7 @@ import '../l10n/app_localizations.dart';
 import '../models/audio_item.dart' as model;
 import '../models/dict_entry.dart';
 import '../providers/audio_engine/audio_engine_provider.dart';
+import '../providers/flashcard/flashcard_provider.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/saved_word_provider.dart';
 import '../providers/sentence_ai_provider.dart';
@@ -82,11 +83,22 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             ),
           ),
 
-          // 内容区域
+          // 内容区域（Stack：列表 + 底部悬浮按钮）
           Expanded(
-            child: _currentView == _FavoritesView.sentences
-                ? const _SentencesView()
-                : const _WordsView(),
+            child: Stack(
+              children: [
+                // 列表
+                _currentView == _FavoritesView.sentences
+                    ? const _SentencesView()
+                    : const _WordsView(),
+
+                // 底部悬浮复习按钮
+                if (_currentView == _FavoritesView.sentences)
+                  const _FloatingSentenceReviewButton()
+                else
+                  const _FloatingFlashcardButton(),
+              ],
+            ),
           ),
         ],
       ),
@@ -125,29 +137,15 @@ class _SentencesView extends ConsumerWidget {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.m,
-            vertical: AppSpacing.s,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.m,
+            AppSpacing.s,
+            AppSpacing.m,
+            80, // 底部留出悬浮按钮空间
           ),
-          // +1 for the review button at the top
-          itemCount: grouped.length + 1,
+          itemCount: grouped.length,
           itemBuilder: (context, index) {
-            // 第一项：开始复习按钮
-            if (index == 0) {
-              // 过滤掉无效书签（迁移遗留的无时长条目），与 Provider 一致
-              final validBookmarks = allBookmarks.where((b) {
-                final duration = b.bookmark.endTime - b.bookmark.startTime;
-                return duration > 0 && b.bookmark.sentenceText.isNotEmpty;
-              }).toList();
-              if (validBookmarks.isEmpty) return const SizedBox.shrink();
-              return _StartReviewButton(
-                bookmarks: allBookmarks,
-                count: validBookmarks.length,
-              );
-            }
-
-            final groupIndex = index - 1;
-            final audioId = grouped.keys.elementAt(groupIndex);
+            final audioId = grouped.keys.elementAt(index);
             final items = grouped[audioId]!;
             final audioName = items.first.audioName;
 
@@ -163,40 +161,138 @@ class _SentencesView extends ConsumerWidget {
   }
 }
 
-/// "开始复习"按钮 — 初始化 BookmarkReviewProvider 并导航到复习页面
-class _StartReviewButton extends ConsumerWidget {
-  final List<BookmarkWithAudio> bookmarks;
-  final int count;
-
-  const _StartReviewButton({required this.bookmarks, required this.count});
+/// 底部悬浮句子复习按钮
+class _FloatingSentenceReviewButton extends ConsumerWidget {
+  const _FloatingSentenceReviewButton();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
+    final bookmarkDao = ref.watch(bookmarkDaoProvider);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.s),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton.tonal(
+    return StreamBuilder<List<BookmarkWithAudio>>(
+      stream: bookmarkDao.watchAllWithAudioName(),
+      builder: (context, snapshot) {
+        final allBookmarks = snapshot.data ?? [];
+        if (allBookmarks.isEmpty) return const SizedBox.shrink();
+
+        // 过滤掉无效书签（迁移遗留的无时长条目）
+        final validBookmarks = allBookmarks.where((b) {
+          final duration = b.bookmark.endTime - b.bookmark.startTime;
+          return duration > 0 && b.bookmark.sentenceText.isNotEmpty;
+        }).toList();
+        if (validBookmarks.isEmpty) return const SizedBox.shrink();
+
+        return _FloatingReviewButton(
+          icon: Icons.headphones,
+          label: AppLocalizations.of(
+            context,
+          )!.bookmarkReviewStartCount(validBookmarks.length),
           onPressed: () {
             final provider = ref.read(bookmarkReviewProvider.notifier);
             final audioItemDao = ref.read(audioItemDaoProvider);
             provider.initialize(
-              bookmarks,
+              allBookmarks,
               getAudioItemById: (id) => audioItemDao.getById(id),
             );
             context.push(AppRoutes.bookmarkReview);
           },
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.headphones, size: 18),
-              const SizedBox(width: 8),
-              Text(l10n.bookmarkReviewStartCount(count)),
-            ],
+        );
+      },
+    );
+  }
+}
+
+/// 底部悬浮 Flashcard 按钮
+class _FloatingFlashcardButton extends ConsumerWidget {
+  const _FloatingFlashcardButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final savedWordsAsync = ref.watch(savedWordListProvider);
+
+    return savedWordsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (words) {
+        if (words.length < 2) return const SizedBox.shrink();
+        final l10n = AppLocalizations.of(context)!;
+        return _FloatingReviewButton(
+          icon: Icons.style_outlined,
+          label: '${l10n.flashcardStartQuiz} (${words.length})',
+          onPressed: () {
+            ref.read(flashcardNotifierProvider.notifier).initialize(words);
+            context.push(AppRoutes.flashcard);
+          },
+        );
+      },
+    );
+  }
+}
+
+/// 底部悬浮复习按钮 — 渐变遮罩 + 全宽 FilledButton
+class _FloatingReviewButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _FloatingReviewButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 渐变遮罩
+          IgnorePointer(
+            child: Container(
+              height: 24,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.surface.withValues(alpha: 0.0),
+                    theme.colorScheme.surface,
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          // 按钮区域
+          Container(
+            color: theme.colorScheme.surface,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.l,
+              0,
+              AppSpacing.l,
+              AppSpacing.m,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onPressed,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 18),
+                    const SizedBox(width: 8),
+                    Text(label),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -594,9 +690,11 @@ class _WordsView extends ConsumerWidget {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.m,
-            vertical: AppSpacing.s,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.m,
+            AppSpacing.s,
+            AppSpacing.m,
+            80, // 底部留出悬浮按钮空间
           ),
           itemCount: words.length,
           itemBuilder: (context, index) {

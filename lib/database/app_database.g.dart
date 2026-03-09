@@ -5654,6 +5654,57 @@ class $SavedWordsTable extends SavedWords
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _practiceCountMeta = const VerificationMeta(
+    'practiceCount',
+  );
+  @override
+  late final GeneratedColumn<int> practiceCount = GeneratedColumn<int>(
+    'practice_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _totalStudyMsMeta = const VerificationMeta(
+    'totalStudyMs',
+  );
+  @override
+  late final GeneratedColumn<int> totalStudyMs = GeneratedColumn<int>(
+    'total_study_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _viewedBackMeta = const VerificationMeta(
+    'viewedBack',
+  );
+  @override
+  late final GeneratedColumn<bool> viewedBack = GeneratedColumn<bool>(
+    'viewed_back',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("viewed_back" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastPracticedAtMeta = const VerificationMeta(
+    'lastPracticedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastPracticedAt =
+      GeneratedColumn<DateTime>(
+        'last_practiced_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -5708,6 +5759,10 @@ class $SavedWordsTable extends SavedWords
     sentenceText,
     sentenceStartMs,
     sentenceEndMs,
+    practiceCount,
+    totalStudyMs,
+    viewedBack,
+    lastPracticedAt,
     createdAt,
     updatedAt,
     deletedAt,
@@ -5781,6 +5836,39 @@ class $SavedWordsTable extends SavedWords
         ),
       );
     }
+    if (data.containsKey('practice_count')) {
+      context.handle(
+        _practiceCountMeta,
+        practiceCount.isAcceptableOrUnknown(
+          data['practice_count']!,
+          _practiceCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('total_study_ms')) {
+      context.handle(
+        _totalStudyMsMeta,
+        totalStudyMs.isAcceptableOrUnknown(
+          data['total_study_ms']!,
+          _totalStudyMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('viewed_back')) {
+      context.handle(
+        _viewedBackMeta,
+        viewedBack.isAcceptableOrUnknown(data['viewed_back']!, _viewedBackMeta),
+      );
+    }
+    if (data.containsKey('last_practiced_at')) {
+      context.handle(
+        _lastPracticedAtMeta,
+        lastPracticedAt.isAcceptableOrUnknown(
+          data['last_practiced_at']!,
+          _lastPracticedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -5846,6 +5934,22 @@ class $SavedWordsTable extends SavedWords
         DriftSqlType.int,
         data['${effectivePrefix}sentence_end_ms'],
       ),
+      practiceCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}practice_count'],
+      )!,
+      totalStudyMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_study_ms'],
+      )!,
+      viewedBack: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}viewed_back'],
+      )!,
+      lastPracticedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_practiced_at'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -5893,6 +5997,18 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   /// 来源句子结束时间（毫秒），冗余存储，删除字幕后仍可播放
   final int? sentenceEndMs;
 
+  /// 练习次数（Flashcard 翻转到背面计为 1 次）
+  final int practiceCount;
+
+  /// 累计学习时长（毫秒），单张卡片最长 60 秒截断
+  final int totalStudyMs;
+
+  /// 是否曾翻转到背面查看释义
+  final bool viewedBack;
+
+  /// 最近一次练习时间
+  final DateTime? lastPracticedAt;
+
   /// 收藏时间
   final DateTime createdAt;
 
@@ -5912,6 +6028,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     this.sentenceText,
     this.sentenceStartMs,
     this.sentenceEndMs,
+    required this.practiceCount,
+    required this.totalStudyMs,
+    required this.viewedBack,
+    this.lastPracticedAt,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -5936,6 +6056,12 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     }
     if (!nullToAbsent || sentenceEndMs != null) {
       map['sentence_end_ms'] = Variable<int>(sentenceEndMs);
+    }
+    map['practice_count'] = Variable<int>(practiceCount);
+    map['total_study_ms'] = Variable<int>(totalStudyMs);
+    map['viewed_back'] = Variable<bool>(viewedBack);
+    if (!nullToAbsent || lastPracticedAt != null) {
+      map['last_practiced_at'] = Variable<DateTime>(lastPracticedAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -5965,6 +6091,12 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
       sentenceEndMs: sentenceEndMs == null && nullToAbsent
           ? const Value.absent()
           : Value(sentenceEndMs),
+      practiceCount: Value(practiceCount),
+      totalStudyMs: Value(totalStudyMs),
+      viewedBack: Value(viewedBack),
+      lastPracticedAt: lastPracticedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPracticedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
@@ -5987,6 +6119,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
       sentenceText: serializer.fromJson<String?>(json['sentenceText']),
       sentenceStartMs: serializer.fromJson<int?>(json['sentenceStartMs']),
       sentenceEndMs: serializer.fromJson<int?>(json['sentenceEndMs']),
+      practiceCount: serializer.fromJson<int>(json['practiceCount']),
+      totalStudyMs: serializer.fromJson<int>(json['totalStudyMs']),
+      viewedBack: serializer.fromJson<bool>(json['viewedBack']),
+      lastPracticedAt: serializer.fromJson<DateTime?>(json['lastPracticedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -6004,6 +6140,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
       'sentenceText': serializer.toJson<String?>(sentenceText),
       'sentenceStartMs': serializer.toJson<int?>(sentenceStartMs),
       'sentenceEndMs': serializer.toJson<int?>(sentenceEndMs),
+      'practiceCount': serializer.toJson<int>(practiceCount),
+      'totalStudyMs': serializer.toJson<int>(totalStudyMs),
+      'viewedBack': serializer.toJson<bool>(viewedBack),
+      'lastPracticedAt': serializer.toJson<DateTime?>(lastPracticedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -6019,6 +6159,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     Value<String?> sentenceText = const Value.absent(),
     Value<int?> sentenceStartMs = const Value.absent(),
     Value<int?> sentenceEndMs = const Value.absent(),
+    int? practiceCount,
+    int? totalStudyMs,
+    bool? viewedBack,
+    Value<DateTime?> lastPracticedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -6037,6 +6181,12 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     sentenceEndMs: sentenceEndMs.present
         ? sentenceEndMs.value
         : this.sentenceEndMs,
+    practiceCount: practiceCount ?? this.practiceCount,
+    totalStudyMs: totalStudyMs ?? this.totalStudyMs,
+    viewedBack: viewedBack ?? this.viewedBack,
+    lastPracticedAt: lastPracticedAt.present
+        ? lastPracticedAt.value
+        : this.lastPracticedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
@@ -6061,6 +6211,18 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
       sentenceEndMs: data.sentenceEndMs.present
           ? data.sentenceEndMs.value
           : this.sentenceEndMs,
+      practiceCount: data.practiceCount.present
+          ? data.practiceCount.value
+          : this.practiceCount,
+      totalStudyMs: data.totalStudyMs.present
+          ? data.totalStudyMs.value
+          : this.totalStudyMs,
+      viewedBack: data.viewedBack.present
+          ? data.viewedBack.value
+          : this.viewedBack,
+      lastPracticedAt: data.lastPracticedAt.present
+          ? data.lastPracticedAt.value
+          : this.lastPracticedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -6080,6 +6242,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
           ..write('sentenceText: $sentenceText, ')
           ..write('sentenceStartMs: $sentenceStartMs, ')
           ..write('sentenceEndMs: $sentenceEndMs, ')
+          ..write('practiceCount: $practiceCount, ')
+          ..write('totalStudyMs: $totalStudyMs, ')
+          ..write('viewedBack: $viewedBack, ')
+          ..write('lastPracticedAt: $lastPracticedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -6097,6 +6263,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     sentenceText,
     sentenceStartMs,
     sentenceEndMs,
+    practiceCount,
+    totalStudyMs,
+    viewedBack,
+    lastPracticedAt,
     createdAt,
     updatedAt,
     deletedAt,
@@ -6113,6 +6283,10 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
           other.sentenceText == this.sentenceText &&
           other.sentenceStartMs == this.sentenceStartMs &&
           other.sentenceEndMs == this.sentenceEndMs &&
+          other.practiceCount == this.practiceCount &&
+          other.totalStudyMs == this.totalStudyMs &&
+          other.viewedBack == this.viewedBack &&
+          other.lastPracticedAt == this.lastPracticedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt &&
@@ -6127,6 +6301,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   final Value<String?> sentenceText;
   final Value<int?> sentenceStartMs;
   final Value<int?> sentenceEndMs;
+  final Value<int> practiceCount;
+  final Value<int> totalStudyMs;
+  final Value<bool> viewedBack;
+  final Value<DateTime?> lastPracticedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
@@ -6139,6 +6317,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     this.sentenceText = const Value.absent(),
     this.sentenceStartMs = const Value.absent(),
     this.sentenceEndMs = const Value.absent(),
+    this.practiceCount = const Value.absent(),
+    this.totalStudyMs = const Value.absent(),
+    this.viewedBack = const Value.absent(),
+    this.lastPracticedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -6152,6 +6334,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     this.sentenceText = const Value.absent(),
     this.sentenceStartMs = const Value.absent(),
     this.sentenceEndMs = const Value.absent(),
+    this.practiceCount = const Value.absent(),
+    this.totalStudyMs = const Value.absent(),
+    this.viewedBack = const Value.absent(),
+    this.lastPracticedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
@@ -6167,6 +6353,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     Expression<String>? sentenceText,
     Expression<int>? sentenceStartMs,
     Expression<int>? sentenceEndMs,
+    Expression<int>? practiceCount,
+    Expression<int>? totalStudyMs,
+    Expression<bool>? viewedBack,
+    Expression<DateTime>? lastPracticedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -6180,6 +6370,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
       if (sentenceText != null) 'sentence_text': sentenceText,
       if (sentenceStartMs != null) 'sentence_start_ms': sentenceStartMs,
       if (sentenceEndMs != null) 'sentence_end_ms': sentenceEndMs,
+      if (practiceCount != null) 'practice_count': practiceCount,
+      if (totalStudyMs != null) 'total_study_ms': totalStudyMs,
+      if (viewedBack != null) 'viewed_back': viewedBack,
+      if (lastPracticedAt != null) 'last_practiced_at': lastPracticedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -6195,6 +6389,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     Value<String?>? sentenceText,
     Value<int?>? sentenceStartMs,
     Value<int?>? sentenceEndMs,
+    Value<int>? practiceCount,
+    Value<int>? totalStudyMs,
+    Value<bool>? viewedBack,
+    Value<DateTime?>? lastPracticedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -6208,6 +6406,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
       sentenceText: sentenceText ?? this.sentenceText,
       sentenceStartMs: sentenceStartMs ?? this.sentenceStartMs,
       sentenceEndMs: sentenceEndMs ?? this.sentenceEndMs,
+      practiceCount: practiceCount ?? this.practiceCount,
+      totalStudyMs: totalStudyMs ?? this.totalStudyMs,
+      viewedBack: viewedBack ?? this.viewedBack,
+      lastPracticedAt: lastPracticedAt ?? this.lastPracticedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -6239,6 +6441,18 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     if (sentenceEndMs.present) {
       map['sentence_end_ms'] = Variable<int>(sentenceEndMs.value);
     }
+    if (practiceCount.present) {
+      map['practice_count'] = Variable<int>(practiceCount.value);
+    }
+    if (totalStudyMs.present) {
+      map['total_study_ms'] = Variable<int>(totalStudyMs.value);
+    }
+    if (viewedBack.present) {
+      map['viewed_back'] = Variable<bool>(viewedBack.value);
+    }
+    if (lastPracticedAt.present) {
+      map['last_practiced_at'] = Variable<DateTime>(lastPracticedAt.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -6264,6 +6478,10 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
           ..write('sentenceText: $sentenceText, ')
           ..write('sentenceStartMs: $sentenceStartMs, ')
           ..write('sentenceEndMs: $sentenceEndMs, ')
+          ..write('practiceCount: $practiceCount, ')
+          ..write('totalStudyMs: $totalStudyMs, ')
+          ..write('viewedBack: $viewedBack, ')
+          ..write('lastPracticedAt: $lastPracticedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -10910,6 +11128,10 @@ typedef $$SavedWordsTableCreateCompanionBuilder =
       Value<String?> sentenceText,
       Value<int?> sentenceStartMs,
       Value<int?> sentenceEndMs,
+      Value<int> practiceCount,
+      Value<int> totalStudyMs,
+      Value<bool> viewedBack,
+      Value<DateTime?> lastPracticedAt,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
@@ -10924,6 +11146,10 @@ typedef $$SavedWordsTableUpdateCompanionBuilder =
       Value<String?> sentenceText,
       Value<int?> sentenceStartMs,
       Value<int?> sentenceEndMs,
+      Value<int> practiceCount,
+      Value<int> totalStudyMs,
+      Value<bool> viewedBack,
+      Value<DateTime?> lastPracticedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -10990,6 +11216,26 @@ class $$SavedWordsTableFilterComposer
 
   ColumnFilters<int> get sentenceEndMs => $composableBuilder(
     column: $table.sentenceEndMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get practiceCount => $composableBuilder(
+    column: $table.practiceCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalStudyMs => $composableBuilder(
+    column: $table.totalStudyMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get viewedBack => $composableBuilder(
+    column: $table.viewedBack,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastPracticedAt => $composableBuilder(
+    column: $table.lastPracticedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11076,6 +11322,26 @@ class $$SavedWordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get practiceCount => $composableBuilder(
+    column: $table.practiceCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalStudyMs => $composableBuilder(
+    column: $table.totalStudyMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get viewedBack => $composableBuilder(
+    column: $table.viewedBack,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastPracticedAt => $composableBuilder(
+    column: $table.lastPracticedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -11155,6 +11421,26 @@ class $$SavedWordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get practiceCount => $composableBuilder(
+    column: $table.practiceCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalStudyMs => $composableBuilder(
+    column: $table.totalStudyMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get viewedBack => $composableBuilder(
+    column: $table.viewedBack,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastPracticedAt => $composableBuilder(
+    column: $table.lastPracticedAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -11228,6 +11514,10 @@ class $$SavedWordsTableTableManager
                 Value<String?> sentenceText = const Value.absent(),
                 Value<int?> sentenceStartMs = const Value.absent(),
                 Value<int?> sentenceEndMs = const Value.absent(),
+                Value<int> practiceCount = const Value.absent(),
+                Value<int> totalStudyMs = const Value.absent(),
+                Value<bool> viewedBack = const Value.absent(),
+                Value<DateTime?> lastPracticedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -11240,6 +11530,10 @@ class $$SavedWordsTableTableManager
                 sentenceText: sentenceText,
                 sentenceStartMs: sentenceStartMs,
                 sentenceEndMs: sentenceEndMs,
+                practiceCount: practiceCount,
+                totalStudyMs: totalStudyMs,
+                viewedBack: viewedBack,
+                lastPracticedAt: lastPracticedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -11254,6 +11548,10 @@ class $$SavedWordsTableTableManager
                 Value<String?> sentenceText = const Value.absent(),
                 Value<int?> sentenceStartMs = const Value.absent(),
                 Value<int?> sentenceEndMs = const Value.absent(),
+                Value<int> practiceCount = const Value.absent(),
+                Value<int> totalStudyMs = const Value.absent(),
+                Value<bool> viewedBack = const Value.absent(),
+                Value<DateTime?> lastPracticedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -11266,6 +11564,10 @@ class $$SavedWordsTableTableManager
                 sentenceText: sentenceText,
                 sentenceStartMs: sentenceStartMs,
                 sentenceEndMs: sentenceEndMs,
+                practiceCount: practiceCount,
+                totalStudyMs: totalStudyMs,
+                viewedBack: viewedBack,
+                lastPracticedAt: lastPracticedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
