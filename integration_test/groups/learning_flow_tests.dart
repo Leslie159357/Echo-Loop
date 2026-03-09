@@ -18,67 +18,88 @@ import 'package:fluency/widgets/blind_listen_complete_dialog.dart';
 
 import '../helpers/test_notifiers.dart';
 
+Future<void> _pumpUi(WidgetTester tester, [int milliseconds = 600]) async {
+  await tester.pump(Duration(milliseconds: milliseconds));
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  int maxPumps = 20,
+  int stepMilliseconds = 200,
+}) async {
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(Duration(milliseconds: stepMilliseconds));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+}
+
 /// 跨页面学习流程端到端测试
 void learningFlowTests() {
   group('流程 7：跨页面学习闭环', () {
     testWidgets('盲听完成 → 返回学习计划页 → 进度更新', (tester) async {
       await tester.pumpWidget(createTestAppWithAudio());
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1000);
 
       // === 1. 导航到学习计划页 ===
       final appContext = tester.element(find.byType(FluencyApp));
       final appContainer = ProviderScope.containerOf(appContext);
-      appContainer.read(appRouterProvider).push(
-        '/collections/test-collection-1/test-audio-1/plan',
-      );
-      await tester.pumpAndSettle();
+      appContainer
+          .read(appRouterProvider)
+          .push('/collections/test-collection-1/test-audio-1/plan');
+      final startLearningButton = find.text('Start Learning');
+      await _pumpUntilFound(tester, startLearningButton);
 
       // 验证盲听步骤为当前（底部按钮显示"Start Learning"）
-      expect(find.text('Start Learning'), findsOneWidget);
+      expect(startLearningButton, findsOneWidget);
 
       // === 2. 点击"开始学习" → 弹出盲听简报 ===
-      await tester.tap(find.text('Start Learning'));
-      await tester.pumpAndSettle();
+      await tester.tap(startLearningButton);
+      await _pumpUi(tester, 1000);
 
       expect(find.byType(BlindListenBriefingSheet), findsOneWidget);
 
       // === 3. 点击"开始练习" → 进入盲听播放器 ===
       await tester.tap(find.text('Start Practice'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1000);
 
       expect(find.byType(BlindListenPlayerScreen), findsOneWidget);
 
       // === 4. 模拟盲听完成（达到目标遍数）===
-      final blindContext =
-          tester.element(find.byType(BlindListenPlayerScreen));
+      final blindContext = tester.element(find.byType(BlindListenPlayerScreen));
       final container = ProviderScope.containerOf(blindContext);
       final session =
-          container.read(learningSessionProvider.notifier) as TestLearningSession;
+          container.read(learningSessionProvider.notifier)
+              as TestLearningSession;
 
       // 设置已达目标遍数
-      session.setState(const LearningSessionState(
-        learningMode: LearningMode.blindListen,
-        audioItemId: 'test-audio-1',
-        blindListenPassCount: 2,
-        targetBlindListenPasses: 2,
-        blindListenCompleted: false,
-      ));
-      await tester.pumpAndSettle();
+      session.setState(
+        const LearningSessionState(
+          learningMode: LearningMode.blindListen,
+          audioItemId: 'test-audio-1',
+          blindListenPassCount: 2,
+          targetBlindListenPasses: 2,
+          blindListenCompleted: false,
+        ),
+      );
+      await _pumpUi(tester, 800);
 
       // 触发完成
       session.setState(session.state.copyWith(blindListenCompleted: true));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1000);
 
       // === 5. 完成对话框 → 选择难度 → 点击"返回计划" ===
       expect(find.byType(BlindListenCompleteDialog), findsOneWidget);
 
       // 选择 "Okay" 难度
       await tester.tap(find.text('Okay'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 800);
 
       // 点击 "Back to Plan"（返回计划页查看进度更新）
       await tester.tap(find.text('Back to Plan'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1200);
 
       // === 6. 返回学习计划页 → 验证进度更新 ===
       // 盲听页面已退出
@@ -102,17 +123,17 @@ void learningFlowTests() {
         currentStageStartedAt: DateTime.now(),
       );
 
-      await tester.pumpWidget(createTestAppWithAudio(
-        progressOverride: progress,
-      ));
+      await tester.pumpWidget(
+        createTestAppWithAudio(progressOverride: progress),
+      );
       await tester.pumpAndSettle();
 
       // === 2. 导航到学习计划页 ===
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
-      container.read(appRouterProvider).push(
-        '/collections/test-collection-1/test-audio-1/plan',
-      );
+      container
+          .read(appRouterProvider)
+          .push('/collections/test-collection-1/test-audio-1/plan');
       await tester.pumpAndSettle();
 
       // 验证底部按钮显示"Continue Learning"
@@ -120,12 +141,14 @@ void learningFlowTests() {
 
       // === 3. 验证断点进度数据正确保存 ===
       // 通过读取 Provider state 验证断点值（复用上方 container）
-      final progressState =
-          container.read(learningProgressNotifierProvider);
+      final progressState = container.read(learningProgressNotifierProvider);
       final savedProgress = progressState.progressMap['test-audio-1'];
       expect(savedProgress, isNotNull);
       expect(savedProgress!.intensiveListenSentenceIndex, equals(2));
-      expect(savedProgress.currentSubStage, equals(SubStageType.intensiveListen));
+      expect(
+        savedProgress.currentSubStage,
+        equals(SubStageType.intensiveListen),
+      );
     });
   });
 }

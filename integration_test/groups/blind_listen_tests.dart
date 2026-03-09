@@ -16,6 +16,10 @@ import 'package:fluency/widgets/blind_listen_complete_dialog.dart';
 
 import '../helpers/test_notifiers.dart';
 
+Future<void> _pumpUi(WidgetTester tester, [int milliseconds = 600]) async {
+  await tester.pump(Duration(milliseconds: milliseconds));
+}
+
 /// 盲听播放器集成测试
 void blindListenTests() {
   group('流程 5：盲听播放器', () {
@@ -155,19 +159,19 @@ void blindListenTests() {
         targetBlindListenPasses: 2,
         blindListenCompleted: false,
       ));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 600);
 
       // 触发完成
       session.setState(session.state.copyWith(blindListenCompleted: true));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 800);
 
       // 选择 "Okay"（medium）难度
       await tester.tap(find.text('Okay'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 600);
 
       // 点击"返回计划"
       await tester.tap(find.text('Back to Plan'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1000);
 
       // 验证盲听页面已退出（不再显示盲听播放器）
       expect(find.byType(BlindListenPlayerScreen), findsNothing);

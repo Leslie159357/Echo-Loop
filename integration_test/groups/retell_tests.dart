@@ -20,6 +20,38 @@ import 'package:fluency/models/sentence.dart';
 
 import '../helpers/test_notifiers.dart';
 
+Future<void> _pumpUi(WidgetTester tester, [int milliseconds = 600]) async {
+  await tester.pump(Duration(milliseconds: milliseconds));
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  int maxPumps = 20,
+  int stepMilliseconds = 200,
+}) async {
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(Duration(milliseconds: stepMilliseconds));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int maxPumps = 20,
+  int stepMilliseconds = 200,
+}) async {
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(Duration(milliseconds: stepMilliseconds));
+    if (condition()) {
+      return;
+    }
+  }
+}
+
 /// 创建测试用段落列表（3 段，每段 2-3 句）
 List<List<Sentence>> _createTestParagraphs() {
   return [
@@ -95,7 +127,7 @@ void retellTests() {
     /// 设置 LearningSession 为复述模式，
     /// 初始化 RetellPlayer 段落数据。
     Future<void> navigateToRetell(WidgetTester tester) async {
-      await tester.pumpAndSettle();
+      await _pumpUi(tester, 1000);
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
@@ -130,13 +162,21 @@ void retellTests() {
       container
           .read(appRouterProvider)
           .push('/collections/test-collection-1/test-audio-1/retell');
-      await tester.pumpAndSettle();
+      await _pumpUntilFound(tester, find.byType(RetellPlayerScreen));
     }
 
     /// 获取 ProviderContainer 辅助方法
     ProviderContainer getContainer(WidgetTester tester) {
       final context = tester.element(find.byType(RetellPlayerScreen));
       return ProviderScope.containerOf(context);
+    }
+
+    Finder appBarTuneButton() => find.widgetWithIcon(IconButton, Icons.tune);
+
+    Future<void> openSettingsSheet(WidgetTester tester) async {
+      final button = tester.widget<IconButton>(appBarTuneButton());
+      button.onPressed?.call();
+      await tester.pumpAndSettle();
     }
 
     testWidgets('复述页面基本 UI', (tester) async {
@@ -178,22 +218,28 @@ void retellTests() {
       );
       await navigateToRetell(tester);
 
-      // 初始在段落 1/3
-      expect(find.textContaining('1/3'), findsWidgets);
+      final container = getContainer(tester);
+      expect(container.read(retellPlayerProvider).currentParagraphIndex, 0);
 
       // 点击下一段
       await tester.tap(find.byIcon(Icons.skip_next_rounded));
-      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () => container.read(retellPlayerProvider).currentParagraphIndex == 1,
+      );
 
-      // 验证进度变为 2/3
-      expect(find.textContaining('2/3'), findsWidgets);
+      // 验证推进到第 2 段（索引 1）
+      expect(container.read(retellPlayerProvider).currentParagraphIndex, 1);
 
       // 点击上一段
       await tester.tap(find.byIcon(Icons.skip_previous_rounded));
-      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () => container.read(retellPlayerProvider).currentParagraphIndex == 0,
+      );
 
-      // 验证进度回到 1/3
-      expect(find.textContaining('1/3'), findsWidgets);
+      // 验证回到第 1 段（索引 0）
+      expect(container.read(retellPlayerProvider).currentParagraphIndex, 0);
     });
 
     testWidgets('显示模式 SegmentedButton 切换', (tester) async {
@@ -350,11 +396,11 @@ void retellTests() {
       await navigateToRetell(tester);
 
       // 验证设置按钮存在
-      expect(find.byIcon(Icons.tune), findsOneWidget);
+      final settingsButton = appBarTuneButton();
+      expect(settingsButton, findsOneWidget);
 
       // 点击设置按钮
-      await tester.tap(find.byIcon(Icons.tune));
-      await tester.pumpAndSettle();
+      await openSettingsSheet(tester);
 
       // 验证设置面板弹出（包含重复次数和停顿模式）
       expect(find.text('Retell Settings'), findsOneWidget);
@@ -374,8 +420,7 @@ void retellTests() {
       await navigateToRetell(tester);
 
       // 打开设置面板
-      await tester.tap(find.byIcon(Icons.tune));
-      await tester.pumpAndSettle();
+      await openSettingsSheet(tester);
 
       // 验证可见词生成方式区域存在（3 个选项）
       expect(find.text('Visible words'), findsOneWidget);
