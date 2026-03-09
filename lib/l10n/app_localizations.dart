@@ -2713,6 +2713,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{current}/{total} sentences'**
   String bookmarkReviewProgress(int current, int total);
+
+  /// No description provided for @flashcardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Flashcards'**
+  String get flashcardTitle;
+
+  /// No description provided for @flashcardViewAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready? View answer'**
+  String get flashcardViewAnswer;
+
+  /// No description provided for @flashcardTapToFlip.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to flip back'**
+  String get flashcardTapToFlip;
+
+  /// No description provided for @flashcardUnsaveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsave when mastered'**
+  String get flashcardUnsaveHint;
+
+  /// No description provided for @flashcardProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{current}/{total}'**
+  String flashcardProgress(int current, int total);
+
+  /// No description provided for @flashcardComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Review Complete'**
+  String get flashcardComplete;
+
+  /// No description provided for @flashcardWordsReviewed.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewed {count} words'**
+  String flashcardWordsReviewed(int count);
+
+  /// No description provided for @flashcardWordsRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved {count} words'**
+  String flashcardWordsRemoved(int count);
+
+  /// No description provided for @flashcardPracticeAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Practice Again'**
+  String get flashcardPracticeAgain;
+
+  /// No description provided for @flashcardFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get flashcardFinish;
+
+  /// No description provided for @flashcardSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Card Settings'**
+  String get flashcardSettingsTitle;
+
+  /// No description provided for @flashcardTimerMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Advance'**
+  String get flashcardTimerMode;
+
+  /// No description provided for @flashcardTimerFixed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fixed'**
+  String get flashcardTimerFixed;
+
+  /// No description provided for @flashcardTimerSmart.
+  ///
+  /// In en, this message translates to:
+  /// **'Smart'**
+  String get flashcardTimerSmart;
+
+  /// No description provided for @flashcardTimerOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get flashcardTimerOff;
+
+  /// No description provided for @flashcardSortMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort Order'**
+  String get flashcardSortMode;
+
+  /// No description provided for @flashcardSortAlphaAsc.
+  ///
+  /// In en, this message translates to:
+  /// **'A → Z'**
+  String get flashcardSortAlphaAsc;
+
+  /// No description provided for @flashcardSortAlphaDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Z → A'**
+  String get flashcardSortAlphaDesc;
+
+  /// No description provided for @flashcardSortTimeAsc.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest'**
+  String get flashcardSortTimeAsc;
+
+  /// No description provided for @flashcardSortTimeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get flashcardSortTimeDesc;
+
+  /// No description provided for @flashcardSortRandom.
+  ///
+  /// In en, this message translates to:
+  /// **'Random'**
+  String get flashcardSortRandom;
+
+  /// No description provided for @flashcardSortSmart.
+  ///
+  /// In en, this message translates to:
+  /// **'Smart'**
+  String get flashcardSortSmart;
+
+  /// No description provided for @flashcardNoDefinition.
+  ///
+  /// In en, this message translates to:
+  /// **'No definition'**
+  String get flashcardNoDefinition;
+
+  /// No description provided for @flashcardStartQuiz.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Review'**
+  String get flashcardStartQuiz;
+
+  /// No description provided for @flashcardTts.
+  ///
+  /// In en, this message translates to:
+  /// **'Pronounce'**
+  String get flashcardTts;
+
+  /// No description provided for @flashcardAutoPlaySentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-play Sentence'**
+  String get flashcardAutoPlaySentence;
 }
 
 class _AppLocalizationsDelegate

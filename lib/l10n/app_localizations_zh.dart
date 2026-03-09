@@ -1477,4 +1477,88 @@ class AppLocalizationsZh extends AppLocalizations {
   String bookmarkReviewProgress(int current, int total) {
     return '$current/$total 句';
   }
+
+  @override
+  String get flashcardTitle => '单词卡片';
+
+  @override
+  String get flashcardViewAnswer => '想好了，查看答案';
+
+  @override
+  String get flashcardTapToFlip => '点击翻回正面';
+
+  @override
+  String get flashcardUnsaveHint => '掌握了就取消收藏';
+
+  @override
+  String flashcardProgress(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get flashcardComplete => '复习完成';
+
+  @override
+  String flashcardWordsReviewed(int count) {
+    return '已复习 $count 个单词';
+  }
+
+  @override
+  String flashcardWordsRemoved(int count) {
+    return '已取消收藏 $count 个';
+  }
+
+  @override
+  String get flashcardPracticeAgain => '再来一遍';
+
+  @override
+  String get flashcardFinish => '完成';
+
+  @override
+  String get flashcardSettingsTitle => '卡片设置';
+
+  @override
+  String get flashcardTimerMode => '自动切换';
+
+  @override
+  String get flashcardTimerFixed => '固定时间';
+
+  @override
+  String get flashcardTimerSmart => '智能';
+
+  @override
+  String get flashcardTimerOff => '关闭';
+
+  @override
+  String get flashcardSortMode => '排序方式';
+
+  @override
+  String get flashcardSortAlphaAsc => 'A → Z';
+
+  @override
+  String get flashcardSortAlphaDesc => 'Z → A';
+
+  @override
+  String get flashcardSortTimeAsc => '最早收藏';
+
+  @override
+  String get flashcardSortTimeDesc => '最近收藏';
+
+  @override
+  String get flashcardSortRandom => '随机';
+
+  @override
+  String get flashcardSortSmart => '智能排序';
+
+  @override
+  String get flashcardNoDefinition => '暂无释义';
+
+  @override
+  String get flashcardStartQuiz => '开始复习';
+
+  @override
+  String get flashcardTts => '发音';
+
+  @override
+  String get flashcardAutoPlaySentence => '自动播放例句';
 }

@@ -99,6 +99,47 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// 更新 Flashcard 练习统计
+  ///
+  /// 每次翻转到背面时调用：practiceCount +1，totalStudyMs 累加，
+  /// viewedBack 置 true，更新 lastPracticedAt。
+  /// [studyMs] 会被截断到 60000ms 防止挂机污染。
+  Future<void> updatePracticeStats({
+    required String word,
+    required int studyMs,
+  }) async {
+    final clampedMs = studyMs.clamp(0, 60000);
+    await customStatement(
+      '''
+      UPDATE saved_words
+      SET practice_count = practice_count + 1,
+          total_study_ms = total_study_ms + ?,
+          viewed_back = 1,
+          last_practiced_at = ?,
+          updated_at = ?
+      WHERE word = ? AND deleted_at IS NULL
+    ''',
+      [
+        clampedMs,
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        word,
+      ],
+    );
+  }
+
+  /// 监听所有未删除的收藏单词（按指定排序）
+  ///
+  /// 用于 Flashcard 功能，支持多种排序方式。
+  Stream<List<SavedWord>> watchAllSorted({required OrderingMode timeOrder}) {
+    return (select(savedWords)
+          ..where((t) => t.deletedAt.isNull())
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.createdAt, mode: timeOrder),
+          ]))
+        .watch();
+  }
+
   /// 流式监听单词是否已收藏
   Stream<bool> watchIsWordSaved(String word) {
     return (select(savedWords)

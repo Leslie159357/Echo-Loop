@@ -62,7 +62,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration {
@@ -106,6 +106,29 @@ class AppDatabase extends _$AppDatabase {
             ON saved_words(created_at DESC)
             WHERE deleted_at IS NULL
           ''');
+        }
+        // v16→v17：saved_words 新增 Flashcard 练习统计列
+        if (from >= 15 && from < 17) {
+          await _addColumnIfNotExists(
+            'saved_words',
+            'practice_count',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+          await _addColumnIfNotExists(
+            'saved_words',
+            'total_study_ms',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+          await _addColumnIfNotExists(
+            'saved_words',
+            'viewed_back',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+          await _addColumnIfNotExists(
+            'saved_words',
+            'last_practiced_at',
+            'INTEGER',
+          );
         }
         // v15→v16：saved_words 新增 sentence_start_ms, sentence_end_ms 列
         if (from >= 15 && from < 16) {

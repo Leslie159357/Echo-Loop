@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_timezone
+  flutter_tts
   sqlite3_flutter_libs
 )
 

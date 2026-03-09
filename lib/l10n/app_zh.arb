@@ -625,5 +625,32 @@
   "inputWordsShort": "输入",
   "outputWordsShort": "输出",
 
-  "bookmarkReviewProgress": "{current}/{total} 句"
+  "bookmarkReviewProgress": "{current}/{total} 句",
+
+  "flashcardTitle": "单词卡片",
+  "flashcardViewAnswer": "想好了，查看答案",
+  "flashcardTapToFlip": "点击翻回正面",
+  "flashcardUnsaveHint": "掌握了就取消收藏",
+  "flashcardProgress": "{current}/{total}",
+  "flashcardComplete": "复习完成",
+  "flashcardWordsReviewed": "已复习 {count} 个单词",
+  "flashcardWordsRemoved": "已取消收藏 {count} 个",
+  "flashcardPracticeAgain": "再来一遍",
+  "flashcardFinish": "完成",
+  "flashcardSettingsTitle": "卡片设置",
+  "flashcardTimerMode": "自动切换",
+  "flashcardTimerFixed": "固定时间",
+  "flashcardTimerSmart": "智能",
+  "flashcardTimerOff": "关闭",
+  "flashcardSortMode": "排序方式",
+  "flashcardSortAlphaAsc": "A → Z",
+  "flashcardSortAlphaDesc": "Z → A",
+  "flashcardSortTimeAsc": "最早收藏",
+  "flashcardSortTimeDesc": "最近收藏",
+  "flashcardSortRandom": "随机",
+  "flashcardSortSmart": "智能排序",
+  "flashcardNoDefinition": "暂无释义",
+  "flashcardStartQuiz": "开始复习",
+  "flashcardTts": "发音",
+  "flashcardAutoPlaySentence": "自动播放例句"
 }

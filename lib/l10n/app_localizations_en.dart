@@ -1515,4 +1515,88 @@ class AppLocalizationsEn extends AppLocalizations {
   String bookmarkReviewProgress(int current, int total) {
     return '$current/$total sentences';
   }
+
+  @override
+  String get flashcardTitle => 'Flashcards';
+
+  @override
+  String get flashcardViewAnswer => 'Ready? View answer';
+
+  @override
+  String get flashcardTapToFlip => 'Tap to flip back';
+
+  @override
+  String get flashcardUnsaveHint => 'Unsave when mastered';
+
+  @override
+  String flashcardProgress(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get flashcardComplete => 'Review Complete';
+
+  @override
+  String flashcardWordsReviewed(int count) {
+    return 'Reviewed $count words';
+  }
+
+  @override
+  String flashcardWordsRemoved(int count) {
+    return 'Unsaved $count words';
+  }
+
+  @override
+  String get flashcardPracticeAgain => 'Practice Again';
+
+  @override
+  String get flashcardFinish => 'Done';
+
+  @override
+  String get flashcardSettingsTitle => 'Card Settings';
+
+  @override
+  String get flashcardTimerMode => 'Auto Advance';
+
+  @override
+  String get flashcardTimerFixed => 'Fixed';
+
+  @override
+  String get flashcardTimerSmart => 'Smart';
+
+  @override
+  String get flashcardTimerOff => 'Off';
+
+  @override
+  String get flashcardSortMode => 'Sort Order';
+
+  @override
+  String get flashcardSortAlphaAsc => 'A → Z';
+
+  @override
+  String get flashcardSortAlphaDesc => 'Z → A';
+
+  @override
+  String get flashcardSortTimeAsc => 'Oldest';
+
+  @override
+  String get flashcardSortTimeDesc => 'Newest';
+
+  @override
+  String get flashcardSortRandom => 'Random';
+
+  @override
+  String get flashcardSortSmart => 'Smart';
+
+  @override
+  String get flashcardNoDefinition => 'No definition';
+
+  @override
+  String get flashcardStartQuiz => 'Start Review';
+
+  @override
+  String get flashcardTts => 'Pronounce';
+
+  @override
+  String get flashcardAutoPlaySentence => 'Auto-play Sentence';
 }

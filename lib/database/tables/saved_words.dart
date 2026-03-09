@@ -14,8 +14,11 @@ class SavedWords extends Table {
   TextColumn get word => text().unique()();
 
   /// 来源音频 ID，FK → audio_items，音频删除时置空
-  TextColumn get audioItemId =>
-      text().nullable().references(AudioItems, #id, onDelete: KeyAction.setNull)();
+  TextColumn get audioItemId => text().nullable().references(
+    AudioItems,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
 
   /// 来源句子索引
   IntColumn get sentenceIndex => integer().nullable()();
@@ -28,6 +31,18 @@ class SavedWords extends Table {
 
   /// 来源句子结束时间（毫秒），冗余存储，删除字幕后仍可播放
   IntColumn get sentenceEndMs => integer().nullable()();
+
+  /// 练习次数（Flashcard 翻转到背面计为 1 次）
+  IntColumn get practiceCount => integer().withDefault(const Constant(0))();
+
+  /// 累计学习时长（毫秒），单张卡片最长 60 秒截断
+  IntColumn get totalStudyMs => integer().withDefault(const Constant(0))();
+
+  /// 是否曾翻转到背面查看释义
+  BoolColumn get viewedBack => boolean().withDefault(const Constant(false))();
+
+  /// 最近一次练习时间
+  DateTimeColumn get lastPracticedAt => dateTime().nullable()();
 
   /// 收藏时间
   DateTimeColumn get createdAt => dateTime()();
