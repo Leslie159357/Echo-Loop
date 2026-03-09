@@ -102,6 +102,7 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen> {
                             .flipCard(),
                         onUnsave: () => _handleUnsave(context),
                         autoPlaySentence: state.settings.autoPlaySentence,
+                        autoPlayWord: state.settings.autoPlayWord,
                       )
                     : const SizedBox.shrink(),
               ),
@@ -202,7 +203,7 @@ class _BottomControls extends StatelessWidget {
           AppSpacing.l,
           AppSpacing.s,
           AppSpacing.l,
-          AppSpacing.m,
+          AppSpacing.l,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -224,7 +225,7 @@ class _BottomControls extends StatelessWidget {
                 onTap: onTogglePause,
               )
             else
-              const SizedBox(width: 32),
+              const SizedBox(width: 44),
 
             // 下一张
             IconButton(
@@ -317,46 +318,53 @@ class _CountdownChipState extends State<_CountdownChip>
               ? 1.0 - (smoothRemaining / widget.total)
               : 1.0;
 
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      value: progress.clamp(0.0, 1.0),
-                      strokeWidth: 2.5,
-                      strokeCap: StrokeCap.round,
-                      backgroundColor: theme.colorScheme.primary.withValues(
-                        alpha: 0.12,
-                      ),
-                      valueColor: AlwaysStoppedAnimation(
-                        theme.colorScheme.primary.withValues(alpha: 0.6),
-                      ),
+          // 使用 SizedBox + Stack 让秒数文字溢出到环下方，
+          // 不影响 Row 的 crossAxisAlignment.center 对齐
+          return SizedBox(
+            width: 44,
+            height: 44,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // 环形进度
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(
+                    value: progress.clamp(0.0, 1.0),
+                    strokeWidth: 3,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: theme.colorScheme.primary.withValues(
+                      alpha: 0.12,
                     ),
-                    Icon(
-                      widget.isPaused
-                          ? Icons.play_arrow_rounded
-                          : Icons.pause_rounded,
-                      size: 16,
-                      color: theme.colorScheme.primary,
+                    valueColor: AlwaysStoppedAnimation(
+                      theme.colorScheme.primary.withValues(alpha: 0.6),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${widget.remaining}s',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.5,
                   ),
                 ),
-              ),
-            ],
+                // 暂停/恢复图标
+                Icon(
+                  widget.isPaused
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
+                // 秒数文字（溢出到环下方，不影响对齐）
+                Positioned(
+                  bottom: -16,
+                  child: Text(
+                    '${widget.remaining}s',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
