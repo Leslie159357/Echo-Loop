@@ -60,6 +60,16 @@ class _StatsChips extends StatelessWidget {
           label:
               '${l10n.weekStudyTimeShort}: ${_formatTime(l10n, stats.weekTotalSeconds)}',
         ),
+        _StatChip(
+          icon: Icons.headphones_outlined,
+          iconColor: Colors.teal,
+          label: '${l10n.inputWordsShort}: ${_formatWordCount(stats.todayInputWords)}',
+        ),
+        _StatChip(
+          icon: Icons.mic_outlined,
+          iconColor: Colors.deepPurple,
+          label: '${l10n.outputWordsShort}: ${_formatWordCount(stats.todayOutputWords)}',
+        ),
       ],
     );
   }
@@ -220,6 +230,21 @@ class _WeeklyBarChart extends StatelessWidget {
       _ => '',
     };
   }
+}
+
+/// 格式化词数显示
+///
+/// < 1000 → "856", >= 1000 → "1,234", >= 10000 → "12.3k"
+String _formatWordCount(int count) {
+  if (count >= 10000) {
+    final k = count / 1000;
+    return '${k.toStringAsFixed(1)}k';
+  }
+  if (count >= 1000) {
+    final str = count.toString();
+    return '${str.substring(0, str.length - 3)},${str.substring(str.length - 3)}';
+  }
+  return count.toString();
 }
 
 /// 格式化学习时长显示
