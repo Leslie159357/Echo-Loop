@@ -22,6 +22,12 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 当前句子是否标记为难句
   final bool isDifficult;
 
+  /// 是否展示“自动标记”文案
+  ///
+  /// 仅在“看不懂”触发自动标记的当次传 true；
+  /// 其它场景（包括已存在的难句）保持 false。
+  final bool showAutoMarkedLabel;
+
   /// 切换难句标记回调
   final VoidCallback onToggle;
 
@@ -53,6 +59,7 @@ class SentenceAnnotationCard extends StatefulWidget {
     super.key,
     required this.text,
     required this.isDifficult,
+    this.showAutoMarkedLabel = false,
     required this.onToggle,
     this.onRequestTranslation,
     this.onRequestAnalysis,
@@ -65,8 +72,7 @@ class SentenceAnnotationCard extends StatefulWidget {
   });
 
   @override
-  State<SentenceAnnotationCard> createState() =>
-      _SentenceAnnotationCardState();
+  State<SentenceAnnotationCard> createState() => _SentenceAnnotationCardState();
 }
 
 class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
@@ -95,10 +101,7 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
       }
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
-          final cleanWord = word.replaceAll(
-            RegExp(r'[.,!?;:\-—…、，。！？；：]'),
-            '',
-          );
+          final cleanWord = word.replaceAll(RegExp(r'[.,!?;:\-—…、，。！？；：]'), '');
           if (cleanWord.isNotEmpty) {
             showWordDictionarySheet(
               context: context,
@@ -133,7 +136,9 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
               Flexible(
                 child: Text(
                   widget.isDifficult
-                      ? l10n.intensiveListenAutoMarkedDifficult
+                      ? (widget.showAutoMarkedLabel
+                            ? l10n.intensiveListenAutoMarkedDifficult
+                            : l10n.intensiveListenMarkedDifficult)
                       : l10n.intensiveListenNotDifficult,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: widget.isDifficult

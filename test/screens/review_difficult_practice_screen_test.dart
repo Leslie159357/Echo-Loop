@@ -399,8 +399,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.star), findsOneWidget);
-      // SentenceAnnotationCard 使用 intensiveListenAutoMarkedDifficult
-      expect(find.text('Auto-marked difficult, tap to undo'), findsOneWidget);
+      expect(find.text('Marked difficult, tap to undo'), findsOneWidget);
     });
 
     testWidgets('跟读模式显示翻译和分析区域', (tester) async {

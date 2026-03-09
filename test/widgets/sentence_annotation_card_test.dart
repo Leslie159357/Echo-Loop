@@ -45,6 +45,36 @@ void main() {
       expect(find.byIcon(Icons.star), findsOneWidget);
     });
 
+    testWidgets('自动标记分支显示自动文案', (tester) async {
+      await tester.pumpWidget(
+        createTestApp(
+          SentenceAnnotationCard(
+            text: 'Auto difficult',
+            isDifficult: true,
+            showAutoMarkedLabel: true,
+            onToggle: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('Auto-marked difficult, tap to undo'), findsOneWidget);
+    });
+
+    testWidgets('已标记分支显示普通难句文案', (tester) async {
+      await tester.pumpWidget(
+        createTestApp(
+          SentenceAnnotationCard(
+            text: 'Marked difficult',
+            isDifficult: true,
+            showAutoMarkedLabel: false,
+            onToggle: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('Marked difficult, tap to undo'), findsOneWidget);
+    });
+
     testWidgets('点击难句标记触发 onToggle', (tester) async {
       var toggled = false;
       await tester.pumpWidget(
@@ -197,8 +227,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — AI 展开交互', () {
-    testWidgets('点击翻译区域触发 onRequestTranslation 并展示结果',
-        (tester) async {
+    testWidgets('点击翻译区域触发 onRequestTranslation 并展示结果', (tester) async {
       var requested = false;
       final completer = Completer<String>();
 
@@ -235,8 +264,7 @@ void main() {
       expect(find.text('这是翻译结果'), findsOneWidget);
     });
 
-    testWidgets('点击解析区域触发 onRequestAnalysis 并展示结果',
-        (tester) async {
+    testWidgets('点击解析区域触发 onRequestAnalysis 并展示结果', (tester) async {
       var requested = false;
       final completer = Completer<String>();
 
@@ -358,8 +386,7 @@ void main() {
       expect(find.text('用法OK'), findsOneWidget);
     });
 
-    testWidgets('cachedTranslation 自动展开且不触发 onRequest',
-        (tester) async {
+    testWidgets('cachedTranslation 自动展开且不触发 onRequest', (tester) async {
       var requested = false;
 
       await tester.pumpWidget(

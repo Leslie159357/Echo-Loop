@@ -28,6 +28,7 @@ void main() {
       expect(state.isCompleted, false);
       expect(state.isTextRevealed, false);
       expect(state.difficultSentences, isEmpty);
+      expect(state.isCurrentSentenceAutoMarked, false);
     });
 
     test('copyWith 更新播放状态', () {
@@ -46,6 +47,7 @@ void main() {
       // 未修改的字段保持不变
       expect(updated.settings.repeatCount, 1);
       expect(updated.isAnnotationMode, false);
+      expect(updated.isCurrentSentenceAutoMarked, false);
     });
 
     test('copyWith 更新 settings', () {
@@ -167,6 +169,7 @@ void main() {
         isPlaying: true,
         isAnnotationMode: true,
         difficultSentences: {1, 2, 3},
+        isCurrentSentenceAutoMarked: true,
       );
 
       final sameState = original.copyWith();
@@ -176,6 +179,7 @@ void main() {
       expect(sameState.isPlaying, true);
       expect(sameState.isAnnotationMode, true);
       expect(sameState.difficultSentences, {1, 2, 3});
+      expect(sameState.isCurrentSentenceAutoMarked, true);
     });
 
     test('切换到下一句时重置临时状态', () {
@@ -187,6 +191,7 @@ void main() {
         isPauseBetweenPlays: true,
         currentPlayCount: 2,
         difficultSentences: {3},
+        isCurrentSentenceAutoMarked: true,
       );
 
       // 模拟切句时的状态更新
@@ -197,6 +202,7 @@ void main() {
         isAnnotationReplay: false,
         isTextRevealed: false,
         isPauseBetweenPlays: false,
+        isCurrentSentenceAutoMarked: false,
       );
 
       expect(nextSentence.currentSentenceIndex, 4);
@@ -205,6 +211,7 @@ void main() {
       expect(nextSentence.isTextRevealed, false);
       expect(nextSentence.isPauseBetweenPlays, false);
       expect(nextSentence.isPauseBetweenSentences, false);
+      expect(nextSentence.isCurrentSentenceAutoMarked, false);
       // 难句集合保持
       expect(nextSentence.difficultSentences, {3});
     });
@@ -271,7 +278,7 @@ void main() {
               IntensiveListenState(
                 currentSentenceIndex: 2,
                 totalSentences: 5,
-                isAnnotationMode: true,
+                isAnnotationMode: false,
                 isPlaying: false,
               ),
               sentences,
@@ -341,16 +348,31 @@ void main() {
       final state1 = container.read(intensiveListenPlayerProvider);
       expect(state1.difficultSentences, contains(2));
       expect(state1.isAnnotationMode, true);
+      expect(state1.isCurrentSentenceAutoMarked, true);
 
       // 用户点击取消标记
       notifier.toggleDifficultSentence();
       final state2 = container.read(intensiveListenPlayerProvider);
       expect(state2.difficultSentences, isNot(contains(2)));
+      expect(state2.isCurrentSentenceAutoMarked, false);
 
       // 再次点击可重新标记
       notifier.toggleDifficultSentence();
       final state3 = container.read(intensiveListenPlayerProvider);
       expect(state3.difficultSentences, contains(2));
+      expect(state3.isCurrentSentenceAutoMarked, false);
+    });
+
+    test('enterAnnotationMode 时句子已是难句 -> 不标记为自动来源', () {
+      notifier.toggleDifficultSentence();
+      final marked = container.read(intensiveListenPlayerProvider);
+      expect(marked.difficultSentences, contains(2));
+      expect(marked.isCurrentSentenceAutoMarked, false);
+
+      notifier.enterAnnotationMode();
+      final state = container.read(intensiveListenPlayerProvider);
+      expect(state.difficultSentences, contains(2));
+      expect(state.isCurrentSentenceAutoMarked, false);
     });
   });
 

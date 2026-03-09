@@ -75,6 +75,7 @@ void main() {
     Duration pauseDuration = Duration.zero,
     bool isCompleted = false,
     Set<int> difficultSentences = const {},
+    bool isCurrentSentenceAutoMarked = false,
   }) {
     return IntensiveListenState(
       currentSentenceIndex: currentSentenceIndex,
@@ -91,6 +92,7 @@ void main() {
       pauseDuration: pauseDuration,
       isCompleted: isCompleted,
       difficultSentences: difficultSentences,
+      isCurrentSentenceAutoMarked: isCurrentSentenceAutoMarked,
     );
   }
 
@@ -430,6 +432,7 @@ void main() {
             isAnnotationMode: true,
             isPlaying: false,
             difficultSentences: {0},
+            isCurrentSentenceAutoMarked: true,
           ),
         ),
       );
@@ -469,12 +472,29 @@ void main() {
             isAnnotationMode: true,
             isPlaying: false,
             difficultSentences: {0},
+            isCurrentSentenceAutoMarked: true,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('已自动标记为难句，点此取消'), findsOneWidget);
+    });
+
+    testWidgets('标注模式手动已标记显示普通难句文案', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            isAnnotationMode: true,
+            isPlaying: false,
+            difficultSentences: {0},
+            isCurrentSentenceAutoMarked: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Marked difficult, tap to undo'), findsOneWidget);
     });
 
     testWidgets('标注模式点击星标可切换难句状态', (tester) async {
@@ -581,14 +601,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 点击偷看按钮
-      await tester.tap(find.text('Peek'));
+      // 按住偷看按钮（onTapDown）
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Peek')),
+      );
       await tester.pumpAndSettle();
 
       // 文本已显示
       expect(find.text('Test sentence number 1.'), findsOneWidget);
       // 偷看按钮图标变为 visibility_off
       expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+
+      await gesture.up();
     });
 
     testWidgets('偷看字幕点击切换 — 再次点击隐藏', (tester) async {
@@ -602,13 +626,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 点击显示
-      await tester.tap(find.text('Peek'));
+      // 按住显示
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('Peek')),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Test sentence number 1.'), findsOneWidget);
 
-      // 再次点击隐藏
-      await tester.tap(find.text('Peek'));
+      // 松开后隐藏（onTapUp）
+      await gesture.up();
       await tester.pumpAndSettle();
       expect(find.text('Test sentence number 1.'), findsNothing);
       expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
@@ -619,7 +645,7 @@ void main() {
         createTestWidget(
           playerState: createPlayerState(
             isPlaying: true,
-            isTextRevealed: false,
+            isTextRevealed: true,
             currentSentenceIndex: 0,
             totalSentences: 5,
           ),
@@ -627,9 +653,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 偷看当前句子
-      await tester.tap(find.text('Peek'));
-      await tester.pumpAndSettle();
+      // 初始为已显示状态
       expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
 
       // 切到下一句（TestIntensiveListenPlayer.goToNext 会 reset isTextRevealed）

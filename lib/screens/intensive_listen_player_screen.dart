@@ -547,6 +547,7 @@ class _IntensiveListenPlayerScreenState
                           isDifficult: playerState.difficultSentences.contains(
                             playerState.currentSentenceIndex,
                           ),
+                          isAutoMarked: playerState.isCurrentSentenceAutoMarked,
                           l10n: l10n,
                           onContinue: () => player.exitAnnotationMode(),
                           onToggleDifficult: _toggleAndSaveDifficult,
@@ -913,6 +914,10 @@ class _CountdownChip extends StatelessWidget {
 class _AnnotationModeView extends StatelessWidget {
   final String text;
   final bool isDifficult;
+
+  /// 是否展示“自动标记为难句”文案
+  final bool isAutoMarked;
+
   final AppLocalizations l10n;
   final VoidCallback onContinue;
   final VoidCallback onToggleDifficult;
@@ -936,6 +941,7 @@ class _AnnotationModeView extends StatelessWidget {
     super.key,
     required this.text,
     required this.isDifficult,
+    required this.isAutoMarked,
     required this.l10n,
     required this.onContinue,
     required this.onToggleDifficult,
@@ -965,6 +971,7 @@ class _AnnotationModeView extends StatelessWidget {
                 key: ValueKey(text),
                 text: text,
                 isDifficult: isDifficult,
+                showAutoMarkedLabel: isAutoMarked,
                 onToggle: onToggleDifficult,
                 onRequestTranslation: ai != null
                     ? () async {

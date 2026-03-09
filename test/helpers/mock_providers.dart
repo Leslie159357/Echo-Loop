@@ -709,6 +709,7 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
         isAnnotationMode: false,
         isAnnotationReplay: false,
         isTextRevealed: false,
+        isCurrentSentenceAutoMarked: false,
       );
     }
   }
@@ -722,18 +723,24 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
         isAnnotationMode: false,
         isAnnotationReplay: false,
         isTextRevealed: false,
+        isCurrentSentenceAutoMarked: false,
       );
     }
   }
 
   @override
   void enterAnnotationMode() {
+    if (state.isAnnotationMode) return;
     final newDifficult = Set<int>.from(state.difficultSentences);
+    final wasAlreadyDifficult = newDifficult.contains(
+      state.currentSentenceIndex,
+    );
     newDifficult.add(state.currentSentenceIndex);
     state = state.copyWith(
       isAnnotationMode: true,
       isPlaying: false,
       difficultSentences: newDifficult,
+      isCurrentSentenceAutoMarked: !wasAlreadyDifficult,
     );
   }
 
@@ -743,6 +750,7 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
       isAnnotationMode: false,
       isAnnotationReplay: false,
       isPlaying: true,
+      isCurrentSentenceAutoMarked: false,
     );
   }
 
@@ -762,7 +770,10 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
     } else {
       newSet.add(idx);
     }
-    state = state.copyWith(difficultSentences: newSet);
+    state = state.copyWith(
+      difficultSentences: newSet,
+      isCurrentSentenceAutoMarked: false,
+    );
   }
 
   @override

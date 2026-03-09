@@ -89,6 +89,13 @@ class IntensiveListenState {
   /// 本次标记的难句索引集合
   final Set<int> difficultSentences;
 
+  /// 当前句是否由“看不懂”动作自动标记为难句
+  ///
+  /// 仅用于标注模式下的文案分支：
+  /// - true：显示“已自动标记为难句”
+  /// - false：显示“已标记为难句”
+  final bool isCurrentSentenceAutoMarked;
+
   /// 倒计时是否暂停中
   final bool isCountdownPaused;
 
@@ -110,6 +117,7 @@ class IntensiveListenState {
     this.isCompleted = false,
     this.isTextRevealed = false,
     this.difficultSentences = const {},
+    this.isCurrentSentenceAutoMarked = false,
     this.isCountdownPaused = false,
     this.isCountdownFastForward = false,
   });
@@ -129,6 +137,7 @@ class IntensiveListenState {
     bool? isCompleted,
     bool? isTextRevealed,
     Set<int>? difficultSentences,
+    bool? isCurrentSentenceAutoMarked,
     bool? isCountdownPaused,
     bool? isCountdownFastForward,
   }) {
@@ -148,6 +157,8 @@ class IntensiveListenState {
       isCompleted: isCompleted ?? this.isCompleted,
       isTextRevealed: isTextRevealed ?? this.isTextRevealed,
       difficultSentences: difficultSentences ?? this.difficultSentences,
+      isCurrentSentenceAutoMarked:
+          isCurrentSentenceAutoMarked ?? this.isCurrentSentenceAutoMarked,
       isCountdownPaused: isCountdownPaused ?? this.isCountdownPaused,
       isCountdownFastForward:
           isCountdownFastForward ?? this.isCountdownFastForward,
@@ -251,6 +262,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isAnnotationReplay: false,
       isTextRevealed: false,
       isPauseBetweenPlays: false,
+      isCurrentSentenceAutoMarked: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -271,6 +283,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isAnnotationReplay: false,
       isTextRevealed: false,
       isPauseBetweenPlays: false,
+      isCurrentSentenceAutoMarked: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -291,6 +304,9 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     // 标记当前句子为难句
     final newDifficult = Set<int>.from(state.difficultSentences);
+    final wasAlreadyDifficult = newDifficult.contains(
+      state.currentSentenceIndex,
+    );
     newDifficult.add(state.currentSentenceIndex);
 
     state = state.copyWith(
@@ -299,6 +315,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isPauseBetweenPlays: false,
       isTextRevealed: false,
       difficultSentences: newDifficult,
+      isCurrentSentenceAutoMarked: !wasAlreadyDifficult,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -312,6 +329,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isAnnotationMode: false,
       isAnnotationReplay: true,
       isPlaying: true,
+      isCurrentSentenceAutoMarked: false,
     );
 
     final sentence = currentSentence;
@@ -362,7 +380,10 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     } else {
       newSet.add(idx);
     }
-    state = state.copyWith(difficultSentences: newSet);
+    state = state.copyWith(
+      difficultSentences: newSet,
+      isCurrentSentenceAutoMarked: false,
+    );
   }
 
   /// 设置偷看字幕状态（按住显示，松开隐藏）
@@ -566,6 +587,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         isPauseBetweenSentences: false,
         isCountdownPaused: false,
         isCountdownFastForward: false,
+        isCurrentSentenceAutoMarked: false,
       );
     } else {
       // 非最后一句 → 推进到下一句
@@ -577,6 +599,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         isPauseBetweenSentences: false,
         isAnnotationMode: false,
         isAnnotationReplay: false,
+        isCurrentSentenceAutoMarked: false,
         isCountdownPaused: false,
         isCountdownFastForward: false,
       );
@@ -598,6 +621,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isAnnotationMode: false,
       isAnnotationReplay: false,
       isTextRevealed: false,
+      isCurrentSentenceAutoMarked: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
