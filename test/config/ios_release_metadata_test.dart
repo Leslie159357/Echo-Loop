@@ -20,4 +20,17 @@ void main() {
     expect(english, contains('"CFBundleDisplayName" = "Echo Loop";'));
     expect(chinese, contains('"CFBundleDisplayName" = "语环";'));
   });
+
+  test('iOS 字幕文档类型声明了 LSHandlerRank', () async {
+    final content = await File('ios/Runner/Info.plist').readAsString();
+
+    expect(
+      RegExp(r'<key>LSHandlerRank</key>\s*<string>Alternate</string>')
+          .allMatches(content)
+          .length,
+      2,
+    );
+    expect(content, contains('<string>SubRip Subtitle</string>'));
+    expect(content, contains('<string>WebVTT Subtitle</string>'));
+  });
 }

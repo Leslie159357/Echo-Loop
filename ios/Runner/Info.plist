@@ -105,6 +105,8 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>SubRip Subtitle</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>top.echo-loop.subrip-subtitle</string>
@@ -113,6 +115,8 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>WebVTT Subtitle</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>top.echo-loop.webvtt</string>

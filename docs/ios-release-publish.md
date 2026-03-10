@@ -7,6 +7,30 @@
 - 上传到 App Store Connect
 - 查询上传后的处理状态
 
+## 0. 一键脚本
+
+优先使用仓库脚本：
+
+```bash
+scripts/release_ios.sh
+```
+
+常用变体：
+
+```bash
+scripts/release_ios.sh --skip-upload
+scripts/release_ios.sh --wait
+scripts/release_ios.sh --build-number 202603101745
+```
+
+说明：
+
+- 默认串行执行 `archive -> export/兜底封包 -> upload`
+- `--skip-upload` 只生成 `ipa`，便于先本地检查
+- `--wait` 会在上传后继续等待 App Store Connect 处理完成
+- 如果 `pubspec.yaml` 没有显式 `+build-number`，脚本会自动生成时间戳 build number，避免重复上传被拒
+- 可通过环境变量覆盖 `APP_STORE_API_KEY_PATH`、`APP_STORE_API_KEY_ID`、`APP_STORE_API_ISSUER_ID`、`IOS_TEAM_ID`、`IOS_BUILD_NAME`、`IOS_BUILD_NUMBER`
+
 当前文档基于以下已确认信息：
 
 - Bundle ID：`top.echo-loop`
@@ -271,7 +295,12 @@ xcrun altool \
 
 - `CFBundleDocumentTypes`
 
-这两个 warning 不阻塞上传，但建议后续补齐。
+这两个 warning 不阻塞上传。
+
+说明：
+
+- 当前仓库已经补上两个文档类型的 `LSHandlerRank = Alternate`
+- 下次重新上传时，这两条 warning 预期应当消失
 
 ## 11. 常用排查命令
 
