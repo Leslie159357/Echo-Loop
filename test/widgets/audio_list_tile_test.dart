@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluency/providers/audio_library_provider.dart';
+import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:fluency/providers/collection_provider.dart';
+import 'package:fluency/providers/learning_progress_provider.dart';
+import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:fluency/providers/learning_session/learning_session_provider.dart';
+import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
+import 'package:fluency/providers/settings_provider.dart';
+import 'package:fluency/providers/tag_provider.dart';
 import 'package:fluency/theme/app_theme.dart';
 import 'package:fluency/widgets/audio_list_tile.dart';
 
@@ -109,6 +117,50 @@ void main() {
       // 验证切换成功 — 图标变为实心星
       expect(find.byIcon(Icons.star), findsOneWidget);
       expect(find.byIcon(Icons.star_border), findsNothing);
+    });
+  });
+
+  group('AudioListTile 当前播放展示', () {
+    final baseItem = createTestAudioItem(id: 'playing-1', name: 'Playing Audio');
+
+    Widget buildCollectionTile() {
+      return createTestApp(
+        AudioListTile(
+          audioItem: baseItem,
+          collectionId: 'collection-1',
+        ),
+        overrides: [
+          appSettingsProvider.overrideWith(
+            () => TestAppSettings(const AppSettingsState()),
+          ),
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [baseItem])),
+          ),
+          collectionListProvider.overrideWith(() => TestCollectionList()),
+          tagListProvider.overrideWith(() => TestTagList()),
+          listeningPracticeProvider.overrideWith(
+            () => TestListeningPractice(
+              ListeningPracticeState(currentAudioItem: baseItem),
+            ),
+          ),
+          audioEngineProvider.overrideWith(() => TestAudioEngine()),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(),
+          ),
+          learningSessionProvider.overrideWith(() => TestLearningSession()),
+          blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
+        ],
+      );
+    }
+
+    testWidgets('合集上下文当前播放时不显示 Last 标签', (tester) async {
+      await tester.pumpWidget(buildCollectionTile());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Last'), findsNothing);
+      expect(find.text('上次'), findsNothing);
+      expect(find.byIcon(Icons.star_border), findsOneWidget);
+      expect(find.byType(PopupMenuButton<String>), findsOneWidget);
     });
   });
 }

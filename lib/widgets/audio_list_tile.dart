@@ -341,22 +341,6 @@ class AudioListTile extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildStarButton(ref, l10n, theme),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            l10n.playing,
-            style: TextStyle(
-              color: theme.colorScheme.onPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
         _buildPopupMenu(context, ref, l10n, theme),
       ],
     );
