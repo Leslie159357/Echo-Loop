@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../database/enums.dart';
 import '../database/providers.dart';
+import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
@@ -50,7 +51,8 @@ class ListenAndRepeatPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _ListenAndRepeatPlayerScreenState
-    extends ConsumerState<ListenAndRepeatPlayerScreen> {
+    extends ConsumerState<ListenAndRepeatPlayerScreen>
+    with WakelockMixin {
   bool _isShowingDialog = false;
 
   @override

@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../database/enums.dart';
+import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/blind_listen_player_provider.dart';
@@ -53,7 +54,8 @@ class BlindListenPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _BlindListenPlayerScreenState
-    extends ConsumerState<BlindListenPlayerScreen> {
+    extends ConsumerState<BlindListenPlayerScreen>
+    with WakelockMixin {
   /// 是否正在显示完成对话框（防止重复弹出）
   bool _isShowingDialog = false;
 

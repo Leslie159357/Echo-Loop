@@ -17,6 +17,7 @@ import '../providers/tag_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import 'learning_progress_icon.dart';
 import '../providers/transcription_task_provider.dart';
 import 'dialogs/text_input_dialog.dart';
 import 'manage_subtitles_sheet.dart';
@@ -105,7 +106,7 @@ class AudioListTile extends ConsumerWidget {
             contentPadding: isDesktop
                 ? const EdgeInsets.symmetric(horizontal: 20, vertical: 4)
                 : null,
-            leading: _buildLeadingProgress(theme, progress),
+            leading: LearningProgressIcon(progress: progress),
             title: Text(
               audioItem.name,
               style: const TextStyle(fontWeight: FontWeight.w500),
@@ -138,81 +139,6 @@ class AudioListTile extends ConsumerWidget {
   /// - 未学习：音频图标在浅色圆形背景上
   /// - 进行中：环形进度 + 中心音频图标
   /// - 已完成：满环（绿色）+ 勾号图标
-  Widget _buildLeadingProgress(ThemeData theme, LearningProgress? progress) {
-    const size = 40.0;
-    const iconSize = 20.0;
-    const strokeWidth = 3.0;
-    // 已完成使用明确的绿色，不依赖 tertiary（在当前主题下是紫色）
-    const completedColor = Color(0xFF4CAF50);
-
-    // 未学习状态
-    if (progress == null || !progress.isStarted) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: theme.colorScheme.surfaceContainerHighest,
-        ),
-        child: Icon(
-          Icons.audiotrack,
-          size: iconSize,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-
-    // 已完成状态
-    if (progress.isCompleted) {
-      return SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: size,
-              height: size,
-              child: CircularProgressIndicator(
-                value: 1.0,
-                strokeWidth: strokeWidth,
-                color: completedColor,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              ),
-            ),
-            Icon(Icons.check, size: iconSize, color: completedColor),
-          ],
-        ),
-      );
-    }
-
-    // 进行中状态
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: size,
-            height: size,
-            child: CircularProgressIndicator(
-              value: progress.progressPercent,
-              strokeWidth: strokeWidth,
-              color: theme.colorScheme.primary,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            ),
-          ),
-          Icon(
-            Icons.audiotrack,
-            size: iconSize,
-            color: theme.colorScheme.primary,
-          ),
-        ],
-      ),
-    );
-  }
-
   /// 获取音频关联的标签数据（名称 + 颜色）
   List<Tag> _getTagData(WidgetRef ref) {
     final tagIds = ref.watch(

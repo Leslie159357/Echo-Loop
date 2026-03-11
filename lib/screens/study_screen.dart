@@ -10,18 +10,18 @@ import '../providers/study_task_provider.dart';
 import '../providers/time_provider.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../widgets/learning_progress_icon.dart';
 import '../widgets/study/study_stats_header.dart';
 
 /// 学习任务列表页
 ///
 /// 页面结构（从上到下）：
 /// 1. AppBar（标题）
-/// 2. Hero Card（最优先可操作任务一键直达）
-/// 3. 统计 Chips + 7天柱状图
-/// 4. Ready to Review（可开始的复习）
-/// 5. Upcoming Reviews（默认折叠）
-/// 6. First Study（首学任务）
-/// 7. Completed（默认折叠）
+/// 2. 统计 Chips + 7天柱状图
+/// 3. Ready to Review（可开始的复习）
+/// 4. Upcoming Reviews（默认折叠）
+/// 5. First Study（首学任务）
+/// 6. Completed（默认折叠）
 class StudyScreen extends ConsumerWidget {
   const StudyScreen({super.key});
 
@@ -33,15 +33,15 @@ class StudyScreen extends ConsumerWidget {
     final now = ref.watch(nowProvider)();
     final statsAsync = ref.watch(studyStatsNotifierProvider);
 
-    final readyReviews =
-        tasks.where((t) => t.type == StudyTaskType.reviewReady).toList();
-    final upcomingReviews =
-        tasks.where((t) => t.type == StudyTaskType.reviewUpcoming).toList();
-    final firstStudies =
-        tasks.where((t) => t.type == StudyTaskType.firstStudy).toList();
-
-    // 确定 Hero Card 任务：逾期复习 > 到期复习 > 进行中首学 > 新首学
-    final heroTask = _pickHeroTask(readyReviews, firstStudies);
+    final readyReviews = tasks
+        .where((t) => t.type == StudyTaskType.reviewReady)
+        .toList();
+    final upcomingReviews = tasks
+        .where((t) => t.type == StudyTaskType.reviewUpcoming)
+        .toList();
+    final firstStudies = tasks
+        .where((t) => t.type == StudyTaskType.firstStudy)
+        .toList();
 
     // 判断空状态类型
     final hasAnyTask = tasks.isNotEmpty || completedAudios.isNotEmpty;
@@ -52,8 +52,10 @@ class StudyScreen extends ConsumerWidget {
           ? Padding(
               padding: const EdgeInsets.only(right: AppSpacing.m),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
@@ -70,9 +72,9 @@ class StudyScreen extends ConsumerWidget {
                     Text(
                       l10n.streakDays(stats.streak),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange.shade800,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        color: Colors.orange.shade800,
+                      ),
                     ),
                   ],
                 ),
@@ -89,74 +91,65 @@ class StudyScreen extends ConsumerWidget {
       body: !hasAnyTask
           ? const _EmptyState(type: _EmptyStateType.noTasks)
           : tasks.isEmpty && completedAudios.isNotEmpty
-              ? _buildAllDoneContent(context, l10n, completedAudios)
-              : ListView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.m,
-                    vertical: AppSpacing.s,
+          ? _buildAllDoneContent(context, l10n, completedAudios)
+          : ListView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.m,
+                vertical: AppSpacing.s,
+              ),
+              children: [
+                // 统计 Chips + 柱状图
+                const StudyStatsHeader(),
+                const SizedBox(height: AppSpacing.l),
+
+                // Ready to Review
+                if (readyReviews.isNotEmpty) ...[
+                  _TaskSection(
+                    title: l10n.readyToReview(readyReviews.length),
+                    icon: Icons.replay_rounded,
+                    iconColor: Theme.of(context).colorScheme.primary,
+                    tasks: readyReviews,
+                    l10n: l10n,
+                    now: now,
                   ),
-                  children: [
-                    // Hero Card
-                    if (heroTask != null) ...[
-                      _HeroCard(task: heroTask, l10n: l10n),
-                      const SizedBox(height: AppSpacing.m),
-                    ],
+                  const SizedBox(height: AppSpacing.m),
+                ],
 
-                    // 统计 Chips + 柱状图
-                    const StudyStatsHeader(),
-                    const SizedBox(height: AppSpacing.l),
+                // Upcoming Reviews (默认折叠)
+                if (upcomingReviews.isNotEmpty) ...[
+                  _CollapsibleSection(
+                    title: l10n.upcomingReviews(upcomingReviews.length),
+                    summary: l10n.upcomingReviewsSummary(
+                      upcomingReviews.length,
+                    ),
+                    initiallyExpanded: false,
+                    children: upcomingReviews
+                        .map((t) => _TaskCard(task: t, l10n: l10n, now: now))
+                        .toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                ],
 
-                    // Ready to Review
-                    if (readyReviews.isNotEmpty) ...[
-                      _TaskSection(
-                        title: l10n.readyToReview(readyReviews.length),
-                        icon: Icons.replay_rounded,
-                        iconColor:
-                            Theme.of(context).colorScheme.primary,
-                        tasks: readyReviews,
-                        l10n: l10n,
-                        now: now,
-                      ),
-                      const SizedBox(height: AppSpacing.m),
-                    ],
+                // First Study
+                if (firstStudies.isNotEmpty) ...[
+                  _TaskSection(
+                    title: l10n.firstStudySection(firstStudies.length),
+                    icon: Icons.school_outlined,
+                    iconColor: Theme.of(context).colorScheme.tertiary,
+                    tasks: firstStudies,
+                    l10n: l10n,
+                    now: now,
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                ],
 
-                    // Upcoming Reviews (默认折叠)
-                    if (upcomingReviews.isNotEmpty) ...[
-                      _CollapsibleSection(
-                        title: l10n.upcomingReviews(upcomingReviews.length),
-                        summary:
-                            l10n.upcomingReviewsSummary(upcomingReviews.length),
-                        initiallyExpanded: false,
-                        children: upcomingReviews
-                            .map(
-                              (t) => _TaskCard(task: t, l10n: l10n, now: now),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: AppSpacing.m),
-                    ],
-
-                    // First Study
-                    if (firstStudies.isNotEmpty) ...[
-                      _TaskSection(
-                        title: l10n.firstStudySection(firstStudies.length),
-                        icon: Icons.school_outlined,
-                        iconColor:
-                            Theme.of(context).colorScheme.tertiary,
-                        tasks: firstStudies,
-                        l10n: l10n,
-                        now: now,
-                      ),
-                      const SizedBox(height: AppSpacing.m),
-                    ],
-
-                    // Completed (默认折叠)
-                    if (completedAudios.isNotEmpty) ...[
-                      _CompletedSection(completedAudios: completedAudios),
-                      const SizedBox(height: AppSpacing.m),
-                    ],
-                  ],
-                ),
+                // Completed (默认折叠)
+                if (completedAudios.isNotEmpty) ...[
+                  _CompletedSection(completedAudios: completedAudios),
+                  const SizedBox(height: AppSpacing.m),
+                ],
+              ],
+            ),
     );
   }
 
@@ -180,131 +173,6 @@ class StudyScreen extends ConsumerWidget {
           _CompletedSection(completedAudios: completedAudios),
         ],
       ],
-    );
-  }
-}
-
-/// 选取 Hero Card 的最优先任务
-///
-/// 优先级：逾期复习 > 到期复习 > 进行中首学 > 新首学
-StudyTask? _pickHeroTask(
-  List<StudyTask> readyReviews,
-  List<StudyTask> firstStudies,
-) {
-  if (readyReviews.isNotEmpty) return readyReviews.first;
-  if (firstStudies.isNotEmpty) return firstStudies.first;
-  return null;
-}
-
-// ============================================================
-// Hero Card
-// ============================================================
-
-/// 一键继续学习的醒目卡片
-///
-/// 渐变背景 + 大号操作按钮 + 播放图标装饰。
-class _HeroCard extends StatelessWidget {
-  final StudyTask task;
-  final AppLocalizations l10n;
-
-  const _HeroCard({required this.task, required this.l10n});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final stageLabel = _stageSubStageLabel(l10n, task.stage, task.subStage);
-    final buttonLabel = _actionLabel(l10n, task);
-    final primary = theme.colorScheme.primary;
-
-    return Card(
-      elevation: 2,
-      shadowColor: primary.withValues(alpha: 0.2),
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primary,
-              primary.withValues(alpha: 0.85),
-            ],
-          ),
-        ),
-        child: InkWell(
-          onTap: () =>
-              context.push(AppRoutes.audioLearningPlan(task.audioId)),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.m),
-            child: Row(
-              children: [
-                // 左侧播放图标
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // 中间文字
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.continueLearningHero,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        task.audioName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        stageLabel,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.75),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.s),
-                // 操作按钮
-                FilledButton(
-                  onPressed: () =>
-                      context.push(AppRoutes.audioLearningPlan(task.audioId)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                  ),
-                  child: Text(buttonLabel),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -419,16 +287,20 @@ class _TaskCard extends StatelessWidget {
     final statusText = _statusText(context, l10n, task, now);
     final isOverdue = task.isOverdue;
 
-    // 获取进度百分比
-    final progressProvider = _useProgressPercent(context);
-    final progressPercent = progressProvider(task);
+    // 获取进度数据
+    final container = ProviderScope.containerOf(context);
+    final progressMap = container
+        .read(learningProgressNotifierProvider)
+        .progressMap;
+    final progress = progressMap[task.audioId];
+    final progressPercent = progress?.progressPercent ?? 0.0;
 
     // 左侧色条颜色
     final accentColor = isOverdue
         ? theme.colorScheme.error
         : task.type == StudyTaskType.firstStudy
-            ? theme.colorScheme.tertiary
-            : theme.colorScheme.primary;
+        ? theme.colorScheme.tertiary
+        : theme.colorScheme.primary;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
@@ -447,6 +319,12 @@ class _TaskCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
+                        LearningProgressIcon(
+                          progress: progress,
+                          size: 36,
+                          iconSize: 18,
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,11 +343,12 @@ class _TaskCard extends StatelessWidget {
                                   Flexible(
                                     child: Text(
                                       stageLabel,
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -484,24 +363,26 @@ class _TaskCard extends StatelessWidget {
                                       decoration: BoxDecoration(
                                         color: isOverdue
                                             ? theme.colorScheme.error
-                                                .withValues(alpha: 0.1)
-                                            : theme.colorScheme
-                                                .surfaceContainerHighest,
+                                                  .withValues(alpha: 0.1)
+                                            : theme
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         statusText,
-                                        style:
-                                            theme.textTheme.labelSmall?.copyWith(
-                                          fontSize: 10,
-                                          color: isOverdue
-                                              ? theme.colorScheme.error
-                                              : theme
-                                                  .colorScheme.onSurfaceVariant,
-                                          fontWeight: isOverdue
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              fontSize: 10,
+                                              color: isOverdue
+                                                  ? theme.colorScheme.error
+                                                  : theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                              fontWeight: isOverdue
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
                                       ),
                                     ),
                                   ],
@@ -515,8 +396,8 @@ class _TaskCard extends StatelessWidget {
                           onPressed: isDisabled
                               ? null
                               : () => context.push(
-                                    AppRoutes.audioLearningPlan(task.audioId),
-                                  ),
+                                  AppRoutes.audioLearningPlan(task.audioId),
+                                ),
                           child: Text(_actionLabel(l10n, task)),
                         ),
                       ],
@@ -547,18 +428,6 @@ class _TaskCard extends StatelessWidget {
 }
 
 /// 从 LearningProgressState 获取任务进度百分比的闭包
-_ProgressGetter _useProgressPercent(BuildContext context) {
-  final container = ProviderScope.containerOf(context);
-  final progressMap =
-      container.read(learningProgressNotifierProvider).progressMap;
-  return (StudyTask task) {
-    final progress = progressMap[task.audioId];
-    return progress?.progressPercent ?? 0.0;
-  };
-}
-
-typedef _ProgressGetter = double Function(StudyTask task);
-
 // ============================================================
 // Completed Section
 // ============================================================
@@ -638,9 +507,7 @@ class _EmptyState extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: (isNoTasks
-                        ? theme.colorScheme.primary
-                        : Colors.amber)
+                color: (isNoTasks ? theme.colorScheme.primary : Colors.amber)
                     .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(24),
               ),

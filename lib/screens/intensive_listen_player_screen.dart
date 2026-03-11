@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../database/enums.dart';
+import '../utils/wakelock_mixin.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
@@ -48,7 +49,8 @@ class IntensiveListenPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _IntensiveListenPlayerScreenState
-    extends ConsumerState<IntensiveListenPlayerScreen> {
+    extends ConsumerState<IntensiveListenPlayerScreen>
+    with WakelockMixin {
   bool _isShowingDialog = false;
 
   @override
@@ -568,8 +570,9 @@ class _IntensiveListenPlayerScreenState
                           playerState: playerState,
                           l10n: l10n,
                           theme: theme,
-                          onPeekToggle: (revealed) =>
-                              player.setTextRevealed(revealed),
+                          onPeekToggle: () => player.setTextRevealed(
+                            !playerState.isTextRevealed,
+                          ),
                           onCantUnderstand: () => player.enterAnnotationMode(),
                           onToggleDifficult: _toggleAndSaveDifficult,
                           onPauseCountdown: () => playerState.isCountdownPaused
@@ -674,7 +677,7 @@ class _NormalModeView extends StatelessWidget {
   final IntensiveListenState playerState;
   final AppLocalizations l10n;
   final ThemeData theme;
-  final ValueChanged<bool> onPeekToggle;
+  final VoidCallback onPeekToggle;
   final VoidCallback onCantUnderstand;
 
   /// 取消难句标记回调
@@ -788,9 +791,7 @@ class _NormalModeView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               GestureDetector(
-                onTapDown: (_) => onPeekToggle(true),
-                onTapUp: (_) => onPeekToggle(false),
-                onTapCancel: () => onPeekToggle(false),
+                onTap: onPeekToggle,
                 child: _ActionChip(
                   icon: playerState.isTextRevealed
                       ? Icons.visibility_off_outlined

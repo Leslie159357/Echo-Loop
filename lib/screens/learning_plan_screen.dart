@@ -1186,7 +1186,7 @@ class _StepCard extends StatelessWidget {
                   height: 28,
                   decoration: BoxDecoration(
                     color: isCompleted
-                        ? Colors.green.shade50
+                        ? Colors.green.shade100
                         : isCurrent
                         ? null
                         : theme.colorScheme.surfaceContainerHighest,
@@ -1355,16 +1355,44 @@ class _ReviewRoundSection extends ConsumerWidget {
     if (now.isBefore(nextReview)) {
       final diff = nextReview.difference(now);
       if (diff.inDays > 0) {
-        return l10n.reviewCountdown(diff.inDays);
+        return l10n.reviewUnlockIn(diff.inDays);
       }
-      return l10n.reviewCountdownHours(diff.inHours.clamp(1, 999));
+      return l10n.reviewUnlockInHours(diff.inHours.clamp(1, 999));
     }
 
     if (progress!.isReviewOverdueAt(now)) {
       return _formatOverdueText(context, progress!.overdueDurationAt(now));
     }
 
-    return l10n.reviewReady;
+    return l10n.reviewUnlocked;
+  }
+
+  /// 解锁状态文案（非当前轮次、非已完成轮次显示）。
+  ///
+  /// 基于首学完成时间 + 阶段间隔计算解锁时间。
+  String? _unlockStatusText() {
+    if (progress == null) return null;
+    // 已完成的轮次显示"已解锁"
+    if (progress!.isStageCompleted(review.stage)) return l10n.reviewUnlocked;
+    // 当前轮次由 _reviewTimingText 处理
+    if (progress!.isCurrentStage(review.stage)) return null;
+
+    final firstLearnCompleted = progress!.firstLearnCompletedAt;
+    if (firstLearnCompleted == null) return null;
+
+    final unlockAt = firstLearnCompleted.add(
+      Duration(hours: review.stage.intervalHours),
+    );
+
+    if (now.isBefore(unlockAt)) {
+      final diff = unlockAt.difference(now);
+      if (diff.inDays > 0) {
+        return l10n.reviewUnlockIn(diff.inDays);
+      }
+      return l10n.reviewUnlockInHours(diff.inHours.clamp(1, 999));
+    }
+
+    return l10n.reviewUnlocked;
   }
 
   String _formatOverdueText(BuildContext context, Duration? overdue) {
@@ -1530,6 +1558,10 @@ class _ReviewRoundSection extends ConsumerWidget {
     final subStages = review.stage.subStages;
     final completedCount = _completedSubStageCount();
     final timingText = _reviewTimingText(context);
+    final unlockText = _unlockStatusText();
+    // 当前轮次显示实时状态，其余轮次显示解锁状态，都没有则显示固定间隔
+    final statusText = timingText ?? unlockText ?? review.interval;
+    final isHighlighted = timingText != null || unlockText != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1582,14 +1614,12 @@ class _ReviewRoundSection extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      // 当前轮次优先显示“实时状态”（倒计时/可复习），
-                      // 其它轮次显示固定间隔，避免同一行出现两个时间文案。
-                      timingText ?? review.interval,
+                      statusText,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: timingText != null
+                        color: isHighlighted
                             ? theme.colorScheme.tertiary
                             : theme.colorScheme.onSurfaceVariant,
-                        fontWeight: timingText != null
+                        fontWeight: isHighlighted
                             ? FontWeight.w500
                             : FontWeight.normal,
                       ),

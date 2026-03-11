@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/wakelock_mixin.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
@@ -35,7 +36,8 @@ class BookmarkReviewScreen extends ConsumerStatefulWidget {
       _BookmarkReviewScreenState();
 }
 
-class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen> {
+class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
+    with WakelockMixin {
   bool _isShowingDialog = false;
 
   @override

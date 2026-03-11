@@ -15,6 +15,7 @@ import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/retell_player_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/wakelock_mixin.dart';
 import '../widgets/intensive_listen/word_dictionary_sheet.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/retell/retell_sentence_tile.dart';
@@ -39,7 +40,8 @@ class RetellPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<RetellPlayerScreen> createState() => _RetellPlayerScreenState();
 }
 
-class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen> {
+class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
+    with WakelockMixin {
   bool _isShowingDialog = false;
 
   @override
@@ -270,32 +272,6 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen> {
                 ),
               ),
 
-              // 显示模式切换（仅当前段落生效，可见词关闭时隐藏）
-              if (state.settings.keywordMethod != KeywordMethod.off)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-                  child: SegmentedButton<RetellDisplayMode>(
-                    segments: [
-                      ButtonSegment(
-                        value: RetellDisplayMode.keywordsOnly,
-                        label: Text(l10n.retellDisplayKeywordsOnly),
-                      ),
-                      ButtonSegment(
-                        value: RetellDisplayMode.showAll,
-                        label: Text(l10n.retellDisplayShowAll),
-                      ),
-                      ButtonSegment(
-                        value: RetellDisplayMode.hideAll,
-                        label: Text(l10n.retellDisplayHideAll),
-                      ),
-                    ],
-                    selected: {state.displayMode},
-                    onSelectionChanged: (selected) =>
-                        player.setDisplayMode(selected.first),
-                  ),
-                ),
-              const SizedBox(height: AppSpacing.s),
-
               // 句子列表
               Expanded(
                 child: Card(
@@ -343,6 +319,32 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen> {
                 ),
               ),
 
+              const SizedBox(height: AppSpacing.s),
+
+              // 显示模式切换（仅当前段落生效，可见词关闭时隐藏）
+              if (state.settings.keywordMethod != KeywordMethod.off)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+                  child: SegmentedButton<RetellDisplayMode>(
+                    segments: [
+                      ButtonSegment(
+                        value: RetellDisplayMode.keywordsOnly,
+                        label: Text(l10n.retellDisplayKeywordsOnly),
+                      ),
+                      ButtonSegment(
+                        value: RetellDisplayMode.showAll,
+                        label: Text(l10n.retellDisplayShowAll),
+                      ),
+                      ButtonSegment(
+                        value: RetellDisplayMode.hideAll,
+                        label: Text(l10n.retellDisplayHideAll),
+                      ),
+                    ],
+                    selected: {state.displayMode},
+                    onSelectionChanged: (selected) =>
+                        player.setDisplayMode(selected.first),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.s),
 
               // 阶段指示器 + 倒计时控制

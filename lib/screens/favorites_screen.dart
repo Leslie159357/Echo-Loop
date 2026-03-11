@@ -962,8 +962,6 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
                             Expanded(
                               child: Text(
                                 word.sentenceText!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                   fontStyle: FontStyle.italic,

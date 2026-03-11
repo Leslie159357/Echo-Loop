@@ -20,6 +20,7 @@ import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/wakelock_mixin.dart';
 import '../providers/sentence_ai_provider.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
@@ -47,7 +48,8 @@ class ReviewDifficultPracticeScreen extends ConsumerStatefulWidget {
 }
 
 class _ReviewDifficultPracticeScreenState
-    extends ConsumerState<ReviewDifficultPracticeScreen> {
+    extends ConsumerState<ReviewDifficultPracticeScreen>
+    with WakelockMixin {
   bool _isShowingDialog = false;
 
   @override
@@ -235,33 +237,38 @@ class _ReviewDifficultPracticeScreenState
       stageName: stepCtx.stageName,
       nextStepName: stepCtx.nextStepName,
       isLastStep: stepCtx.isLastStep,
+      replayLabel: l10n.practiceAgain,
     );
 
     _isShowingDialog = false;
     if (!mounted) return;
 
-    if (result != null) {
-      // 清除断点（已全部完成）并推进子步骤
-      try {
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .completeCurrentSubStage(widget.audioItemId);
-      } catch (e) {
-        debugPrint('难句补练完成处理出错: $e');
-      }
+    // 再来一遍（点击 replayLabel 按钮时 result 为 null）
+    if (result == null) {
+      await ref.read(reviewDifficultPracticeProvider.notifier).resetToStart();
+      return;
+    }
 
-      if (result.continueToNext && stepCtx.nextStepName != null) {
-        // 继续下一步 → 退出当前模式，返回计划页让路由分发
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      } else {
-        // 返回计划页
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      }
+    // 清除断点（已全部完成）并推进子步骤
+    try {
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .completeCurrentSubStage(widget.audioItemId);
+    } catch (e) {
+      debugPrint('难句补练完成处理出错: $e');
+    }
+
+    if (result.continueToNext && stepCtx.nextStepName != null) {
+      // 继续下一步 → 退出当前模式，返回计划页让路由分发
+      await ref.read(learningSessionProvider.notifier).exitLearningMode();
+      if (mounted) context.pop();
+    } else {
+      // 返回计划页
+      await ref.read(learningSessionProvider.notifier).exitLearningMode();
+      if (mounted) context.pop();
     }
   }
 
