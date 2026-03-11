@@ -601,18 +601,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 按住偷看按钮（onTapDown）
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.text('Peek')),
-      );
+      // 点击偷看按钮切换为显示
+      await tester.tap(find.text('Peek'));
       await tester.pumpAndSettle();
 
       // 文本已显示
       expect(find.text('Test sentence number 1.'), findsOneWidget);
       // 偷看按钮图标变为 visibility_off
       expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
-
-      await gesture.up();
     });
 
     testWidgets('偷看字幕点击切换 — 再次点击隐藏', (tester) async {
@@ -626,15 +622,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 按住显示
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.text('Peek')),
-      );
+      // 第一次点击显示
+      await tester.tap(find.text('Peek'));
       await tester.pumpAndSettle();
       expect(find.text('Test sentence number 1.'), findsOneWidget);
 
-      // 松开后隐藏（onTapUp）
-      await gesture.up();
+      // 第二次点击隐藏
+      await tester.tap(find.text('Peek'));
       await tester.pumpAndSettle();
       expect(find.text('Test sentence number 1.'), findsNothing);
       expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);

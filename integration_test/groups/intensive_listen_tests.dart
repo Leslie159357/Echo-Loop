@@ -95,7 +95,7 @@ void intensiveListenTests() {
       expect(find.text("Can't understand"), findsOneWidget);
     });
 
-    testWidgets('偷看字幕：按住显示，松开隐藏', (tester) async {
+    testWidgets('偷看字幕：点击显示，再次点击隐藏', (tester) async {
       await tester.pumpWidget(
         createTestAppWithAudio(
           progressOverride: createTestLearningProgress(
@@ -109,21 +109,19 @@ void intensiveListenTests() {
       // 初始状态：文字隐藏
       expect(find.text('Test sentence number 1.'), findsNothing);
 
-      // 按住"Peek"按钮 — 模拟 pointer down
-      final peekButton = find.text('Peek');
-      final gesture = await tester.startGesture(tester.getCenter(peekButton));
+      // 第一次点击 "Peek" 按钮
+      await tester.tap(find.text('Peek'));
       await tester.pumpAndSettle();
 
-      // 验证按住时文本显示
+      // 验证点击后文本显示
       expect(find.text('Test sentence number 1.'), findsOneWidget);
-      // 按钮文案始终为"Peek"（不再切换为 Hide）
       expect(find.text('Peek'), findsOneWidget);
 
-      // 松开 — 模拟 pointer up
-      await gesture.up();
+      // 第二次点击后文本隐藏
+      await tester.tap(find.text('Peek'));
       await tester.pumpAndSettle();
 
-      // 验证松开后文本隐藏
+      // 验证再次点击后文本隐藏
       expect(find.text('Test sentence number 1.'), findsNothing);
     });
 

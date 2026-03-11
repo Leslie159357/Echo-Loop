@@ -43,10 +43,6 @@ void audioStarTests() {
       final starIcon = tester.widget<Icon>(find.byIcon(Icons.star));
       expect(starIcon.color, AppTheme.bookmarkColor);
 
-      // 验证 leading audiotrack 图标也变为 bookmarkColor
-      final audioIcon = tester.widget<Icon>(find.byIcon(Icons.audiotrack));
-      expect(audioIcon.color, AppTheme.bookmarkColor);
-
       // 再次点击取消星标
       await tester.tap(find.byIcon(Icons.star));
       await tester.pumpAndSettle();

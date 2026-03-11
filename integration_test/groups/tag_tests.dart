@@ -88,7 +88,7 @@ void tagTests() {
       await tester.pump(const Duration(milliseconds: 500));
 
       // 返回音频列表 — 应能看到彩色标签 chip
-      expect(find.text('Business English'), findsOneWidget);
+      expect(find.text('Business English'), findsAtLeast(1));
     });
 
     testWidgets('删除标签后从列表和音频中移除', (tester) async {

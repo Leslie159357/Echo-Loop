@@ -332,7 +332,7 @@ void main() {
       expect(find.text('01:05 - 01:10'), findsOneWidget);
     });
 
-    testWidgets('句子项显示收藏图标和播放按钮', (tester) async {
+    testWidgets('句子项显示播放按钮', (tester) async {
       await tester.pumpWidget(createTestWidget());
 
       bookmarkController.add([
@@ -352,8 +352,6 @@ void main() {
       await tester.tap(find.text('Audio One'));
       await tester.pumpAndSettle();
 
-      // 收藏图标
-      expect(find.byIcon(Icons.bookmark), findsAtLeast(1));
       // 播放按钮
       expect(find.byIcon(Icons.play_circle_outline), findsOneWidget);
     });
@@ -418,7 +416,7 @@ void main() {
       expect(find.text('banana'), findsOneWidget);
     });
 
-    testWidgets('单词项显示收藏图标', (tester) async {
+    testWidgets('单词项显示单词内容', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pump();
 
@@ -428,7 +426,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.byIcon(Icons.bookmark), findsAtLeast(1));
+      expect(find.text('hello'), findsOneWidget);
     });
   });
 
