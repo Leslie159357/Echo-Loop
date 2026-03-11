@@ -150,11 +150,16 @@ class RetellPlayer extends _$RetellPlayer {
   /// 当前 AudioEngine sessionId
   int _sessionId = -1;
 
+  /// 倒计时运行版本号
+  ///
+  /// 每次启动或取消复述倒计时都递增，用于屏蔽已取消倒计时的过期回调。
+  int _retellCountdownRunId = 0;
+
   @override
   RetellPlayerState build() {
     ref.onDispose(() {
       _positionSub?.cancel();
-      _countdown.cancel();
+      _invalidateRetellCountdown();
     });
     return const RetellPlayerState();
   }
@@ -262,7 +267,7 @@ class RetellPlayer extends _$RetellPlayer {
     final engine = ref.read(audioEngineProvider.notifier);
     _sessionId = engine.newSession();
     _positionSub?.cancel();
-    _countdown.cancel();
+    _invalidateRetellCountdown();
     await engine.stopPlayback();
     state = state.copyWith(
       isPlaying: false,
@@ -356,7 +361,7 @@ class RetellPlayer extends _$RetellPlayer {
   ///
   /// 取消倒计时，回到 listening 阶段重新播放。
   Future<void> replayDuringCountdown() async {
-    _countdown.cancel();
+    _invalidateRetellCountdown();
     state = state.copyWith(
       isRetellCountdown: false,
       isCountdownPaused: false,
@@ -500,6 +505,7 @@ class RetellPlayer extends _$RetellPlayer {
 
   /// 开始复述倒计时
   void _startRetellCountdown(Duration duration) {
+    final runId = ++_retellCountdownRunId;
     state = state.copyWith(
       isRetellCountdown: true,
       pauseDuration: duration,
@@ -514,7 +520,7 @@ class RetellPlayer extends _$RetellPlayer {
         })
         .then((_) {
           // 倒计时正常结束（非取消）时推进
-          if (state.isRetellCountdown) {
+          if (state.isRetellCountdown && runId == _retellCountdownRunId) {
             _onRetellCountdownFinished();
           }
         });
@@ -549,14 +555,22 @@ class RetellPlayer extends _$RetellPlayer {
     final engine = ref.read(audioEngineProvider.notifier);
     _sessionId = engine.newSession();
     _positionSub?.cancel();
-    _countdown.cancel();
+    _invalidateRetellCountdown();
     await engine.stopPlayback();
+  }
+
+  /// 使当前复述倒计时失效
+  ///
+  /// 必须在 await 任何异步中断逻辑前调用，避免取消后的过期倒计时回调继续推进段落。
+  void _invalidateRetellCountdown() {
+    _retellCountdownRunId += 1;
+    _countdown.cancel();
   }
 
   /// 清理资源
   void _cleanup() {
     _positionSub?.cancel();
-    _countdown.cancel();
+    _invalidateRetellCountdown();
     _positionSub = null;
   }
 }
