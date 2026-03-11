@@ -170,5 +170,39 @@ void main() {
       );
       expect(segmented.selected, contains(RetellDisplayMode.showAll));
     });
+
+    testWidgets('不同选中态下 SegmentedButton 总宽度保持不变', (tester) async {
+      Future<double> pumpAndMeasure(RetellDisplayMode displayMode) async {
+        await tester.pumpWidget(
+          createTestWidget(
+            playerState: RetellPlayerState(
+              currentParagraphIndex: 0,
+              totalParagraphs: 1,
+              phase: RetellPhase.listening,
+              isPlaying: true,
+              playingSentenceIndex: 0,
+              displayMode: displayMode,
+              settings: const RetellSettings(
+                keywordMethod: KeywordMethod.random,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        return tester
+            .getRect(find.byType(SegmentedButton<RetellDisplayMode>))
+            .width;
+      }
+
+      final keywordsOnlyWidth = await pumpAndMeasure(
+        RetellDisplayMode.keywordsOnly,
+      );
+      final showAllWidth = await pumpAndMeasure(RetellDisplayMode.showAll);
+      final hideAllWidth = await pumpAndMeasure(RetellDisplayMode.hideAll);
+
+      expect(showAllWidth, equals(keywordsOnlyWidth));
+      expect(hideAllWidth, equals(keywordsOnlyWidth));
+    });
   });
 }

@@ -326,18 +326,29 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
                   child: SegmentedButton<RetellDisplayMode>(
+                    showSelectedIcon: false,
                     segments: [
                       ButtonSegment(
                         value: RetellDisplayMode.keywordsOnly,
-                        label: Text(l10n.retellDisplayKeywordsOnly),
+                        label: _DisplayModeSegmentLabel(
+                          text: l10n.retellDisplayKeywordsOnly,
+                          selected:
+                              state.displayMode == RetellDisplayMode.keywordsOnly,
+                        ),
                       ),
                       ButtonSegment(
                         value: RetellDisplayMode.showAll,
-                        label: Text(l10n.retellDisplayShowAll),
+                        label: _DisplayModeSegmentLabel(
+                          text: l10n.retellDisplayShowAll,
+                          selected: state.displayMode == RetellDisplayMode.showAll,
+                        ),
                       ),
                       ButtonSegment(
                         value: RetellDisplayMode.hideAll,
-                        label: Text(l10n.retellDisplayHideAll),
+                        label: _DisplayModeSegmentLabel(
+                          text: l10n.retellDisplayHideAll,
+                          selected: state.displayMode == RetellDisplayMode.hideAll,
+                        ),
                       ),
                     ],
                     selected: {state.displayMode},
@@ -366,6 +377,34 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 显示模式标签
+///
+/// 始终为选中图标预留固定宽度，避免切换选中项时 SegmentedButton 宽度抖动。
+class _DisplayModeSegmentLabel extends StatelessWidget {
+  final String text;
+  final bool selected;
+
+  const _DisplayModeSegmentLabel({
+    required this.text,
+    required this.selected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          child: selected ? const Icon(Icons.check, size: 18) : null,
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Text(text),
+      ],
     );
   }
 }
