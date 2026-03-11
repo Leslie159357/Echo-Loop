@@ -9,6 +9,7 @@ import 'package:fluency/models/learning_progress.dart';
 import 'package:fluency/providers/audio_library_provider.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/screens/study_screen.dart';
+import 'package:fluency/widgets/learning_progress_icon.dart';
 import 'package:fluency/providers/time_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -181,10 +182,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 音频名称出现在 Hero Card 和任务卡片中
+    // 音频名称出现在任务卡片中
     expect(find.text('Review Audio'), findsAtLeast(1));
 
-    // 点击 Hero Card 中的 Review 按钮
+    // 点击任务卡片中的 Review 按钮
     await tester.tap(find.text('Review').first);
     await tester.pumpAndSettle();
 
@@ -225,7 +226,7 @@ void main() {
 
     // 新格式："Overdue 3h"
     expect(find.textContaining('Overdue 3h'), findsOneWidget);
-    // Hero Card 和任务卡片都有 Review 按钮
+    // 任务卡片有 Review 按钮
     final reviewButtons = find.widgetWithText(FilledButton, 'Review');
     expect(reviewButtons, findsAtLeast(1));
   });
@@ -306,7 +307,7 @@ void main() {
     expect(find.text('Completed Audio'), findsOneWidget);
   });
 
-  testWidgets('Hero Card 显示最优先任务', (tester) async {
+  testWidgets('有任务时不应出现 Hero Card（渐变大卡片）', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
       AudioItem(
@@ -343,10 +344,34 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Hero Card 应该显示复习任务（优先级更高）
-    expect(find.text('Continue Learning'), findsOneWidget);
-    // Hero Card 中显示复习音频名称
+    // 不应出现 Hero Card 的 "Continue Learning" 标签
+    expect(find.text('Continue Learning'), findsNothing);
+    // 任务应直接在对应 section 中显示
     expect(find.text('Review Audio'), findsAtLeast(1));
+    expect(find.text('First Study Audio'), findsAtLeast(1));
+  });
+
+  testWidgets('任务卡片中显示 LearningProgressIcon', (tester) async {
+    final now = DateTime(2026, 2, 25, 12, 0);
+    final audioItems = [
+      AudioItem(
+        id: 'audio-1',
+        name: 'Test Audio',
+        audioPath: 'audios/test.mp3',
+        addedDate: now,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      createTestWidget(
+        audioItems: audioItems,
+        progressState: const LearningProgressState(),
+        fixedNow: now,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LearningProgressIcon), findsAtLeast(1));
   });
 
   testWidgets('无任务时点击"去导入音频"导航到 Library', (tester) async {

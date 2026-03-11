@@ -24,6 +24,8 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/retell_player_provider.dart';
+import 'package:fluency/models/retell_settings.dart';
 import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
 import 'package:fluency/providers/daily_study_time_provider.dart';
 import 'package:fluency/providers/transcription_task_provider.dart';
@@ -1186,6 +1188,179 @@ class TestTranscriptionTaskManager extends TranscriptionTaskManager {
   @override
   void clearState(String audioId) {
     state = Map.of(state)..remove(audioId);
+  }
+}
+
+/// 测试用 RetellPlayer — 不依赖音频引擎
+class TestRetellPlayer extends RetellPlayer {
+  final RetellPlayerState _initialState;
+  List<List<Sentence>> _testParagraphs;
+  Map<int, Set<int>> _testKeywords;
+
+  TestRetellPlayer([
+    this._initialState = const RetellPlayerState(),
+    this._testParagraphs = const [],
+    this._testKeywords = const {},
+  ]);
+
+  @override
+  RetellPlayerState build() => _initialState;
+
+  @override
+  List<Sentence> get currentParagraphSentences =>
+      _testParagraphs.isNotEmpty &&
+              state.currentParagraphIndex < _testParagraphs.length
+          ? _testParagraphs[state.currentParagraphIndex]
+          : [];
+
+  @override
+  List<List<Sentence>> get paragraphs => List.unmodifiable(_testParagraphs);
+
+  @override
+  Map<int, Set<int>> get keywordsMap => Map.unmodifiable(_testKeywords);
+
+  @override
+  Duration get currentParagraphDuration {
+    final sentences = currentParagraphSentences;
+    if (sentences.isEmpty) return Duration.zero;
+    return sentences.last.endTime - sentences.first.startTime;
+  }
+
+  @override
+  int? get currentParagraphFirstSentenceIndex {
+    final sentences = currentParagraphSentences;
+    return sentences.isNotEmpty ? sentences.first.index : null;
+  }
+
+  @override
+  void initialize(
+    List<List<Sentence>> paragraphs,
+    Map<int, Set<int>> keywordsMap, {
+    int? startSentenceIndex,
+  }) {
+    _testParagraphs = paragraphs;
+    _testKeywords = keywordsMap;
+    state = RetellPlayerState(
+      currentParagraphIndex: 0,
+      totalParagraphs: paragraphs.length,
+    );
+  }
+
+  @override
+  Future<void> startPlaying() async {
+    if (_testParagraphs.isEmpty) {
+      state = state.copyWith(isCompleted: true);
+      return;
+    }
+    state = state.copyWith(
+      phase: RetellPhase.listening,
+      isPlaying: true,
+      playingSentenceIndex: 0,
+    );
+  }
+
+  @override
+  Future<void> restart() async {
+    state = RetellPlayerState(
+      currentParagraphIndex: 0,
+      totalParagraphs: _testParagraphs.length,
+      settings: state.settings,
+      displayMode: RetellDisplayMode.keywordsOnly,
+      phase: RetellPhase.listening,
+      isPlaying: true,
+      playingSentenceIndex: 0,
+    );
+  }
+
+  @override
+  Future<void> pause() async {
+    state = state.copyWith(isPlaying: false, isRetellCountdown: false);
+  }
+
+  @override
+  Future<void> resume() async {
+    if (state.phase == RetellPhase.listening) {
+      state = state.copyWith(isPlaying: true);
+    }
+  }
+
+  @override
+  Future<void> goToNextParagraph() async {
+    if (state.currentParagraphIndex >= state.totalParagraphs - 1) {
+      state = state.copyWith(isCompleted: true, isPlaying: false);
+      return;
+    }
+    state = state.copyWith(
+      currentParagraphIndex: state.currentParagraphIndex + 1,
+      phase: RetellPhase.listening,
+      currentRepeatCount: 1,
+      playingSentenceIndex: 0,
+      isRetellCountdown: false,
+      isPlaying: true,
+      displayMode: RetellDisplayMode.keywordsOnly,
+    );
+  }
+
+  @override
+  Future<void> goToPreviousParagraph() async {
+    if (state.currentParagraphIndex <= 0) return;
+    state = state.copyWith(
+      currentParagraphIndex: state.currentParagraphIndex - 1,
+      phase: RetellPhase.listening,
+      currentRepeatCount: 1,
+      playingSentenceIndex: 0,
+      isRetellCountdown: false,
+      isPlaying: true,
+      displayMode: RetellDisplayMode.keywordsOnly,
+    );
+  }
+
+  @override
+  void pauseCountdown() {
+    state = state.copyWith(isCountdownPaused: true);
+  }
+
+  @override
+  void resumeCountdown() {
+    state = state.copyWith(isCountdownPaused: false);
+  }
+
+  @override
+  void toggleCountdownFastForward() {
+    state = state.copyWith(
+      isCountdownFastForward: !state.isCountdownFastForward,
+    );
+  }
+
+  @override
+  Future<void> replayDuringCountdown() async {
+    state = state.copyWith(
+      phase: RetellPhase.listening,
+      isRetellCountdown: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+      isPlaying: true,
+    );
+  }
+
+  @override
+  void setDisplayMode(RetellDisplayMode mode) {
+    state = state.copyWith(displayMode: mode);
+  }
+
+  @override
+  void updateSettings(RetellSettings newSettings) {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  void regenerateKeywords() {}
+
+  @override
+  void disposePlayer() {
+    _testParagraphs = [];
+    _testKeywords = {};
+    state = const RetellPlayerState();
   }
 }
 

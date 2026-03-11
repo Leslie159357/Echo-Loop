@@ -203,7 +203,7 @@ void main() {
           .where((widget) => widget.turns == 0.5)
           .length;
       expect(expandedAfterSecondTap, 1); // 再次折叠后仅首学展开
-      expect(find.text('Available in 1 hours'), findsOneWidget);
+      expect(find.text('Unlocks in 1 hours'), findsOneWidget);
       expect(find.text('After 6 hours'), findsNothing);
     });
 
@@ -579,6 +579,116 @@ void main() {
       // 盲听步骤已完成，应显示遍数 + 难度
       expect(find.textContaining('Listened 2 time(s)'), findsOneWidget);
       expect(find.textContaining('Difficulty:'), findsOneWidget);
+    });
+
+    testWidgets('未到解锁时间的复习轮次显示"X天后解锁"', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // 首学刚完成，review1 需要 24h 后解锁
+      final firstLearnCompletedAt = DateTime(2026, 1, 1);
+      final now = DateTime(2026, 1, 1, 12, 0); // 12小时后
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review0,
+            currentSubStage: SubStageType.blindListen,
+            firstLearnCompletedAt: firstLearnCompletedAt,
+            lastStageCompletedAt: firstLearnCompletedAt,
+            updatedAt: now,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(progressState: progressState, fixedNow: now),
+      );
+      await tester.pumpAndSettle();
+
+      // 滚动到 Review 2（review1 阶段，需要 1 天解锁）
+      await tester.scrollUntilVisible(find.text('Review 2'), 200);
+      await tester.pumpAndSettle();
+
+      // 未到解锁时间，应显示解锁倒计时
+      // review1 需要 24h，现在才过 12h，还差 12h
+      expect(find.textContaining('Unlocks in'), findsAtLeast(1));
+    });
+
+    testWidgets('已到解锁时间的复习轮次显示"已解锁"', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // 首学完成 2 天前，review1（24h）应已解锁
+      final firstLearnCompletedAt = DateTime(2026, 1, 1);
+      final now = DateTime(2026, 1, 3, 12, 0); // 2.5 天后
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review0,
+            currentSubStage: SubStageType.blindListen,
+            firstLearnCompletedAt: firstLearnCompletedAt,
+            lastStageCompletedAt: firstLearnCompletedAt,
+            updatedAt: now,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(progressState: progressState, fixedNow: now),
+      );
+      await tester.pumpAndSettle();
+
+      // 滚动到 Review 2（review1 阶段）
+      await tester.scrollUntilVisible(find.text('Review 2'), 200);
+      await tester.pumpAndSettle();
+
+      // 已到解锁时间，应显示"Unlocked"
+      expect(find.text('Unlocked'), findsAtLeast(1));
+    });
+
+    testWidgets('已完成步骤圆形背景使用较深绿色（非 shade50）', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.intensiveListen,
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      // 盲听步骤已完成，其圆形背景应使用较深绿色
+      final containers = tester.widgetList<Container>(find.byType(Container));
+      final greenContainers = containers.where((c) {
+        final decoration = c.decoration;
+        if (decoration is BoxDecoration && decoration.shape == BoxShape.circle) {
+          return decoration.color == Colors.green.shade100;
+        }
+        return false;
+      });
+      expect(greenContainers, isNotEmpty,
+          reason: '已完成步骤应使用 Colors.green.shade100 作为背景');
+
+      // 确保没有使用过浅的 shade50
+      final tooLightContainers = containers.where((c) {
+        final decoration = c.decoration;
+        if (decoration is BoxDecoration && decoration.shape == BoxShape.circle) {
+          return decoration.color == Colors.green.shade50;
+        }
+        return false;
+      });
+      expect(tooLightContainers, isEmpty,
+          reason: '不应使用过浅的 Colors.green.shade50');
     });
 
     testWidgets('已完成状态显示正确', (tester) async {

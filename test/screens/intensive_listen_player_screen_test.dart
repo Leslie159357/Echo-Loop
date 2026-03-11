@@ -698,5 +698,39 @@ void main() {
       expect(prevOpacity.opacity, 0.6);
       expect(nextOpacity.opacity, 0.6);
     });
+
+    testWidgets('偷看按钮点击切换 isTextRevealed（非按住）', (tester) async {
+      await tester.pumpWidget(createTestWidget(
+        playerState: createPlayerState(isTextRevealed: false),
+      ));
+      await tester.pumpAndSettle();
+
+      // 找到偷看按钮并点击
+      final peekButton = find.byIcon(Icons.visibility_outlined);
+      expect(peekButton, findsOneWidget);
+
+      await tester.tap(peekButton);
+      await tester.pumpAndSettle();
+
+      // 点击后应切换为 revealed，图标变为 visibility_off
+      expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+    });
+
+    testWidgets('偷看按钮再次点击取消显示', (tester) async {
+      await tester.pumpWidget(createTestWidget(
+        playerState: createPlayerState(isTextRevealed: true),
+      ));
+      await tester.pumpAndSettle();
+
+      // 已显示状态，图标为 visibility_off
+      final peekButton = find.byIcon(Icons.visibility_off_outlined);
+      expect(peekButton, findsOneWidget);
+
+      await tester.tap(peekButton);
+      await tester.pumpAndSettle();
+
+      // 点击后应切换回隐藏，图标变为 visibility
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
+    });
   });
 }

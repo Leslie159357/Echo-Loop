@@ -432,6 +432,44 @@ void main() {
     });
   });
 
+  group('FavoritesScreen — 单词例句显示', () {
+    testWidgets('展开单词后长例句完整显示（无 maxLines 截断）', (tester) async {
+      final longSentence =
+          'This is a very long example sentence that should be displayed in full '
+          'without any truncation because the user needs to read the complete '
+          'context of where this word was encountered during their study session.';
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pump();
+
+      await tester.tap(find.text('Words'));
+      await tester.pump();
+      wordController.add([
+        _createSavedWord(
+          id: 1,
+          word: 'encountered',
+          audioItemId: 'audio-1',
+          sentenceIndex: 0,
+          sentenceText: longSentence,
+        ),
+      ]);
+      await tester.pump();
+      await tester.pump();
+
+      // 展开单词详情
+      await tester.tap(find.text('encountered'));
+      await tester.pumpAndSettle();
+
+      // 例句应完整显示
+      expect(find.text(longSentence), findsOneWidget);
+
+      // 验证例句 Text widget 没有 maxLines 限制
+      final textWidget = tester.widget<Text>(find.text(longSentence));
+      expect(textWidget.maxLines, isNull,
+          reason: '展开后的例句不应有 maxLines 限制');
+    });
+  });
+
   group('FavoritesScreen — 中文本地化', () {
     testWidgets('中文标题和 tab 标签', (tester) async {
       await tester.pumpWidget(createTestWidget(locale: const Locale('zh')));

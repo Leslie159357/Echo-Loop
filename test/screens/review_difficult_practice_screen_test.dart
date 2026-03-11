@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fluency/l10n/app_localizations.dart';
+import 'package:fluency/models/sentence.dart';
 import 'package:fluency/screens/review_difficult_practice_screen.dart';
 import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
 import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
@@ -41,6 +42,16 @@ class _TestBookmarkDao implements BookmarkDao {
   @override
   dynamic noSuchMethod(Invocation invocation) {
     return Future<void>.value();
+  }
+}
+
+/// 启动后立即进入完成态，用于触发完成对话框逻辑
+class _AutoCompleteReviewDifficultPractice extends TestReviewDifficultPractice {
+  _AutoCompleteReviewDifficultPractice(super.initialState, super.testSentences);
+
+  @override
+  Future<void> startPlaying() async {
+    state = state.copyWith(isPlaying: false, isCompleted: true);
   }
 }
 
@@ -82,6 +93,10 @@ void main() {
     Locale locale = const Locale('en'),
     ReviewDifficultPracticeState? playerState,
     LearningSessionState? sessionState,
+    TestReviewDifficultPractice Function(
+      ReviewDifficultPracticeState initialState,
+      List<Sentence> sentences,
+    )? playerFactory,
   }) {
     final sentences = createTestSentences(count: 5);
     final initialPlayerState = playerState ?? createPlayerState();
@@ -119,7 +134,8 @@ void main() {
               TestLearningSession(sessionState ?? const LearningSessionState()),
         ),
         reviewDifficultPracticeProvider.overrideWith(
-          () => TestReviewDifficultPractice(initialPlayerState, sentences),
+          () => playerFactory?.call(initialPlayerState, sentences) ??
+              TestReviewDifficultPractice(initialPlayerState, sentences),
         ),
         bookmarkDaoProvider.overrideWithValue(_TestBookmarkDao()),
         sentenceAiNotifierProvider.overrideWithValue(
@@ -601,6 +617,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('第 2/3 遍'), findsOneWidget);
+    });
+  });
+
+  group('ReviewDifficultPracticeScreen — 完成弹窗', () {
+    testWidgets('非自由练习模式完成弹窗显示"再来一遍"按钮', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          sessionState: const LearningSessionState(isFreePlay: false),
+          playerFactory: (initialState, sentences) =>
+              _AutoCompleteReviewDifficultPractice(initialState, sentences),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 完成弹窗应显示"Practice Again"按钮
+      expect(find.text('Practice Again'), findsOneWidget);
     });
   });
 }
