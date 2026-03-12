@@ -84,9 +84,16 @@ class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
   bool _loading = true;
   bool _notFound = false;
 
+  /// 词典弹窗统一使用清洗后的词形作为查询和兜底展示文本，
+  /// 避免句末标点在“未收录”状态下直接暴露给用户。
+  String get _normalizedWord =>
+      widget.word
+          .trim()
+          .replaceAll(RegExp(r'^[^A-Za-z0-9]+|[^A-Za-z0-9]+$'), '');
+
   /// 用于收藏的 lemmatized 单词（优先使用词典返回的原形）
   String get _lemmaWord =>
-      _entry?.word.toLowerCase() ?? widget.word.toLowerCase();
+      _entry?.word.toLowerCase() ?? _normalizedWord.toLowerCase();
 
   @override
   void initState() {
@@ -95,7 +102,7 @@ class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
   }
 
   Future<void> _lookup() async {
-    final entry = await DictionaryService.instance.lookup(widget.word);
+    final entry = await DictionaryService.instance.lookup(_normalizedWord);
     if (!mounted) return;
     setState(() {
       _entry = entry;
@@ -190,7 +197,7 @@ class _WordDictionarySheetState extends ConsumerState<WordDictionarySheet> {
         children: [
           // 单词
           Text(
-            widget.word,
+            _normalizedWord,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: theme.colorScheme.onSurface,

@@ -128,6 +128,14 @@ void main() {
       expect(find.text('Word not found in dictionary'), findsOneWidget);
     });
 
+    testWidgets('未收录单词标题会去掉前后标点', (tester) async {
+      await _openSheet(tester, 'prioritize.');
+
+      expect(find.text('prioritize'), findsOneWidget);
+      expect(find.text('prioritize.'), findsNothing);
+      expect(find.text('Word not found in dictionary'), findsOneWidget);
+    });
+
     testWidgets('翻译为 null 时不崩溃', (tester) async {
       await _openSheet(tester, 'test');
 
