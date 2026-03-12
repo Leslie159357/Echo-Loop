@@ -1,3 +1,4 @@
+import '../models/audio_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/enums.dart';
@@ -57,8 +58,16 @@ final studyTaskProvider = Provider<List<StudyTask>>((ref) {
   final now = ref.watch(nowProvider)();
 
   final tasks = <StudyTask>[];
+  final activeProgresses = <LearningProgress>[];
+  final unstartedAudioItems = <AudioItem>[];
+
   for (final item in audioState.audioItems) {
     final progress = progressMap[item.id];
+    if (progress == null) {
+      unstartedAudioItems.add(item);
+      continue;
+    }
+
     final task = _buildTaskForAudio(
       audioId: item.id,
       audioName: item.name,
@@ -67,6 +76,23 @@ final studyTaskProvider = Provider<List<StudyTask>>((ref) {
     );
     if (task != null) {
       tasks.add(task);
+      activeProgresses.add(progress);
+    }
+  }
+
+  if (_shouldInjectNewAudio(tasks: tasks, activeProgresses: activeProgresses)) {
+    final selectedAudio = _pickNextNewAudio(unstartedAudioItems);
+    if (selectedAudio != null) {
+      tasks.add(
+        StudyTask(
+          audioId: selectedAudio.id,
+          audioName: selectedAudio.name,
+          type: StudyTaskType.firstStudy,
+          stage: LearningStage.firstLearn,
+          subStage: SubStageType.blindListen,
+          updatedAt: now,
+        ),
+      );
     }
   }
 
@@ -80,39 +106,29 @@ final pendingStudyTaskCountProvider = Provider<int>((ref) {
 });
 
 /// 已完成音频（LearningStage.completed）列表
-final completedAudioProvider = Provider<List<({String audioId, String audioName})>>((ref) {
-  final audioState = ref.watch(audioLibraryProvider);
-  final progressMap = ref.watch(
-    learningProgressNotifierProvider.select((s) => s.progressMap),
-  );
+final completedAudioProvider =
+    Provider<List<({String audioId, String audioName})>>((ref) {
+      final audioState = ref.watch(audioLibraryProvider);
+      final progressMap = ref.watch(
+        learningProgressNotifierProvider.select((s) => s.progressMap),
+      );
 
-  final completed = <({String audioId, String audioName})>[];
-  for (final item in audioState.audioItems) {
-    final progress = progressMap[item.id];
-    if (progress != null && progress.isCompleted) {
-      completed.add((audioId: item.id, audioName: item.name));
-    }
-  }
-  return completed;
-});
+      final completed = <({String audioId, String audioName})>[];
+      for (final item in audioState.audioItems) {
+        final progress = progressMap[item.id];
+        if (progress != null && progress.isCompleted) {
+          completed.add((audioId: item.id, audioName: item.name));
+        }
+      }
+      return completed;
+    });
 
 StudyTask? _buildTaskForAudio({
   required String audioId,
   required String audioName,
-  required LearningProgress? progress,
+  required LearningProgress progress,
   required DateTime now,
 }) {
-  if (progress == null) {
-    return StudyTask(
-      audioId: audioId,
-      audioName: audioName,
-      type: StudyTaskType.firstStudy,
-      stage: LearningStage.firstLearn,
-      subStage: SubStageType.blindListen,
-      updatedAt: now,
-    );
-  }
-
   if (progress.isCompleted) {
     return null;
   }
@@ -150,12 +166,80 @@ StudyTask? _buildTaskForAudio({
   );
 }
 
+/// 是否应该向学习页额外投放 1 篇新音频。
+///
+/// 只有当当前任务数不超过 3，且所有在学音频都已进入 review1 及之后，
+/// 才允许从未学习音频里补 1 篇首学任务。
+bool _shouldInjectNewAudio({
+  required List<StudyTask> tasks,
+  required List<LearningProgress> activeProgresses,
+}) {
+  if (tasks.length > 3) {
+    return false;
+  }
+  if (activeProgresses.isEmpty) {
+    return true;
+  }
+
+  for (final progress in activeProgresses) {
+    if (progress.currentStage.index < LearningStage.review1.index ||
+        progress.currentStage.index > LearningStage.review28.index) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/// 从未学习音频中选择最适合投放的一篇。
+///
+/// 选择优先级：
+/// 1. 有效时长更短（`totalDuration > 0` 才视为有效）
+/// 2. 时长同级时，导入时间更早
+/// 3. 仍相同时，按名称和 id 稳定排序
+AudioItem? _pickNextNewAudio(List<AudioItem> candidates) {
+  if (candidates.isEmpty) {
+    return null;
+  }
+
+  final sortedCandidates = [...candidates]..sort(_compareNewAudioCandidate);
+  return sortedCandidates.first;
+}
+
+int _compareNewAudioCandidate(AudioItem a, AudioItem b) {
+  final aHasDuration = a.totalDuration > 0;
+  final bHasDuration = b.totalDuration > 0;
+  if (aHasDuration != bHasDuration) {
+    return aHasDuration ? -1 : 1;
+  }
+
+  if (aHasDuration && bHasDuration) {
+    final durationCmp = a.totalDuration.compareTo(b.totalDuration);
+    if (durationCmp != 0) {
+      return durationCmp;
+    }
+  }
+
+  final addedDateCmp = a.addedDate.compareTo(b.addedDate);
+  if (addedDateCmp != 0) {
+    return addedDateCmp;
+  }
+
+  final nameCmp = a.audioNameForSort.compareTo(b.audioNameForSort);
+  if (nameCmp != 0) {
+    return nameCmp;
+  }
+
+  return a.id.compareTo(b.id);
+}
+
 int _compareTask(StudyTask a, StudyTask b) {
   final typeCmp = _typeRank(a.type).compareTo(_typeRank(b.type));
   if (typeCmp != 0) return typeCmp;
 
   // 可复习任务内部：逾期优先，且逾期越久优先。
-  if (a.type == StudyTaskType.reviewReady && b.type == StudyTaskType.reviewReady) {
+  if (a.type == StudyTaskType.reviewReady &&
+      b.type == StudyTaskType.reviewReady) {
     if (a.isOverdue != b.isOverdue) {
       return a.isOverdue ? -1 : 1;
     }
@@ -190,4 +274,8 @@ int _typeRank(StudyTaskType type) {
     StudyTaskType.reviewUpcoming => 1,
     StudyTaskType.firstStudy => 2,
   };
+}
+
+extension on AudioItem {
+  String get audioNameForSort => name.toLowerCase();
 }

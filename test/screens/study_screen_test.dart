@@ -30,37 +30,44 @@ void main() {
       initialLocation: '/study',
       routes: [
         StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) => Scaffold(
-            body: navigationShell,
-          ),
+          builder: (context, state, navigationShell) =>
+              Scaffold(body: navigationShell),
           branches: [
-            StatefulShellBranch(routes: [
-              GoRoute(
-                path: '/collections',
-                builder: (context, state) =>
-                    const Scaffold(body: Text('Library')),
-              ),
-            ]),
-            StatefulShellBranch(routes: [
-              GoRoute(
-                path: '/study',
-                builder: (context, state) => const StudyScreen(),
-              ),
-            ]),
-            StatefulShellBranch(routes: [
-              GoRoute(
-                path: '/favorites',
-                builder: (context, state) =>
-                    const Scaffold(body: Text('Favorites')),
-              ),
-            ]),
-            StatefulShellBranch(routes: [
-              GoRoute(
-                path: '/settings',
-                builder: (context, state) =>
-                    const Scaffold(body: Text('Settings')),
-              ),
-            ]),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/collections',
+                  builder: (context, state) =>
+                      const Scaffold(body: Text('Library')),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/study',
+                  builder: (context, state) => const StudyScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/favorites',
+                  builder: (context, state) =>
+                      const Scaffold(body: Text('Favorites')),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/settings',
+                  builder: (context, state) =>
+                      const Scaffold(body: Text('Settings')),
+                ),
+              ],
+            ),
           ],
         ),
         GoRoute(
@@ -372,6 +379,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LearningProgressIcon), findsAtLeast(1));
+  });
+
+  testWidgets('多个未学习音频时页面只展示规则选中的 1 个首学任务', (tester) async {
+    final now = DateTime(2026, 2, 25, 12, 0);
+    final audioItems = [
+      AudioItem(
+        id: 'review-audio',
+        name: 'Review Audio',
+        audioPath: 'audios/review.mp3',
+        addedDate: now,
+        totalDuration: 180,
+      ),
+      AudioItem(
+        id: 'short-audio',
+        name: 'Short Audio',
+        audioPath: 'audios/short.mp3',
+        addedDate: now.subtract(const Duration(days: 1)),
+        totalDuration: 90,
+      ),
+      AudioItem(
+        id: 'long-audio',
+        name: 'Long Audio',
+        audioPath: 'audios/long.mp3',
+        addedDate: now.subtract(const Duration(days: 2)),
+        totalDuration: 240,
+      ),
+    ];
+    final progressState = LearningProgressState(
+      progressMap: {
+        'review-audio': LearningProgress(
+          audioItemId: 'review-audio',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+          updatedAt: now,
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      createTestWidget(
+        audioItems: audioItems,
+        progressState: progressState,
+        fixedNow: now,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review Audio'), findsAtLeast(1));
+    expect(find.text('Short Audio'), findsAtLeast(1));
+    expect(find.text('Long Audio'), findsNothing);
   });
 
   testWidgets('无任务时点击"去导入音频"导航到 Library', (tester) async {

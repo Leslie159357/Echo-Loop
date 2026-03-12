@@ -80,7 +80,7 @@ void main() {
       expect(tasks[2].type, StudyTaskType.firstStudy);
     });
 
-    test('无进度音频默认生成首学任务', () {
+    test('无进度音频时只投放 1 个首学任务', () {
       final now = DateTime(2026, 2, 25, 12, 0);
       final audioItems = [
         AudioItem(
@@ -88,6 +88,14 @@ void main() {
           name: 'No Progress Audio',
           audioPath: 'audios/a1.mp3',
           addedDate: now,
+          totalDuration: 180,
+        ),
+        AudioItem(
+          id: 'audio-2',
+          name: 'Second Audio',
+          audioPath: 'audios/a2.mp3',
+          addedDate: now.subtract(const Duration(days: 1)),
+          totalDuration: 240,
         ),
       ];
 
@@ -106,9 +114,370 @@ void main() {
 
       final tasks = container.read(studyTaskProvider);
       expect(tasks.length, 1);
-      expect(tasks.first.type, StudyTaskType.firstStudy);
-      expect(tasks.first.stage, LearningStage.firstLearn);
-      expect(tasks.first.subStage, SubStageType.blindListen);
+      expect(tasks.single.audioId, 'audio-1');
+      expect(tasks.single.type, StudyTaskType.firstStudy);
+      expect(tasks.single.stage, LearningStage.firstLearn);
+      expect(tasks.single.subStage, SubStageType.blindListen);
+    });
+
+    test('存在首学任务时不投放新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'in-progress',
+          name: 'In Progress Audio',
+          audioPath: 'audios/in-progress.mp3',
+          addedDate: now,
+          totalDuration: 300,
+        ),
+        AudioItem(
+          id: 'unstarted',
+          name: 'Unstarted Audio',
+          audioPath: 'audios/unstarted.mp3',
+          addedDate: now.subtract(const Duration(days: 1)),
+          totalDuration: 120,
+        ),
+      ];
+
+      final progressMap = {
+        'in-progress': LearningProgress(
+          audioItemId: 'in-progress',
+          currentStage: LearningStage.firstLearn,
+          currentSubStage: SubStageType.listenAndRepeat,
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.length, 1);
+      expect(tasks.single.audioId, 'in-progress');
+    });
+
+    test('存在 review0 任务时不投放新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'review0',
+          name: 'Review 0 Audio',
+          audioPath: 'audios/review0.mp3',
+          addedDate: now,
+          totalDuration: 300,
+        ),
+        AudioItem(
+          id: 'unstarted',
+          name: 'Unstarted Audio',
+          audioPath: 'audios/unstarted.mp3',
+          addedDate: now.subtract(const Duration(days: 1)),
+          totalDuration: 60,
+        ),
+      ];
+
+      final progressMap = {
+        'review0': LearningProgress(
+          audioItemId: 'review0',
+          currentStage: LearningStage.review0,
+          currentSubStage: SubStageType.reviewDifficultPractice,
+          lastStageCompletedAt: now.subtract(const Duration(hours: 6)),
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.length, 1);
+      expect(tasks.single.audioId, 'review0');
+    });
+
+    test('仅有 review1 及之后任务且数量不超过 3 时投放 1 个新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'review-1',
+          name: 'Review Audio 1',
+          audioPath: 'audios/review1.mp3',
+          addedDate: now,
+          totalDuration: 180,
+        ),
+        AudioItem(
+          id: 'review-2',
+          name: 'Review Audio 2',
+          audioPath: 'audios/review2.mp3',
+          addedDate: now,
+          totalDuration: 200,
+        ),
+        AudioItem(
+          id: 'new-short',
+          name: 'New Short Audio',
+          audioPath: 'audios/new-short.mp3',
+          addedDate: now,
+          totalDuration: 90,
+        ),
+        AudioItem(
+          id: 'new-long',
+          name: 'New Long Audio',
+          audioPath: 'audios/new-long.mp3',
+          addedDate: now.subtract(const Duration(days: 2)),
+          totalDuration: 240,
+        ),
+      ];
+
+      final progressMap = {
+        'review-1': LearningProgress(
+          audioItemId: 'review-1',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+          updatedAt: now,
+        ),
+        'review-2': LearningProgress(
+          audioItemId: 'review-2',
+          currentStage: LearningStage.review2,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 2)),
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.map((e) => e.audioId).toList(), [
+        'review-1',
+        'review-2',
+        'new-short',
+      ]);
+      expect(tasks.last.type, StudyTaskType.firstStudy);
+    });
+
+    test('只有未到时间的 review1 任务时仍可投放新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'review-upcoming',
+          name: 'Upcoming Review Audio',
+          audioPath: 'audios/review-upcoming.mp3',
+          addedDate: now,
+          totalDuration: 180,
+        ),
+        AudioItem(
+          id: 'new-audio',
+          name: 'New Audio',
+          audioPath: 'audios/new.mp3',
+          addedDate: now.subtract(const Duration(days: 1)),
+          totalDuration: 100,
+        ),
+      ];
+
+      final progressMap = {
+        'review-upcoming': LearningProgress(
+          audioItemId: 'review-upcoming',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now,
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.map((e) => e.audioId).toList(), [
+        'review-upcoming',
+        'new-audio',
+      ]);
+      expect(tasks.first.type, StudyTaskType.reviewUpcoming);
+      expect(tasks.last.type, StudyTaskType.firstStudy);
+    });
+
+    test('在学任务超过 3 个时不投放新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        for (var i = 0; i < 4; i++)
+          AudioItem(
+            id: 'review-$i',
+            name: 'Review Audio $i',
+            audioPath: 'audios/review-$i.mp3',
+            addedDate: now,
+            totalDuration: 120 + i,
+          ),
+        AudioItem(
+          id: 'unstarted',
+          name: 'Unstarted Audio',
+          audioPath: 'audios/unstarted.mp3',
+          addedDate: now.subtract(const Duration(days: 1)),
+          totalDuration: 60,
+        ),
+      ];
+
+      final progressMap = {
+        for (var i = 0; i < 4; i++)
+          'review-$i': LearningProgress(
+            audioItemId: 'review-$i',
+            currentStage: LearningStage.review1,
+            currentSubStage: SubStageType.blindListen,
+            lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+            updatedAt: now,
+          ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.length, 4);
+      expect(tasks.any((task) => task.audioId == 'unstarted'), isFalse);
+    });
+
+    test('新音频选择遵循 最短时长 -> 最早导入 -> 名称 -> id', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'duration-zero',
+          name: 'Duration Zero',
+          audioPath: 'audios/duration-zero.mp3',
+          addedDate: now.subtract(const Duration(days: 3)),
+          totalDuration: 0,
+        ),
+        AudioItem(
+          id: 'same-duration-b',
+          name: 'Bravo',
+          audioPath: 'audios/bravo.mp3',
+          addedDate: now.subtract(const Duration(days: 2)),
+          totalDuration: 120,
+        ),
+        AudioItem(
+          id: 'same-duration-a',
+          name: 'Alpha',
+          audioPath: 'audios/alpha.mp3',
+          addedDate: now.subtract(const Duration(days: 2)),
+          totalDuration: 120,
+        ),
+      ];
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.single.audioId, 'same-duration-a');
+    });
+
+    test('没有未学习音频时不投放新音频', () {
+      final now = DateTime(2026, 2, 25, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'review-only',
+          name: 'Review Only',
+          audioPath: 'audios/review-only.mp3',
+          addedDate: now,
+          totalDuration: 180,
+        ),
+      ];
+
+      final progressMap = {
+        'review-only': LearningProgress(
+          audioItemId: 'review-only',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.length, 1);
+      expect(tasks.single.audioId, 'review-only');
     });
 
     test('边界时刻 now == nextReviewAt 时任务归类为可复习', () {
