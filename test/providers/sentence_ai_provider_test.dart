@@ -131,13 +131,13 @@ void main() {
         () => mockDao.getByHash(any(), 'analysis'),
       ).thenAnswer(
         (_) async =>
-            '{"analysis":{"grammar":"现在完成进行时","vocabulary":"study","usage":"持续动作"}}',
+            '{"analysis":{"grammar":"现在完成进行时","vocabulary":"study","listening":"持续动作"}}',
       );
 
       final result = await notifier.getAnalysis(text);
       expect(result.grammar, '现在完成进行时');
       expect(result.vocabulary, 'study');
-      expect(result.usage, '持续动作');
+      expect(result.listening, '持续动作');
     });
 
     test('L3 API 调用', () async {
@@ -150,7 +150,7 @@ void main() {
         (_) async => const SentenceAnalysis(
           grammar: 'g',
           vocabulary: 'v',
-          usage: 'u',
+          listening: 'u',
         ),
       );
       when(
@@ -207,7 +207,7 @@ void main() {
         (_) async => const SentenceAnalysis(
           grammar: 'g',
           vocabulary: 'v',
-          usage: 'u',
+          listening: 'u',
         ),
       );
       when(
@@ -251,7 +251,7 @@ void main() {
       completer.complete(const SentenceAnalysis(
         grammar: 'g',
         vocabulary: 'v',
-        usage: 'u',
+        listening: 'u',
       ));
 
       final r1 = await f1;
@@ -313,7 +313,7 @@ void main() {
         (_) async => const SentenceAnalysis(
           grammar: 'g',
           vocabulary: 'v',
-          usage: 'u',
+          listening: 'u',
         ),
       );
 

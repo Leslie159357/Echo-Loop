@@ -1472,11 +1472,11 @@ abstract class AppLocalizations {
   /// **'Vocabulary'**
   String get aiVocabulary;
 
-  /// No description provided for @aiUsage.
+  /// No description provided for @aiListening.
   ///
   /// In en, this message translates to:
-  /// **'Usage'**
-  String get aiUsage;
+  /// **'Listening'**
+  String get aiListening;
 
   /// No description provided for @intensiveListenWordDictNotFound.
   ///

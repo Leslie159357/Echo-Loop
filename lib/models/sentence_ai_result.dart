@@ -24,24 +24,24 @@ class SentenceAnalysis {
   /// 词汇分析
   final String vocabulary;
 
-  /// 用法分析
-  final String usage;
+  /// 听力分析（连读、弱读、缩读等语音现象）
+  final String listening;
 
   const SentenceAnalysis({
     required this.grammar,
     required this.vocabulary,
-    required this.usage,
+    required this.listening,
   });
 
   /// 从 API 响应 JSON 反序列化
   ///
-  /// 期望格式：`{ "analysis": { "grammar": "...", "vocabulary": "...", "usage": "..." } }`
+  /// 期望格式：`{ "analysis": { "grammar": "...", "vocabulary": "...", "listening": "..." } }`
   factory SentenceAnalysis.fromJson(Map<String, dynamic> json) {
     final analysis = json['analysis'] as Map<String, dynamic>;
     return SentenceAnalysis(
       grammar: analysis['grammar'] as String,
       vocabulary: analysis['vocabulary'] as String,
-      usage: analysis['usage'] as String,
+      listening: analysis['listening'] as String,
     );
   }
 }

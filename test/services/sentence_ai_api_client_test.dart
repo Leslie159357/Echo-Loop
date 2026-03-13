@@ -101,7 +101,7 @@ void main() {
             'analysis': {
               'grammar': '现在完成进行时',
               'vocabulary': 'study: 学习',
-              'usage': '表示持续进行的动作',
+              'listening': '表示持续进行的动作',
             },
           },
           statusCode: 200,
@@ -112,7 +112,7 @@ void main() {
       final result = await client.analyze('She has been studying.');
       expect(result.grammar, '现在完成进行时');
       expect(result.vocabulary, 'study: 学习');
-      expect(result.usage, '表示持续进行的动作');
+      expect(result.listening, '表示持续进行的动作');
     });
 
     test('服务器错误抛出 DioException', () async {

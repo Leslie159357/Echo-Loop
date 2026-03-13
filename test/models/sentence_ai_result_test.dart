@@ -37,23 +37,23 @@ void main() {
         'analysis': {
           'grammar': '主语 + 谓语 + 宾语',
           'vocabulary': 'test: 测试',
-          'usage': '常用于正式场合',
+          'listening': '常用于正式场合',
         },
       };
       final result = SentenceAnalysis.fromJson(json);
       expect(result.grammar, '主语 + 谓语 + 宾语');
       expect(result.vocabulary, 'test: 测试');
-      expect(result.usage, '常用于正式场合');
+      expect(result.listening, '常用于正式场合');
     });
 
     test('fromJson 处理空字段值', () {
       final json = {
-        'analysis': {'grammar': '', 'vocabulary': '', 'usage': ''},
+        'analysis': {'grammar': '', 'vocabulary': '', 'listening': ''},
       };
       final result = SentenceAnalysis.fromJson(json);
       expect(result.grammar, '');
       expect(result.vocabulary, '');
-      expect(result.usage, '');
+      expect(result.listening, '');
     });
 
     test('fromJson 缺少 analysis 外层字段时抛出异常', () {
@@ -80,11 +80,11 @@ void main() {
       const result = SentenceAnalysis(
         grammar: 'g',
         vocabulary: 'v',
-        usage: 'u',
+        listening: 'u',
       );
       expect(result.grammar, 'g');
       expect(result.vocabulary, 'v');
-      expect(result.usage, 'u');
+      expect(result.listening, 'u');
     });
   });
 }

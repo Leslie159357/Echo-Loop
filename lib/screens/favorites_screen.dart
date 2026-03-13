@@ -511,7 +511,7 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
     final cachedAnalysisText = cachedAnalysis != null
         ? '${cachedAnalysis.grammar}\n'
               '${cachedAnalysis.vocabulary}\n'
-              '${cachedAnalysis.usage}'
+              '${cachedAnalysis.listening}'
         : null;
 
     return Dismissible(
@@ -616,7 +616,7 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
                       final result = await ai.getAnalysis(bm.sentenceText);
                       return '${result.grammar}\n'
                           '${result.vocabulary}\n'
-                          '${result.usage}';
+                          '${result.listening}';
                     },
                     contentBuilder: (content) =>
                         _AnalysisContent(content: content),
@@ -641,7 +641,7 @@ class _AnalysisContent extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final lines = content.split('\n');
-    final labels = [l10n.aiGrammar, l10n.aiVocabulary, l10n.aiUsage];
+    final labels = [l10n.aiGrammar, l10n.aiVocabulary, l10n.aiListening];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

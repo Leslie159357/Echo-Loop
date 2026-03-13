@@ -214,7 +214,7 @@ class _AnalysisContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final lines = content.split('\n');
     // 使用本地化标签名
-    final labels = [l10n.aiGrammar, l10n.aiVocabulary, l10n.aiUsage];
+    final labels = [l10n.aiGrammar, l10n.aiVocabulary, l10n.aiListening];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

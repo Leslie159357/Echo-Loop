@@ -753,7 +753,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiVocabulary => 'Vocabulary';
 
   @override
-  String get aiUsage => 'Usage';
+  String get aiListening => 'Listening';
 
   @override
   String get intensiveListenWordDictNotFound => 'Word not found in dictionary';

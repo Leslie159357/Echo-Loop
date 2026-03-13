@@ -609,7 +609,7 @@ class _ShadowReadingView extends StatelessWidget {
     final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
     final cachedAnalysis = ai?.getCachedAnalysis(text);
     final cachedAnalysisText = cachedAnalysis != null
-        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.usage}'
+        ? '${cachedAnalysis.grammar}\n${cachedAnalysis.vocabulary}\n${cachedAnalysis.listening}'
         : null;
 
     return Padding(
@@ -637,7 +637,7 @@ class _ShadowReadingView extends StatelessWidget {
                 onRequestAnalysis: ai != null
                     ? () async {
                         final result = await ai.getAnalysis(text);
-                        return '${result.grammar}\n${result.vocabulary}\n${result.usage}';
+                        return '${result.grammar}\n${result.vocabulary}\n${result.listening}';
                       }
                     : null,
                 cachedTranslation: cachedTranslation,

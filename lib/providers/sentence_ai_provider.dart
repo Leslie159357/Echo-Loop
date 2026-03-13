@@ -167,7 +167,7 @@ class SentenceAiNotifier {
         'analysis': {
           'grammar': analysis.grammar,
           'vocabulary': analysis.vocabulary,
-          'usage': analysis.usage,
+          'listening': analysis.listening,
         },
       }),
     );

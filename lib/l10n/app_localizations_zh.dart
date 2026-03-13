@@ -744,7 +744,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiVocabulary => '词汇';
 
   @override
-  String get aiUsage => '用法';
+  String get aiListening => '听力提示';
 
   @override
   String get intensiveListenWordDictNotFound => '未收录该单词';

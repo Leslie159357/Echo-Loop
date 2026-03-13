@@ -57,7 +57,7 @@ void main() {
       await db.sentenceAiCacheDao.upsert(
         'abc123',
         'analysis',
-        '{"analysis":{"grammar":"g","vocabulary":"v","usage":"u"}}',
+        '{"analysis":{"grammar":"g","vocabulary":"v","listening":"u"}}',
       );
 
       final translation = await db.sentenceAiCacheDao.getByHash(
