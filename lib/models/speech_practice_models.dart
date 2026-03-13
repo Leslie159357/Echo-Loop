@@ -51,6 +51,12 @@ enum SpeechPracticeEventType {
   /// 录音中的中间转录。
   partialTranscriptUpdated,
 
+  /// 检测到用户开始说话。
+  speechStarted,
+
+  /// 用户开口后的连续静音时长更新。
+  silenceProgress,
+
   /// 最终转录完成。
   finalTranscriptReady,
 
@@ -115,12 +121,16 @@ class SpeechPracticeEvent {
   /// 错误消息。
   final String? errorMessage;
 
+  /// 开口后的连续静音时长。
+  final Duration? silenceDuration;
+
   const SpeechPracticeEvent({
     required this.type,
     required this.promptId,
     this.transcript,
     this.errorCode,
     this.errorMessage,
+    this.silenceDuration,
   });
 }
 
@@ -205,6 +215,12 @@ class SpeechPracticeAttempt {
   /// 当前尝试的错误文案。
   final String? errorMessage;
 
+  /// 是否已检测到用户开口。
+  final bool hasDetectedSpeech;
+
+  /// 用户开口后的连续静音时长。
+  final Duration silenceDuration;
+
   const SpeechPracticeAttempt({
     required this.promptId,
     this.filePath,
@@ -217,6 +233,8 @@ class SpeechPracticeAttempt {
     this.transcriptSegments = const [],
     this.referenceSegments = const [],
     this.errorMessage,
+    this.hasDetectedSpeech = false,
+    this.silenceDuration = Duration.zero,
   });
 
   /// 是否已有录音文件。
@@ -252,6 +270,10 @@ class SpeechPracticeAttempt {
     bool clearReferenceSegments = false,
     String? errorMessage,
     bool clearErrorMessage = false,
+    bool? hasDetectedSpeech,
+    bool clearDetectedSpeech = false,
+    Duration? silenceDuration,
+    bool clearSilenceDuration = false,
   }) {
     return SpeechPracticeAttempt(
       promptId: promptId,
@@ -276,6 +298,12 @@ class SpeechPracticeAttempt {
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
+      hasDetectedSpeech: clearDetectedSpeech
+          ? false
+          : (hasDetectedSpeech ?? this.hasDetectedSpeech),
+      silenceDuration: clearSilenceDuration
+          ? Duration.zero
+          : (silenceDuration ?? this.silenceDuration),
     );
   }
 }

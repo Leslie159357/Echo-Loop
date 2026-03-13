@@ -135,6 +135,8 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
           clearTranscriptSegments: true,
           clearReferenceSegments: true,
           clearErrorMessage: true,
+          clearDetectedSpeech: true,
+          clearSilenceDuration: true,
           matchedTokenCount: 0,
           totalTargetTokenCount: 0,
         ),
@@ -231,6 +233,7 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
         referenceSegments: matchResult.referenceSegments,
         clearLiveTranscript: true,
         clearErrorMessage: true,
+        clearSilenceDuration: true,
       );
       _setAttemptState(promptId, updated);
       state = state.copyWith(clearAwaitingFinalPromptId: true);
@@ -300,6 +303,8 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
           clearTranscriptSegments: true,
           clearReferenceSegments: true,
           clearErrorMessage: true,
+          clearDetectedSpeech: true,
+          clearSilenceDuration: true,
           matchedTokenCount: 0,
           totalTargetTokenCount: 0,
         ),
@@ -377,6 +382,10 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
     switch (event.type) {
       case SpeechPracticeEventType.partialTranscriptUpdated:
         _handlePartialTranscript(event);
+      case SpeechPracticeEventType.speechStarted:
+        _handleSpeechStarted(event);
+      case SpeechPracticeEventType.silenceProgress:
+        _handleSilenceProgress(event);
       case SpeechPracticeEventType.finalTranscriptReady ||
           SpeechPracticeEventType.error:
         final completer = _finalEventCompleter;
@@ -399,6 +408,40 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
       promptId,
       current.copyWith(
         liveTranscript: (event.transcript ?? '').trim(),
+        clearErrorMessage: true,
+        clearSilenceDuration: true,
+      ),
+    );
+  }
+
+  void _handleSpeechStarted(SpeechPracticeEvent event) {
+    final promptId = event.promptId;
+    final current = attemptFor(promptId);
+    if (promptId.isEmpty || current == null || !isRecordingPrompt(promptId)) {
+      return;
+    }
+
+    _setAttemptState(
+      promptId,
+      current.copyWith(
+        hasDetectedSpeech: true,
+        clearSilenceDuration: true,
+        clearErrorMessage: true,
+      ),
+    );
+  }
+
+  void _handleSilenceProgress(SpeechPracticeEvent event) {
+    final promptId = event.promptId;
+    final current = attemptFor(promptId);
+    if (promptId.isEmpty || current == null || !isRecordingPrompt(promptId)) {
+      return;
+    }
+
+    _setAttemptState(
+      promptId,
+      current.copyWith(
+        silenceDuration: event.silenceDuration ?? Duration.zero,
         clearErrorMessage: true,
       ),
     );

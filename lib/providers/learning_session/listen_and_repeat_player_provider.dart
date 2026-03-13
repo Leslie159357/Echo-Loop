@@ -352,6 +352,47 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
     await _startSentence();
   }
 
+  /// 立即完成当前停顿回合，继续后续播放流程。
+  Future<void> completePausedTurn() async {
+    if (!state.isPauseBetweenPlays) {
+      return;
+    }
+
+    final isSentencePause = state.isPauseBetweenSentences;
+    _engine.invalidateSession();
+    state = state.copyWith(
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+      pauseRemaining: Duration.zero,
+    );
+
+    if (isSentencePause) {
+      final isLastSentence =
+          state.currentSentenceIndex >= state.totalSentences - 1;
+      if (isLastSentence) {
+        state = state.copyWith(isCompleted: true, isPlaying: false);
+        return;
+      }
+
+      state = state.copyWith(
+        currentSentenceIndex: state.currentSentenceIndex + 1,
+        currentPlayCount: 1,
+      );
+      await _startSentence();
+      return;
+    }
+
+    final nextPlayCount = state.currentPlayCount + 1;
+    if (nextPlayCount > state.settings.repeatCount) {
+      await _autoAdvance();
+      return;
+    }
+
+    await _startSentence(startPlayCount: nextPlayCount);
+  }
+
   /// 释放资源
   void disposePlayer() {
     _engine.cleanup();
@@ -362,7 +403,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
   // ========== 内部方法 ==========
 
   /// 开始播放当前句子的循环
-  Future<void> _startSentence() async {
+  Future<void> _startSentence({int startPlayCount = 1}) async {
     final sentence = currentSentence;
     if (sentence == null) return;
 
@@ -374,7 +415,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
     state = state.copyWith(
       isPlaying: true,
-      currentPlayCount: 1,
+      currentPlayCount: startPlayCount,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
     );
@@ -386,6 +427,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
     await _engine.playSentenceLoop(
       sentence: sentence,
       repeatCount: state.settings.repeatCount,
+      startPlayCount: startPlayCount,
       pauseCalculator: _buildPauseCalculator(),
       onPlayCountChanged: (playCount) {
         state = state.copyWith(currentPlayCount: playCount, isPlaying: true);

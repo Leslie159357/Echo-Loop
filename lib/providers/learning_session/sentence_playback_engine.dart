@@ -57,6 +57,7 @@ class SentencePlaybackEngine {
   Future<void> playSentenceLoop({
     required Sentence sentence,
     required int repeatCount,
+    int startPlayCount = 1,
     required PauseCalculator pauseCalculator,
     required void Function(int playCount) onPlayCountChanged,
     required void Function(Duration pauseDuration) onPauseStarted,
@@ -68,7 +69,11 @@ class SentencePlaybackEngine {
     _currentSessionId = engine.newSession();
     final sessionId = _currentSessionId;
 
-    for (int playCount = 1; playCount <= repeatCount; playCount++) {
+    for (
+      int playCount = startPlayCount;
+      playCount <= repeatCount;
+      playCount++
+    ) {
       if (!engine.isActiveSession(sessionId)) return;
 
       onPlayCountChanged(playCount);

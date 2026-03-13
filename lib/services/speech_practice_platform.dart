@@ -191,6 +191,8 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
     final type = switch (event['type'] as String?) {
       'partialTranscriptUpdated' =>
         SpeechPracticeEventType.partialTranscriptUpdated,
+      'speechStarted' => SpeechPracticeEventType.speechStarted,
+      'silenceProgress' => SpeechPracticeEventType.silenceProgress,
       'finalTranscriptReady' => SpeechPracticeEventType.finalTranscriptReady,
       _ => SpeechPracticeEventType.error,
     };
@@ -200,6 +202,11 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
       transcript: event['transcript'] as String?,
       errorCode: event['errorCode'] as String?,
       errorMessage: event['errorMessage'] as String?,
+      silenceDuration: switch (event['silenceMs']) {
+        final int ms => Duration(milliseconds: ms),
+        final num ms => Duration(milliseconds: ms.round()),
+        _ => null,
+      },
     );
   }
 

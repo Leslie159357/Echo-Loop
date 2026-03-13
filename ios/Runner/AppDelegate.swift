@@ -12,6 +12,9 @@ private enum SpeechPracticeError: String {
   case finalTimeout
 }
 
+private let trimLeadingPaddingMs = 120.0
+private let trimTrailingPaddingMs = 180.0
+
 private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   private let methodChannel: FlutterMethodChannel
   private let eventChannel: FlutterEventChannel
@@ -23,6 +26,12 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   private var recognitionTask: SFSpeechRecognitionTask?
   private var currentFileURL: URL?
   private var currentPromptId: String?
+  private var hasDetectedSpeech = false
+  private var silenceStartAt: Date?
+  private var lastReportedSilenceMs = -1
+  private var recordedDurationMs = 0.0
+  private var firstDetectedSpeechMs: Double?
+  private var lastDetectedSpeechMs: Double?
 
   init(binaryMessenger: FlutterBinaryMessenger) {
     methodChannel = FlutterMethodChannel(
@@ -172,6 +181,12 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
 
       currentPromptId = promptId
       currentFileURL = fileURL
+      hasDetectedSpeech = false
+      silenceStartAt = nil
+      lastReportedSilenceMs = -1
+      recordedDurationMs = 0
+      firstDetectedSpeechMs = nil
+      lastDetectedSpeechMs = nil
       self.audioFile = audioFile
       recognitionRequest = request
       audioEngine = engine
@@ -183,6 +198,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
       inputNode.removeTap(onBus: 0)
       inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
         guard let self else { return }
+        self.handleVoiceActivity(buffer: buffer)
         self.recognitionRequest?.append(buffer)
         do {
           let playbackBuffer = self.makeAmplifiedBuffer(from: buffer, gain: 2.2)
@@ -213,6 +229,9 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     audioEngine?.stop()
     recognitionRequest?.endAudio()
     audioFile = nil
+    if let fileURL = currentFileURL {
+      trimRecordingIfNeeded(fileURL: fileURL)
+    }
     result(["filePath": currentFileURL?.path as Any])
   }
 
@@ -290,6 +309,212 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     }
   }
 
+  private func handleVoiceActivity(buffer: AVAudioPCMBuffer) {
+    guard let promptId = currentPromptId else { return }
+    let bufferDurationMs = (Double(buffer.frameLength) / buffer.format.sampleRate) * 1000
+    let bufferStartMs = recordedDurationMs
+    let bufferEndMs = bufferStartMs + bufferDurationMs
+
+    if isSpeechDetected(in: buffer) {
+      if !hasDetectedSpeech {
+        hasDetectedSpeech = true
+        emitEvent([
+          "type": "speechStarted",
+          "promptId": promptId
+        ])
+      }
+      firstDetectedSpeechMs = firstDetectedSpeechMs ?? bufferStartMs
+      lastDetectedSpeechMs = bufferEndMs
+
+      if silenceStartAt != nil || lastReportedSilenceMs > 0 {
+        emitEvent([
+          "type": "silenceProgress",
+          "promptId": promptId,
+          "silenceMs": 0
+        ])
+      }
+      silenceStartAt = nil
+      lastReportedSilenceMs = 0
+      recordedDurationMs = bufferEndMs
+      return
+    }
+
+    recordedDurationMs = bufferEndMs
+    guard hasDetectedSpeech else { return }
+
+    let now = Date()
+    if silenceStartAt == nil {
+      silenceStartAt = now
+    }
+    let silenceMs = Int(now.timeIntervalSince(silenceStartAt ?? now) * 1000)
+    if silenceMs == 0 || silenceMs - lastReportedSilenceMs >= 200 {
+      lastReportedSilenceMs = silenceMs
+      emitEvent([
+        "type": "silenceProgress",
+        "promptId": promptId,
+        "silenceMs": silenceMs
+      ])
+    }
+  }
+
+  private func isSpeechDetected(in buffer: AVAudioPCMBuffer) -> Bool {
+    let threshold: Float = 0.015
+
+    if let channelData = buffer.floatChannelData {
+      let frameLength = Int(buffer.frameLength)
+      guard frameLength > 0 else { return false }
+      var sum: Float = 0
+      let channel = channelData[0]
+      for frame in 0..<frameLength {
+        let sample = channel[frame]
+        sum += sample * sample
+      }
+      let rms = sqrt(sum / Float(frameLength))
+      return rms >= threshold
+    }
+
+    if let channelData = buffer.int16ChannelData {
+      let frameLength = Int(buffer.frameLength)
+      guard frameLength > 0 else { return false }
+      var sum: Float = 0
+      let channel = channelData[0]
+      for frame in 0..<frameLength {
+        let normalized = Float(channel[frame]) / Float(Int16.max)
+        sum += normalized * normalized
+      }
+      let rms = sqrt(sum / Float(frameLength))
+      return rms >= threshold
+    }
+
+    return false
+  }
+
+  private func trimRecordingIfNeeded(fileURL: URL) {
+    do {
+      let sourceFile = try AVAudioFile(forReading: fileURL)
+      guard let trimRange = detectSpeechRange(in: sourceFile) else {
+        return
+      }
+
+      let sampleRate = sourceFile.processingFormat.sampleRate
+      let startMs = max(0, trimRange.startMs - trimLeadingPaddingMs)
+      let endMs = min(trimRange.endMs + trimTrailingPaddingMs, (Double(sourceFile.length) / sampleRate) * 1000.0)
+      guard endMs - startMs > 120 else {
+        return
+      }
+
+      let startFrame = AVAudioFramePosition((startMs / 1000.0) * sampleRate)
+      let endFrame = AVAudioFramePosition((endMs / 1000.0) * sampleRate)
+      let totalFrames = sourceFile.length
+      let safeStartFrame = max(0, min(startFrame, totalFrames))
+      let safeEndFrame = max(safeStartFrame, min(endFrame, totalFrames))
+      let framesToCopy = safeEndFrame - safeStartFrame
+      guard framesToCopy > 0 else { return }
+
+      let tempURL = fileURL.deletingLastPathComponent()
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("caf")
+      let outputFile = try AVAudioFile(
+        forWriting: tempURL,
+        settings: sourceFile.fileFormat.settings
+      )
+
+      sourceFile.framePosition = safeStartFrame
+      let chunkSize: AVAudioFrameCount = 4096
+      while sourceFile.framePosition < safeEndFrame {
+        let remainingFrames = safeEndFrame - sourceFile.framePosition
+        let framesThisPass = AVAudioFrameCount(min(Int64(chunkSize), remainingFrames))
+        guard let buffer = AVAudioPCMBuffer(
+          pcmFormat: sourceFile.processingFormat,
+          frameCapacity: framesThisPass
+        ) else {
+          break
+        }
+        try sourceFile.read(into: buffer, frameCount: framesThisPass)
+        if buffer.frameLength == 0 {
+          break
+        }
+        try outputFile.write(from: buffer)
+      }
+
+      try FileManager.default.removeItem(at: fileURL)
+      try FileManager.default.moveItem(at: tempURL, to: fileURL)
+    } catch {
+      // 保留原始录音即可，不阻塞识别结果返回。
+    }
+  }
+
+  private func detectSpeechRange(in audioFile: AVAudioFile) -> (startMs: Double, endMs: Double)? {
+    let chunkSize: AVAudioFrameCount = 2048
+    let threshold: Float = 0.022
+    let sampleRate = audioFile.processingFormat.sampleRate
+    var firstSpeechFrame: AVAudioFramePosition?
+    var lastSpeechFrame: AVAudioFramePosition?
+
+    audioFile.framePosition = 0
+
+    while audioFile.framePosition < audioFile.length {
+      let remainingFrames = audioFile.length - audioFile.framePosition
+      let framesThisPass = AVAudioFrameCount(min(Int64(chunkSize), remainingFrames))
+      guard let buffer = AVAudioPCMBuffer(
+        pcmFormat: audioFile.processingFormat,
+        frameCapacity: framesThisPass
+      ) else {
+        break
+      }
+
+      let chunkStartFrame = audioFile.framePosition
+      try? audioFile.read(into: buffer, frameCount: framesThisPass)
+      if buffer.frameLength == 0 {
+        break
+      }
+
+      if rmsLevel(of: buffer) >= threshold {
+        firstSpeechFrame = firstSpeechFrame ?? chunkStartFrame
+        lastSpeechFrame = chunkStartFrame + AVAudioFramePosition(buffer.frameLength)
+      }
+    }
+
+    audioFile.framePosition = 0
+
+    guard let firstSpeechFrame, let lastSpeechFrame, lastSpeechFrame > firstSpeechFrame else {
+      return nil
+    }
+
+    return (
+      startMs: (Double(firstSpeechFrame) / sampleRate) * 1000.0,
+      endMs: (Double(lastSpeechFrame) / sampleRate) * 1000.0
+    )
+  }
+
+  private func rmsLevel(of buffer: AVAudioPCMBuffer) -> Float {
+    if let channelData = buffer.floatChannelData {
+      let frameLength = Int(buffer.frameLength)
+      guard frameLength > 0 else { return 0 }
+      var sum: Float = 0
+      let channel = channelData[0]
+      for frame in 0..<frameLength {
+        let sample = channel[frame]
+        sum += sample * sample
+      }
+      return sqrt(sum / Float(frameLength))
+    }
+
+    if let channelData = buffer.int16ChannelData {
+      let frameLength = Int(buffer.frameLength)
+      guard frameLength > 0 else { return 0 }
+      var sum: Float = 0
+      let channel = channelData[0]
+      for frame in 0..<frameLength {
+        let normalized = Float(channel[frame]) / Float(Int16.max)
+        sum += normalized * normalized
+      }
+      return sqrt(sum / Float(frameLength))
+    }
+
+    return 0
+  }
+
   private func makeAmplifiedBuffer(from buffer: AVAudioPCMBuffer, gain: Float) -> AVAudioPCMBuffer {
     guard let copy = AVAudioPCMBuffer(
       pcmFormat: buffer.format,
@@ -341,6 +566,12 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     }
     recognitionTask = nil
     currentPromptId = nil
+    hasDetectedSpeech = false
+    silenceStartAt = nil
+    lastReportedSilenceMs = -1
+    recordedDurationMs = 0
+    firstDetectedSpeechMs = nil
+    lastDetectedSpeechMs = nil
 
     if restorePlayback {
       restorePlaybackSession()
