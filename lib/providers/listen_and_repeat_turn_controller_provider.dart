@@ -319,6 +319,14 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     _startReviewCountdown();
   }
 
+  /// 快进倒计时：立即跳过，进入下一句。
+  void fastForwardReviewCountdown() {
+    if (state.phase != ListenAndRepeatTurnPhase.reviewCountdown) {
+      return;
+    }
+    unawaited(handleContinue());
+  }
+
   void resetReviewCountdownOnPlayback() {
     if (state.phase != ListenAndRepeatTurnPhase.reviewCountdown) {
       return;

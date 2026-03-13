@@ -659,6 +659,103 @@ void main() {
       });
     });
 
+    test('快进倒计时立即跳过进入 idle', () {
+      fakeAsync((async) {
+        final backend = _FakeSpeechPracticeBackend();
+        final container = ProviderContainer(
+          overrides: [
+            speechPracticeBackendProvider.overrideWithValue(backend),
+            listenAndRepeatPlayerProvider.overrideWith(
+              () => TestListenAndRepeatPlayer(
+                const ListenAndRepeatPlayerState(
+                  currentSentenceIndex: 0,
+                  totalSentences: 1,
+                  currentPlayCount: 1,
+                  isPauseBetweenPlays: true,
+                ),
+                createTestSentences(count: 1),
+              ),
+            ),
+          ],
+        );
+
+        final controller = container.read(
+          listenAndRepeatTurnControllerProvider.notifier,
+        );
+        controller.ensureTurn(
+          promptId: 'shadowing:a1:0',
+          referenceText: 'Hello world',
+          allowAutoFallback: false,
+        );
+        async.flushMicrotasks();
+
+        // 进入 reviewCountdown
+        controller.activateReviewCountdown(promptId: 'shadowing:a1:0');
+        expect(
+          container.read(listenAndRepeatTurnControllerProvider).phase,
+          ListenAndRepeatTurnPhase.reviewCountdown,
+        );
+
+        // 快进 → 立即跳过倒计时
+        controller.fastForwardReviewCountdown();
+        async.flushMicrotasks();
+
+        final after = container.read(listenAndRepeatTurnControllerProvider);
+        expect(after.phase, ListenAndRepeatTurnPhase.idle);
+
+        backend.dispose();
+        container.dispose();
+      });
+    });
+
+    test('非 reviewCountdown 阶段调用快进无效', () {
+      fakeAsync((async) {
+        final backend = _FakeSpeechPracticeBackend();
+        final container = ProviderContainer(
+          overrides: [
+            speechPracticeBackendProvider.overrideWithValue(backend),
+            listenAndRepeatPlayerProvider.overrideWith(
+              () => TestListenAndRepeatPlayer(
+                const ListenAndRepeatPlayerState(
+                  currentSentenceIndex: 0,
+                  totalSentences: 1,
+                  currentPlayCount: 1,
+                  isPauseBetweenPlays: true,
+                ),
+                createTestSentences(count: 1),
+              ),
+            ),
+          ],
+        );
+
+        final controller = container.read(
+          listenAndRepeatTurnControllerProvider.notifier,
+        );
+        controller.ensureTurn(
+          promptId: 'shadowing:a1:0',
+          referenceText: 'Hello world',
+          allowAutoFallback: false,
+        );
+        async.flushMicrotasks();
+
+        // awaitingSpeech 阶段调用快进，不应改变状态
+        expect(
+          container.read(listenAndRepeatTurnControllerProvider).phase,
+          ListenAndRepeatTurnPhase.awaitingSpeech,
+        );
+        controller.fastForwardReviewCountdown();
+        async.flushMicrotasks();
+
+        expect(
+          container.read(listenAndRepeatTurnControllerProvider).phase,
+          ListenAndRepeatTurnPhase.awaitingSpeech,
+        );
+
+        backend.dispose();
+        container.dispose();
+      });
+    });
+
     test('录音正常结束时 maxDurationTimer 不触发', () {
       fakeAsync((async) {
         final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);

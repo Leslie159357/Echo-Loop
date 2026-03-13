@@ -608,15 +608,13 @@ class _ListenAndRepeatPlayerScreenState
                           turnState: turnState,
                           isRecordingCurrent: isRecordingCurrent,
                           onRecordTap: _handleRecordTap,
-                          onContinue: () {
-                            unawaited(
-                              ref
-                                  .read(
-                                    listenAndRepeatTurnControllerProvider
-                                        .notifier,
-                                  )
-                                  .handleContinue(),
-                            );
+                          onFastForward: () {
+                            ref
+                                .read(
+                                  listenAndRepeatTurnControllerProvider
+                                      .notifier,
+                                )
+                                .fastForwardReviewCountdown();
                           },
                           onCountdownTap: turnState.isReviewCountdownPaused
                               ? () => ref
@@ -780,20 +778,37 @@ class _CountdownChip extends StatelessWidget {
                 ),
               ),
             ),
-            if (isPaused)
-              Icon(
-                Icons.play_arrow_rounded,
-                size: 28,
+            // 倒计时数字始终居中显示
+            Text(
+              '$seconds',
+              style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.primary,
-              )
-            else
-              Text(
-                '$seconds',
-                style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            // 右下角状态徽章：暂停时 play，倒计时中 pause
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.colorScheme.primaryContainer,
+                  border: Border.all(
+                    color: theme.colorScheme.surface,
+                  ),
+                ),
+                child: Icon(
+                  isPaused
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+                  size: 12,
                   color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -807,7 +822,7 @@ class _SpeechPracticeTurnPanel extends StatelessWidget {
   final ListenAndRepeatTurnState turnState;
   final bool isRecordingCurrent;
   final VoidCallback onRecordTap;
-  final VoidCallback onContinue;
+  final VoidCallback onFastForward;
   final VoidCallback onCountdownTap;
 
   const _SpeechPracticeTurnPanel({
@@ -815,7 +830,7 @@ class _SpeechPracticeTurnPanel extends StatelessWidget {
     required this.turnState,
     required this.isRecordingCurrent,
     required this.onRecordTap,
-    required this.onContinue,
+    required this.onFastForward,
     required this.onCountdownTap,
   });
 
@@ -829,25 +844,26 @@ class _SpeechPracticeTurnPanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 24 + AppSpacing.xs),
-          Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // 左侧占位，与右侧快进按钮等宽，保持倒计时居中
+              const SizedBox(width: 32),
+              const SizedBox(width: 48),
               _CountdownChip(
                 remaining: turnState.reviewCountdownRemaining,
                 total: const Duration(seconds: 5),
                 isPaused: turnState.isReviewCountdownPaused,
                 onTap: onCountdownTap,
               ),
-              Positioned(
-                left: 56 + AppSpacing.xs,
-                child: IconButton(
-                  onPressed: onContinue,
-                  icon: const Icon(Icons.fast_forward_rounded),
-                  iconSize: 24,
-                  style: IconButton.styleFrom(
-                    foregroundColor: theme.colorScheme.onSurfaceVariant,
-                  ),
+              const SizedBox(width: 48),
+              // 与下方"下一句"按钮同列对齐
+              GestureDetector(
+                onTap: onFastForward,
+                child: Icon(
+                  Icons.fast_forward_rounded,
+                  size: 32,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
