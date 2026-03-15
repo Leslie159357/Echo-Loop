@@ -15,7 +15,7 @@ enum StudyTaskType {
   /// 尚未到时间的复习任务
   reviewUpcoming,
 
-  /// 首学任务
+  /// 首次学习任务
   firstStudy,
 }
 
@@ -49,7 +49,7 @@ class StudyTask {
 /// 输出稳定排序的任务清单：
 /// 1) 可开始复习
 /// 2) 未到时间复习
-/// 3) 首学
+/// 3) 首次学习
 final studyTaskProvider = Provider<List<StudyTask>>((ref) {
   final audioState = ref.watch(audioLibraryProvider);
   final progressMap = ref.watch(
@@ -80,7 +80,7 @@ final studyTaskProvider = Provider<List<StudyTask>>((ref) {
     }
   }
 
-  // 只保留学习进度最深的首学任务（规则：同时只允许一个首学）
+  // 只保留学习进度最深的首次学习任务（规则：同时只允许一个首次学习）
   // 优先级：子阶段更靠后 > updatedAt 更新
   final firstStudyTasks =
       tasks.where((t) => t.type == StudyTaskType.firstStudy).toList();
@@ -190,7 +190,7 @@ StudyTask? _buildTaskForAudio({
 /// 是否应该向学习页额外投放 1 篇新音频。
 ///
 /// 只有当当前任务数不超过 3，且所有在学音频都已进入 review1 及之后，
-/// 才允许从未学习音频里补 1 篇首学任务。
+/// 才允许从未学习音频里补 1 篇首次学习任务。
 bool _shouldInjectNewAudio({
   required List<StudyTask> tasks,
   required List<LearningProgress> activeProgresses,

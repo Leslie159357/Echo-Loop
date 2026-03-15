@@ -22,7 +22,7 @@ class LearningProgresses extends Table {
   /// 难度等级（0=easy, 1=medium, 2=hard）
   IntColumn get difficulty => integer().withDefault(const Constant(1))();
 
-  /// 首学完成时间（复习间隔计算基准，首学完成前为 null）
+  /// 首次学习完成时间（复习间隔计算基准，首次学习完成前为 null）
   DateTimeColumn get firstLearnCompletedAt => dateTime().nullable()();
 
   /// 上一阶段完成时间（复习调度核心字段，用于计算下次复习时间）

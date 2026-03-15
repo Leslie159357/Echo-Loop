@@ -20,7 +20,7 @@ import '../widgets/study/study_stats_header.dart';
 /// 2. 统计 Chips + 7天柱状图
 /// 3. Ready to Review（可开始的复习）
 /// 4. Upcoming Reviews（默认折叠）
-/// 5. First Study（首学任务）
+/// 5. First Study（首次学习任务）
 /// 6. Completed（默认折叠）
 class StudyScreen extends ConsumerWidget {
   const StudyScreen({super.key});

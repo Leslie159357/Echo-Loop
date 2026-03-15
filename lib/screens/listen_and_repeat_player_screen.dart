@@ -393,7 +393,7 @@ class _ListenAndRepeatPlayerScreenState
       }
 
       if (result.continueToNext) {
-        // 继续下一步：段级复述
+        // 继续下一步：段落复述
         await _navigateToRetell();
       } else {
         // 返回计划页
@@ -403,7 +403,7 @@ class _ListenAndRepeatPlayerScreenState
     }
   }
 
-  /// 导航到段级复述播放器
+  /// 导航到段落复述播放器
   ///
   /// 退出跟读模式 → 显示复述简报弹窗 → 分段 + 提取关键词 → 进入复述模式 → pushReplacement
   Future<void> _navigateToRetell() async {

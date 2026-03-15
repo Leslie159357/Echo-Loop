@@ -1,7 +1,7 @@
 /// 复习子步骤集成测试
 ///
 /// 验证复习阶段的学习计划展示和子步骤入口交互，
-/// 包括难句补练页面 UI、复习段级复述入口（无双弹窗）、
+/// 包括难句补练页面 UI、复习段落复述入口（无双弹窗）、
 /// 以及复习总结复述简报。
 /// 包含 6 个测试场景。
 library;
@@ -135,7 +135,7 @@ void reviewSubStageTests() {
       expect(find.text('Difficult Sentence Practice'), findsOneWidget);
     });
 
-    testWidgets('复习段级复述入口只弹出一个弹窗（时长选择）', (tester) async {
+    testWidgets('复习段落复述入口只弹出一个弹窗（时长选择）', (tester) async {
       // review0 当前子步骤为 reviewRetellParagraph
       final progress = createTestLearningProgress(
         currentStage: LearningStage.review0,

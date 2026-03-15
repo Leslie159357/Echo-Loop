@@ -1,6 +1,6 @@
 // 学习计划表页面
 //
-// 展示音频的完整学习流程：首学（4步）和复习（7步）。
+// 展示音频的完整学习流程：首次学习（4步）和复习（7步）。
 // 从 LearningProgressNotifier 读取真实进度数据，
 // 步骤卡片支持三态：已完成、当前、未开始。
 // 导航路径：合集详情 → 学习计划表 → 播放器
@@ -66,7 +66,7 @@ class LearningPlanScreen extends ConsumerStatefulWidget {
 }
 
 class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
-  /// 首学区域是否展开（首学阶段默认展开，进入复习阶段后默认折叠）
+  /// 首次学习区域是否展开（首次学习阶段默认展开，进入复习阶段后默认折叠）
   bool? _isFirstLearnExpanded;
 
   /// 各复习轮次的展开状态（key 为复习大阶段）
@@ -151,7 +151,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   void _startReviewSubStage(BuildContext context, LearningProgress progress) {
     final subStage = progress.currentSubStage;
 
-    // 段级复述自带时长选择弹窗，无需再展示复习简报
+    // 段落复述自带时长选择弹窗，无需再展示复习简报
     if (subStage == SubStageType.reviewRetellParagraph) {
       _startReviewRetell(context, isSummary: false);
       return;
@@ -509,7 +509,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     );
   }
 
-  /// 进入段级复述
+  /// 进入段落复述
   void _startRetelling(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final lpState = ref.read(listeningPracticeProvider);
@@ -861,7 +861,7 @@ class _ProgressRingPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-/// 首学区域 — 默认展开，显示 4 个步骤
+/// 首次学习区域 — 默认展开，显示 4 个步骤
 ///
 /// 已完成的盲听步骤支持点击进入自由练习模式。
 class _FirstStudySection extends ConsumerWidget {
@@ -1379,9 +1379,9 @@ class _ReviewStageData {
   });
 }
 
-/// 单个复习轮次区块（与首学同级）
+/// 单个复习轮次区块（与首次学习同级）
 ///
-/// 视觉与首学区块保持一致：标题行可独立折叠/展开，展开后显示子阶段。
+/// 视觉与首次学习区块保持一致：标题行可独立折叠/展开，展开后显示子阶段。
 class _ReviewRoundSection extends ConsumerWidget {
   final AppLocalizations l10n;
   final LearningProgress? progress;
@@ -1568,7 +1568,7 @@ class _ReviewRoundSection extends ConsumerWidget {
     }
   }
 
-  /// 进入自由练习复述模式（段级复述 / 全文总结复述）
+  /// 进入自由练习复述模式（段落复述 / 全文总结复述）
   Future<void> _startFreePlayRetell(
     BuildContext context,
     WidgetRef ref, {
@@ -1597,7 +1597,7 @@ class _ReviewRoundSection extends ConsumerWidget {
       return;
     }
 
-    // 段级复述：弹出简报面板让用户选择段落时长
+    // 段落复述：弹出简报面板让用户选择段落时长
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,

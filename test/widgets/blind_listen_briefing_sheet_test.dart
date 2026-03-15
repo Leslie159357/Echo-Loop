@@ -6,7 +6,7 @@ import '../helpers/test_app.dart';
 
 void main() {
   group('BlindListenBriefingSheet', () {
-    testWidgets('首学模式 — 显示正确标题和提示', (tester) async {
+    testWidgets('首次学习模式 — 显示正确标题和提示', (tester) async {
       bool startPracticeCalled = false;
 
       await tester.pumpWidget(

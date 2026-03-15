@@ -20,7 +20,7 @@ void main() {
       expect(progress.currentStageStartedAt, isNull);
     });
 
-    test('首学第 2 个子步骤进行中', () {
+    test('首次学习第 2 个子步骤进行中', () {
       final progress = LearningProgress(
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,
@@ -37,7 +37,7 @@ void main() {
       expect(progress.completedReviewStages, 0);
     });
 
-    test('首学全部完成，进入 review0', () {
+    test('首次学习全部完成，进入 review0', () {
       final progress = LearningProgress(
         audioItemId: 'audio-1',
         currentStage: LearningStage.review0,
@@ -63,7 +63,7 @@ void main() {
         updatedAt: now,
       );
 
-      // 完成了：4(首学) + 2(review0) + 3(review1) + 1(review2的第1个子步骤) = 10
+      // 完成了：4(首次学习) + 2(review0) + 3(review1) + 1(review2的第1个子步骤) = 10
       final total = LearningProgress.totalSubStages;
       expect(progress.progressPercent, closeTo(10 / total, 0.001));
       expect(progress.completedFirstStudySteps, 4);
@@ -109,7 +109,7 @@ void main() {
         updatedAt: now,
       );
 
-      // 首学中：blindListen, intensiveListen 已完成，listenAndRepeat 是当前，retell 未开始
+      // 首次学习中：blindListen, intensiveListen 已完成，listenAndRepeat 是当前，retell 未开始
       expect(
         progress.isSubStageCompleted(
           LearningStage.firstLearn,
@@ -148,7 +148,7 @@ void main() {
         updatedAt: now,
       );
 
-      // 首学所有子步骤都已完成
+      // 首次学习所有子步骤都已完成
       expect(
         progress.isSubStageCompleted(
           LearningStage.firstLearn,
@@ -251,7 +251,7 @@ void main() {
   });
 
   group('nextReviewAt / isReviewReadyAt / isReviewLockedAt', () {
-    test('首学阶段 — nextReviewAt 为 null，isReviewReadyAt 为 true', () {
+    test('首次学习阶段 — nextReviewAt 为 null，isReviewReadyAt 为 true', () {
       final progress = LearningProgress(
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,
@@ -365,7 +365,7 @@ void main() {
       expect(progress.isReviewLockedAt(after), false);
     });
 
-    test('首学阶段 isReviewLockedAt=false', () {
+    test('首次学习阶段 isReviewLockedAt=false', () {
       final progress = LearningProgress(
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,

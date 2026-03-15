@@ -31,17 +31,17 @@ void learningPlanTests() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('学习计划页展示 4 个首学步骤', (tester) async {
+    testWidgets('学习计划页展示 4 个首次学习步骤', (tester) async {
       await tester.pumpWidget(createTestAppWithAudio());
       await navigateToLearningPlan(tester);
 
-      // 验证 4 个首学步骤卡片
+      // 验证 4 个首次学习步骤卡片
       expect(find.text('Blind Listening'), findsWidgets);
       expect(find.text('Intensive Listening'), findsOneWidget);
       expect(find.text('Listen & Repeat'), findsOneWidget);
       expect(find.text('Retelling'), findsOneWidget);
 
-      // 验证首学标题
+      // 验证首次学习标题
       expect(find.text('First Study'), findsOneWidget);
 
       // 验证底部按钮显示"Start Learning"

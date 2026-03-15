@@ -10,7 +10,7 @@ void main() {
       expect(retellDefaultSeconds(null), 0);
     });
 
-    test('首学返回 0（逐句）', () {
+    test('首次学习返回 0（逐句）', () {
       expect(retellDefaultSeconds(LearningStage.firstLearn), 0);
     });
 

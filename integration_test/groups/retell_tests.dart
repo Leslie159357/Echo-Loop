@@ -309,7 +309,7 @@ void retellTests() {
       // 验证统计信息
       expect(find.text('3 paragraphs retold'), findsOneWidget);
 
-      // 验证"再来一遍"和"完成首学"按钮都存在
+      // 验证"再来一遍"和"完成首次学习"按钮都存在
       expect(find.text('Practice Again'), findsOneWidget);
       expect(find.text('Complete First Study'), findsOneWidget);
     });

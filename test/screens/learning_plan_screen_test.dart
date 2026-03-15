@@ -122,7 +122,7 @@ void main() {
       expect(find.text('Not started'), findsOneWidget);
     });
 
-    testWidgets('显示首学区域的 4 个步骤', (tester) async {
+    testWidgets('显示首次学习区域的 4 个步骤', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
@@ -178,7 +178,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 滚动到首轮复习并检查其子阶段
-      // 新策略：当前轮次默认展开，首学默认折叠（因已进入复习阶段）
+      // 新策略：当前轮次默认展开，首次学习默认折叠（因已进入复习阶段）
       await tester.scrollUntilVisible(find.text('Review 1'), 200);
       await tester.pumpAndSettle();
       expect(find.text('Review 1'), findsOneWidget);
@@ -589,7 +589,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      // 首学刚完成，review1 需要 24h 后解锁
+      // 首次学习刚完成，review1 需要 24h 后解锁
       final firstLearnCompletedAt = DateTime(2026, 1, 1);
       final now = DateTime(2026, 1, 1, 12, 0); // 12小时后
       final progressState = LearningProgressState(
@@ -625,7 +625,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      // 首学完成 2 天前，review1（24h）应已解锁
+      // 首次学习完成 2 天前，review1（24h）应已解锁
       final firstLearnCompletedAt = DateTime(2026, 1, 1);
       final now = DateTime(2026, 1, 3, 12, 0); // 2.5 天后
       final progressState = LearningProgressState(

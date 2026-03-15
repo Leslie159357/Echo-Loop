@@ -260,7 +260,7 @@ class _BlindListenPlayerScreenState
       // 用户选择"再听一遍"
       await ref.read(learningSessionProvider.notifier).replayBlindListen();
     } else {
-      // 保存难度（仅首学模式）→ 推进子步骤
+      // 保存难度（仅首次学习模式）→ 推进子步骤
       try {
         if (!isReview) {
           await ref
@@ -353,7 +353,7 @@ class _BlindListenPlayerScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.reviewDifficultPracticeNone)),
         );
-        // 导航到下一子阶段（段级复述或全文总结复述）
+        // 导航到下一子阶段（段落复述或全文总结复述）
         _navigateToReviewRetell();
         return;
       }
@@ -381,7 +381,7 @@ class _BlindListenPlayerScreenState
 
   /// 导航到复习复述（跳过难句补练后使用）
   ///
-  /// 读取更新后的进度，根据当前子阶段决定进入段级复述还是全文总结。
+  /// 读取更新后的进度，根据当前子阶段决定进入段落复述还是全文总结。
   void _navigateToReviewRetell() {
     final progress = ref
         .read(learningProgressNotifierProvider)
@@ -422,7 +422,7 @@ class _BlindListenPlayerScreenState
         }
       });
     } else if (nextSubStage == SubStageType.reviewRetellParagraph) {
-      // 段级复述：弹简报面板让用户选择段落时长
+      // 段落复述：弹简报面板让用户选择段落时长
       final currentStage = progress.currentStage;
       showRetellBriefingSheet(
         context: context,

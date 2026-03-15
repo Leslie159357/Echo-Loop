@@ -12,7 +12,7 @@ import '../helpers/mock_providers.dart';
 
 void main() {
   group('studyTaskProvider', () {
-    test('任务排序遵循：可复习 > 未到时间复习 > 首学', () {
+    test('任务排序遵循：可复习 > 未到时间复习 > 首次学习', () {
       final now = DateTime(2026, 2, 25, 12, 0);
       final audioItems = [
         AudioItem(
@@ -100,7 +100,7 @@ void main() {
       ];
 
       final progressMap = {
-        // blindListen 是首学最初始的子阶段，进度最浅
+        // blindListen 是首次学习最初始的子阶段，进度最浅
         'first-shallow': LearningProgress(
           audioItemId: 'first-shallow',
           currentStage: LearningStage.firstLearn,
@@ -139,7 +139,7 @@ void main() {
       expect(tasks.single.subStage, SubStageType.listenAndRepeat);
     });
 
-    test('无进度音频时只投放 1 个首学任务', () {
+    test('无进度音频时只投放 1 个首次学习任务', () {
       final now = DateTime(2026, 2, 25, 12, 0);
       final audioItems = [
         AudioItem(
@@ -179,7 +179,7 @@ void main() {
       expect(tasks.single.subStage, SubStageType.blindListen);
     });
 
-    test('存在首学任务时不投放新音频', () {
+    test('存在首次学习任务时不投放新音频', () {
       final now = DateTime(2026, 2, 25, 12, 0);
       final audioItems = [
         AudioItem(

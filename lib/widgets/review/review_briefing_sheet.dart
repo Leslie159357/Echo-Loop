@@ -6,7 +6,7 @@ import '../../theme/app_theme.dart';
 
 /// 复习步骤提示弹窗。
 ///
-/// 交互与首学保持一致：先展示当前步骤说明，再点击“开始练习”进入页面。
+/// 交互与首次学习保持一致：先展示当前步骤说明，再点击“开始练习”进入页面。
 Future<void> showReviewBriefingSheet({
   required BuildContext context,
   required LearningStage stage,
@@ -179,7 +179,7 @@ String _titleForSubStage(
     SubStageType.blindListen => l10n.stepBlindListening,
     SubStageType.reviewDifficultPractice =>
       isZh ? '难句补练' : 'Difficult sentence practice',
-    SubStageType.reviewRetellParagraph => isZh ? '段级复述' : 'Paragraph retelling',
+    SubStageType.reviewRetellParagraph => isZh ? '段落复述' : 'Paragraph retelling',
     SubStageType.reviewRetellSummary => isZh ? '全文总结复述' : 'Summary retelling',
     SubStageType.intensiveListen => l10n.stepIntensiveListening,
     SubStageType.listenAndRepeat => l10n.stepShadowing,

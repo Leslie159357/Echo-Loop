@@ -169,7 +169,7 @@
   "reviewCountdown": "{days} 天后可复习",
   "reviewCountdownHours": "{hours} 小时后可复习",
   "blindListenBriefingTitle": "全文盲听",
-  "blindListenBriefingSubtitle": "首学 - 全文盲听",
+  "blindListenBriefingSubtitle": "首次学习 - 全文盲听",
   "blindListenBriefingReviewSubtitle": "第{round}轮复习 - 全文盲听",
   "blindListenBriefingTip": "不看字幕，完整听一遍，感受大意即可",
   "startPractice": "开始练习",
@@ -250,7 +250,7 @@
   "exitIntensiveListenTitle": "退出精听？",
   "exitIntensiveListenMessage": "进度已保存，下次可从断点继续。",
   "intensiveListenBriefingTitle": "逐句精听",
-  "intensiveListenBriefingSubtitle": "首学 - 逐句精听",
+  "intensiveListenBriefingSubtitle": "首次学习 - 逐句精听",
   "intensiveListenBriefingTip": "逐句盲听，听不懂时点击「听不懂」查看文本并标记难句。",
   "intensiveListenBriefingSentenceCount": "共 {count} 个句子",
   "intensiveListenNoSubtitle": "无字幕",
@@ -301,7 +301,7 @@
       "step": { "type": "String" }
     }
   },
-  "completeFirstStudy": "完成首学",
+  "completeFirstStudy": "完成首次学习",
   "completeReview": "完成本轮复习",
   "stepProgressLabel": "步骤进度：{current}/{total}（{stage}）",
   "@stepProgressLabel": {
@@ -390,7 +390,7 @@
   "exitListenAndRepeatTitle": "退出跟读？",
   "exitListenAndRepeatMessage": "进度已保存，下次可从断点继续。",
   "listenAndRepeatBriefingTitle": "难句跟读",
-  "listenAndRepeatBriefingSubtitle": "首学 - 难句跟读",
+  "listenAndRepeatBriefingSubtitle": "首次学习 - 难句跟读",
   "listenAndRepeatBriefingTip": "听完后跟读，在停顿时间内大声朗读这个句子。",
   "listenAndRepeatBriefingDifficultCount": "{count} 个难句",
   "@listenAndRepeatBriefingDifficultCount": {
@@ -433,7 +433,7 @@
     }
   },
 
-  "retellBriefingTitle": "段级复述",
+  "retellBriefingTitle": "段落复述",
   "retellBriefingSubtitle": "听一段音频，然后尝试复述。关键词会帮助你回忆内容。",
   "retellBriefingTargetDuration": "目标段落时长",
   "retellBriefingParagraphCount": "将分为 {count} 个段落",
@@ -456,7 +456,7 @@
     }
   },
 
-  "retellTitle": "段级复述",
+  "retellTitle": "段落复述",
   "retellParagraphProgress": "段落 {current}/{total}",
   "@retellParagraphProgress": {
     "placeholders": {
@@ -484,7 +484,7 @@
       "total": { "type": "int" }
     }
   },
-  "retellCompleteFirstStudy": "完成首学",
+  "retellCompleteFirstStudy": "完成首次学习",
   "retellCompleteReview": "完成复习",
   "retellCompleteFreePlay": "练习完成",
   "retellCompleteTitle": "复述完成",
@@ -632,7 +632,7 @@
   "reviewDue": "待复习",
   "availableInDays": "{count} 天后",
   "availableInHours": "{count} 小时后",
-  "subStageLabelFirstLearn": "首学 - {subStage}",
+  "subStageLabelFirstLearn": "首次学习 - {subStage}",
   "subStageLabelReview": "{reviewName} - {subStage}",
 
   "favoritesSentences": "句子",
@@ -744,5 +744,7 @@
   "linkCopied": "已复制",
   "checkForUpdate": "检查更新",
   "alreadyLatest": "已是最新版本",
-  "checkUpdateFailed": "检查失败，请检查网络"
+  "checkUpdateFailed": "检查失败，请检查网络",
+  "demoMode": "演示模式",
+  "demoModeSubtitle": "开启后使用演示数据，方便截图展示"
 }

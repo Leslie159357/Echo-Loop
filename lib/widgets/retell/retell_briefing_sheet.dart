@@ -1,6 +1,6 @@
 /// 复述简报底部弹窗
 ///
-/// 进入段级复述前显示，用户选择目标段落时长，
+/// 进入段落复述前显示，用户选择目标段落时长，
 /// 实时预览段落数（切换时运行完整 DP 计算）。
 library;
 
@@ -11,9 +11,9 @@ import '../../models/sentence.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/paragraph_grouping.dart';
 
-/// 根据学习阶段计算段级复述的默认目标段落时长（秒）
+/// 根据学习阶段计算段落复述的默认目标段落时长（秒）
 ///
-/// - 首学 + 首轮复习 → 0（逐句）
+/// - 首次学习 + 首轮复习 → 0（逐句）
 /// - review1 + review2 → 10s
 /// - review4 + review7 → 20s
 /// - review14 + review28 → 30s

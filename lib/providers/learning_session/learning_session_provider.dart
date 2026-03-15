@@ -42,7 +42,7 @@ enum LearningMode {
   /// 难句跟读
   listenAndRepeat,
 
-  /// 段级复述
+  /// 段落复述
   retell,
 
   /// 复习难句补练
@@ -469,7 +469,7 @@ class LearningSession extends _$LearningSession {
     );
   }
 
-  /// 进入段级复述模式
+  /// 进入段落复述模式
   ///
   /// 1. 保存当前用户播放设置
   /// 2. 暂停 LP 的 stream 监听

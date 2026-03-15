@@ -542,7 +542,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blindListenBriefingTitle => '全文盲听';
 
   @override
-  String get blindListenBriefingSubtitle => '首学 - 全文盲听';
+  String get blindListenBriefingSubtitle => '首次学习 - 全文盲听';
 
   @override
   String blindListenBriefingReviewSubtitle(int round) {
@@ -783,7 +783,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenBriefingTitle => '逐句精听';
 
   @override
-  String get intensiveListenBriefingSubtitle => '首学 - 逐句精听';
+  String get intensiveListenBriefingSubtitle => '首次学习 - 逐句精听';
 
   @override
   String get intensiveListenBriefingTip => '逐句盲听，听不懂时点击「听不懂」查看文本并标记难句。';
@@ -860,7 +860,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get completeFirstStudy => '完成首学';
+  String get completeFirstStudy => '完成首次学习';
 
   @override
   String get completeReview => '完成本轮复习';
@@ -1013,7 +1013,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatBriefingTitle => '难句跟读';
 
   @override
-  String get listenAndRepeatBriefingSubtitle => '首学 - 难句跟读';
+  String get listenAndRepeatBriefingSubtitle => '首次学习 - 难句跟读';
 
   @override
   String get listenAndRepeatBriefingTip => '听完后跟读，在停顿时间内大声朗读这个句子。';
@@ -1061,7 +1061,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get retellBriefingTitle => '段级复述';
+  String get retellBriefingTitle => '段落复述';
 
   @override
   String get retellBriefingSubtitle => '听一段音频，然后尝试复述。关键词会帮助你回忆内容。';
@@ -1088,7 +1088,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get retellTitle => '段级复述';
+  String get retellTitle => '段落复述';
 
   @override
   String retellParagraphProgress(int current, int total) {
@@ -1114,7 +1114,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get retellCompleteFirstStudy => '完成首学';
+  String get retellCompleteFirstStudy => '完成首次学习';
 
   @override
   String get retellCompleteReview => '完成复习';
@@ -1474,7 +1474,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String subStageLabelFirstLearn(String subStage) {
-    return '首学 - $subStage';
+    return '首次学习 - $subStage';
   }
 
   @override
@@ -1767,4 +1767,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get checkUpdateFailed => '检查失败，请检查网络';
+
+  @override
+  String get demoMode => '演示模式';
+
+  @override
+  String get demoModeSubtitle => '开启后使用演示数据，方便截图展示';
 }

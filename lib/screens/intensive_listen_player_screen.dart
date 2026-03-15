@@ -267,7 +267,7 @@ class _IntensiveListenPlayerScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.listenAndRepeatNoDifficultSentences)),
       );
-      // 退出精听模式后导航到段级复述
+      // 退出精听模式后导航到段落复述
       await ref.read(learningSessionProvider.notifier).exitLearningMode();
       if (!mounted) return;
       _navigateToRetell();
@@ -294,7 +294,7 @@ class _IntensiveListenPlayerScreenState
     );
   }
 
-  /// 导航到段级复述（跳过跟读后使用）
+  /// 导航到段落复述（跳过跟读后使用）
   void _navigateToRetell() {
     final lpState = ref.read(listeningPracticeProvider);
     if (lpState.sentences.isEmpty) {

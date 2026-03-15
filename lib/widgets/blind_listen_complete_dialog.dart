@@ -24,7 +24,7 @@ typedef BlindListenResult = ({DifficultyLevel difficulty, bool continueToNext});
 /// [passCount] 已完成的盲听遍数，显示为内容文本。
 /// [stepIndex] 当前完成的步骤序号（0-based）。
 /// [totalSteps] 当前阶段总步骤数。
-/// [stageName] 当前阶段名称（如"首学"）。
+/// [stageName] 当前阶段名称（如"首次学习"）。
 /// [nextStepName] 下一步名称（null 表示下一步不可用或不存在）。
 /// [isLastStep] 是否为当前阶段的最后一步。
 /// [showDifficultySelector] 是否显示 5 档难度选择器（复习模式下隐藏）。

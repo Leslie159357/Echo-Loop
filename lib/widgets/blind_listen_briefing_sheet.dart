@@ -10,7 +10,7 @@ import '../theme/app_theme.dart';
 
 /// 显示盲听简报底部弹窗
 ///
-/// [isFirstStudy] 为 true 时显示"首学"标题，否则显示复习轮次。
+/// [isFirstStudy] 为 true 时显示"首次学习"标题，否则显示复习轮次。
 /// [reviewRound] 复习轮次（仅复习时使用）。
 /// [audioDuration] 音频总时长。
 /// [onStartPractice] 点击"开始练习"的回调。
@@ -40,7 +40,7 @@ Future<void> showBlindListenBriefingSheet({
 
 /// 盲听简报弹窗内容
 class BlindListenBriefingSheet extends StatelessWidget {
-  /// 是否为首学
+  /// 是否为首次学习
   final bool isFirstStudy;
 
   /// 复习轮次（仅复习时使用）

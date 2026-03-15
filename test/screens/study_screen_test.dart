@@ -238,7 +238,7 @@ void main() {
     expect(reviewButtons, findsAtLeast(1));
   });
 
-  testWidgets('首学任务显示子阶段标签', (tester) async {
+  testWidgets('首次学习任务显示子阶段标签', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
       AudioItem(
@@ -270,7 +270,7 @@ void main() {
 
     // 子阶段标签
     expect(find.textContaining('Intensive Listening'), findsAtLeast(1));
-    // 按钮文案为 Continue（已开始首学）
+    // 按钮文案为 Continue（已开始首次学习）
     expect(find.text('Continue'), findsAtLeast(1));
   });
 
@@ -381,7 +381,7 @@ void main() {
     expect(find.byType(LearningProgressIcon), findsAtLeast(1));
   });
 
-  testWidgets('多个未学习音频时页面只展示规则选中的 1 个首学任务', (tester) async {
+  testWidgets('多个未学习音频时页面只展示规则选中的 1 个首次学习任务', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
       AudioItem(

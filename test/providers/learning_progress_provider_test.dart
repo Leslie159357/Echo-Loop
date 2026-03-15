@@ -102,7 +102,7 @@ void main() {
   // ========== Group 1: completeCurrentSubStage — 子步骤推进 ==========
 
   group('completeCurrentSubStage', () {
-    test('首学阶段内推进：blindListen → intensiveListen', () async {
+    test('首次学习阶段内推进：blindListen → intensiveListen', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
       final progress = LearningProgress(
         audioItemId: 'a1',
@@ -127,7 +127,7 @@ void main() {
     });
 
     test(
-      '首学最后一步 retell → review0.reviewDifficultPractice，设置 firstLearnCompletedAt',
+      '首次学习最后一步 retell → review0.reviewDifficultPractice，设置 firstLearnCompletedAt',
       () async {
         final now = DateTime(2026, 3, 1, 10, 0);
         final progress = LearningProgress(

@@ -202,7 +202,7 @@ void main() {
     });
 
     /// 末步骤（没有下一步）
-    testWidgets('末步骤 — 显示"完成首学"按钮', (tester) async {
+    testWidgets('末步骤 — 显示"完成首次学习"按钮', (tester) async {
       await tester.pumpWidget(
         createTestApp(
           Builder(
@@ -229,7 +229,7 @@ void main() {
       // 验证步骤进度
       expect(find.text('Step 4/4 (First Study)'), findsOneWidget);
 
-      // 末步骤显示"完成首学"按钮（FilledButton）和"再听一遍"（OutlinedButton）
+      // 末步骤显示"完成首次学习"按钮（FilledButton）和"再听一遍"（OutlinedButton）
       expect(find.text('Complete First Study'), findsOneWidget);
       expect(find.text('Listen Again'), findsOneWidget);
 
@@ -237,7 +237,7 @@ void main() {
       expect(find.text('Back to Plan'), findsNothing);
     });
 
-    testWidgets('末步骤 — 选择难度后点击"完成首学"返回 continueToNext=false',
+    testWidgets('末步骤 — 选择难度后点击"完成首次学习"返回 continueToNext=false',
         (tester) async {
       BlindListenResult? result;
 

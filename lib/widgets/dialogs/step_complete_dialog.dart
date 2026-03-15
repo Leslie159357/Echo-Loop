@@ -6,7 +6,7 @@
 ///
 /// 按钮布局根据上下文分三种情况：
 /// 1. 有下一步可继续：[返回计划] [继续：X]
-/// 2. 末步骤：[完成首学/复习]（全宽）
+/// 2. 末步骤：[完成首次学习/复习]（全宽）
 /// 3. 非末步骤但下一步不可用：[返回计划]（全宽）
 ///
 /// 不可通过返回键或点击外部区域关闭。
@@ -36,7 +36,7 @@ typedef StepCompleteResult = ({
 /// [contentBody] 自定义内容区域（如完成统计信息）。
 /// [stepIndex] 当前完成的步骤序号（0-based），null 表示不显示步骤进度。
 /// [totalSteps] 当前阶段总步骤数。
-/// [stageName] 当前阶段名称（如"首学"）。
+/// [stageName] 当前阶段名称（如"首次学习"）。
 /// [nextStepName] 下一步名称（null 表示下一步不可用或不存在）。
 /// [isLastStep] 是否为当前阶段的最后一步。
 /// [showDifficultySelector] 是否显示 5 档难度选择器。
@@ -230,7 +230,7 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
   ///
   /// 三种情况：
   /// 1. 有下一步可继续：[返回计划 Outlined] [继续：X Filled] 同一行
-  /// 2. 末步骤：[完成首学/复习 Filled]（全宽）
+  /// 2. 末步骤：[完成首次学习/复习 Filled]（全宽）
   /// 3. 非末步骤但下一步不可用：[返回计划 Filled]（全宽）
   List<Widget> _buildActions(BuildContext context, AppLocalizations l10n) {
     if (widget.nextStepName != null) {

@@ -18,7 +18,7 @@ class LearningProgress {
   /// 难度等级
   final DifficultyLevel difficulty;
 
-  /// 首学完成时间（复习间隔计算基准）
+  /// 首次学习完成时间（复习间隔计算基准）
   final DateTime? firstLearnCompletedAt;
 
   /// 上一阶段完成时间（复习调度核心字段）
@@ -100,7 +100,7 @@ class LearningProgress {
   /// 下次复习可用时间（仅复习阶段有意义）
   ///
   /// 基于 [lastStageCompletedAt] + 当前阶段的 [intervalHours] 计算。
-  /// 首学阶段或缺少完成时间时返回 null。
+  /// 首次学习阶段或缺少完成时间时返回 null。
   DateTime? get nextReviewAt {
     if (lastStageCompletedAt == null) return null;
     if (currentStage.intervalHours <= 0) return null;
@@ -205,7 +205,7 @@ class LearningProgress {
   bool isCurrentSubStage(LearningStage stage, SubStageType subStage) =>
       stage == currentStage && subStage == currentSubStage;
 
-  /// 已完成的首学步骤数
+  /// 已完成的首次学习步骤数
   int get completedFirstStudySteps {
     if (currentStage == LearningStage.firstLearn) {
       return currentSubStageIndex.clamp(0, currentStage.subStageCount);

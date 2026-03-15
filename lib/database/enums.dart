@@ -35,13 +35,13 @@ enum SubStageType {
   /// 跟读
   listenAndRepeat('listenAndRepeat'),
 
-  /// 段级复述
+  /// 段落复述
   retell('retell'),
 
   /// 复习：难句补练（盲听听不懂后进入跟读/精听式补练）
   reviewDifficultPractice('reviewDifficultPractice'),
 
-  /// 复习：段级复述
+  /// 复习：段落复述
   reviewRetellParagraph('reviewRetellParagraph'),
 
   /// 复习：全文总结复述（3-5句话概述大意）
@@ -57,9 +57,9 @@ enum SubStageType {
     blindListen => '全文盲听',
     intensiveListen => '逐句精听',
     listenAndRepeat => '跟读',
-    retell => '段级复述',
+    retell => '段落复述',
     reviewDifficultPractice => '难句补练',
-    reviewRetellParagraph => '段级复述',
+    reviewRetellParagraph => '段落复述',
     reviewRetellSummary => '全文总结复述',
   };
 
@@ -74,11 +74,11 @@ enum SubStageType {
 
 /// 学习大阶段枚举
 ///
-/// 定义音频学习的完整流程：首学 → 7 轮间隔复习 → 完成。
+/// 定义音频学习的完整流程：首次学习 → 7 轮间隔复习 → 完成。
 /// 学习流程严格线性，必须按顺序完成。
 /// DB 存储字符串 [key]，排序使用 Dart 枚举的 [index]。
 enum LearningStage {
-  /// 首学阶段（4 个子步骤：盲听、精听、跟读、复述）
+  /// 首次学习阶段（4 个子步骤：盲听、精听、跟读、复述）
   firstLearn('firstLearn'),
 
   /// 首轮复习（6 小时后）
@@ -153,7 +153,7 @@ enum LearningStage {
 
   /// 中文 UI 标签
   String get label => switch (this) {
-    firstLearn => '首学',
+    firstLearn => '首次学习',
     review0 => '首轮复习',
     review1 => '第二轮复习',
     review2 => '第三轮复习',

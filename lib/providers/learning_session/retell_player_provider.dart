@@ -1,6 +1,6 @@
 /// 复述专用播放器 Provider
 ///
-/// 段级复述播放器，直接操作 AudioEngine。
+/// 段落复述播放器，直接操作 AudioEngine。
 /// 核心功能：
 /// - 段落播放（playRangeOnce：首句 startTime → 末句 endTime）
 /// - 播放期间句子高亮（监听 absolutePositionStream + 二分查找）
