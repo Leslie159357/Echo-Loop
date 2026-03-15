@@ -324,6 +324,22 @@
 
 ---
 
+## 已完成：输入时间 & 输出时间统计功能
+
+- [x] StudyTimeService 扩展 — 新增 addInputTime / addOutputTime / getWeeklyInputTimes / getWeeklyOutputTimes 等 6 个方法
+- [x] StudyStats 模型扩展 — 新增 todayInputSeconds / todayOutputSeconds / dailyInputSeconds / dailyOutputSeconds 4 个字段
+- [x] 输入时间埋点（学习模式）— LearningSessionProvider 监听 AudioEngine playerState 追踪音频播放时间
+- [x] 输入/输出时间埋点（收藏复习）— BookmarkReview 新增 _inputStopwatch + _outputStopwatch
+- [x] 输入时间埋点（闪卡）— FlashcardNotifier 新增 _inputStopwatch（TTS + 例句播放计时）
+- [x] 输出时间埋点 — 跟读 onPauseStarted/onPauseEnded、复述 _enterRetellingPhase/_onRetellCountdownFinished、难句补练跟读轮
+- [x] UI — Chips 合并（"听: X分 · N词" / "说: X分 · N词"）+ 国际化 listenTimeWords / speakTimeWords
+- [x] UI — 柱状图双色堆叠（底部 teal 输入 + 顶部 deepPurple 输出）
+- [x] 测试覆盖（10 个新 StudyTimeService 测试，全部通过）
+
+  **完成时间**: 2026-03-15
+
+---
+
 ## 意群划分功能
 
 ## 增加自由练习功能

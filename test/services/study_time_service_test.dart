@@ -271,4 +271,104 @@ void main() {
       expect(await service.getTodayOutputWords(), 50);
     });
   });
+
+  group('StudyTimeService - inputTime', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('首次读取返回 0', () async {
+      final service = StudyTimeService();
+      expect(await service.getTodayInputTime(), 0);
+    });
+
+    test('addInputTime 累加', () async {
+      final service = StudyTimeService();
+      await service.addInputTime(30);
+      expect(await service.getTodayInputTime(), 30);
+
+      await service.addInputTime(45);
+      expect(await service.getTodayInputTime(), 75);
+    });
+
+    test('seconds <= 0 时忽略', () async {
+      final service = StudyTimeService();
+      await service.addInputTime(60);
+      await service.addInputTime(0);
+      await service.addInputTime(-5);
+      expect(await service.getTodayInputTime(), 60);
+    });
+
+    test('自定义日期隔离', () async {
+      final service = StudyTimeService();
+      final day1 = DateTime(2026, 3, 5);
+      final day2 = DateTime(2026, 3, 6);
+
+      await service.addInputTime(100, date: day1);
+      await service.addInputTime(200, date: day2);
+
+      expect(await service.getInputTime(day1), 100);
+      expect(await service.getInputTime(day2), 200);
+    });
+
+    test('getWeeklyInputTimes 返回过去 7 天数据', () async {
+      final service = StudyTimeService();
+      final today = DateTime(2026, 3, 8);
+      await service.addInputTime(100, date: DateTime(2026, 3, 2));
+      await service.addInputTime(200, date: DateTime(2026, 3, 5));
+      await service.addInputTime(300, date: today);
+
+      final times = await service.getWeeklyInputTimes(now: today);
+      expect(times, [100, 0, 0, 200, 0, 0, 300]);
+      expect(times.length, 7);
+    });
+  });
+
+  group('StudyTimeService - outputTime', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('首次读取返回 0', () async {
+      final service = StudyTimeService();
+      expect(await service.getTodayOutputTime(), 0);
+    });
+
+    test('addOutputTime 累加', () async {
+      final service = StudyTimeService();
+      await service.addOutputTime(20);
+      expect(await service.getTodayOutputTime(), 20);
+
+      await service.addOutputTime(30);
+      expect(await service.getTodayOutputTime(), 50);
+    });
+
+    test('seconds <= 0 时忽略', () async {
+      final service = StudyTimeService();
+      await service.addOutputTime(40);
+      await service.addOutputTime(0);
+      await service.addOutputTime(-1);
+      expect(await service.getTodayOutputTime(), 40);
+    });
+
+    test('getWeeklyOutputTimes 返回过去 7 天数据', () async {
+      final service = StudyTimeService();
+      final today = DateTime(2026, 3, 8);
+      await service.addOutputTime(50, date: DateTime(2026, 3, 3));
+      await service.addOutputTime(80, date: today);
+
+      final times = await service.getWeeklyOutputTimes(now: today);
+      expect(times, [0, 50, 0, 0, 0, 0, 80]);
+      expect(times.length, 7);
+    });
+
+    test('输入时间与输出时间互不干扰', () async {
+      final service = StudyTimeService();
+      await service.addInputTime(100);
+      await service.addOutputTime(50);
+
+      expect(await service.getTodayInputTime(), 100);
+      expect(await service.getTodayOutputTime(), 50);
+    });
+  });
 }

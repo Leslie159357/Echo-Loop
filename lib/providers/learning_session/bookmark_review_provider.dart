@@ -14,6 +14,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../database/daos/bookmark_dao.dart';
@@ -53,6 +54,15 @@ class BookmarkReview extends _$BookmarkReview {
   /// 学习计时器
   final Stopwatch _studyStopwatch = Stopwatch();
 
+  /// 输入时间计时器（音频播放期间运行）
+  final Stopwatch _inputStopwatch = Stopwatch();
+
+  /// 输出时间计时器（跟读暂停期间运行）
+  final Stopwatch _outputStopwatch = Stopwatch();
+
+  /// 音频播放状态监听（用于输入时间追踪）
+  StreamSubscription<ja.PlayerState>? _inputTimePlayerStateSub;
+
   @override
   ReviewDifficultPracticeState build() {
     _engine = SentencePlaybackEngine(
@@ -60,6 +70,7 @@ class BookmarkReview extends _$BookmarkReview {
     );
     ref.onDispose(() {
       _engine.cleanup();
+      _inputTimePlayerStateSub?.cancel();
       _saveAndRefreshStudyTime();
     });
     return const ReviewDifficultPracticeState();
@@ -125,6 +136,22 @@ class BookmarkReview extends _$BookmarkReview {
     // 启动学习计时
     _studyStopwatch.reset();
     _studyStopwatch.start();
+
+    // 启动输入时间追踪
+    _startInputTimeTracking();
+  }
+
+  /// 开始监听 AudioEngine playerState，追踪输入时间
+  void _startInputTimeTracking() {
+    _inputTimePlayerStateSub?.cancel();
+    final engine = ref.read(audioEngineProvider.notifier);
+    _inputTimePlayerStateSub = engine.playerStateStream.listen((playerState) {
+      if (playerState.playing) {
+        if (!_inputStopwatch.isRunning) _inputStopwatch.start();
+      } else {
+        _inputStopwatch.stop();
+      }
+    });
   }
 
   /// 更新练习设置（仅会话内生效）
@@ -320,6 +347,8 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 释放资源
   void disposePlayer() {
+    _inputTimePlayerStateSub?.cancel();
+    _inputTimePlayerStateSub = null;
     _saveAndRefreshStudyTime();
     _engine.cleanup();
     _sentences = [];
@@ -474,6 +503,7 @@ class BookmarkReview extends _$BookmarkReview {
         _addInputWords(wordCount);
         _recordLearnedSentence(sentence.text);
         _addOutputWords(wordCount);
+        if (!_outputStopwatch.isRunning) _outputStopwatch.start();
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -484,6 +514,7 @@ class BookmarkReview extends _$BookmarkReview {
         );
       },
       onPauseEnded: () {
+        _outputStopwatch.stop();
         state = state.copyWith(isPauseBetweenPlays: false);
       },
       onTick: (remaining) {
@@ -503,10 +534,29 @@ class BookmarkReview extends _$BookmarkReview {
     );
   }
 
-  /// 停止计时并保存已记录的学习时长，刷新统计 UI
+  /// 停止计时并保存已记录的学习时长 + 输入/输出时间，刷新统计 UI
   Future<void> _saveAndRefreshStudyTime() async {
+    // 保存输入/输出时间
+    _inputStopwatch.stop();
+    final inputSecs = _inputStopwatch.elapsed.inSeconds;
+    _inputStopwatch.reset();
+    if (inputSecs > 0) {
+      await _studyTimeService.addInputTime(inputSecs);
+    }
+
+    _outputStopwatch.stop();
+    final outputSecs = _outputStopwatch.elapsed.inSeconds;
+    _outputStopwatch.reset();
+    if (outputSecs > 0) {
+      await _studyTimeService.addOutputTime(outputSecs);
+    }
+
     if (!_studyStopwatch.isRunning &&
         _studyStopwatch.elapsed == Duration.zero) {
+      if (inputSecs > 0 || outputSecs > 0) {
+        ref.read(dailyStudyTimeProvider.notifier).refresh();
+        ref.read(studyStatsNotifierProvider.notifier).refresh();
+      }
       return;
     }
     _studyStopwatch.stop();

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -153,10 +154,17 @@ class FlashcardNotifier extends _$FlashcardNotifier {
   /// 学习计时器
   final Stopwatch _studyStopwatch = Stopwatch();
 
+  /// 输入时间计时器（TTS + 音频播放期间运行）
+  final Stopwatch _inputStopwatch = Stopwatch();
+
+  /// 音频播放状态监听（用于输入时间追踪）
+  StreamSubscription<ja.PlayerState>? _inputTimePlayerStateSub;
+
   @override
   FlashcardState build() {
     ref.onDispose(() {
       _timer.cancel();
+      _inputTimePlayerStateSub?.cancel();
       _saveAndRefreshStudyTime();
     });
     return const FlashcardState();
@@ -187,6 +195,9 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     // 启动学习计时
     _studyStopwatch.reset();
     _studyStopwatch.start();
+
+    // 启动输入时间追踪（例句音频播放）
+    _startInputTimeTracking();
 
     if (items.isNotEmpty) {
       // 预加载词典（当前 + 前后 2 张）
@@ -397,6 +408,8 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
   /// 释放资源
   Future<void> disposePlayer() async {
+    _inputTimePlayerStateSub?.cancel();
+    _inputTimePlayerStateSub = null;
     await _saveAndRefreshStudyTime();
     _timer.cancel();
     _stopAllPlayback();
@@ -492,12 +505,29 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     ref.read(audioEngineProvider.notifier).stop();
   }
 
+  /// 开始监听 AudioEngine playerState，追踪输入时间（例句音频播放）
+  void _startInputTimeTracking() {
+    _inputTimePlayerStateSub?.cancel();
+    final engine = ref.read(audioEngineProvider.notifier);
+    _inputTimePlayerStateSub = engine.playerStateStream.listen((playerState) {
+      if (playerState.playing) {
+        if (!_inputStopwatch.isRunning) _inputStopwatch.start();
+      } else {
+        _inputStopwatch.stop();
+      }
+    });
+  }
+
   /// TTS 朗读当前单词（受 autoPlayWord 设置控制）
+  ///
+  /// TTS 朗读期间计入输入时间。
   Future<void> _speakCurrentWord() async {
     if (!state.settings.autoPlayWord) return;
     final word = state.currentWord?.savedWord.word;
     if (word != null) {
+      if (!_inputStopwatch.isRunning) _inputStopwatch.start();
       await TtsService.instance.speak(word);
+      _inputStopwatch.stop();
       await _addInputWords(1);
     }
   }
@@ -605,10 +635,22 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     return const FlashcardSettings();
   }
 
-  /// 停止计时并保存已记录的学习时长，刷新统计 UI
+  /// 停止计时并保存已记录的学习时长 + 输入时间，刷新统计 UI
   Future<void> _saveAndRefreshStudyTime() async {
+    // 保存输入时间
+    _inputStopwatch.stop();
+    final inputSecs = _inputStopwatch.elapsed.inSeconds;
+    _inputStopwatch.reset();
+    if (inputSecs > 0) {
+      await _studyTimeService.addInputTime(inputSecs);
+    }
+
     if (!_studyStopwatch.isRunning &&
         _studyStopwatch.elapsed == Duration.zero) {
+      if (inputSecs > 0) {
+        ref.read(dailyStudyTimeProvider.notifier).refresh();
+        ref.read(studyStatsNotifierProvider.notifier).refresh();
+      }
       return;
     }
     _studyStopwatch.stop();

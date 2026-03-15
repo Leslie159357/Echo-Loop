@@ -24,7 +24,11 @@ class StudyStatsHeader extends ConsumerWidget {
           _StatsChips(stats: stats),
           if (stats.dailySeconds.any((s) => s > 0)) ...[
             const SizedBox(height: AppSpacing.m),
-            _WeeklyBarChart(dailySeconds: stats.dailySeconds),
+            _WeeklyBarChart(
+              dailyInputSeconds: stats.dailyInputSeconds,
+              dailyOutputSeconds: stats.dailyOutputSeconds,
+              dailyTotalSeconds: stats.dailySeconds,
+            ),
           ],
         ],
       ),
@@ -64,14 +68,18 @@ class _StatsChips extends StatelessWidget {
         _StatChip(
           icon: Icons.headphones_outlined,
           iconColor: Colors.teal,
-          label:
-              '${l10n.inputWordsShort}: ${_formatWordCount(stats.todayInputWords)}',
+          label: l10n.listenTimeWords(
+            _formatTimeShort(stats.todayInputSeconds),
+            _formatWordCount(stats.todayInputWords),
+          ),
         ),
         _StatChip(
           icon: Icons.mic_outlined,
           iconColor: Colors.deepPurple,
-          label:
-              '${l10n.outputWordsShort}: ${_formatWordCount(stats.todayOutputWords)}',
+          label: l10n.speakTimeWords(
+            _formatTimeShort(stats.todayOutputSeconds),
+            _formatWordCount(stats.todayOutputWords),
+          ),
         ),
         _StatChip(
           icon: Icons.spellcheck_rounded,
@@ -141,19 +149,33 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-/// 7 天学习时长柱状图
+/// 7 天学习时长柱状图（双色堆叠）
 ///
-/// 用 Row + Container 实现，不引入图表库。
-/// 当天主题色高亮，其余淡色。柱顶圆角。
+/// 底部 teal = 输入时间，顶部 deepPurple = 输出时间。
+/// 柱高 = 输入 + 输出（不含暂停等非听说时间）。
+/// 如果输入/输出时间都为 0，回退到总学习时间单色显示。
 class _WeeklyBarChart extends StatelessWidget {
-  final List<int> dailySeconds;
+  final List<int> dailyInputSeconds;
+  final List<int> dailyOutputSeconds;
+  final List<int> dailyTotalSeconds;
 
-  const _WeeklyBarChart({required this.dailySeconds});
+  const _WeeklyBarChart({
+    required this.dailyInputSeconds,
+    required this.dailyOutputSeconds,
+    required this.dailyTotalSeconds,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final maxSeconds = dailySeconds.reduce((a, b) => a > b ? a : b);
+
+    // 向前兼容：旧数据无 input/output 时，用 totalSeconds 当作输入
+    final dailyBarSeconds = List.generate(7, (i) {
+      final io = dailyInputSeconds[i] + dailyOutputSeconds[i];
+      return io > 0 ? io : dailyTotalSeconds[i];
+    });
+
+    final maxSeconds = dailyBarSeconds.reduce((a, b) => a > b ? a : b);
     const maxBarHeight = 56.0;
 
     // 计算最近 7 天的星期标签
@@ -176,20 +198,29 @@ class _WeeklyBarChart extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: List.generate(7, (i) {
             final isToday = i == 6;
-            final seconds = dailySeconds[i];
-            final ratio = maxSeconds > 0 ? seconds / maxSeconds : 0.0;
+            final totalSec = dailyBarSeconds[i];
+            final ratio = maxSeconds > 0 ? totalSec / maxSeconds : 0.0;
             final barHeight = (ratio * maxBarHeight).clamp(3.0, maxBarHeight);
+
+            // 双色比例（旧数据无 input/output 时全部算输入）
+            final hasBreakdown =
+                dailyInputSeconds[i] > 0 || dailyOutputSeconds[i] > 0;
+            final inputSec =
+                hasBreakdown ? dailyInputSeconds[i] : dailyTotalSeconds[i];
+            final outputSec =
+                hasBreakdown ? dailyOutputSeconds[i] : 0;
+            final inputRatio = totalSec > 0 ? inputSec / totalSec : 1.0;
 
             return Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // 柱顶数值
-                  if (seconds > 0)
+                  if (totalSec > 0)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Text(
-                        _formatMinutes(seconds),
+                        _formatMinutes(totalSec),
                         style: theme.textTheme.labelSmall?.copyWith(
                           fontSize: 9,
                           fontWeight: isToday
@@ -201,20 +232,27 @@ class _WeeklyBarChart extends StatelessWidget {
                         ),
                       ),
                     ),
-                  // 柱体
-                  Container(
-                    height: barHeight,
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    decoration: BoxDecoration(
-                      color: isToday
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.primary.withValues(alpha: 0.15),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(4),
-                        bottom: Radius.circular(2),
+                  // 柱体（双色堆叠或纯输入单色）
+                  if (outputSec > 0)
+                    _buildStackedBar(
+                      barHeight: barHeight,
+                      inputRatio: inputRatio,
+                      isToday: isToday,
+                    )
+                  else
+                    Container(
+                      height: barHeight,
+                      margin: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: isToday
+                            ? Colors.teal
+                            : Colors.teal.withValues(alpha: 0.2),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(4),
+                          bottom: Radius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 5),
                   // 星期标签
                   Text(
@@ -232,6 +270,46 @@ class _WeeklyBarChart extends StatelessWidget {
             );
           }),
         ),
+      ),
+    );
+  }
+
+  /// 构建双色堆叠柱体
+  Widget _buildStackedBar({
+    required double barHeight,
+    required double inputRatio,
+    required bool isToday,
+  }) {
+    final inputHeight = (barHeight * inputRatio).clamp(1.0, barHeight - 1);
+    final outputHeight = barHeight - inputHeight;
+    final alpha = isToday ? 1.0 : 0.3;
+
+    return Container(
+      height: barHeight,
+      margin: const EdgeInsets.symmetric(horizontal: 5),
+      child: Column(
+        children: [
+          // 顶部：输出（deepPurple）
+          Container(
+            height: outputHeight,
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.withValues(alpha: alpha),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(4),
+              ),
+            ),
+          ),
+          // 底部：输入（teal）
+          Container(
+            height: inputHeight,
+            decoration: BoxDecoration(
+              color: Colors.teal.withValues(alpha: alpha),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(2),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -256,6 +334,19 @@ class _WeeklyBarChart extends StatelessWidget {
       _ => '',
     };
   }
+}
+
+/// 格式化秒数为简短时间显示（用于 Chip）
+///
+/// 0 → "0分", < 60 → "< 1分", < 3600 → "N分", >= 3600 → "Nh Mm"
+String _formatTimeShort(int seconds) {
+  if (seconds <= 0) return '0分';
+  final totalMinutes = (seconds / 60).ceil();
+  if (totalMinutes < 60) return '$totalMinutes分';
+  final hours = totalMinutes ~/ 60;
+  final minutes = totalMinutes % 60;
+  if (minutes == 0) return '${hours}h';
+  return '${hours}h${minutes}m';
 }
 
 /// 格式化词数显示

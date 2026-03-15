@@ -493,6 +493,11 @@ class RetellPlayer extends _$RetellPlayer {
       paragraphDuration,
     );
 
+    // 复述开始 = 输出时间开始
+    try {
+      ref.read(learningSessionProvider.notifier).startOutputTimer();
+    } catch (_) {}
+
     state = state.copyWith(
       phase: RetellPhase.retelling,
       isPlaying: false,
@@ -528,11 +533,11 @@ class RetellPlayer extends _$RetellPlayer {
 
   /// 复述倒计时结束
   Future<void> _onRetellCountdownFinished() async {
-    // 复述完成 = 输出词数
+    // 复述完成 = 输出词数 + 停止输出计时
+    final session = ref.read(learningSessionProvider.notifier);
     final paragraphWordCount = countWordsInSentences(currentParagraphSentences);
-    ref
-        .read(learningSessionProvider.notifier)
-        .addOutputWords(paragraphWordCount);
+    session.addOutputWords(paragraphWordCount);
+    session.stopOutputTimer();
 
     state = state.copyWith(isRetellCountdown: false);
 

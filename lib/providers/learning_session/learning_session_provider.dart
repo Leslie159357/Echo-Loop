@@ -138,6 +138,15 @@ class LearningSession extends _$LearningSession {
   /// 学习计时器，进入学习模式时启动，退出时停止
   final Stopwatch _studyStopwatch = Stopwatch();
 
+  /// 输入时间计时器（音频播放期间运行）
+  final Stopwatch _inputStopwatch = Stopwatch();
+
+  /// 输出时间计时器（跟读/复述暂停期间运行）
+  final Stopwatch _outputStopwatch = Stopwatch();
+
+  /// 音频播放状态监听（用于输入时间追踪）
+  StreamSubscription<ja.PlayerState>? _inputTimePlayerStateSub;
+
   /// 学习计时器是否正在运行（仅用于测试验证）
   @visibleForTesting
   bool get isStudyTimerRunning => _studyStopwatch.isRunning;
@@ -156,6 +165,7 @@ class LearningSession extends _$LearningSession {
     ref.onDispose(() {
       _playerStateSub?.cancel();
       _blindListenPositionSub?.cancel();
+      _inputTimePlayerStateSub?.cancel();
       _saveStudyTime();
       _lifecycleListener.dispose();
     });
@@ -174,6 +184,8 @@ class LearningSession extends _$LearningSession {
         final isPlaying = ref.read(audioEngineProvider.notifier).isPlaying;
         if (!isPlaying) {
           _studyStopwatch.stop();
+          _inputStopwatch.stop();
+          _outputStopwatch.stop();
         }
       }
     } else if (lifecycleState == AppLifecycleState.resumed) {
@@ -184,10 +196,12 @@ class LearningSession extends _$LearningSession {
     }
   }
 
-  /// 停止计时并保存已记录的学习时长
+  /// 停止计时并保存已记录的学习时长 + 输入/输出时间
   Future<void> _saveStudyTime() async {
     if (!_studyStopwatch.isRunning &&
         _studyStopwatch.elapsed == Duration.zero) {
+      // 即使总学习时长为 0，也要保存可能已累计的输入/输出时间
+      await _saveInputOutputTime();
       return;
     }
     _studyStopwatch.stop();
@@ -196,6 +210,49 @@ class LearningSession extends _$LearningSession {
     if (seconds > 0) {
       await _studyTimeService.addStudyTime(seconds);
     }
+    await _saveInputOutputTime();
+  }
+
+  /// 保存已累计的输入/输出时间
+  Future<void> _saveInputOutputTime() async {
+    _inputStopwatch.stop();
+    final inputSeconds = _inputStopwatch.elapsed.inSeconds;
+    _inputStopwatch.reset();
+    if (inputSeconds > 0) {
+      await _studyTimeService.addInputTime(inputSeconds);
+    }
+
+    _outputStopwatch.stop();
+    final outputSeconds = _outputStopwatch.elapsed.inSeconds;
+    _outputStopwatch.reset();
+    if (outputSeconds > 0) {
+      await _studyTimeService.addOutputTime(outputSeconds);
+    }
+  }
+
+  /// 开始监听 AudioEngine playerState，追踪输入时间
+  ///
+  /// playing → 启动 _inputStopwatch，非 playing → 暂停
+  void _startInputTimeTracking() {
+    _inputTimePlayerStateSub?.cancel();
+    final engine = ref.read(audioEngineProvider.notifier);
+    _inputTimePlayerStateSub = engine.playerStateStream.listen((playerState) {
+      if (playerState.playing) {
+        if (!_inputStopwatch.isRunning) _inputStopwatch.start();
+      } else {
+        _inputStopwatch.stop();
+      }
+    });
+  }
+
+  /// 启动输出时间计时（跟读/复述暂停开始时调用）
+  void startOutputTimer() {
+    if (!_outputStopwatch.isRunning) _outputStopwatch.start();
+  }
+
+  /// 停止输出时间计时（跟读/复述暂停结束时调用）
+  void stopOutputTimer() {
+    _outputStopwatch.stop();
   }
 
   /// 立即持久化输入词数（每播完一句调用，不丢数据）
@@ -259,6 +316,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
   }) async {
     _studyStopwatch.start();
+    _startInputTimeTracking();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
 
@@ -324,6 +382,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
   }) async {
     _studyStopwatch.start();
+    _startInputTimeTracking();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
     final progressNotifier = ref.read(
@@ -366,6 +425,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
   }) async {
     _studyStopwatch.start();
+    _startInputTimeTracking();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
 
@@ -420,6 +480,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
   }) async {
     _studyStopwatch.start();
+    _startInputTimeTracking();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
 
@@ -461,6 +522,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
   }) async {
     _studyStopwatch.start();
+    _startInputTimeTracking();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
 
@@ -506,6 +568,8 @@ class LearningSession extends _$LearningSession {
 
     _playerStateSub?.cancel();
     _playerStateSub = null;
+    _inputTimePlayerStateSub?.cancel();
+    _inputTimePlayerStateSub = null;
 
     if (mode == LearningMode.blindListen) {
       // 补计尚未被位置追踪计入的句子（用户中途退出时）

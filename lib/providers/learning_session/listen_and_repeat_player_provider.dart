@@ -437,6 +437,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
         session.addInputWords(wordCount);
         session.recordLearnedSentence(sentence.text);
         session.addOutputWords(wordCount);
+        session.startOutputTimer();
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -447,6 +448,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
         );
       },
       onPauseEnded: () {
+        session.stopOutputTimer();
         state = state.copyWith(
           isPauseBetweenPlays: false,
           isCountdownPaused: false,
