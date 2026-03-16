@@ -947,6 +947,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatTapToRecord => '点击开始录音';
 
   @override
+  String get listenAndRepeatRatingPerfect => '完美!';
+
+  @override
   String get listenAndRepeatRatingExcellent => '非常棒';
 
   @override
@@ -956,7 +959,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatRatingFair => '还行';
 
   @override
-  String get listenAndRepeatRatingTryAgain => '再试一次';
+  String get listenAndRepeatRatingKeepGoing => '继续加油';
 
   @override
   String get listenAndRepeatAwaitingFinalTranscript => '正在确认最终转录...';
@@ -978,7 +981,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get listenAndRepeatRecognitionNoEnglish => '没有检测到英语，请再试一次。';
+  String get listenAndRepeatRecognitionNoEnglish => '未检测到英语语音';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied => '需要麦克风和语音识别权限。';
@@ -988,9 +991,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get listenAndRepeatRecognitionError => '识别错误';
-
-  @override
-  String get listenAndRepeatRetryPending => '再试一遍...';
 
   @override
   String get listenAndRepeatCompleteTitle => '跟读完成';

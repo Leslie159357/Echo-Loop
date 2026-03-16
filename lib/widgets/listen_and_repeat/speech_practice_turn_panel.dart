@@ -20,9 +20,6 @@ class SpeechPracticeTurnPanel extends StatelessWidget {
   final VoidCallback onFastForward;
   final VoidCallback onCountdownTap;
 
-  /// 手动控制模式：idle 阶段显示"点击录音"而非"录音中"
-  final bool isManualMode;
-
   const SpeechPracticeTurnPanel({
     super.key,
     required this.l10n,
@@ -31,7 +28,6 @@ class SpeechPracticeTurnPanel extends StatelessWidget {
     required this.onRecordTap,
     required this.onFastForward,
     required this.onCountdownTap,
-    this.isManualMode = false,
   });
 
   @override
@@ -75,8 +71,7 @@ class SpeechPracticeTurnPanel extends StatelessWidget {
     // 其余阶段统一布局：状态文字 + 录音按钮
     final statusText = _statusText(turnState.phase);
     final isProcessing =
-        turnState.phase == ListenAndRepeatTurnPhase.processing ||
-        turnState.phase == ListenAndRepeatTurnPhase.retryPending;
+        turnState.phase == ListenAndRepeatTurnPhase.processing;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -119,13 +114,11 @@ class SpeechPracticeTurnPanel extends StatelessWidget {
             opacity: isProcessing ? 0.45 : 1.0,
             child: SpeechRecordButton(
               phase: switch (turnState.phase) {
-                // 手动模式 idle 保持蓝色待录音态，自动模式映射为红色（即将开始录音）
-                ListenAndRepeatTurnPhase.idle => isManualMode
-                    ? ListenAndRepeatTurnPhase.manualFallback
-                    : ListenAndRepeatTurnPhase.awaitingSpeech,
-                ListenAndRepeatTurnPhase.processing ||
-                ListenAndRepeatTurnPhase.retryPending =>
-                  ListenAndRepeatTurnPhase.awaitingSpeech,
+                // idle / processing 显示蓝色待录音态
+                // 只有 awaitingSpeech / speaking 才显示红色录音态
+                ListenAndRepeatTurnPhase.idle ||
+                ListenAndRepeatTurnPhase.processing =>
+                  ListenAndRepeatTurnPhase.waitingForUser,
                 final p => p,
               },
               onTap: onRecordTap,
@@ -139,19 +132,14 @@ class SpeechPracticeTurnPanel extends StatelessWidget {
   /// 根据阶段返回状态文字，null 表示不显示。
   String? _statusText(ListenAndRepeatTurnPhase phase) {
     return switch (phase) {
-      ListenAndRepeatTurnPhase.idle => isManualMode
-          ? l10n.listenAndRepeatTapToRecord
-          : l10n.listenAndRepeatRecordingInProgress,
+      ListenAndRepeatTurnPhase.idle => l10n.listenAndRepeatTapToRecord,
       ListenAndRepeatTurnPhase.awaitingSpeech =>
-        turnState.hasShownSpeechReminder
-            ? l10n.listenAndRepeatStartSpeaking
-            : l10n.listenAndRepeatRecordingInProgress,
+        l10n.listenAndRepeatRecordingInProgress,
       ListenAndRepeatTurnPhase.speaking =>
         l10n.listenAndRepeatRecordingInProgress,
       ListenAndRepeatTurnPhase.processing => l10n.listenAndRepeatAnalyzing,
-      ListenAndRepeatTurnPhase.manualFallback =>
+      ListenAndRepeatTurnPhase.waitingForUser =>
         l10n.listenAndRepeatTapToRecord,
-      ListenAndRepeatTurnPhase.retryPending => l10n.listenAndRepeatRetryPending,
       ListenAndRepeatTurnPhase.reviewCountdown => null,
     };
   }

@@ -7,18 +7,17 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/speech_practice_models.dart';
+import '../services/app_logger.dart';
 import 'speech_practice_session_provider.dart';
 
-const _awaitingSpeechReminderDelay = Duration(seconds: 5);
-const _awaitingSpeechFallbackDelay = Duration(seconds: 15);
+const _awaitingSpeechFallbackDelay = Duration(seconds: 60);
 const _defaultSilenceThreshold = Duration(seconds: 5);
 const _maxRecordingMultiplier = 2.5;
 const _maxRecordingBuffer = Duration(seconds: 5);
 const _maxRecordingFloor = Duration(seconds: 10);
 const _reviewCountdownDuration = Duration(seconds: 5);
-const _fairScoreThreshold = 0.45;
-const _autoRetryDelay = Duration(seconds: 4);
-const _maxConsecutiveFailures = 3;
+// const _autoRetryDelay = Duration(seconds: 4);
+// const _maxConsecutiveFailures = 3;
 
 enum ListenAndRepeatTurnPhase {
   idle,
@@ -27,16 +26,13 @@ enum ListenAndRepeatTurnPhase {
   processing,
   reviewCountdown,
 
-  /// 评级未达 Fair，短暂展示反馈后自动重新录音。
-  retryPending,
-  manualFallback,
+  waitingForUser,
 }
 
 class ListenAndRepeatTurnState {
   final ListenAndRepeatTurnPhase phase;
   final String? promptId;
   final String? referenceText;
-  final bool hasShownSpeechReminder;
   final Duration reviewCountdownRemaining;
   final bool isReviewCountdownPaused;
 
@@ -44,15 +40,13 @@ class ListenAndRepeatTurnState {
     this.phase = ListenAndRepeatTurnPhase.idle,
     this.promptId,
     this.referenceText,
-    this.hasShownSpeechReminder = false,
     this.reviewCountdownRemaining = _reviewCountdownDuration,
     this.isReviewCountdownPaused = false,
   });
 
   bool get isActive =>
       phase != ListenAndRepeatTurnPhase.idle &&
-      phase != ListenAndRepeatTurnPhase.manualFallback &&
-      phase != ListenAndRepeatTurnPhase.retryPending;
+      phase != ListenAndRepeatTurnPhase.waitingForUser;
 
   ListenAndRepeatTurnState copyWith({
     ListenAndRepeatTurnPhase? phase,
@@ -60,7 +54,6 @@ class ListenAndRepeatTurnState {
     bool clearPromptId = false,
     String? referenceText,
     bool clearReferenceText = false,
-    bool? hasShownSpeechReminder,
     Duration? reviewCountdownRemaining,
     bool? isReviewCountdownPaused,
   }) {
@@ -70,8 +63,6 @@ class ListenAndRepeatTurnState {
       referenceText: clearReferenceText
           ? null
           : (referenceText ?? this.referenceText),
-      hasShownSpeechReminder:
-          hasShownSpeechReminder ?? this.hasShownSpeechReminder,
       reviewCountdownRemaining:
           reviewCountdownRemaining ?? this.reviewCountdownRemaining,
       isReviewCountdownPaused:
@@ -236,15 +227,12 @@ final listenAndRepeatTurnControllerProvider =
     );
 
 class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
-  Timer? _speechReminderTimer;
   Timer? _speechFallbackTimer;
   Timer? _reviewTickTimer;
   Timer? _maxDurationTimer;
-  Timer? _autoRetryTimer;
   Timer? _transcriptStaleTimer;
   String? _lastKnownTranscript;
   Duration _sentenceDuration = Duration.zero;
-  int _consecutiveFailureCount = 0;
   bool _isStopping = false;
 
   /// 手动控制模式标志：录音评估后不自动倒计时推进。
@@ -296,6 +284,7 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     _isStopping = false;
     _lastKnownTranscript = null;
     _sentenceDuration = sentenceDuration;
+    AppLogger.log('Turn', '→ awaitingSpeech (manual=$_isManualMode)');
     state = ListenAndRepeatTurnState(
       phase: ListenAndRepeatTurnPhase.awaitingSpeech,
       promptId: promptId,
@@ -309,21 +298,16 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
         .read(speechPracticeSessionProvider.notifier)
         .attemptFor(promptId);
     if (currentAttempt?.status != SpeechPracticeAttemptStatus.recording) {
+      AppLogger.log('Turn', '→ idle (recording failed to start)');
       state = state.copyWith(phase: ListenAndRepeatTurnPhase.idle);
       return;
     }
 
     // 手动模式：不启动任何自动计时器，完全由用户控制
-    if (!_isManualMode) {
-      _scheduleMaxDurationTimer(
-        promptId: promptId,
-        referenceText: referenceText,
-        sentenceDuration: sentenceDuration,
-      );
-
-      if (allowAutoFallback) {
-        _scheduleAwaitingSpeechTimers(promptId);
-      }
+    // 自动模式：只启动等待开口计时器（60s），最大录音时长在检测到语音后才启动
+    if (!_isManualMode && allowAutoFallback) {
+      AppLogger.log('Turn', '启动 60s 等待开口计时器');
+      _scheduleAwaitingSpeechTimer(promptId);
     }
   }
 
@@ -359,14 +343,16 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     if (state.promptId != promptId) {
       return;
     }
-    _cancelAwaitingSpeechTimers();
+    _cancelAwaitingSpeechTimer();
     _cancelReviewCountdown();
     _maxDurationTimer?.cancel();
     _maxDurationTimer = null;
+    AppLogger.log('Turn', '→ processing');
     state = state.copyWith(phase: ListenAndRepeatTurnPhase.processing);
   }
 
   Future<void> handleManualStop() async {
+    AppLogger.log('Turn', 'handleManualStop');
     final promptId = state.promptId;
     final referenceText = state.referenceText;
     if (promptId == null || referenceText == null) {
@@ -383,12 +369,13 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
   }
 
   Future<void> handleContinue() async {
+    AppLogger.log('Turn', '→ idle (handleContinue)');
     _cancelReviewCountdown();
     state = state.copyWith(phase: ListenAndRepeatTurnPhase.idle);
     if (_onContinue != null) {
       await _onContinue!();
     } else {
-      debugPrint('[TurnController] handleContinue: _onContinue 未注册');
+      AppLogger.log('Turn', 'handleContinue: _onContinue 未注册!');
     }
   }
 
@@ -435,7 +422,7 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     if (state.promptId != promptId) {
       return;
     }
-    _cancelAwaitingSpeechTimers();
+    _cancelAwaitingSpeechTimer();
     _cancelReviewCountdown();
     state = state.copyWith(
       phase: ListenAndRepeatTurnPhase.reviewCountdown,
@@ -446,18 +433,24 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
   }
 
   /// App 进入后台时清理 turn，停止所有定时器。
+  /// 回前台后进入 waitingForUser，避免自动触发录音。
   void _handleAppLifecycleChange(AppLifecycleState appState) {
     if (appState == AppLifecycleState.paused ||
         appState == AppLifecycleState.hidden) {
-      clearTurn();
+      AppLogger.log('Turn', 'App 进入后台 → waitingForUser');
+      _cancelAllTimers();
+      _isStopping = false;
+      state = const ListenAndRepeatTurnState(
+        phase: ListenAndRepeatTurnPhase.waitingForUser,
+      );
     }
   }
 
   /// 清除当前回合状态（保留页面级配置 _isManualMode / _onContinue）。
   void clearTurn() {
+    AppLogger.log('Turn', 'clearTurn → idle');
     _cancelAllTimers();
     _isStopping = false;
-    _consecutiveFailureCount = 0;
     state = const ListenAndRepeatTurnState();
   }
 
@@ -495,57 +488,53 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
 
     if (attempt.hasFinalFeedback &&
         !(previousAttempt?.hasFinalFeedback ?? false)) {
+      AppLogger.log('Turn', '评估完成: status=${attempt.status.name}, '
+          'score=${attempt.score?.toStringAsFixed(2)}');
       // 权限被拒或平台不可用时回退为手动录音，重试也无法解决
       if (attempt.status == SpeechPracticeAttemptStatus.permissionDenied ||
           attempt.status == SpeechPracticeAttemptStatus.unavailable) {
+        AppLogger.log('Turn', '→ waitingForUser (${attempt.status.name})');
         _cancelAllTimers();
-        state = state.copyWith(phase: ListenAndRepeatTurnPhase.manualFallback);
+        state = state.copyWith(phase: ListenAndRepeatTurnPhase.waitingForUser);
         return;
       }
-      // 检测失败、识别错误或评级未达 Fair 时自动重试
-      final isFailed =
-          attempt.status == SpeechPracticeAttemptStatus.noEnglishDetected ||
-          attempt.status == SpeechPracticeAttemptStatus.error ||
-          (attempt.score ?? 0) < _fairScoreThreshold;
-      if (isFailed) {
-        // 手动模式下不自动重试，回到 idle 让用户自行操作
-        if (_isManualMode) {
-          _cancelAllTimers();
-          state = state.copyWith(phase: ListenAndRepeatTurnPhase.idle);
-          return;
-        }
-        _consecutiveFailureCount++;
-        if (_consecutiveFailureCount >= _maxConsecutiveFailures) {
-          _consecutiveFailureCount = 0;
-          _cancelAllTimers();
-          state = state.copyWith(
-            phase: ListenAndRepeatTurnPhase.manualFallback,
-          );
-        } else {
-          _scheduleAutoRetry(promptId: promptId);
-        }
+      if (_isManualMode) {
+        AppLogger.log('Turn', '→ idle (手动模式，等待用户操作)');
+        _cancelAllTimers();
+        state = state.copyWith(phase: ListenAndRepeatTurnPhase.idle);
       } else {
-        _consecutiveFailureCount = 0;
-        if (_isManualMode) {
-          // 手动模式：评估成功后回到 idle，由用户手动点击下一句
-          _cancelAllTimers();
-          state = state.copyWith(phase: ListenAndRepeatTurnPhase.idle);
-        } else {
-          activateReviewCountdown(promptId: promptId);
-        }
+        AppLogger.log('Turn', '→ reviewCountdown (自动推进)');
+        activateReviewCountdown(promptId: promptId);
       }
       return;
     }
 
     // VAD 检测到语音，或 ASR 已产出文字（用户压低声音时 VAD 可能不触发）
+    final liveText = attempt.liveTranscript?.trim() ?? '';
+    if (liveText.isNotEmpty && liveText != (previousAttempt?.liveTranscript?.trim() ?? '')) {
+      AppLogger.log('Turn', 'live: "$liveText"');
+    }
     final hasVoiceInput =
-        attempt.hasDetectedSpeech ||
-        (attempt.liveTranscript?.trim().isNotEmpty ?? false);
+        attempt.hasDetectedSpeech || liveText.isNotEmpty;
 
     if (state.phase == ListenAndRepeatTurnPhase.awaitingSpeech &&
         hasVoiceInput) {
-      _cancelAwaitingSpeechTimers();
+      _cancelAwaitingSpeechTimer();
+      AppLogger.log('Turn', '→ speaking (检测到语音)');
       state = state.copyWith(phase: ListenAndRepeatTurnPhase.speaking);
+      // 检测到语音后才启动最大录音时长计时器
+      if (!_isManualMode) {
+        final referenceText = state.referenceText;
+        if (promptId == state.promptId && referenceText != null) {
+          final maxDur = _computeMaxRecordingDuration(_sentenceDuration);
+          AppLogger.log('Turn', '启动最大录音时长计时器: ${maxDur.inMilliseconds}ms');
+          _scheduleMaxDurationTimer(
+            promptId: promptId,
+            referenceText: referenceText,
+            sentenceDuration: _sentenceDuration,
+          );
+        }
+      }
     }
 
     // 手动模式：不做静音检测/转录停滞检测，完全由用户点击停止
@@ -560,25 +549,19 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     }
   }
 
-  void _scheduleAwaitingSpeechTimers(String promptId) {
-    _speechReminderTimer?.cancel();
+  /// 60 秒内未检测到语音信号，退出录音模式等待用户操作。
+  void _scheduleAwaitingSpeechTimer(String promptId) {
     _speechFallbackTimer?.cancel();
-    _speechReminderTimer = Timer(_awaitingSpeechReminderDelay, () {
-      if (state.promptId != promptId ||
-          state.phase != ListenAndRepeatTurnPhase.awaitingSpeech) {
-        return;
-      }
-      state = state.copyWith(hasShownSpeechReminder: true);
-    });
     _speechFallbackTimer = Timer(_awaitingSpeechFallbackDelay, () async {
       if (state.promptId != promptId ||
           state.phase != ListenAndRepeatTurnPhase.awaitingSpeech) {
         return;
       }
+      AppLogger.log('Turn', '→ waitingForUser (60s 未检测到语音)');
       await ref
           .read(speechPracticeSessionProvider.notifier)
           .cancelActiveRecording();
-      state = state.copyWith(phase: ListenAndRepeatTurnPhase.manualFallback);
+      state = state.copyWith(phase: ListenAndRepeatTurnPhase.waitingForUser);
     });
   }
 
@@ -607,13 +590,21 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
         partialTranscript: liveTranscript,
       );
       if (currentSilence >= required) {
-        _stopForEvaluation(promptId: promptId, referenceText: referenceText);
+        _stopForEvaluation(
+          promptId: promptId,
+          referenceText: referenceText,
+          reason: '用户读完，静音${currentSilence.inMilliseconds}ms',
+        );
         return;
       }
     }
     // 静音 5s 兜底（无转录时）
     if (currentSilence >= _defaultSilenceThreshold) {
-      _stopForEvaluation(promptId: promptId, referenceText: referenceText);
+      _stopForEvaluation(
+        promptId: promptId,
+        referenceText: referenceText,
+        reason: '静音兜底 ${currentSilence.inSeconds}s',
+      );
       return;
     }
 
@@ -646,7 +637,11 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     _transcriptStaleTimer = Timer(threshold, () {
       if (state.promptId != promptId || _isStopping) return;
       if (state.phase != ListenAndRepeatTurnPhase.speaking) return;
-      _stopForEvaluation(promptId: promptId, referenceText: referenceText);
+      _stopForEvaluation(
+        promptId: promptId,
+        referenceText: referenceText,
+        reason: '转录停滞 ${threshold.inMilliseconds}ms',
+      );
     });
   }
 
@@ -697,7 +692,9 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
   void _stopForEvaluation({
     required String promptId,
     required String referenceText,
+    String reason = '',
   }) {
+    AppLogger.log('Turn', '自动停止录音 ($reason)');
     _isStopping = true;
     enterProcessing(promptId);
     unawaited(
@@ -710,38 +707,14 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
     );
   }
 
-  void _cancelAwaitingSpeechTimers() {
-    _speechReminderTimer?.cancel();
+  void _cancelAwaitingSpeechTimer() {
     _speechFallbackTimer?.cancel();
-    _speechReminderTimer = null;
     _speechFallbackTimer = null;
   }
 
   void _cancelReviewCountdown() {
     _reviewTickTimer?.cancel();
     _reviewTickTimer = null;
-  }
-
-  /// 评级未达 Fair 时短暂展示反馈，然后自动重新开始录音。
-  void _scheduleAutoRetry({required String promptId}) {
-    _cancelAllTimers();
-    state = state.copyWith(phase: ListenAndRepeatTurnPhase.retryPending);
-    _autoRetryTimer = Timer(_autoRetryDelay, () {
-      if (state.promptId != promptId ||
-          state.phase != ListenAndRepeatTurnPhase.retryPending) {
-        return;
-      }
-      final referenceText = state.referenceText;
-      if (referenceText == null) return;
-      unawaited(
-        ensureTurn(
-          promptId: promptId,
-          referenceText: referenceText,
-          allowAutoFallback: false,
-          sentenceDuration: _sentenceDuration,
-        ),
-      );
-    });
   }
 
   /// 启动录音最大时长兜底计时器。
@@ -758,7 +731,11 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
       if (state.promptId != promptId) return;
       if (state.phase == ListenAndRepeatTurnPhase.awaitingSpeech ||
           state.phase == ListenAndRepeatTurnPhase.speaking) {
-        _stopForEvaluation(promptId: promptId, referenceText: referenceText);
+        _stopForEvaluation(
+          promptId: promptId,
+          referenceText: referenceText,
+          reason: '最大录音时长 ${maxDuration.inMilliseconds}ms',
+        );
       }
     });
   }
@@ -771,12 +748,10 @@ class ListenAndRepeatTurnController extends Notifier<ListenAndRepeatTurnState> {
   }
 
   void _cancelAllTimers() {
-    _cancelAwaitingSpeechTimers();
+    _cancelAwaitingSpeechTimer();
     _cancelReviewCountdown();
     _maxDurationTimer?.cancel();
     _maxDurationTimer = null;
-    _autoRetryTimer?.cancel();
-    _autoRetryTimer = null;
     _transcriptStaleTimer?.cancel();
     _transcriptStaleTimer = null;
   }

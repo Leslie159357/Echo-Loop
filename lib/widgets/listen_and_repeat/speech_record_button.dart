@@ -1,7 +1,7 @@
 /// 跟读录音按钮组件。
 ///
 /// 大圆形按钮 + 话筒图标，录音中在图标两侧显示 3 层音波弧线：
-/// - **待录音**（idle / manualFallback）：柔和轮廓 + 话筒图标，无动画
+/// - **待录音**（idle / waitingForUser）：柔和轮廓 + 话筒图标，无动画
 /// - **等待说话**（awaitingSpeech）：红色按钮 + 慢速音波
 /// - **正在说话**（speaking）：红色按钮 + 快速音波
 library;
@@ -38,9 +38,6 @@ class _SpeechRecordButtonState extends State<SpeechRecordButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _waveController;
 
-  /// 乐观更新：点击后立即切换为录音态，无需等 parent rebuild。
-  bool _optimisticRecording = false;
-
   /// 等待说话慢速，说话时快速。
   static const _slowDuration = Duration(milliseconds: 2400);
   static const _fastDuration = Duration(milliseconds: 1000);
@@ -56,19 +53,12 @@ class _SpeechRecordButtonState extends State<SpeechRecordButton>
   void didUpdateWidget(covariant SpeechRecordButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.phase != widget.phase) {
-      // parent 已刷新 phase，清除乐观状态
-      _optimisticRecording = false;
       _syncAnimation();
     }
   }
 
-  ListenAndRepeatTurnPhase get _effectivePhase =>
-      _optimisticRecording
-          ? ListenAndRepeatTurnPhase.awaitingSpeech
-          : widget.phase;
-
   void _syncAnimation() {
-    final phase = _effectivePhase;
+    final phase = widget.phase;
     if (phase == ListenAndRepeatTurnPhase.awaitingSpeech) {
       _waveController.duration = _slowDuration;
       if (!_waveController.isAnimating) {
@@ -86,15 +76,6 @@ class _SpeechRecordButtonState extends State<SpeechRecordButton>
   }
 
   void _handleTap() {
-    // 松开手指后立即切换为录音态视觉，同时触发回调
-    final phase = widget.phase;
-    if (phase != ListenAndRepeatTurnPhase.awaitingSpeech &&
-        phase != ListenAndRepeatTurnPhase.speaking) {
-      setState(() {
-        _optimisticRecording = true;
-      });
-      _syncAnimation();
-    }
     widget.onTap();
   }
 
@@ -107,7 +88,7 @@ class _SpeechRecordButtonState extends State<SpeechRecordButton>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final phase = _effectivePhase;
+    final phase = widget.phase;
     final isRecording =
         phase == ListenAndRepeatTurnPhase.awaitingSpeech ||
         phase == ListenAndRepeatTurnPhase.speaking;

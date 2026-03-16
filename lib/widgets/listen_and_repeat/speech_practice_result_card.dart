@@ -96,16 +96,19 @@ class SpeechPracticeResultCard extends StatelessWidget {
 
   String _ratingLabel() {
     final score = attempt.score ?? 0;
-    if (score >= 0.85) {
+    if (score >= 0.95) {
+      return l10n.listenAndRepeatRatingPerfect;
+    }
+    if (score >= 0.80) {
       return l10n.listenAndRepeatRatingExcellent;
     }
-    if (score >= 0.65) {
+    if (score >= 0.60) {
       return l10n.listenAndRepeatRatingGood;
     }
-    if (score >= 0.45) {
+    if (score >= 0.40) {
       return l10n.listenAndRepeatRatingFair;
     }
-    return l10n.listenAndRepeatRatingTryAgain;
+    return l10n.listenAndRepeatRatingKeepGoing;
   }
 
   String _feedbackText() {
@@ -141,7 +144,26 @@ class SpeechPracticeResultCard extends StatelessWidget {
   RatingBadgeStyle _ratingStyle(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
     final score = attempt.score ?? 0;
-    if (score >= 0.85) {
+
+    // Perfect (>= 0.95) — 金色
+    if (score >= 0.95) {
+      return isDark
+          ? const RatingBadgeStyle(
+              textColor: Color(0xFFFFE082),
+              backgroundStart: Color(0x33C9A030),
+              backgroundEnd: Color(0x1A7A5F14),
+              borderColor: Color(0x40E0B84A),
+            )
+          : const RatingBadgeStyle(
+              textColor: Color(0xFF8B6914),
+              backgroundStart: Color(0xFFFFF8E1),
+              backgroundEnd: Color(0xFFFFF0B8),
+              borderColor: Color(0xFFE0C068),
+            );
+    }
+
+    // Excellent (>= 0.80) — 绿色
+    if (score >= 0.80) {
       return isDark
           ? const RatingBadgeStyle(
               textColor: Color(0xFFB9F5C8),
@@ -156,7 +178,9 @@ class SpeechPracticeResultCard extends StatelessWidget {
               borderColor: Color(0xFFA8D6B6),
             );
     }
-    if (score >= 0.65) {
+
+    // Good (>= 0.60) — 黄绿色
+    if (score >= 0.60) {
       return isDark
           ? const RatingBadgeStyle(
               textColor: Color(0xFFE4F3B2),
@@ -171,7 +195,9 @@ class SpeechPracticeResultCard extends StatelessWidget {
               borderColor: Color(0xFFD6DD9A),
             );
     }
-    if (score >= 0.45) {
+
+    // Fair (>= 0.40) — 橙色（鼓励）
+    if (score >= 0.40) {
       return isDark
           ? const RatingBadgeStyle(
               textColor: Color(0xFFF7D79B),
@@ -186,18 +212,20 @@ class SpeechPracticeResultCard extends StatelessWidget {
               borderColor: Color(0xFFE6C48C),
             );
     }
+
+    // Keep Going (< 0.40) — 柔和蓝灰（避免红色带来的负面感）
     return isDark
         ? const RatingBadgeStyle(
-            textColor: Color(0xFFFFC4B8),
-            backgroundStart: Color(0x33C55A4F),
-            backgroundEnd: Color(0x1A642722),
-            borderColor: Color(0x40DD756A),
+            textColor: Color(0xFFB0BEC5),
+            backgroundStart: Color(0x33607D8B),
+            backgroundEnd: Color(0x1A37474F),
+            borderColor: Color(0x4078909C),
           )
         : const RatingBadgeStyle(
-            textColor: Color(0xFFA0433C),
-            backgroundStart: Color(0xFFFFECE8),
-            backgroundEnd: Color(0xFFF8D9D4),
-            borderColor: Color(0xFFE5B2AA),
+            textColor: Color(0xFF546E7A),
+            backgroundStart: Color(0xFFECEFF1),
+            backgroundEnd: Color(0xFFE0E4E8),
+            borderColor: Color(0xFFB0BEC5),
           );
   }
 }

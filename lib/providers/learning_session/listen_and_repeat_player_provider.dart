@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../models/intensive_listen_settings.dart';
+import '../../services/app_logger.dart';
 import '../../models/sentence.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
@@ -354,7 +355,13 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   /// 立即完成当前停顿回合，继续后续播放流程。
   Future<void> completePausedTurn() async {
+    AppLogger.log('Player', 'completePausedTurn: '
+        'isPause=${state.isPauseBetweenPlays}, '
+        'isSentencePause=${state.isPauseBetweenSentences}, '
+        'play=${state.currentPlayCount}/${state.settings.repeatCount}, '
+        'sentence=${state.currentSentenceIndex + 1}/${state.totalSentences}');
     if (!state.isPauseBetweenPlays) {
+      AppLogger.log('Player', 'completePausedTurn 跳过：不在停顿中');
       return;
     }
 
@@ -372,10 +379,12 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       final isLastSentence =
           state.currentSentenceIndex >= state.totalSentences - 1;
       if (isLastSentence) {
+        AppLogger.log('Player', '→ 完成（最后一句）');
         state = state.copyWith(isCompleted: true, isPlaying: false);
         return;
       }
 
+      AppLogger.log('Player', '→ 下一句 #${state.currentSentenceIndex + 2}');
       state = state.copyWith(
         currentSentenceIndex: state.currentSentenceIndex + 1,
         currentPlayCount: 1,
@@ -386,10 +395,12 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
     final nextPlayCount = state.currentPlayCount + 1;
     if (nextPlayCount > state.settings.repeatCount) {
+      AppLogger.log('Player', '→ autoAdvance（${state.settings.repeatCount}遍已满）');
       await _autoAdvance();
       return;
     }
 
+    AppLogger.log('Player', '→ 第$nextPlayCount/${state.settings.repeatCount}遍');
     await _startSentence(startPlayCount: nextPlayCount);
   }
 

@@ -963,6 +963,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get listenAndRepeatTapToRecord => 'Tap to record';
 
   @override
+  String get listenAndRepeatRatingPerfect => 'Perfect!';
+
+  @override
   String get listenAndRepeatRatingExcellent => 'Excellent';
 
   @override
@@ -972,7 +975,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get listenAndRepeatRatingFair => 'Fair';
 
   @override
-  String get listenAndRepeatRatingTryAgain => 'Try again';
+  String get listenAndRepeatRatingKeepGoing => 'Keep going';
 
   @override
   String get listenAndRepeatAwaitingFinalTranscript =>
@@ -997,7 +1000,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get listenAndRepeatRecognitionNoEnglish =>
-      'No English speech was detected. Please try again.';
+      'No English speech detected';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied =>
@@ -1009,9 +1012,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get listenAndRepeatRecognitionError => 'Recognition error';
-
-  @override
-  String get listenAndRepeatRetryPending => 'Try again...';
 
   @override
   String get listenAndRepeatCompleteTitle => 'Listen & Repeat Complete';

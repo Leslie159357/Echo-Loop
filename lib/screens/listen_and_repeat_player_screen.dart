@@ -22,6 +22,7 @@ import '../providers/learning_session/listen_and_repeat_player_provider.dart';
 import '../providers/listen_and_repeat_turn_controller_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../router/app_router.dart';
+import '../services/app_logger.dart';
 import '../theme/app_theme.dart';
 import '../models/retell_settings.dart';
 import '../models/speech_practice_models.dart';
@@ -393,7 +394,7 @@ class _ListenAndRepeatPlayerScreenState
             .read(learningProgressNotifierProvider.notifier)
             .completeCurrentSubStage(widget.audioItemId);
       } catch (e) {
-        debugPrint('跟读完成处理出错: $e');
+        print('跟读完成处理出错: $e');
       }
 
       if (result.continueToNext) {
@@ -500,6 +501,11 @@ class _ListenAndRepeatPlayerScreenState
           return;
         }
         final latestPlayer = ref.read(listenAndRepeatPlayerProvider);
+        // 防护：player 可能已推进，不再处于停顿中
+        if (!latestPlayer.isPauseBetweenPlays) {
+          AppLogger.log('Screen', 'postFrameCallback 跳过：isPauseBetweenPlays=false');
+          return;
+        }
         if (!latestPlayer.isCountdownPaused) {
           ref.read(listenAndRepeatPlayerProvider.notifier).pauseCountdown();
         }
@@ -641,7 +647,6 @@ class _ListenAndRepeatPlayerScreenState
                           l10n: l10n,
                           turnState: turnState,
                           isRecordingCurrent: isRecordingCurrent,
-                          isManualMode: playerState.settings.isManualMode,
                           onRecordTap: _handleRecordTap,
                           onFastForward: () {
                             ref

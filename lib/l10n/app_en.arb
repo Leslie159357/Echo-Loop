@@ -512,10 +512,11 @@
   "listenAndRepeatStartSpeaking": "Start speaking",
   "listenAndRepeatAnalyzing": "Analyzing...",
   "listenAndRepeatTapToRecord": "Tap to record",
+  "listenAndRepeatRatingPerfect": "Perfect!",
   "listenAndRepeatRatingExcellent": "Excellent",
   "listenAndRepeatRatingGood": "Good",
   "listenAndRepeatRatingFair": "Fair",
-  "listenAndRepeatRatingTryAgain": "Try again",
+  "listenAndRepeatRatingKeepGoing": "Keep going",
   "listenAndRepeatAwaitingFinalTranscript": "Confirming final transcript...",
   "listenAndRepeatYourTakeLabel": "Your Take",
   "listenAndRepeatRecognitionInProgress": "Checking your recording...",
@@ -531,11 +532,10 @@
       "percent": { "type": "int" }
     }
   },
-  "listenAndRepeatRecognitionNoEnglish": "No English speech was detected. Please try again.",
+  "listenAndRepeatRecognitionNoEnglish": "No English speech detected",
   "listenAndRepeatRecognitionPermissionDenied": "Microphone or speech recognition permission is required.",
   "listenAndRepeatRecognitionUnavailable": "Speech recognition is unavailable on this device.",
   "listenAndRepeatRecognitionError": "Recognition error",
-  "listenAndRepeatRetryPending": "Try again...",
   "listenAndRepeatCompleteTitle": "Listen & Repeat Complete",
   "listenAndRepeatCompleteMessage": "You've completed listen & repeat for all {total} difficult sentences.",
   "@listenAndRepeatCompleteMessage": {

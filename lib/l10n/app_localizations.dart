@@ -1814,6 +1814,12 @@ abstract class AppLocalizations {
   /// **'Tap to record'**
   String get listenAndRepeatTapToRecord;
 
+  /// No description provided for @listenAndRepeatRatingPerfect.
+  ///
+  /// In en, this message translates to:
+  /// **'Perfect!'**
+  String get listenAndRepeatRatingPerfect;
+
   /// No description provided for @listenAndRepeatRatingExcellent.
   ///
   /// In en, this message translates to:
@@ -1832,11 +1838,11 @@ abstract class AppLocalizations {
   /// **'Fair'**
   String get listenAndRepeatRatingFair;
 
-  /// No description provided for @listenAndRepeatRatingTryAgain.
+  /// No description provided for @listenAndRepeatRatingKeepGoing.
   ///
   /// In en, this message translates to:
-  /// **'Try again'**
-  String get listenAndRepeatRatingTryAgain;
+  /// **'Keep going'**
+  String get listenAndRepeatRatingKeepGoing;
 
   /// No description provided for @listenAndRepeatAwaitingFinalTranscript.
   ///
@@ -1871,7 +1877,7 @@ abstract class AppLocalizations {
   /// No description provided for @listenAndRepeatRecognitionNoEnglish.
   ///
   /// In en, this message translates to:
-  /// **'No English speech was detected. Please try again.'**
+  /// **'No English speech detected'**
   String get listenAndRepeatRecognitionNoEnglish;
 
   /// No description provided for @listenAndRepeatRecognitionPermissionDenied.
@@ -1891,12 +1897,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recognition error'**
   String get listenAndRepeatRecognitionError;
-
-  /// No description provided for @listenAndRepeatRetryPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Try again...'**
-  String get listenAndRepeatRetryPending;
 
   /// No description provided for @listenAndRepeatCompleteTitle.
   ///

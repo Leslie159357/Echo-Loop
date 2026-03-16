@@ -619,7 +619,7 @@ void main() {
     });
 
     test(
-      '15 秒无声 manualFallback 后调用 startManualRecording 能重新进入 awaitingSpeech',
+      '15 秒无声 waitingForUser 后调用 startManualRecording 能重新进入 awaitingSpeech',
       () {
         fakeAsync((async) {
           final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
@@ -651,12 +651,12 @@ void main() {
           );
           async.flushMicrotasks();
 
-          // 15 秒后进入 manualFallback
+          // 15 秒后进入 waitingForUser
           async.elapse(const Duration(seconds: 15));
           final fallbackState = container.read(
             listenAndRepeatTurnControllerProvider,
           );
-          expect(fallbackState.phase, ListenAndRepeatTurnPhase.manualFallback);
+          expect(fallbackState.phase, ListenAndRepeatTurnPhase.waitingForUser);
 
           // 用户再点录音按钮
           controller.startManualRecording(
@@ -725,148 +725,6 @@ void main() {
       });
     });
 
-    test('识别失败（noEnglishDetected）时进入 retryPending 自动重试', () async {
-      final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
-      final container = ProviderContainer(
-        overrides: [
-          speechPracticeBackendProvider.overrideWithValue(backend),
-          listenAndRepeatPlayerProvider.overrideWith(
-            () => TestListenAndRepeatPlayer(
-              const ListenAndRepeatPlayerState(
-                currentSentenceIndex: 0,
-                totalSentences: 1,
-                currentPlayCount: 1,
-                isPauseBetweenPlays: true,
-              ),
-              createTestSentences(count: 1),
-            ),
-          ),
-        ],
-      );
-      addTearDown(() async {
-        await backend.dispose();
-        container.dispose();
-      });
-
-      final controller = container.read(
-        listenAndRepeatTurnControllerProvider.notifier,
-      );
-      await controller.ensureAutoTurn(
-        promptId: 'shadowing:a1:0',
-        referenceText: 'Hello world',
-      );
-
-      final stopFuture = controller.handleManualStop();
-
-      // 发送空 final transcript → matcher 判定 noEnglishDetected
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      backend._controller.add(
-        SpeechPracticeEvent(
-          type: SpeechPracticeEventType.finalTranscriptReady,
-          promptId: 'shadowing:a1:0',
-          transcript: '',
-        ),
-      );
-      await stopFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      final turnState = container.read(listenAndRepeatTurnControllerProvider);
-      expect(turnState.phase, ListenAndRepeatTurnPhase.retryPending);
-    });
-
-    test('连续 3 次检测失败后退出自动录音进入 manualFallback', () async {
-      final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
-      final container = ProviderContainer(
-        overrides: [
-          speechPracticeBackendProvider.overrideWithValue(backend),
-          listenAndRepeatPlayerProvider.overrideWith(
-            () => TestListenAndRepeatPlayer(
-              const ListenAndRepeatPlayerState(
-                currentSentenceIndex: 0,
-                totalSentences: 1,
-                currentPlayCount: 1,
-                isPauseBetweenPlays: true,
-              ),
-              createTestSentences(count: 1),
-            ),
-          ),
-        ],
-      );
-      addTearDown(() async {
-        await backend.dispose();
-        container.dispose();
-      });
-
-      final controller = container.read(
-        listenAndRepeatTurnControllerProvider.notifier,
-      );
-      await controller.ensureAutoTurn(
-        promptId: 'shadowing:a1:0',
-        referenceText: 'Hello world',
-      );
-
-      // 第 1 次失败 → retryPending
-      var stopFuture = controller.handleManualStop();
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      backend._controller.add(
-        SpeechPracticeEvent(
-          type: SpeechPracticeEventType.finalTranscriptReady,
-          promptId: 'shadowing:a1:0',
-          transcript: '',
-        ),
-      );
-      await stopFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(
-        container.read(listenAndRepeatTurnControllerProvider).phase,
-        ListenAndRepeatTurnPhase.retryPending,
-      );
-
-      // 第 2 次失败 → retryPending
-      // 手动触发重试（模拟 timer 到期）
-      await controller.ensureTurn(
-        promptId: 'shadowing:a1:0',
-        referenceText: 'Hello world',
-        allowAutoFallback: false,
-      );
-      stopFuture = controller.handleManualStop();
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      backend._controller.add(
-        SpeechPracticeEvent(
-          type: SpeechPracticeEventType.finalTranscriptReady,
-          promptId: 'shadowing:a1:0',
-          transcript: '',
-        ),
-      );
-      await stopFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(
-        container.read(listenAndRepeatTurnControllerProvider).phase,
-        ListenAndRepeatTurnPhase.retryPending,
-      );
-
-      // 第 3 次失败 → manualFallback（连续 3 次上限）
-      await controller.ensureTurn(
-        promptId: 'shadowing:a1:0',
-        referenceText: 'Hello world',
-        allowAutoFallback: false,
-      );
-      stopFuture = controller.handleManualStop();
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      backend._controller.add(
-        SpeechPracticeEvent(
-          type: SpeechPracticeEventType.finalTranscriptReady,
-          promptId: 'shadowing:a1:0',
-          transcript: '',
-        ),
-      );
-      await stopFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(
-        container.read(listenAndRepeatTurnControllerProvider).phase,
-        ListenAndRepeatTurnPhase.manualFallback,
-      );
-    });
 
     test('录音超过最大时长后自动停止并进入 processing', () {
       fakeAsync((async) {
@@ -920,58 +778,7 @@ void main() {
       });
     });
 
-    test('评级未达 Fair 时进入 retryPending 并自动重新录音', () async {
-      final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
-      final container = ProviderContainer(
-        overrides: [
-          speechPracticeBackendProvider.overrideWithValue(backend),
-          listenAndRepeatPlayerProvider.overrideWith(
-            () => TestListenAndRepeatPlayer(
-              const ListenAndRepeatPlayerState(
-                currentSentenceIndex: 0,
-                totalSentences: 1,
-                currentPlayCount: 1,
-                isPauseBetweenPlays: true,
-              ),
-              createTestSentences(count: 1),
-            ),
-          ),
-        ],
-      );
-      addTearDown(() async {
-        await backend.dispose();
-        container.dispose();
-      });
-
-      final controller = container.read(
-        listenAndRepeatTurnControllerProvider.notifier,
-      );
-      await controller.ensureAutoTurn(
-        promptId: 'shadowing:a1:0',
-        referenceText: 'Anyhow I noticed your name on the door',
-      );
-
-      // 手动停止 → processing
-      final stopFuture = controller.handleManualStop();
-
-      // 发送低分 final transcript（只命中 1/8 个词）
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      backend._controller.add(
-        SpeechPracticeEvent(
-          type: SpeechPracticeEventType.finalTranscriptReady,
-          promptId: 'shadowing:a1:0',
-          transcript: 'hello',
-        ),
-      );
-      await stopFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      // 应进入 retryPending（评级低于 Fair）
-      final retryState = container.read(listenAndRepeatTurnControllerProvider);
-      expect(retryState.phase, ListenAndRepeatTurnPhase.retryPending);
-    });
-
-    test('评级达到 Fair 时正常进入 reviewCountdown', () async {
+    test('评估完成后进入 reviewCountdown', () async {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
@@ -1019,67 +826,6 @@ void main() {
       // 高分应进入 reviewCountdown
       final reviewState = container.read(listenAndRepeatTurnControllerProvider);
       expect(reviewState.phase, ListenAndRepeatTurnPhase.reviewCountdown);
-    });
-
-    test('retryPending 2 秒后自动重新开始录音', () {
-      fakeAsync((async) {
-        final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
-        final container = ProviderContainer(
-          overrides: [
-            speechPracticeBackendProvider.overrideWithValue(backend),
-            listenAndRepeatPlayerProvider.overrideWith(
-              () => TestListenAndRepeatPlayer(
-                const ListenAndRepeatPlayerState(
-                  currentSentenceIndex: 0,
-                  totalSentences: 1,
-                  currentPlayCount: 1,
-                  isPauseBetweenPlays: true,
-                ),
-                createTestSentences(count: 1),
-              ),
-            ),
-          ],
-        );
-
-        final controller = container.read(
-          listenAndRepeatTurnControllerProvider.notifier,
-        );
-        controller.ensureAutoTurn(
-          promptId: 'shadowing:a1:0',
-          referenceText: 'Anyhow I noticed your name on the door',
-        );
-        async.flushMicrotasks();
-
-        // 手动停止 → processing
-        controller.handleManualStop();
-        async.flushMicrotasks();
-
-        // 发送低分 final transcript
-        backend._controller.add(
-          SpeechPracticeEvent(
-            type: SpeechPracticeEventType.finalTranscriptReady,
-            promptId: 'shadowing:a1:0',
-            transcript: 'hello',
-          ),
-        );
-        async.flushMicrotasks();
-
-        // 应进入 retryPending
-        final retryState = container.read(
-          listenAndRepeatTurnControllerProvider,
-        );
-        expect(retryState.phase, ListenAndRepeatTurnPhase.retryPending);
-
-        // 4 秒后应自动重新录音
-        async.elapse(const Duration(seconds: 4));
-        final retriedState = container.read(
-          listenAndRepeatTurnControllerProvider,
-        );
-        expect(retriedState.phase, ListenAndRepeatTurnPhase.awaitingSpeech);
-
-        backend.dispose();
-        container.dispose();
-      });
     });
 
     test('快进倒计时立即跳过进入 idle', () {

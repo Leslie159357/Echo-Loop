@@ -18,6 +18,7 @@ import '../providers/learning_progress_provider.dart';
 import '../providers/tag_provider.dart';
 import '../services/demo_data_seeder.dart';
 import '../theme/app_theme.dart';
+import 'log_viewer_screen.dart';
 import '../widgets/app_update_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -277,6 +278,17 @@ class SettingsScreen extends ConsumerWidget {
             l10n,
             controller,
             settings.timeMachineDateTime,
+          ),
+        ),
+        ListTile(
+          leading: _emojiIcon('📋'),
+          title: const Text('日志'),
+          subtitle: const Text('查看应用内运行日志'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const LogViewerScreen(),
+            ),
           ),
         ),
         ListTile(

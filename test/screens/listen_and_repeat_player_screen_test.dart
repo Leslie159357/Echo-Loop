@@ -393,7 +393,7 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
       await tester.pump(const Duration(milliseconds: 100));
 
-      // manualFallback 阶段同样显示 mic 图标（柔和背景色）
+      // waitingForUser 阶段同样显示 mic 图标（柔和背景色）
       expect(find.byType(SpeechRecordButton), findsOneWidget);
       expect(find.byIcon(Icons.mic_rounded), findsOneWidget);
     });
