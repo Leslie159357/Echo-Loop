@@ -72,7 +72,14 @@ abstract class AppRoutes {
       : '/audio/$audioId/retell';
 
   /// 独立音频学习计划页路径（不依赖合集）
-  static String audioLearningPlan(String audioId) => '/audio/$audioId/plan';
+  /// [autoStart] 为 true 时进入后自动弹出学习任务
+  static String audioLearningPlan(
+    String audioId, {
+    bool autoStart = false,
+  }) =>
+      autoStart
+          ? '/audio/$audioId/plan?autoStart=true'
+          : '/audio/$audioId/plan';
 
   /// 独立音频播放器页路径（不依赖合集）
   static String audioPlayer(String audioId) => '/audio/$audioId/player';
@@ -156,7 +163,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final audioId = state.pathParameters['audioId']!;
-          return LearningPlanScreen(collectionId: null, audioItemId: audioId);
+          final autoStart =
+              state.uri.queryParameters['autoStart'] == 'true';
+          return LearningPlanScreen(
+            collectionId: null,
+            audioItemId: audioId,
+            autoStart: autoStart,
+          );
         },
       ),
       GoRoute(

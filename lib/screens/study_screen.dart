@@ -301,98 +301,105 @@ class _TaskCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
       clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            // 左侧色条
-            Container(width: 4, color: accentColor),
-            // 内容区
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        LearningProgressIcon(
-                          progress: progress,
-                          size: 36,
-                          iconSize: 18,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                task.audioName,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: () => context.push(AppRoutes.audioLearningPlan(task.audioId)),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // 左侧色条
+              Container(width: 4, color: accentColor),
+              // 内容区
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          LearningProgressIcon(
+                            progress: progress,
+                            size: 36,
+                            iconSize: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  task.audioName,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 3),
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      stageLabel,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        stageLabel,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (statusText.isNotEmpty) ...[
+                                      const SizedBox(width: AppSpacing.s),
+                                      _StatusBadge(
+                                        text: statusText,
+                                        isOverdue: isOverdue,
+                                        isInProgress:
+                                            statusText ==
+                                            l10n.learningInProgress,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.s),
+                          FilledButton.tonal(
+                            onPressed: isDisabled
+                                ? null
+                                : () => context.push(
+                                    AppRoutes.audioLearningPlan(
+                                      task.audioId,
+                                      autoStart: true,
                                     ),
                                   ),
-                                  if (statusText.isNotEmpty) ...[
-                                    const SizedBox(width: AppSpacing.s),
-                                    _StatusBadge(
-                                      text: statusText,
-                                      isOverdue: isOverdue,
-                                      isInProgress: statusText ==
-                                          l10n.learningInProgress,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
+                            child: Text(_actionLabel(l10n, task)),
+                          ),
+                        ],
+                      ),
+                      // 进度条
+                      if (progressPercent > 0) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progressPercent,
+                            minHeight: 4,
+                            color: accentColor,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.s),
-                        FilledButton.tonal(
-                          onPressed: isDisabled
-                              ? null
-                              : () => context.push(
-                                  AppRoutes.audioLearningPlan(task.audioId),
-                                ),
-                          child: Text(_actionLabel(l10n, task)),
-                        ),
                       ],
-                    ),
-                    // 进度条
-                    if (progressPercent > 0) ...[
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: progressPercent,
-                          minHeight: 4,
-                          color: accentColor,
-                          backgroundColor:
-                              theme.colorScheme.surfaceContainerHighest,
-                        ),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

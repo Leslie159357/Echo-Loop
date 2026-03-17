@@ -55,10 +55,14 @@ class LearningPlanScreen extends ConsumerStatefulWidget {
   /// 音频项 ID
   final String audioItemId;
 
+  /// 是否自动启动当前学习任务
+  final bool autoStart;
+
   const LearningPlanScreen({
     super.key,
     this.collectionId,
     required this.audioItemId,
+    this.autoStart = false,
   });
 
   @override
@@ -66,6 +70,9 @@ class LearningPlanScreen extends ConsumerStatefulWidget {
 }
 
 class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
+  /// autoStart 是否已触发
+  bool _autoStartTriggered = false;
+
   /// 首次学习区域是否展开（首次学习阶段默认展开，进入复习阶段后默认折叠）
   bool? _isFirstLearnExpanded;
 
@@ -581,6 +588,15 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         appBar: AppBar(),
         body: Center(child: Text(l10n.audioFileNotFound)),
       );
+    }
+
+    // autoStart：正常渲染计划页，同时自动触发 _handleStartLearning（弹 briefing sheet）
+    if (widget.autoStart && !_autoStartTriggered) {
+      _autoStartTriggered = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _handleStartLearning(context, progress);
+      });
     }
 
     final reviewStages = _buildReviewStages(l10n);
