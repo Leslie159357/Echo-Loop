@@ -455,10 +455,6 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
                       playerState.totalSentences - 1;
                   if (isLast) {
                     player.forceComplete();
-                  } else if (playerState.isPauseBetweenPlays &&
-                      playerState.isAnnotationMode) {
-                    // 跟读停顿中：走 completePausedTurn（递增遍数或推进）
-                    unawaited(player.completePausedTurn());
                   } else {
                     unawaited(player.goToNext());
                   }
