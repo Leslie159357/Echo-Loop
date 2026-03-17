@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
@@ -35,6 +36,7 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
   AudioPlayer? _player;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<SpeechPracticeEvent>? _eventSub;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
   Completer<SpeechPracticeEvent>? _finalEventCompleter;
   String? _finalEventPromptId;
 
@@ -44,6 +46,7 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
     if (backend.isSupported) {
       _eventSub = backend.events.listen(_handleSpeechEvent);
       unawaited(backend.warmup());
+      _listenForAudioInterruptions();
     }
 
     // App 回前台时刷新权限缓存，覆盖用户在系统设置中撤销权限的场景。
@@ -52,6 +55,7 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
     );
 
     ref.onDispose(() async {
+      _interruptionSub?.cancel();
       lifecycleListener.dispose();
       await _eventSub?.cancel();
       await _disposePlayer();
@@ -70,6 +74,19 @@ class SpeechPracticeSession extends Notifier<SpeechPracticeSessionState> {
         appState == AppLifecycleState.hidden) {
       unawaited(cancelActiveRecording());
     }
+  }
+
+  /// 监听系统音频会话中断（AirDrop、来电等）。
+  ///
+  /// 中断开始时取消当前录音，避免引擎空转产生识别错误。
+  void _listenForAudioInterruptions() {
+    unawaited(AudioSession.instance.then((session) {
+      _interruptionSub = session.interruptionEventStream.listen((event) {
+        if (event.begin && state.recordingPromptId != null) {
+          unawaited(cancelActiveRecording());
+        }
+      });
+    }));
   }
 
   /// 获取当前句子的录音结果。
