@@ -348,6 +348,7 @@ class RetellPlayer extends _$RetellPlayer {
       playingSentenceIndex: -1,
       isRetellCountdown: false,
       displayMode: RetellDisplayMode.hideAll,
+      userOverrodeDisplayMode: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -367,6 +368,7 @@ class RetellPlayer extends _$RetellPlayer {
       playingSentenceIndex: -1,
       isRetellCountdown: false,
       displayMode: RetellDisplayMode.hideAll,
+      userOverrodeDisplayMode: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -471,7 +473,6 @@ class RetellPlayer extends _$RetellPlayer {
       isPlaying: true,
       playingSentenceIndex: 0,
       isRetellCountdown: false,
-      userOverrodeDisplayMode: false,
     );
     _persistCurrentParagraphIndexAsync();
 
