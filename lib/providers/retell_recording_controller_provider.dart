@@ -25,9 +25,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/speech_practice_models.dart';
 import '../services/app_logger.dart';
+import '../services/embedding_similarity.dart';
 import '../services/recording_service.dart';
 import '../services/speech_completion_detector.dart';
 import '../services/speech_practice_platform.dart';
+import '../services/text_embedding_platform.dart';
 import 'speech_practice_session_provider.dart';
 
 /// 等待开口最大时长
@@ -365,6 +367,9 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
         'score=${attempt.score?.toStringAsFixed(2)}, '
         'matched=${attempt.matchedTokenCount}/${attempt.totalTargetTokenCount}');
 
+    // Debug: 计算 embedding cosine similarity（异步，不阻塞 UI）
+    unawaited(_logEmbeddingSimilarity(referenceText, result.finalTranscript!));
+
     state = state.copyWith(
       phase: RetellRecordingPhase.idle,
       currentAttempt: attempt,
@@ -630,6 +635,33 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
     _maxDurationTimer = null;
     _transcriptStaleTimer?.cancel();
     _transcriptStaleTimer = null;
+  }
+
+  /// Debug: 异步计算并打印 embedding cosine similarity。
+  Future<void> _logEmbeddingSimilarity(
+    String referenceText,
+    String transcript,
+  ) async {
+    try {
+      final similarity = EmbeddingSimilarity(
+        backend: TextEmbeddingPlatform.instance,
+      );
+      if (!similarity.isSupported) {
+        AppLogger.log('RetellRec', '🧮 Embedding: 当前平台不支持');
+        return;
+      }
+      final score = await similarity.computeSimilarity(
+        referenceText,
+        transcript,
+      );
+      AppLogger.log(
+        'RetellRec',
+        '🧮 Embedding cosine similarity: ${score.toStringAsFixed(4)} '
+            '(ref=${referenceText.length}字, transcript=${transcript.length}字)',
+      );
+    } on Exception catch (e) {
+      AppLogger.log('RetellRec', '🧮 Embedding 计算失败: $e');
+    }
   }
 
   /// 判断错误码对应的 attempt 状态。

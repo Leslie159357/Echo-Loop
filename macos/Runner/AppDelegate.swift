@@ -1,6 +1,7 @@
 import AVFoundation
 import Cocoa
 import FlutterMacOS
+import NaturalLanguage
 import Speech
 
 enum SpeechPracticeMacError: String {
@@ -733,12 +734,72 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   }
 }
 
+/// NLEmbedding 文本 embedding 桥接，提供句子级 embedding 向量计算。
+final class MacTextEmbeddingHandler: NSObject {
+  private let methodChannel: FlutterMethodChannel
+
+  init(binaryMessenger: FlutterBinaryMessenger) {
+    methodChannel = FlutterMethodChannel(
+      name: "top.echo-loop/text_embedding",
+      binaryMessenger: binaryMessenger
+    )
+    super.init()
+    methodChannel.setMethodCallHandler(handle)
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "embed":
+      guard #available(macOS 11.0, *) else {
+        result(FlutterError(
+          code: "notAvailable",
+          message: "Sentence embedding requires macOS 11.0 or newer",
+          details: nil
+        ))
+        return
+      }
+      guard let args = call.arguments as? [String: Any],
+            let text = args["text"] as? String
+      else {
+        result(FlutterError(
+          code: "invalidArguments",
+          message: "Missing 'text' parameter",
+          details: nil
+        ))
+        return
+      }
+      guard let embedding = NLEmbedding.sentenceEmbedding(for: .english) else {
+        result(FlutterError(
+          code: "notAvailable",
+          message: "Sentence embedding model is not available",
+          details: nil
+        ))
+        return
+      }
+      guard let vector = embedding.vector(for: text) else {
+        result(FlutterError(
+          code: "embeddingFailed",
+          message: "Failed to compute embedding for the given text",
+          details: nil
+        ))
+        return
+      }
+      result(vector)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+}
+
 @main
 class AppDelegate: FlutterAppDelegate {
   private var speechPracticeHandler: MacSpeechPracticeHandler?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
+    // 注意：MethodChannel 的实际注册在 MainFlutterWindow.awakeFromNib 中完成，
+    // 因为 Dart 使用的是 window 的 FlutterEngine，而非 AppDelegate 的。
+    // 此处的注册绑定的 engine 不是 Dart 端使用的，属于无效代码，已移除 textEmbeddingHandler。
     if let controller = mainFlutterWindow?.contentViewController as? FlutterViewController {
       speechPracticeHandler = MacSpeechPracticeHandler(binaryMessenger: controller.engine.binaryMessenger)
     }

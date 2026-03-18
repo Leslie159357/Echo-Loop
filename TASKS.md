@@ -373,6 +373,18 @@
 
 ---
 
+## 已完成：文本 Embedding 相似度计算（NLEmbedding + MethodChannel）
+
+- [x] Dart 侧平台桥接 `TextEmbeddingPlatform`（MethodChannel `top.echo-loop/text_embedding`，`embed` 方法）
+- [x] Dart 侧 `EmbeddingSimilarity` 纯计算服务（cosine similarity + mock 友好的 `TextEmbeddingBackend` 抽象）
+- [x] iOS 原生 `IOSTextEmbeddingHandler`（NLEmbedding.sentenceEmbedding + vector(for:)）
+- [x] macOS 原生 `MacTextEmbeddingHandler`（同 iOS API）
+- [x] 单测 12 个（cosineSimilarity 纯函数 8 个 + computeSimilarity mock 测试 4 个）
+
+  **完成时间**: 2026-03-18
+
+---
+
 ## 任务完成记录模板
 
 <!--

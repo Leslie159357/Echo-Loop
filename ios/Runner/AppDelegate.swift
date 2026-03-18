@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import NaturalLanguage
 import Speech
 import UIKit
 
@@ -753,9 +754,67 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   }
 }
 
+/// NLEmbedding 文本 embedding 桥接，提供句子级 embedding 向量计算。
+private final class IOSTextEmbeddingHandler: NSObject {
+  private let methodChannel: FlutterMethodChannel
+
+  init(binaryMessenger: FlutterBinaryMessenger) {
+    methodChannel = FlutterMethodChannel(
+      name: "top.echo-loop/text_embedding",
+      binaryMessenger: binaryMessenger
+    )
+    super.init()
+    methodChannel.setMethodCallHandler(handle)
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "embed":
+      guard #available(iOS 14.0, *) else {
+        result(FlutterError(
+          code: "notAvailable",
+          message: "Sentence embedding requires iOS 14.0 or newer",
+          details: nil
+        ))
+        return
+      }
+      guard let args = call.arguments as? [String: Any],
+            let text = args["text"] as? String
+      else {
+        result(FlutterError(
+          code: "invalidArguments",
+          message: "Missing 'text' parameter",
+          details: nil
+        ))
+        return
+      }
+      guard let embedding = NLEmbedding.sentenceEmbedding(for: .english) else {
+        result(FlutterError(
+          code: "notAvailable",
+          message: "Sentence embedding model is not available",
+          details: nil
+        ))
+        return
+      }
+      guard let vector = embedding.vector(for: text) else {
+        result(FlutterError(
+          code: "embeddingFailed",
+          message: "Failed to compute embedding for the given text",
+          details: nil
+        ))
+        return
+      }
+      result(vector)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var speechPracticeHandler: IOSSpeechPracticeHandler?
+  private var textEmbeddingHandler: IOSTextEmbeddingHandler?
 
   override func application(
     _ application: UIApplication,
@@ -785,6 +844,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     }
 
     speechPracticeHandler = IOSSpeechPracticeHandler(binaryMessenger: controller.binaryMessenger)
+    textEmbeddingHandler = IOSTextEmbeddingHandler(binaryMessenger: controller.binaryMessenger)
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
