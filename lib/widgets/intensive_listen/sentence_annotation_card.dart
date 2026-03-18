@@ -241,7 +241,7 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
         ),
         if (widget.inlineFeedback case final inlineFeedback?) ...[
           const SizedBox(height: AppSpacing.l),
-          inlineFeedback,
+          Align(alignment: Alignment.centerRight, child: inlineFeedback),
         ],
         // AI 翻译区域（仅在有回调或缓存时显示）
         if (widget.onRequestTranslation != null ||

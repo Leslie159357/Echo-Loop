@@ -14,7 +14,7 @@ import '../../providers/sentence_ai_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/countdown_chip.dart';
 import '../../widgets/intensive_listen/sentence_annotation_card.dart';
-import '../../widgets/listen_and_repeat/speech_practice_result_card.dart';
+import '../../widgets/common/speech_rating_badge.dart';
 import '../../widgets/listen_and_repeat/speech_practice_turn_panel.dart';
 
 /// 录音配置（包装所有录音相关参数）
@@ -132,13 +132,13 @@ class PracticeShadowReadingView extends StatelessWidget {
                 highlightedSegments: rec?.currentAttempt?.referenceSegments,
                 inlineFeedback: switch (rec?.currentAttempt) {
                   final attempt? when attempt.hasFinalFeedback =>
-                    SpeechPracticeResultCard(
+                    SpeechRatingBadge(
                       l10n: l10n,
                       attempt: attempt,
-                      isPlayingAttempt:
+                      isPlaying:
                           rec!.speechState.playingPromptId ==
                           rec.currentPromptId,
-                      onPlayAttempt: attempt.hasRecording
+                      onTap: attempt.hasRecording
                           ? () => rec.onAttemptPlaybackTap(rec.currentPromptId)
                           : null,
                     ),

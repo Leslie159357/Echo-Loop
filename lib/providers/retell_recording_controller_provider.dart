@@ -30,7 +30,7 @@ import '../services/recording_service.dart';
 import '../services/speech_completion_detector.dart';
 import '../services/speech_practice_platform.dart';
 import '../services/text_embedding_platform.dart';
-import '../widgets/listen_and_repeat/speech_practice_result_card.dart';
+import '../widgets/common/speech_rating_badge.dart';
 import 'speech_practice_session_provider.dart';
 
 /// 等待开口最大时长

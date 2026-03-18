@@ -29,7 +29,7 @@ import '../utils/wakelock_mixin.dart';
 import '../widgets/intensive_listen/word_dictionary_sheet.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/listen_and_repeat/speech_record_button.dart';
-import '../widgets/listen_and_repeat/speech_practice_result_card.dart';
+import '../widgets/common/speech_rating_badge.dart';
 import '../widgets/common/countdown_chip.dart';
 import '../widgets/retell/retell_sentence_tile.dart';
 import '../widgets/retell/retell_settings_sheet.dart';
@@ -701,23 +701,19 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                 ),
               ),
 
-              // 录音结果卡（有分数时显示评级+播放录音，在可见词菜单上方）
-              // 跟跟读一致：结果一直显示直到下一次 startRecording 覆盖
+              // 评级 badge（点击播放录音）
               if (currentAttempt != null && currentAttempt.score != null)
                 Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppSpacing.l,
-                    right: AppSpacing.l,
-                    top: AppSpacing.xs,
-                  ),
-                  child: SpeechPracticeResultCard(
-                    l10n: l10n,
-                    attempt: currentAttempt,
-                    isPlayingAttempt:
-                        _playingPromptId == currentPromptId,
-                    onPlayAttempt: () =>
-                        _handleAttemptPlaybackTap(currentPromptId),
-                    thresholds: RatingThresholds.retell,
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Center(
+                    child: SpeechRatingBadge(
+                      l10n: l10n,
+                      attempt: currentAttempt,
+                      isPlaying: _playingPromptId == currentPromptId,
+                      onTap: () =>
+                          _handleAttemptPlaybackTap(currentPromptId),
+                      thresholds: RatingThresholds.retell,
+                    ),
                   ),
                 ),
 

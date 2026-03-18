@@ -981,7 +981,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get listenAndRepeatRecognitionNoEnglish => '未检测到英语语音';
+  String get listenAndRepeatRecognitionNoEnglish => '未检测到英语';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied => '需要麦克风和语音识别权限。';

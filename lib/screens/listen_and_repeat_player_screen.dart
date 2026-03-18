@@ -33,7 +33,7 @@ import '../providers/speech_practice_session_provider.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_settings_sheet.dart';
 import '../widgets/listen_and_repeat/speech_practice_turn_panel.dart';
-import '../widgets/listen_and_repeat/speech_practice_result_card.dart';
+import '../widgets/common/speech_rating_badge.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/retell/retell_briefing_sheet.dart';
@@ -609,13 +609,13 @@ class _ListenAndRepeatPlayerScreenState
                                 currentAttempt?.referenceSegments,
                             inlineFeedback: switch (currentAttempt) {
                               final attempt? when attempt.hasFinalFeedback =>
-                                SpeechPracticeResultCard(
+                                SpeechRatingBadge(
                                   l10n: l10n,
                                   attempt: attempt,
-                                  isPlayingAttempt:
+                                  isPlaying:
                                       speechState.playingPromptId ==
                                       currentPromptId,
-                                  onPlayAttempt: attempt.hasRecording
+                                  onTap: attempt.hasRecording
                                       ? () => _handleAttemptPlaybackTap(
                                           currentPromptId,
                                         )
@@ -851,7 +851,7 @@ class _PlaybackControls extends StatelessWidget {
                 ? Icons.check_circle_rounded
                 : Icons.skip_next_rounded,
             enabled: canGoNext,
-            onTap: canGoNext ? onNext : null,
+            onTap: onNext,
           ),
         ],
       ),
