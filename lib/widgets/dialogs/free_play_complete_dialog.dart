@@ -3,16 +3,18 @@
 /// 合并了盲听、精听、跟读、难句补练等多个页面的自由练习完成对话框。
 /// 简单的两按钮布局：「完成」和「再来一遍」。
 ///
-/// 不可通过返回键或点击外部区域关闭。
+/// 点击外部区域可关闭弹窗（返回 null），不会导致父路由被 pop。
+/// 实现方式：使用 [Overlay] 替代 [Navigator]，同 [showStepCompleteDialog]。
 library;
 
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'overlay_dialog.dart';
 
 /// 显示自由练习完成对话框
 ///
-/// 返回 `true` 表示完成退出，`false` 表示再来一遍。
+/// 返回 `true` 表示完成退出，`false` 表示再来一遍，`null` 表示点击外部关闭。
 ///
 /// [title] 对话框标题。
 /// [message] 完成消息（可选，如句数统计）。
@@ -25,10 +27,11 @@ Future<bool?> showFreePlayCompleteDialog({
   String? replayLabel,
   String? doneLabel,
 }) {
-  return showDialog<bool>(
+  // 使用 Overlay 替代 Navigator 显示弹窗，完全绕过 GoRouter 路由栈
+  return showOverlayDialog<bool>(
     context: context,
-    barrierDismissible: false,
-    builder: (context) => FreePlayCompleteDialog(
+    builder: (onResult) => FreePlayCompleteDialog(
+      onResult: onResult,
       title: title,
       message: message,
       replayLabel: replayLabel,
@@ -51,8 +54,12 @@ class FreePlayCompleteDialog extends StatelessWidget {
   /// 自定义"完成"按钮文本
   final String? doneLabel;
 
+  /// 结果回调，替代 Navigator.pop 传递结果
+  final void Function(bool?) onResult;
+
   const FreePlayCompleteDialog({
     super.key,
+    required this.onResult,
     required this.title,
     this.message,
     this.replayLabel,
@@ -64,9 +71,7 @@ class FreePlayCompleteDialog extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
+    return AlertDialog(
         title: Row(
           children: [
             Icon(Icons.check_circle, color: theme.colorScheme.primary),
@@ -82,21 +87,20 @@ class FreePlayCompleteDialog extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () => onResult(true),
                   child: Text(doneLabel ?? l10n.done),
                 ),
               ),
               const SizedBox(width: AppSpacing.s),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () => onResult(false),
                   child: Text(replayLabel ?? l10n.listenAgain),
                 ),
               ),
             ],
           ),
         ],
-      ),
     );
   }
 }

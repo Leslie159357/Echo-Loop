@@ -9,27 +9,42 @@
 /// 2. 末步骤：[完成首次学习/复习]（全宽）
 /// 3. 非末步骤但下一步不可用：[返回计划]（全宽）
 ///
-/// 不可通过返回键或点击外部区域关闭。
+/// 点击外部区域关闭弹窗（返回 null），不会导致父路由被 pop。
+///
+/// 实现方式：使用 [Overlay] 替代 [Navigator] 显示弹窗，完全绕过 GoRouter 路由栈。
+/// 弹窗内部通过 `onResult` 回调传递结果，而非 `Navigator.pop`。
 library;
 
 import 'package:flutter/material.dart';
 import '../../database/enums.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'overlay_dialog.dart';
+
+/// 用户在完成对话框中的选择
+enum StepCompleteAction {
+  /// 继续下一步
+  continueNext,
+
+  /// 返回计划页
+  back,
+
+  /// 再来一遍
+  replay,
+}
 
 /// 步骤完成对话框返回结果
 ///
-/// [continueToNext] 为 true 表示用户选择"继续下一步"，
-/// false 表示"返回计划"或"完成阶段"。
+/// [action] 用户选择的操作。
 /// [difficulty] 仅在 [showDifficultySelector] 为 true 时有值。
 typedef StepCompleteResult = ({
-  bool continueToNext,
+  StepCompleteAction action,
   DifficultyLevel? difficulty,
 });
 
 /// 显示步骤完成对话框
 ///
-/// 返回 `null` 表示用户选择"再来一遍"（仅在 [replayLabel] 非 null 时可能），
+/// 返回 `null` 表示用户点击外部区域关闭，
 /// 返回 [StepCompleteResult] 表示用户点击了操作按钮。
 ///
 /// [title] 对话框标题文本。
@@ -52,11 +67,14 @@ Future<StepCompleteResult?> showStepCompleteDialog({
   bool isLastStep = false,
   bool showDifficultySelector = false,
   String? replayLabel,
+  bool filledContinueButton = true,
 }) {
-  return showDialog<StepCompleteResult?>(
+  // 使用 Overlay 替代 Navigator 显示弹窗，完全绕过 GoRouter 路由栈。
+  // 弹窗的关闭通过移除 overlay entry + Completer 传递结果。
+  return showOverlayDialog<StepCompleteResult>(
     context: context,
-    barrierDismissible: false,
-    builder: (context) => StepCompleteDialog(
+    builder: (onResult) => StepCompleteDialog(
+      onResult: onResult,
       title: title,
       contentBody: contentBody,
       stepIndex: stepIndex,
@@ -66,6 +84,7 @@ Future<StepCompleteResult?> showStepCompleteDialog({
       isLastStep: isLastStep,
       showDifficultySelector: showDifficultySelector,
       replayLabel: replayLabel,
+      filledContinueButton: filledContinueButton,
     ),
   );
 }
@@ -99,8 +118,17 @@ class StepCompleteDialog extends StatefulWidget {
   /// "再来一遍"按钮文本，null 则不显示
   final String? replayLabel;
 
+  /// 继续按钮是否使用 FilledButton 样式（默认 true）
+  final bool filledContinueButton;
+
+  /// 结果回调，替代 Navigator.pop 传递结果
+  ///
+  /// 由 [showOverlayDialog] 提供，调用后关闭 overlay 并传递结果。
+  final void Function(StepCompleteResult?) onResult;
+
   const StepCompleteDialog({
     super.key,
+    required this.onResult,
     required this.title,
     this.contentBody,
     this.stepIndex,
@@ -110,6 +138,7 @@ class StepCompleteDialog extends StatefulWidget {
     this.isLastStep = false,
     this.showDifficultySelector = false,
     this.replayLabel,
+    this.filledContinueButton = true,
   });
 
   @override
@@ -140,9 +169,7 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
+    return AlertDialog(
         title: Row(
           children: [
             Icon(Icons.check_circle, color: theme.colorScheme.primary),
@@ -151,7 +178,10 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
             // "再来一遍"按钮（右上角）
             if (widget.replayLabel != null)
               TextButton(
-                onPressed: () => Navigator.of(context).pop(null),
+                onPressed: () => widget.onResult((
+                      action: StepCompleteAction.replay,
+                      difficulty: _selectedDifficulty,
+                    )),
                 child: Text(widget.replayLabel!),
               ),
           ],
@@ -194,7 +224,6 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
           ],
         ),
         actions: _buildActions(context, l10n),
-      ),
     );
   }
 
@@ -241,8 +270,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
             Expanded(
               child: OutlinedButton(
                 onPressed: _actionsEnabled
-                    ? () => Navigator.of(context).pop((
-                        continueToNext: false,
+                    ? () => widget.onResult((
+                        action: StepCompleteAction.back,
                         difficulty: _selectedDifficulty,
                       ))
                     : null,
@@ -251,15 +280,25 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
             ),
             const SizedBox(width: AppSpacing.s),
             Expanded(
-              child: FilledButton(
-                onPressed: _actionsEnabled
-                    ? () => Navigator.of(context).pop((
-                        continueToNext: true,
-                        difficulty: _selectedDifficulty,
-                      ))
-                    : null,
-                child: Text(l10n.continueToStep(widget.nextStepName!)),
-              ),
+              child: widget.filledContinueButton
+                  ? FilledButton(
+                      onPressed: _actionsEnabled
+                          ? () => widget.onResult((
+                              action: StepCompleteAction.continueNext,
+                              difficulty: _selectedDifficulty,
+                            ))
+                          : null,
+                      child: Text(l10n.continueToStep(widget.nextStepName!)),
+                    )
+                  : OutlinedButton(
+                      onPressed: _actionsEnabled
+                          ? () => widget.onResult((
+                              action: StepCompleteAction.continueNext,
+                              difficulty: _selectedDifficulty,
+                            ))
+                          : null,
+                      child: Text(l10n.continueToStep(widget.nextStepName!)),
+                    ),
             ),
           ],
         ),
@@ -279,8 +318,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
           width: double.infinity,
           child: FilledButton(
             onPressed: _actionsEnabled
-                ? () => Navigator.of(context).pop((
-                    continueToNext: false,
+                ? () => widget.onResult((
+                    action: StepCompleteAction.back,
                     difficulty: _selectedDifficulty,
                   ))
                 : null,
@@ -295,8 +334,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
           width: double.infinity,
           child: FilledButton(
             onPressed: _actionsEnabled
-                ? () => Navigator.of(context).pop((
-                    continueToNext: false,
+                ? () => widget.onResult((
+                    action: StepCompleteAction.back,
                     difficulty: _selectedDifficulty,
                   ))
                 : null,

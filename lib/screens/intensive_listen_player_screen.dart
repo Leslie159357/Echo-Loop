@@ -407,6 +407,19 @@ class _IntensiveListenPlayerScreenState
     // 自由练习模式：弹窗询问"完成"或"再来一遍"
     if (session.isFreePlay) {
       final l10n = AppLocalizations.of(context)!;
+      // 弹窗前保存统计并递增遍数
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveDifficultCount(widget.audioItemId, totalDifficultCount);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .incrementIntensiveListenPassCount(widget.audioItemId);
+
+      if (!mounted) {
+        _isShowingDialog = false;
+        return;
+      }
+
       final result = await showFreePlayCompleteDialog(
         context: context,
         title: l10n.intensiveListenCompleteTitle,
@@ -416,34 +429,51 @@ class _IntensiveListenPlayerScreenState
         ),
       );
 
-      _isShowingDialog = false;
-      if (!mounted) return;
+      if (!mounted) { _isShowingDialog = false; return; }
 
-      // 无论选择什么，都保存统计并递增遍数
+      if (result == null) { _isShowingDialog = false; return; }
+
+      if (result == false) {
+        // 再来一遍：resetToStart()，保留已标记难句
+        ref.read(intensiveListenPlayerProvider.notifier).resetToStart();
+      } else {
+        // true（完成按钮）→ 退出
+        await ref
+            .read(learningProgressNotifierProvider.notifier)
+            .saveIntensiveListenSentenceIndex(widget.audioItemId, null);
+        await ref.read(learningSessionProvider.notifier).exitLearningMode();
+        if (mounted) context.pop();
+      }
+      _isShowingDialog = false;
+      return;
+    }
+
+    final stepCtx = _getStepContext();
+
+    // 弹窗前立即标记完成
+    try {
       await ref
           .read(learningProgressNotifierProvider.notifier)
           .saveDifficultCount(widget.audioItemId, totalDifficultCount);
       await ref
           .read(learningProgressNotifierProvider.notifier)
           .incrementIntensiveListenPassCount(widget.audioItemId);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveIntensiveListenSentenceIndex(widget.audioItemId, null);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .completeCurrentSubStage(widget.audioItemId);
+    } catch (e) {
+      debugPrint('精听完成处理出错: $e');
+    }
 
-      if (result == true) {
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveIntensiveListenSentenceIndex(widget.audioItemId, null);
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      } else {
-        // 再来一遍：resetToStart()，保留已标记难句
-        ref.read(intensiveListenPlayerProvider.notifier).resetToStart();
-      }
+    if (!mounted) {
+      _isShowingDialog = false;
       return;
     }
 
-    final stepCtx = _getStepContext();
-
     final l10nDialog = AppLocalizations.of(context)!;
-    // continueToNext: true = 继续, false = 返回计划, null = 对话框未响应
     final result = await showStepCompleteDialog(
       context: context,
       title: l10nDialog.intensiveListenCompleteTitle,
@@ -461,44 +491,22 @@ class _IntensiveListenPlayerScreenState
       isLastStep: stepCtx.isLastStep,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
-    if (result != null) {
-      try {
-        // 保存精听统计（难句数快照 + 递增总遍数）
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveDifficultCount(widget.audioItemId, totalDifficultCount);
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .incrementIntensiveListenPassCount(widget.audioItemId);
+    if (result == null) { _isShowingDialog = false; return; }
 
-        // 清除断点（已完成）
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveIntensiveListenSentenceIndex(widget.audioItemId, null);
-
-        // 推进子步骤
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .completeCurrentSubStage(widget.audioItemId);
-      } catch (e) {
-        debugPrint('精听完成处理出错: $e');
+    if (result.action == StepCompleteAction.continueNext) {
+      // 继续下一步 → 进入难句跟读
+      await ref.read(learningSessionProvider.notifier).exitLearningMode();
+      if (mounted) {
+        _startListenAndRepeat();
       }
-
-      if (result.continueToNext) {
-        // 继续下一步 → 进入难句跟读
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) {
-          _startListenAndRepeat();
-        }
-      } else {
-        // 返回计划页
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      }
+    } else {
+      // 返回计划 → 退出
+      await ref.read(learningSessionProvider.notifier).exitLearningMode();
+      if (mounted) context.pop();
     }
+    _isShowingDialog = false;
   }
 
   @override

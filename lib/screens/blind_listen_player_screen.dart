@@ -23,6 +23,7 @@ import '../providers/listening_practice/listening_practice_provider.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 import '../widgets/blind_listen_complete_dialog.dart';
+import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/blind_listen_settings_sheet.dart';
 import '../widgets/common/countdown_chip.dart';
 import '../widgets/common/paragraph_bottom_controls.dart';
@@ -101,15 +102,23 @@ class _BlindListenPlayerScreenState
       title: l10n.blindListenComplete,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
-    if (result == true) {
+    if (result == null) {
+      _isShowingDialog = false;
+      return;
+    }
+
+    // 保持 _isShowingDialog = true 阻止 listener 在处理期间重复触发
+    if (result == false) {
+      // 再听一遍
+      await ref.read(learningSessionProvider.notifier).replayBlindListen();
+    } else {
+      // true（完成按钮）→ 退出
       if (mounted) context.pop();
       await ref.read(learningSessionProvider.notifier).exitLearningMode();
-    } else {
-      await ref.read(learningSessionProvider.notifier).replayBlindListen();
     }
+    _isShowingDialog = false;
   }
 
   /// 正常模式完成对话框
@@ -125,6 +134,20 @@ class _BlindListenPlayerScreenState
         .progressMap[widget.audioItemId];
     final isReview = progress?.isInReviewStage ?? false;
 
+    // 弹窗前立即标记完成
+    try {
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .completeCurrentSubStage(widget.audioItemId);
+    } catch (e) {
+      debugPrint('盲听完成处理出错: $e');
+    }
+
+    if (!mounted) {
+      _isShowingDialog = false;
+      return;
+    }
+
     final result = await showBlindListenCompleteDialog(
       context: context,
       passCount: session.blindListenPassCount,
@@ -136,32 +159,37 @@ class _BlindListenPlayerScreenState
       showDifficultySelector: !isReview,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
     if (result == null) {
-      await ref.read(learningSessionProvider.notifier).replayBlindListen();
-    } else {
+      _isShowingDialog = false;
+      return;
+    }
+
+    // 保持 _isShowingDialog = true 阻止 listener 在处理期间重复触发
+
+    // 保存难度
+    if (!isReview) {
       try {
-        if (!isReview) {
-          await ref
-              .read(learningProgressNotifierProvider.notifier)
-              .setDifficulty(widget.audioItemId, result.difficulty);
-        }
         await ref
             .read(learningProgressNotifierProvider.notifier)
-            .completeCurrentSubStage(widget.audioItemId);
+            .setDifficulty(widget.audioItemId, result.difficulty);
       } catch (e) {
-        debugPrint('盲听完成处理出错: $e');
-      }
-
-      if (result.continueToNext) {
-        await _navigateToNextStep();
-      } else {
-        if (mounted) context.pop();
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
+        debugPrint('盲听保存难度出错: $e');
       }
     }
+
+    if (result.action == StepCompleteAction.replay) {
+      // 再听一遍
+      await ref.read(learningSessionProvider.notifier).replayBlindListen();
+    } else if (result.action == StepCompleteAction.continueNext) {
+      await _navigateToNextStep();
+    } else {
+      // back：返回计划页
+      if (mounted) context.pop();
+      await ref.read(learningSessionProvider.notifier).exitLearningMode();
+    }
+    _isShowingDialog = false;
   }
 
   /// 获取当前步骤上下文
@@ -438,9 +466,9 @@ class _BlindListenPlayerScreenState
   ) {
     final player = ref.read(blindListenPlayerProvider.notifier);
 
-    // 监听完成状态
+    // 监听完成状态（不要求 false→true 转变，_isShowingDialog 已防重复弹出）
     ref.listen<BlindListenPlayerState>(blindListenPlayerProvider, (prev, next) {
-      if (next.isCompleted && !(prev?.isCompleted ?? false)) {
+      if (next.isCompleted) {
         _handleParagraphModeCompleted();
       }
     });

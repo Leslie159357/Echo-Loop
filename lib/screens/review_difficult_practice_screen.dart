@@ -347,6 +347,16 @@ class _ReviewDifficultPracticeScreenState
       final playerState = ref.read(reviewDifficultPracticeProvider);
       final l10n = AppLocalizations.of(context)!;
 
+      // 弹窗前清除断点
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
+
+      if (!mounted) {
+        _isShowingDialog = false;
+        return;
+      }
+
       final result = await showFreePlayCompleteDialog(
         context: context,
         title: l10n.reviewDifficultPracticeCompleteTitle,
@@ -355,27 +365,42 @@ class _ReviewDifficultPracticeScreenState
         ),
       );
 
-      _isShowingDialog = false;
-      if (!mounted) return;
+      if (!mounted) { _isShowingDialog = false; return; }
 
-      // 清除断点（已全部完成）
-      await ref
-          .read(learningProgressNotifierProvider.notifier)
-          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
+      if (result == null) { _isShowingDialog = false; return; }
 
-      if (result == true) {
-        await ref.read(learningSessionProvider.notifier).exitLearningMode();
-        if (mounted) context.pop();
-      } else {
+      if (result == false) {
         // 再练一遍
         _manualStoppedThisSentence = false;
         await ref.read(reviewDifficultPracticeProvider.notifier).resetToStart();
+      } else {
+        // true（完成按钮）→ 退出
+        await ref.read(learningSessionProvider.notifier).exitLearningMode();
+        if (mounted) context.pop();
       }
+      _isShowingDialog = false;
       return;
     }
 
     final playerState = ref.read(reviewDifficultPracticeProvider);
     final stepCtx = _getStepContext();
+
+    // 弹窗前立即标记完成
+    try {
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .completeCurrentSubStage(widget.audioItemId);
+    } catch (e) {
+      debugPrint('难句补练完成处理出错: $e');
+    }
+
+    if (!mounted) {
+      _isShowingDialog = false;
+      return;
+    }
 
     final l10n = AppLocalizations.of(context)!;
     final result = await showStepCompleteDialog(
@@ -393,37 +418,24 @@ class _ReviewDifficultPracticeScreenState
       replayLabel: l10n.practiceAgain,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
-    // 再来一遍（点击 replayLabel 按钮时 result 为 null）
-    if (result == null) {
+    if (result == null) { _isShowingDialog = false; return; }
+
+    if (result.action == StepCompleteAction.replay) {
+      // 再来一遍
       _manualStoppedThisSentence = false;
       await ref.read(reviewDifficultPracticeProvider.notifier).resetToStart();
-      return;
-    }
-
-    // 清除断点（已全部完成）并推进子步骤
-    try {
-      await ref
-          .read(learningProgressNotifierProvider.notifier)
-          .saveDifficultPracticeSentenceIndex(widget.audioItemId, null);
-      await ref
-          .read(learningProgressNotifierProvider.notifier)
-          .completeCurrentSubStage(widget.audioItemId);
-    } catch (e) {
-      debugPrint('难句补练完成处理出错: $e');
-    }
-
-    if (result.continueToNext && stepCtx.nextStepName != null) {
+    } else if (result.action == StepCompleteAction.continueNext && stepCtx.nextStepName != null) {
       // 继续下一步 → 退出当前模式，返回计划页让路由分发
       await ref.read(learningSessionProvider.notifier).exitLearningMode();
       if (mounted) context.pop();
     } else {
-      // 返回计划页
+      // 返回计划 → 退出
       await ref.read(learningSessionProvider.notifier).exitLearningMode();
       if (mounted) context.pop();
     }
+    _isShowingDialog = false;
   }
 
   @override

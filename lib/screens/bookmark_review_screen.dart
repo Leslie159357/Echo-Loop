@@ -245,18 +245,20 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
       replayLabel: l10n.bookmarkReviewAgain,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
-    if (result == true) {
-      // 完成退出
-      ref.read(bookmarkReviewProvider.notifier).disposePlayer();
-      if (mounted) context.pop();
-    } else {
+    if (result == null) { _isShowingDialog = false; return; }
+
+    if (result == false) {
       // 再来一遍
       _manualStoppedThisSentence = false;
       await ref.read(bookmarkReviewProvider.notifier).resetToStart();
+    } else {
+      // true（完成按钮）→ 退出
+      ref.read(bookmarkReviewProvider.notifier).disposePlayer();
+      if (mounted) context.pop();
     }
+    _isShowingDialog = false;
   }
 
   @override

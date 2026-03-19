@@ -402,6 +402,16 @@ class _ListenAndRepeatPlayerScreenState
     // 自由练习模式：弹窗询问"完成"或"再来一遍"
     if (session.isFreePlay) {
       final l10n = AppLocalizations.of(context)!;
+      // 弹窗前递增遍数
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .incrementShadowingPassCount(widget.audioItemId);
+
+      if (!mounted) {
+        _isShowingDialog = false;
+        return;
+      }
+
       final result = await showFreePlayCompleteDialog(
         context: context,
         title: l10n.listenAndRepeatCompleteTitle,
@@ -410,32 +420,49 @@ class _ListenAndRepeatPlayerScreenState
         ),
       );
 
-      _isShowingDialog = false;
-      if (!mounted) return;
+      if (!mounted) { _isShowingDialog = false; return; }
 
-      // 递增遍数（无论再来一遍还是完成，都算一遍）
-      await ref
-          .read(learningProgressNotifierProvider.notifier)
-          .incrementShadowingPassCount(widget.audioItemId);
+      if (result == null) { _isShowingDialog = false; return; }
 
-      if (result == true) {
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveShadowingSentenceIndex(widget.audioItemId, null);
-        // 完成退出
-        await _exit();
-      } else {
+      if (result == false) {
         // 再来一遍：重置到第一句重新开始
         await ref
             .read(shadowingRecordingControllerProvider.notifier)
             .fullReset();
         _manualStoppedThisSentence = false;
         ref.read(listenAndRepeatPlayerProvider.notifier).resetToStart();
+      } else {
+        // true（完成按钮）→ 退出
+        await ref
+            .read(learningProgressNotifierProvider.notifier)
+            .saveShadowingSentenceIndex(widget.audioItemId, null);
+        await _exit();
       }
+      _isShowingDialog = false;
       return;
     }
 
     final stepCtx = _getStepContext();
+
+    // 弹窗前立即标记完成
+    try {
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .incrementShadowingPassCount(widget.audioItemId);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .saveShadowingSentenceIndex(widget.audioItemId, null);
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .completeCurrentSubStage(widget.audioItemId);
+    } catch (e) {
+      debugPrint('跟读完成处理出错: $e');
+    }
+
+    if (!mounted) {
+      _isShowingDialog = false;
+      return;
+    }
 
     final l10nStep = AppLocalizations.of(context)!;
     final result = await showStepCompleteDialog(
@@ -451,37 +478,18 @@ class _ListenAndRepeatPlayerScreenState
       isLastStep: stepCtx.isLastStep,
     );
 
-    _isShowingDialog = false;
-    if (!mounted) return;
+    if (!mounted) { _isShowingDialog = false; return; }
 
-    if (result != null) {
-      try {
-        // 递增跟读总遍数
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .incrementShadowingPassCount(widget.audioItemId);
+    if (result == null) { _isShowingDialog = false; return; }
 
-        // 清除断点（已完成）
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .saveShadowingSentenceIndex(widget.audioItemId, null);
-
-        // 推进子步骤
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .completeCurrentSubStage(widget.audioItemId);
-      } catch (e) {
-        print('跟读完成处理出错: $e');
-      }
-
-      if (result.continueToNext) {
-        // 继续下一步：段落复述
-        await _navigateToRetell();
-      } else {
-        // 返回计划页
-        await _exit();
-      }
+    if (result.action == StepCompleteAction.continueNext) {
+      // 继续下一步：段落复述
+      await _navigateToRetell();
+    } else {
+      // 返回计划 → 退出
+      await _exit();
     }
+    _isShowingDialog = false;
   }
 
   /// 导航到段落复述播放器
