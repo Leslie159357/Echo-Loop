@@ -586,18 +586,26 @@ class _IntensiveListenPlayerScreenState
                 child:
                     playerState.isAnnotationMode ||
                         playerState.isAnnotationReplay
-                    ? _AnnotationModeView(
-                        text: currentSentence?.text ?? '',
-                        isDifficult: playerState.difficultSentences.contains(
-                          playerState.currentSentenceIndex,
+                    ? _AnnotationWithBookmark(
+                        playerState: playerState,
+                        l10n: l10n,
+                        theme: theme,
+                        onToggleDifficult: _toggleAndSaveDifficult,
+                        child: _AnnotationModeView(
+                          text: currentSentence?.text ?? '',
+                          isDifficult: playerState.difficultSentences.contains(
+                            playerState.currentSentenceIndex,
+                          ),
+                          isAutoMarked:
+                              playerState.isCurrentSentenceAutoMarked,
+                          aiNotifier: ref.read(sentenceAiNotifierProvider),
+                          audioItemId: widget.audioItemId,
+                          sentenceIndex: playerState.currentSentenceIndex,
+                          sentenceStartMs:
+                              currentSentence?.startTime.inMilliseconds,
+                          sentenceEndMs:
+                              currentSentence?.endTime.inMilliseconds,
                         ),
-                        isAutoMarked: playerState.isCurrentSentenceAutoMarked,
-                        aiNotifier: ref.read(sentenceAiNotifierProvider),
-                        audioItemId: widget.audioItemId,
-                        sentenceIndex: playerState.currentSentenceIndex,
-                        sentenceStartMs:
-                            currentSentence?.startTime.inMilliseconds,
-                        sentenceEndMs: currentSentence?.endTime.inMilliseconds,
                       )
                     : _NormalModeView(
                         playerState: playerState,
@@ -771,6 +779,73 @@ class _ProgressSection extends StatelessWidget {
 ///
 /// 倒计时使用固定 56px 高度占位，避免字幕区跳动。
 /// 布局参考难句补练 PracticeNormalModeView。
+/// 标注模式外层包装：在顶部显示和普通模式相同的书签标记行
+class _AnnotationWithBookmark extends StatelessWidget {
+  final IntensiveListenState playerState;
+  final AppLocalizations l10n;
+  final ThemeData theme;
+  final VoidCallback onToggleDifficult;
+  final Widget child;
+
+  const _AnnotationWithBookmark({
+    required this.playerState,
+    required this.l10n,
+    required this.theme,
+    required this.onToggleDifficult,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDifficult = playerState.difficultSentences.contains(
+      playerState.currentSentenceIndex,
+    );
+    final isAutoMarked = playerState.isCurrentSentenceAutoMarked;
+
+    // 标记文案：自动标记 / 手动标记 / 未标记
+    final labelText = isDifficult
+        ? (isAutoMarked
+            ? l10n.intensiveListenAutoMarkedDifficult
+            : l10n.intensiveListenMarkedDifficult)
+        : l10n.intensiveListenNotDifficult;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+      child: Column(
+        children: [
+          const SizedBox(height: AppSpacing.s),
+          // 书签标记行（和普通模式同位置、同样式）
+          GestureDetector(
+            onTap: onToggleDifficult,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: Text(
+                    labelText,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Icon(
+                  isDifficult ? Icons.bookmark : Icons.bookmark_border,
+                  color: isDifficult ? Colors.amber.shade700 : Colors.grey,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+          // 标注内容
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
 class _NormalModeView extends StatelessWidget {
   final IntensiveListenState playerState;
   final AppLocalizations l10n;
@@ -1015,18 +1090,13 @@ class _AnnotationModeView extends StatelessWidget {
     final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
     final cachedAnalysis = ai?.getCachedAnalysis(text);
     final cachedAnalysisText = cachedAnalysis?.toDisplayString();
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: AppSpacing.l),
-          child: SentenceAnnotationCard(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: AppSpacing.s),
+      child: SentenceAnnotationCard(
             key: ValueKey(text),
             text: text,
             isDifficult: isDifficult,
             showAutoMarkedLabel: isAutoMarked,
-            // 不传 onToggle → 不显示取消标记按钮
             onRequestTranslation: ai != null
                 ? () async {
                     final result = await ai.getTranslation(text);
@@ -1046,8 +1116,6 @@ class _AnnotationModeView extends StatelessWidget {
             sentenceStartMs: sentenceStartMs,
             sentenceEndMs: sentenceEndMs,
           ),
-        ),
-      ),
     );
   }
 }
