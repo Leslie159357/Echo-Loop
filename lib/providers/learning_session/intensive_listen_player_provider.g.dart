@@ -7,7 +7,7 @@ part of 'intensive_listen_player_provider.dart';
 // **************************************************************************
 
 String _$intensiveListenPlayerHash() =>
-    r'f7aa0d27a739b96c951bd8942580413d2ae409d2';
+    r'3195c42922d577c861233f531ef0ec4846c16fc1';
 
 /// 精听专用播放器 Provider
 ///

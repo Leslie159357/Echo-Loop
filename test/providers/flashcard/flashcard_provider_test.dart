@@ -54,8 +54,8 @@ void main() {
       expect(state.isCompleted, false);
       expect(state.isPaused, false);
       expect(state.removedCount, 0);
-      expect(state.countdownRemaining, 0);
-      expect(state.countdownTotal, 0);
+      expect(state.countdownRemaining, Duration.zero);
+      expect(state.countdownTotal, Duration.zero);
       expect(state.currentWord, isNull);
     });
 
@@ -228,17 +228,13 @@ void main() {
 
     test('alphabeticalAsc 按字母 A→Z', () {
       final sorted = List<SavedWord>.from(words)
-        ..sort(
-          (a, b) => a.word.toLowerCase().compareTo(b.word.toLowerCase()),
-        );
+        ..sort((a, b) => a.word.toLowerCase().compareTo(b.word.toLowerCase()));
       expect(sorted.map((w) => w.word).toList(), ['apple', 'banana', 'cherry']);
     });
 
     test('alphabeticalDesc 按字母 Z→A', () {
       final sorted = List<SavedWord>.from(words)
-        ..sort(
-          (a, b) => b.word.toLowerCase().compareTo(a.word.toLowerCase()),
-        );
+        ..sort((a, b) => b.word.toLowerCase().compareTo(a.word.toLowerCase()));
       expect(sorted.map((w) => w.word).toList(), ['cherry', 'banana', 'apple']);
     });
 

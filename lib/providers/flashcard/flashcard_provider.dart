@@ -21,8 +21,8 @@ import '../../services/dictionary_service.dart';
 import '../../services/study_time_service.dart';
 import '../../services/tts_service.dart';
 import '../daily_study_time_provider.dart';
+import '../learning_session/countdown_controller.dart';
 import '../study_stats_provider.dart';
-import 'flashcard_timer.dart';
 
 part 'flashcard_provider.g.dart';
 
@@ -70,11 +70,11 @@ class FlashcardState {
   /// 设置
   final FlashcardSettings settings;
 
-  /// 倒计时剩余秒数
-  final int countdownRemaining;
+  /// 倒计时剩余时间
+  final Duration countdownRemaining;
 
-  /// 倒计时总秒数
-  final int countdownTotal;
+  /// 倒计时总时长
+  final Duration countdownTotal;
 
   /// 是否全部完成
   final bool isCompleted;
@@ -93,8 +93,8 @@ class FlashcardState {
     this.currentIndex = 0,
     this.isShowingBack = false,
     this.settings = const FlashcardSettings(),
-    this.countdownRemaining = 0,
-    this.countdownTotal = 0,
+    this.countdownRemaining = Duration.zero,
+    this.countdownTotal = Duration.zero,
     this.isCompleted = false,
     this.removedCount = 0,
     this.cardStartTime,
@@ -115,8 +115,8 @@ class FlashcardState {
     int? currentIndex,
     bool? isShowingBack,
     FlashcardSettings? settings,
-    int? countdownRemaining,
-    int? countdownTotal,
+    Duration? countdownRemaining,
+    Duration? countdownTotal,
     bool? isCompleted,
     int? removedCount,
     DateTime? cardStartTime,
@@ -146,7 +146,7 @@ const _settingsKey = 'flashcard_settings';
 /// Flashcard 主 Provider
 @Riverpod(keepAlive: true)
 class FlashcardNotifier extends _$FlashcardNotifier {
-  final FlashcardTimer _timer = FlashcardTimer();
+  final CountdownController _countdown = CountdownController();
 
   /// 学习时长存储服务
   late final StudyTimeService _studyTimeService;
@@ -164,7 +164,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
   FlashcardState build() {
     _studyTimeService = ref.read(studyTimeServiceProvider);
     ref.onDispose(() {
-      _timer.cancel();
+      _countdown.cancel();
       _inputTimePlayerStateSub?.cancel();
       _saveAndRefreshStudyTime();
     });
@@ -175,7 +175,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
   ///
   /// [words] 收藏单词列表快照
   Future<void> initialize(List<SavedWord> words) async {
-    _timer.cancel();
+    _countdown.cancel();
 
     // 加载设置
     final settings = await _loadSettings();
@@ -240,7 +240,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
     if (state.currentIndex >= state.words.length - 1) {
       // 最后一张 → 完成
-      _timer.cancel();
+      _countdown.cancel();
       _saveStudyTime();
       state = state.copyWith(isCompleted: true);
       return;
@@ -263,7 +263,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     if (state.currentIndex <= 0) return;
 
     _stopAllPlayback();
-    _timer.cancel();
+    _countdown.cancel();
     _saveStudyTime();
     state = state.copyWith(
       currentIndex: state.currentIndex - 1,
@@ -282,7 +282,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
     _stopAllPlayback();
     final word = state.words[state.currentIndex];
-    _timer.cancel();
+    _countdown.cancel();
 
     // 从 DAO 中删除
     final dao = ref.read(savedWordDaoProvider);
@@ -320,7 +320,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
   /// 更新设置
   Future<void> updateSettings(FlashcardSettings newSettings) async {
-    _timer.cancel();
+    _countdown.cancel();
 
     // 如果排序方式变了，重新排序
     if (newSettings.sortMode != state.settings.sortMode) {
@@ -371,7 +371,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
   /// 暂停（AppLifecycle / 弹窗时调用）
   void pause() {
-    _timer.pause();
+    _countdown.pause();
     _studyStopwatch.stop();
     state = state.copyWith(isPaused: true);
   }
@@ -381,12 +381,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     if (state.isCompleted) return;
     _studyStopwatch.start();
     state = state.copyWith(isPaused: false);
-    _timer.resume(
-      onTick: (remaining) {
-        state = state.copyWith(countdownRemaining: remaining);
-      },
-      onExpired: _onCountdownExpired,
-    );
+    _countdown.resume();
   }
 
   /// 切换暂停/恢复
@@ -400,7 +395,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
   /// 重新开始（再来一遍）
   Future<void> reset() async {
-    _timer.cancel();
+    _countdown.cancel();
     // 先保存已累计时间
     await _saveAndRefreshStudyTime();
     final savedWords = state.words.map((w) => w.savedWord).toList();
@@ -412,7 +407,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     _inputTimePlayerStateSub?.cancel();
     _inputTimePlayerStateSub = null;
     await _saveAndRefreshStudyTime();
-    _timer.cancel();
+    _countdown.cancel();
     _stopAllPlayback();
     state = const FlashcardState();
   }
@@ -421,26 +416,30 @@ class FlashcardNotifier extends _$FlashcardNotifier {
 
   /// 启动倒计时
   void _startCountdown() {
-    _timer.cancel();
+    _countdown.cancel();
 
     if (state.settings.timerMode == FlashcardTimerMode.off) {
-      state = state.copyWith(countdownRemaining: 0, countdownTotal: 0);
+      state = state.copyWith(
+        countdownRemaining: Duration.zero,
+        countdownTotal: Duration.zero,
+      );
       return;
     }
 
     final seconds = _getTimerSeconds();
-    state = state.copyWith(
-      countdownRemaining: seconds,
-      countdownTotal: seconds,
-    );
+    final total = Duration(seconds: seconds);
+    state = state.copyWith(countdownRemaining: total, countdownTotal: total);
 
-    _timer.start(
-      seconds: seconds,
-      onTick: (remaining) {
-        state = state.copyWith(countdownRemaining: remaining);
-      },
-      onExpired: _onCountdownExpired,
-    );
+    _countdown
+        .start(total, (remaining) {
+          state = state.copyWith(countdownRemaining: remaining);
+        })
+        .then((_) {
+          // 倒计时自然结束（非 cancel）时触发
+          if (state.countdownRemaining <= Duration.zero) {
+            _onCountdownExpired();
+          }
+        });
   }
 
   /// 获取当前倒计时秒数

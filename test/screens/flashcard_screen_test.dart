@@ -183,9 +183,7 @@ void main() {
     testWidgets('AppBar 包含设置按钮', (tester) async {
       final items = _createWordItems(1);
       await tester.pumpWidget(
-        _createTestWidget(
-          initialState: FlashcardState(words: items),
-        ),
+        _createTestWidget(initialState: FlashcardState(words: items)),
       );
       await tester.pumpAndSettle();
 
@@ -195,9 +193,7 @@ void main() {
     testWidgets('AppBar 包含返回按钮', (tester) async {
       final items = _createWordItems(1);
       await tester.pumpWidget(
-        _createTestWidget(
-          initialState: FlashcardState(words: items),
-        ),
+        _createTestWidget(initialState: FlashcardState(words: items)),
       );
       await tester.pumpAndSettle();
 
@@ -209,9 +205,7 @@ void main() {
     testWidgets('点击卡片翻转到背面', (tester) async {
       final items = _createWordItems(1);
       await tester.pumpWidget(
-        _createTestWidget(
-          initialState: FlashcardState(words: items),
-        ),
+        _createTestWidget(initialState: FlashcardState(words: items)),
       );
       await tester.pumpAndSettle();
 
@@ -246,10 +240,7 @@ void main() {
       final items = _createWordItems(2);
       await tester.pumpWidget(
         _createTestWidget(
-          initialState: FlashcardState(
-            words: items,
-            isCompleted: true,
-          ),
+          initialState: FlashcardState(words: items, isCompleted: true),
         ),
       );
       await tester.pumpAndSettle();
@@ -271,8 +262,8 @@ void main() {
               timerMode: FlashcardTimerMode.fixed,
               fixedTimerSeconds: 8,
             ),
-            countdownRemaining: 5,
-            countdownTotal: 8,
+            countdownRemaining: const Duration(seconds: 5),
+            countdownTotal: const Duration(seconds: 8),
           ),
         ),
       );

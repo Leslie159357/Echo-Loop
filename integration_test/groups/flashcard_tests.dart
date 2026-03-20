@@ -63,12 +63,12 @@ void flashcardTests() {
       final container = ProviderScope.containerOf(context);
 
       // 预设卡片数据
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(3),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(3), currentIndex: 0),
+      );
 
       // 导航到 Flashcard 页面
       container.read(appRouterProvider).push(AppRoutes.flashcard);
@@ -91,12 +91,12 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(2),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(2), currentIndex: 0),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -123,12 +123,12 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(3),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(3), currentIndex: 0),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -151,12 +151,12 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(3),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(3), currentIndex: 0),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -175,12 +175,12 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(3),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(3), currentIndex: 0),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -206,12 +206,15 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(2),
-        currentIndex: 1, // 已在最后一张
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(
+          words: _createWordItems(2),
+          currentIndex: 1, // 已在最后一张
+        ),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -236,12 +239,10 @@ void flashcardTests() {
       final container = ProviderScope.containerOf(context);
 
       final items = _createWordItems(2);
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: items,
-        isCompleted: true,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(FlashcardState(words: items, isCompleted: true));
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -268,18 +269,21 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(2),
-        currentIndex: 0,
-        settings: const FlashcardSettings(
-          timerMode: FlashcardTimerMode.fixed,
-          fixedTimerSeconds: 8,
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(
+          words: _createWordItems(2),
+          currentIndex: 0,
+          settings: const FlashcardSettings(
+            timerMode: FlashcardTimerMode.fixed,
+            fixedTimerSeconds: 8,
+          ),
+          countdownRemaining: const Duration(seconds: 5),
+          countdownTotal: const Duration(seconds: 8),
         ),
-        countdownRemaining: 5,
-        countdownTotal: 8,
-      ));
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -305,12 +309,12 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(2),
-        currentIndex: 0,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(words: _createWordItems(2), currentIndex: 0),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
@@ -335,13 +339,16 @@ void flashcardTests() {
       final context = tester.element(find.byType(FluencyApp));
       final container = ProviderScope.containerOf(context);
 
-      final notifier = container.read(flashcardNotifierProvider.notifier)
-          as TestFlashcardNotifier;
-      notifier.setState(FlashcardState(
-        words: _createWordItems(3),
-        isCompleted: true,
-        removedCount: 2,
-      ));
+      final notifier =
+          container.read(flashcardNotifierProvider.notifier)
+              as TestFlashcardNotifier;
+      notifier.setState(
+        FlashcardState(
+          words: _createWordItems(3),
+          isCompleted: true,
+          removedCount: 2,
+        ),
+      );
 
       container.read(appRouterProvider).push(AppRoutes.flashcard);
       await tester.pumpAndSettle();
