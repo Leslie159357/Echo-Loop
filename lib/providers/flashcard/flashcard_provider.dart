@@ -177,7 +177,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
   Future<void> initialize(List<SavedWord> words) async {
     _countdown.cancel();
 
-    // 加载设置
+    // 加载持久化设置
     final settings = await _loadSettings();
 
     // 排序
@@ -331,7 +331,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     _startCountdown();
   }
 
-  /// 更新设置
+  /// 更新设置并持久化
   Future<void> updateSettings(FlashcardSettings newSettings) async {
     _countdown.cancel();
 
@@ -440,7 +440,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
   void _startCountdown() {
     _countdown.cancel();
 
-    if (state.settings.timerMode == FlashcardTimerMode.off) {
+    if (state.settings.isManualMode) {
       state = state.copyWith(
         countdownRemaining: Duration.zero,
         countdownTotal: Duration.zero,
@@ -461,11 +461,13 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     });
   }
 
-  /// 获取当前倒计时秒数
+  /// 获取当前倒计时秒数（根据正面/背面返回不同值）
   int _getTimerSeconds() {
     switch (state.settings.timerMode) {
       case FlashcardTimerMode.fixed:
-        return state.settings.fixedTimerSeconds;
+        return state.isShowingBack
+            ? state.settings.fixedTimerBackSeconds
+            : state.settings.fixedTimerSeconds;
       case FlashcardTimerMode.smart:
         final word = state.currentWord?.savedWord;
         if (word == null) return 8;
@@ -473,8 +475,6 @@ class FlashcardNotifier extends _$FlashcardNotifier {
           wordLength: word.word.length,
           practiceCount: word.practiceCount,
         );
-      case FlashcardTimerMode.off:
-        return 0;
     }
   }
 
@@ -625,6 +625,16 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     return const FlashcardSettings();
   }
 
+  /// 持久化设置
+  Future<void> _saveSettings(FlashcardSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_settingsKey, json.encode(settings.toJson()));
+    } catch (e) {
+      debugPrint('Flashcard: 保存设置失败: $e');
+    }
+  }
+
   /// 停止计时并保存已记录的学习时长 + 输入时间，刷新统计 UI
   Future<void> _saveAndRefreshStudyTime() async {
     // 保存输入时间
@@ -661,13 +671,4 @@ class FlashcardNotifier extends _$FlashcardNotifier {
     }
   }
 
-  /// 持久化设置
-  Future<void> _saveSettings(FlashcardSettings settings) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_settingsKey, json.encode(settings.toJson()));
-    } catch (e) {
-      debugPrint('Flashcard: 保存设置失败: $e');
-    }
-  }
 }

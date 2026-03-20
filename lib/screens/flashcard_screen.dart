@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
-import '../models/flashcard_settings.dart';
 import '../providers/flashcard/flashcard_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/countdown_chip.dart';
@@ -133,7 +132,7 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen> {
               countdownTotal: state.countdownTotal,
               isPaused: state.isPaused,
               showCountdown:
-                  state.settings.timerMode != FlashcardTimerMode.off &&
+                  !state.settings.isManualMode &&
                   state.countdownTotal > Duration.zero,
               onPrevious: state.currentIndex > 0
                   ? () => ref

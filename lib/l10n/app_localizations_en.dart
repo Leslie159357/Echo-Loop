@@ -1702,19 +1702,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flashcardSettingsTitle => 'Card Settings';
 
   @override
-  String get flashcardTimerMode => 'Auto Advance';
+  String get flashcardSettingsSubtitle => 'Settings are saved automatically';
+
+  @override
+  String get flashcardControlModeLabel => 'Control Mode';
+
+  @override
+  String get flashcardControlModeAuto => 'Auto';
+
+  @override
+  String get flashcardControlModeManual => 'Manual';
+
+  @override
+  String get flashcardControlModeAutoDesc => 'Auto flip, auto advance';
+
+  @override
+  String get flashcardControlModeManualDesc => 'Manual flip, manual advance';
+
+  @override
+  String get flashcardTimerMode => 'Card Advance Timer';
+
+  @override
+  String get flashcardTimerSmart => 'Auto';
+
+  @override
+  String get flashcardTimerSmartDesc =>
+      'Adjusts based on word difficulty and practice count';
 
   @override
   String get flashcardTimerFixed => 'Fixed';
 
   @override
-  String get flashcardTimerSmart => 'Smart';
+  String get flashcardTimerFixedDesc => 'Set fixed duration for front and back';
 
   @override
-  String get flashcardTimerOff => 'Off';
+  String get flashcardTimerFrontDuration => 'Front';
 
   @override
-  String get flashcardSortMode => 'Sort Order';
+  String get flashcardTimerBackDuration => 'Back';
+
+  @override
+  String get flashcardSortMode => 'Word Sort Order';
 
   @override
   String get flashcardSortAlphaAsc => 'A → Z';

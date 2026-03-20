@@ -3032,11 +3032,59 @@ abstract class AppLocalizations {
   /// **'Card Settings'**
   String get flashcardSettingsTitle;
 
+  /// No description provided for @flashcardSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings are saved automatically'**
+  String get flashcardSettingsSubtitle;
+
+  /// No description provided for @flashcardControlModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Control Mode'**
+  String get flashcardControlModeLabel;
+
+  /// No description provided for @flashcardControlModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get flashcardControlModeAuto;
+
+  /// No description provided for @flashcardControlModeManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get flashcardControlModeManual;
+
+  /// No description provided for @flashcardControlModeAutoDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto flip, auto advance'**
+  String get flashcardControlModeAutoDesc;
+
+  /// No description provided for @flashcardControlModeManualDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual flip, manual advance'**
+  String get flashcardControlModeManualDesc;
+
   /// No description provided for @flashcardTimerMode.
   ///
   /// In en, this message translates to:
-  /// **'Auto Advance'**
+  /// **'Card Advance Timer'**
   String get flashcardTimerMode;
+
+  /// No description provided for @flashcardTimerSmart.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get flashcardTimerSmart;
+
+  /// No description provided for @flashcardTimerSmartDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusts based on word difficulty and practice count'**
+  String get flashcardTimerSmartDesc;
 
   /// No description provided for @flashcardTimerFixed.
   ///
@@ -3044,22 +3092,28 @@ abstract class AppLocalizations {
   /// **'Fixed'**
   String get flashcardTimerFixed;
 
-  /// No description provided for @flashcardTimerSmart.
+  /// No description provided for @flashcardTimerFixedDesc.
   ///
   /// In en, this message translates to:
-  /// **'Smart'**
-  String get flashcardTimerSmart;
+  /// **'Set fixed duration for front and back'**
+  String get flashcardTimerFixedDesc;
 
-  /// No description provided for @flashcardTimerOff.
+  /// No description provided for @flashcardTimerFrontDuration.
   ///
   /// In en, this message translates to:
-  /// **'Off'**
-  String get flashcardTimerOff;
+  /// **'Front'**
+  String get flashcardTimerFrontDuration;
+
+  /// No description provided for @flashcardTimerBackDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get flashcardTimerBackDuration;
 
   /// No description provided for @flashcardSortMode.
   ///
   /// In en, this message translates to:
-  /// **'Sort Order'**
+  /// **'Word Sort Order'**
   String get flashcardSortMode;
 
   /// No description provided for @flashcardSortAlphaAsc.

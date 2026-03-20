@@ -1656,19 +1656,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String get flashcardSettingsTitle => '卡片设置';
 
   @override
-  String get flashcardTimerMode => '自动切换';
+  String get flashcardSettingsSubtitle => '设置会自动保存';
 
   @override
-  String get flashcardTimerFixed => '固定时间';
+  String get flashcardControlModeLabel => '控制模式';
 
   @override
-  String get flashcardTimerSmart => '智能';
+  String get flashcardControlModeAuto => '自动';
 
   @override
-  String get flashcardTimerOff => '关闭';
+  String get flashcardControlModeManual => '手动';
 
   @override
-  String get flashcardSortMode => '排序方式';
+  String get flashcardControlModeAutoDesc => '自动翻转、自动切换下一张';
+
+  @override
+  String get flashcardControlModeManualDesc => '手动翻转、手动切换下一张';
+
+  @override
+  String get flashcardTimerMode => '单词切换时长';
+
+  @override
+  String get flashcardTimerSmart => '自动';
+
+  @override
+  String get flashcardTimerSmartDesc => '根据单词难度和练习次数自动调整';
+
+  @override
+  String get flashcardTimerFixed => '固定时长';
+
+  @override
+  String get flashcardTimerFixedDesc => '正面和背面分别设置固定时长';
+
+  @override
+  String get flashcardTimerFrontDuration => '正面时长';
+
+  @override
+  String get flashcardTimerBackDuration => '背面时长';
+
+  @override
+  String get flashcardSortMode => '单词排序方式';
 
   @override
   String get flashcardSortAlphaAsc => 'A → Z';
