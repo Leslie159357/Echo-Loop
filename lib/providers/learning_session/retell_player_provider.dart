@@ -633,9 +633,8 @@ class RetellPlayer extends _$RetellPlayer {
     final effectiveRepeatCount =
         state.settings.isManualMode ? 1 : state.settings.repeatCount;
     if (state.currentRepeatCount < effectiveRepeatCount) {
-      // 还有遍数 → 回到 listening phase
+      // 还有遍数 → 直接回到 listening phase，不经过 isRetellCountdown=false 中间状态
       state = state.copyWith(
-        isRetellCountdown: false,
         currentRepeatCount: state.currentRepeatCount + 1,
       );
       await _playCurrentParagraph();

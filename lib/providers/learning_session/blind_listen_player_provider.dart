@@ -421,20 +421,19 @@ class BlindListenPlayer extends _$BlindListenPlayer {
 
   /// 段间停顿结束
   Future<void> _onPauseCountdownFinished() async {
-    state = state.copyWith(isPauseCountdown: false);
-
     if (state.currentRepeatCount < state.settings.repeatCount) {
-      // 当前段还有遍数 → 继续播放
+      // 当前段还有遍数 → 直接继续播放，不经过 isPauseCountdown=false 中间状态
       state = state.copyWith(
         currentRepeatCount: state.currentRepeatCount + 1,
       );
       await _playCurrentParagraph();
     } else if (state.currentParagraphIndex < state.totalParagraphs - 1) {
       // 还有下一段 → 推进
+      state = state.copyWith(isPauseCountdown: false);
       await goToNextParagraph();
     } else {
-      // 最后一段最后一遍 → 停止，等用户点完成按钮
-      state = state.copyWith(isPlaying: false);
+      // 最后一段最后一遍 → 停止
+      state = state.copyWith(isPauseCountdown: false, isPlaying: false);
     }
   }
 
