@@ -131,10 +131,10 @@ class IntensiveListenSettings {
         PauseMode.smart;
   }
 
-  /// 解析固定间隔：1-60 范围内有效，否则回退 5
+  /// 解析固定间隔：必须在可选值列表中，否则回退 5
   static int _parseFixedPauseSeconds(dynamic raw) {
     if (raw is! int) return 5;
-    if (raw < fixedPauseOptions.first || raw > fixedPauseOptions.last) return 5;
+    if (!fixedPauseOptions.contains(raw)) return 5;
     return raw;
   }
 
