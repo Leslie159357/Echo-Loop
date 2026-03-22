@@ -26,6 +26,7 @@ import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/intensive_listen/sentence_annotation_card.dart';
 import '../widgets/common/countdown_chip.dart';
 import '../widgets/player_hotkey_scope.dart';
+import '../widgets/common/text_context_menu.dart';
 
 /// 精听播放器页面
 class IntensiveListenPlayerScreen extends ConsumerStatefulWidget {
@@ -848,6 +849,18 @@ class _NormalModeView extends StatelessWidget {
                     child: playerState.isTextRevealed && sentenceText != null
                         ? GestureDetector(
                             onTap: () {}, // 拦截点击，不冒泡到外层
+                            onLongPressStart: (details) =>
+                                TextContextMenu.show(
+                              context,
+                              details.globalPosition,
+                              sentenceText!,
+                            ),
+                            onSecondaryTapDown: (details) =>
+                                TextContextMenu.show(
+                              context,
+                              details.globalPosition,
+                              sentenceText!,
+                            ),
                             child: Text(
                               sentenceText!,
                               style: theme.textTheme.titleMedium?.copyWith(

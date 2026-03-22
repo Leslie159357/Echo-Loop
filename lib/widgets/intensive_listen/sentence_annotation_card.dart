@@ -11,6 +11,7 @@ import '../../models/sentence_ai_result.dart';
 import '../../models/speech_practice_models.dart';
 import '../../theme/app_theme.dart';
 import '../common/ai_content_section.dart';
+import '../common/text_context_menu.dart';
 import 'word_dictionary_sheet.dart';
 
 /// 标注模式句子卡片
@@ -229,14 +230,26 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
           const SizedBox(height: AppSpacing.m),
         ],
 
-        // 句子文本（单词可点击查词典）
-        RichText(
-          text: TextSpan(
-            style: theme.textTheme.titleMedium?.copyWith(
-              height: 1.6,
-              color: theme.colorScheme.onSurface,
+        // 句子文本（单词可点击查词典，长按/右键复制整句）
+        GestureDetector(
+          onLongPressStart: (details) => TextContextMenu.show(
+            context,
+            details.globalPosition,
+            widget.text,
+          ),
+          onSecondaryTapDown: (details) => TextContextMenu.show(
+            context,
+            details.globalPosition,
+            widget.text,
+          ),
+          child: RichText(
+            text: TextSpan(
+              style: theme.textTheme.titleMedium?.copyWith(
+                height: 1.6,
+                color: theme.colorScheme.onSurface,
+              ),
+              children: _buildHighlightedWordSpans(theme),
             ),
-            children: _buildHighlightedWordSpans(theme),
           ),
         ),
         if (widget.inlineFeedback case final inlineFeedback?) ...[

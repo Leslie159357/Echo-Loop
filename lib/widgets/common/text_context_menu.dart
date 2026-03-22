@@ -1,7 +1,10 @@
 /// 文本右键/长按上下文菜单
 ///
 /// 提供复制等文本操作，支持 iOS 长按和桌面端右键。
+/// 复制成功后使用 Overlay 显示轻量提示，确保在 BottomSheet 等场景下也能正常显示。
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,13 +74,116 @@ class TextContextMenu {
     if (result == 'copy' && context.mounted) {
       await Clipboard.setData(ClipboardData(text: text));
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.copied),
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        _showOverlayToast(context, l10n.copied);
       }
     }
+  }
+
+  /// 使用 Overlay 显示轻量提示
+  ///
+  /// 不依赖 ScaffoldMessenger，在 BottomSheet 等场景中也能正常显示。
+  static void _showOverlayToast(BuildContext context, String message) {
+    final overlayState = Overlay.of(context);
+    final theme = Theme.of(context);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _ToastOverlay(
+        message: message,
+        theme: theme,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+
+    overlayState.insert(entry);
+  }
+}
+
+/// Overlay 轻量提示组件
+///
+/// 底部居中显示，1 秒后自动淡出消失。
+class _ToastOverlay extends StatefulWidget {
+  final String message;
+  final ThemeData theme;
+  final VoidCallback onDismiss;
+
+  const _ToastOverlay({
+    required this.message,
+    required this.theme,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_ToastOverlay> createState() => _ToastOverlayState();
+}
+
+class _ToastOverlayState extends State<_ToastOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  Timer? _dismissTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+
+    _controller.forward();
+    _dismissTimer = Timer(const Duration(seconds: 1), _fadeOut);
+  }
+
+  void _fadeOut() {
+    _controller.reverse().then((_) {
+      if (mounted) widget.onDismiss();
+    });
+  }
+
+  @override
+  void dispose() {
+    _dismissTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+
+    return Positioned(
+      bottom: MediaQuery.of(context).viewInsets.bottom + 80,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: FadeTransition(
+          opacity: _opacity,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xE0303030),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check, size: 15, color: Colors.white),
+                const SizedBox(width: 6),
+                Text(
+                  widget.message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
