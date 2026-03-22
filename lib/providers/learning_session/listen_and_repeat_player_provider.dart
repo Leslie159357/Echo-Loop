@@ -220,6 +220,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       isPlaying: false,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
+      isPostEvalCountdown: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -242,6 +243,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       currentPlayCount: 1,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
+      isPostEvalCountdown: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -261,6 +263,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       currentPlayCount: 1,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
+      isPostEvalCountdown: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
@@ -366,6 +369,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
     state = state.copyWith(
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
+      isPostEvalCountdown: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );

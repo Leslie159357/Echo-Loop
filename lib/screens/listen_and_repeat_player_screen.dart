@@ -38,6 +38,9 @@ import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/player_hotkey_scope.dart';
 
+/// 录音/倒计时区域固定高度（录音面板最高：24 状态 + 4 间距 + 56 按钮 + 16 底部 = 100）
+const double _kTurnAreaHeight = 100;
+
 /// 跟读播放器页面
 class ListenAndRepeatPlayerScreen extends ConsumerStatefulWidget {
   /// 合集 ID（用于返回导航，从独立音频路由进入时为 null）
@@ -746,7 +749,10 @@ class _ListenAndRepeatPlayerScreenState
                     // 评级 badge（点击播放录音），和复述页面同位置
                     if (currentAttempt != null && currentAttempt.score != null)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        padding: const EdgeInsets.only(
+                          top: AppSpacing.s,
+                          bottom: AppSpacing.xs,
+                        ),
                         child: Center(
                           child: SpeechRatingBadge(
                             l10n: l10n,
@@ -760,32 +766,39 @@ class _ListenAndRepeatPlayerScreenState
                         ),
                       ),
                     // 评估后倒计时 / 录音面板（和复述页面同构）
-                    if (_isPostEvalCountdown(playerState))
-                      _PostEvalCountdown(
-                        playerState: playerState,
-                        onFastForward: () => ref
-                            .read(listenAndRepeatPlayerProvider.notifier)
-                            .completePausedTurn(),
-                        onCountdownTap: () {
-                          final p = ref.read(
-                            listenAndRepeatPlayerProvider.notifier,
-                          );
-                          playerState.isCountdownPaused
-                              ? p.resumePostEvalCountdown()
-                              : p.pausePostEvalCountdown();
-                        },
-                      )
-                    else if (playerState.isPauseBetweenPlays)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.m),
-                        child: SpeechPracticeTurnPanel(
-                          l10n: l10n,
-                          turnState: turnState,
-                          isRecordingCurrent: isRecordingCurrent,
-                          onRecordTap: _handleRecordTap,
-                          currentAttempt: currentAttempt,
-                        ),
-                      ),
+                    // 固定高度，避免倒计时消失后 badge 位置跳动
+                    SizedBox(
+                      height: _kTurnAreaHeight,
+                      child: _isPostEvalCountdown(playerState)
+                          ? _PostEvalCountdown(
+                              playerState: playerState,
+                              onFastForward: () => ref
+                                  .read(listenAndRepeatPlayerProvider.notifier)
+                                  .completePausedTurn(),
+                              onCountdownTap: () {
+                                final p = ref.read(
+                                  listenAndRepeatPlayerProvider.notifier,
+                                );
+                                playerState.isCountdownPaused
+                                    ? p.resumePostEvalCountdown()
+                                    : p.pausePostEvalCountdown();
+                              },
+                            )
+                          : playerState.isPauseBetweenPlays
+                              ? Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.m,
+                                  ),
+                                  child: SpeechPracticeTurnPanel(
+                                    l10n: l10n,
+                                    turnState: turnState,
+                                    isRecordingCurrent: isRecordingCurrent,
+                                    onRecordTap: _handleRecordTap,
+                                    currentAttempt: currentAttempt,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                    ),
                     // 播放控制
                     _PlaybackControls(
                       playerState: playerState,
@@ -877,42 +890,39 @@ class _PostEvalCountdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.m),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 24 + AppSpacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(width: 32),
-              const SizedBox(width: 48),
-              // Consumer 隔离倒计时 tick，避免触发外层重建
-              Consumer(
-                builder: (context, ref, _) {
-                  final s = ref.watch(listenAndRepeatPlayerProvider);
-                  return CountdownChip(
-                    remaining: s.pauseRemaining,
-                    total: s.pauseDuration,
-                    isPaused: s.isCountdownPaused,
-                    onTap: onCountdownTap,
-                  );
-                },
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(width: 32),
+            const SizedBox(width: 48),
+            // Consumer 隔离倒计时 tick，避免触发外层重建
+            Consumer(
+              builder: (context, ref, _) {
+                final s = ref.watch(listenAndRepeatPlayerProvider);
+                return CountdownChip(
+                  remaining: s.pauseRemaining,
+                  total: s.pauseDuration,
+                  isPaused: s.isCountdownPaused,
+                  onTap: onCountdownTap,
+                );
+              },
+            ),
+            const SizedBox(width: 48),
+            GestureDetector(
+              onTap: onFastForward,
+              child: Icon(
+                Icons.fast_forward_rounded,
+                size: 32,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
-              const SizedBox(width: 48),
-              GestureDetector(
-                onTap: onFastForward,
-                child: Icon(
-                  Icons.fast_forward_rounded,
-                  size: 32,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.m),
+      ],
     );
   }
 }
