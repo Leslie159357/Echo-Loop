@@ -217,7 +217,7 @@ class BookmarkReview extends _$BookmarkReview {
       _startShadowReading();
       return;
     }
-    await _startSentence();
+    await _startSentence(startPlayCount: state.currentPlayCount);
   }
 
   /// 进入跟读模式（听不懂）
@@ -332,7 +332,7 @@ class BookmarkReview extends _$BookmarkReview {
         isCountdownPaused: false,
         isCountdownFastForward: false,
       );
-      await _startSentence();
+      await _startSentence(startPlayCount: state.currentPlayCount);
     }
   }
 
@@ -544,7 +544,7 @@ class BookmarkReview extends _$BookmarkReview {
   }
 
   /// 开始播放当前句子（盲听 N 遍）
-  Future<void> _startSentence() async {
+  Future<void> _startSentence({int startPlayCount = 1}) async {
     _outputStopwatch.stop();
     final bookmarkSentence = currentBookmarkSentence;
     if (bookmarkSentence == null) return;
@@ -574,7 +574,7 @@ class BookmarkReview extends _$BookmarkReview {
 
     state = state.copyWith(
       isPlaying: true,
-      currentPlayCount: 1,
+      currentPlayCount: startPlayCount,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
       stepFinished: false,
@@ -584,6 +584,7 @@ class BookmarkReview extends _$BookmarkReview {
     await _engine.playSentenceLoop(
       sentence: sentence,
       repeatCount: repeatCount,
+      startPlayCount: startPlayCount,
       pauseCalculator: repeatCount > 1
           ? listenAndRepeatPauseCalculator
           : (_) => Duration.zero,

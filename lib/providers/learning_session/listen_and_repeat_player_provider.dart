@@ -228,7 +228,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   /// 恢复播放（从当前句子重新开始播放循环）
   Future<void> resume() async {
-    await _startSentence();
+    await _startSentence(startPlayCount: state.currentPlayCount);
   }
 
   /// 跳转到下一句
@@ -373,7 +373,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       isCountdownPaused: false,
       isCountdownFastForward: false,
     );
-    await _startSentence();
+    await _startSentence(startPlayCount: state.currentPlayCount);
   }
 
   /// 立即完成当前停顿回合，继续后续播放流程。

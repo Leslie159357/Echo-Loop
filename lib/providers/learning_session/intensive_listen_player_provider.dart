@@ -268,7 +268,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       await _startInlineAnnotationReplay();
       return;
     }
-    await _startSentence();
+    await _startSentence(startPlayCount: state.currentPlayCount);
   }
 
   /// 跳转到下一句
@@ -476,13 +476,13 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isCountdownFastForward: false,
     );
 
-    /// 详情页里的倒计时重播，需要回到“带字幕重播中”而不是普通模式。
+    /// 详情页里的倒计时重播，需要回到”带字幕重播中”而不是普通模式。
     if (state.isAnnotationMode) {
       await _startInlineAnnotationReplay();
       return;
     }
 
-    await _startSentence();
+    await _startSentence(startPlayCount: state.currentPlayCount);
   }
 
   /// 更新精听设置（仅会话内生效，不持久化）
@@ -497,6 +497,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     final switchedToManual = newSettings.isManualMode &&
         !state.settings.isManualMode;
+    final repeatCountChanged =
+        newSettings.repeatCount != state.settings.repeatCount;
 
     state = state.copyWith(
       settings: newSettings,
@@ -517,8 +519,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     }
 
     // repeatCount 变化时中断当前循环，以新设置重新开始
-    final needRestart = newSettings.repeatCount != state.settings.repeatCount;
-    if (needRestart && state.isPlaying) {
+    if (repeatCountChanged && state.isPlaying) {
       _invalidateSession();
       _startSentence();
     }
@@ -537,7 +538,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
   // ========== 内部方法 ==========
 
   /// 开始播放当前句子的循环
-  Future<void> _startSentence() async {
+  Future<void> _startSentence({int startPlayCount = 1}) async {
     final sentence = currentSentence;
     if (sentence == null) return;
 
@@ -549,7 +550,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     state = state.copyWith(
       isPlaying: true,
-      currentPlayCount: 1,
+      currentPlayCount: startPlayCount,
       isPauseBetweenPlays: false,
       isPauseBetweenSentences: false,
       stepFinished: false,
@@ -565,18 +566,22 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     _currentSessionId = engine.newSession();
     final sessionId = _currentSessionId;
 
-    await _playSentenceLoop(sentence, sessionId);
+    await _playSentenceLoop(sentence, sessionId, startPlayCount);
   }
 
   /// 句子播放循环：播放 repeatCount 遍，遍间停顿
   ///
   /// 手动模式下仅播放一遍后停止，等待用户操作。
-  Future<void> _playSentenceLoop(Sentence sentence, int sessionId) async {
+  Future<void> _playSentenceLoop(
+    Sentence sentence,
+    int sessionId, [
+    int startPlayCount = 1,
+  ]) async {
     final engine = ref.read(audioEngineProvider.notifier);
     final isManual = state.settings.isManualMode;
     final repeatCount = isManual ? 1 : state.settings.repeatCount;
 
-    for (int playCount = 1; playCount <= repeatCount; playCount++) {
+    for (int playCount = startPlayCount; playCount <= repeatCount; playCount++) {
       if (!engine.isActiveSession(sessionId)) return;
 
       state = state.copyWith(currentPlayCount: playCount, isPlaying: true);
