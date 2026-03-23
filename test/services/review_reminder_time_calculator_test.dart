@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluency/services/review_reminder_time_calculator.dart';
 
 void main() {
-  group('FixedDailyReminderTimeCalculator', () {
-    const calculator = FixedDailyReminderTimeCalculator(hour: 20, minute: 0);
+  group('FixedTimeReminderCalculator', () {
+    const calculator = FixedTimeReminderCalculator(hour: 20, minute: 0);
 
     test('当前时间早于 20:00，返回当天 20:00', () {
       final now = DateTime(2026, 2, 25, 10, 30);
@@ -20,7 +20,7 @@ void main() {
 
   test('AdaptiveReminderTimeCalculator 当前回退到 fixed', () {
     const adaptive = AdaptiveReminderTimeCalculator(
-      fallback: FixedDailyReminderTimeCalculator(hour: 20, minute: 0),
+      fallback: FixedTimeReminderCalculator(hour: 20, minute: 0),
     );
     final now = DateTime(2026, 2, 25, 8, 0);
     expect(adaptive.nextTriggerAt(now), DateTime(2026, 2, 25, 20, 0));

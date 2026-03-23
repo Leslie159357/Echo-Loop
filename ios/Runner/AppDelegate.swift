@@ -3,6 +3,7 @@ import Flutter
 import NaturalLanguage
 import Speech
 import UIKit
+import UserNotifications
 
 private enum SpeechPracticeError: String {
   case permissionDenied
@@ -821,6 +822,10 @@ private final class IOSTextEmbeddingHandler: NSObject {
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+
+    // flutter_local_notifications 要求显式设置 delegate，
+    // 否则通知点击回调不会转发到插件（iOS 端不会自动设置）。
+    UNUserNotificationCenter.current().delegate = self
 
     let controller = window?.rootViewController as! FlutterViewController
     let networkChannel = FlutterMethodChannel(

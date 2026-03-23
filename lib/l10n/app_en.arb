@@ -1089,5 +1089,15 @@
   "stageBreakdownLessThanOneMin": "<1m",
   "stageBreakdownListenShort": "Listen",
   "stageBreakdownSpeakShort": "Speak",
-  "stageBreakdownNoStageData": "Detailed breakdown data starts recording from this version"
+  "stageBreakdownNoStageData": "Detailed breakdown data starts recording from this version",
+
+  "reminderSectionTitle": "Reminders",
+  "reminderSettings": "Reminder Settings",
+  "savedReviewReminderSection": "Saved Review Reminder",
+  "savedReviewReminderToggle": "Saved Content Reminder",
+  "savedReviewReminderTime": "Daily Reminder Time",
+  "savedReviewReminderDescription": "Review saved content during commute or before bed for best results",
+  "audioReviewReminderSection": "Audio Review Reminder",
+  "audioReviewReminderToggle": "Audio Due Reminder",
+  "audioReviewReminderDescription": "Get notified when it's time to review, helping you stay on track"
 }

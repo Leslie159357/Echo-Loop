@@ -10,6 +10,11 @@ class OpenStudyTasks extends NotificationIntent {
   const OpenStudyTasks();
 }
 
+/// 打开收藏页
+class OpenFavorites extends NotificationIntent {
+  const OpenFavorites();
+}
+
 /// 打开指定音频的学习计划页
 class OpenAudioLearningPlan extends NotificationIntent {
   final String audioId;

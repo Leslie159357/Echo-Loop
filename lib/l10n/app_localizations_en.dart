@@ -1988,4 +1988,33 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get stageBreakdownNoStageData =>
       'Detailed breakdown data starts recording from this version';
+
+  @override
+  String get reminderSectionTitle => 'Reminders';
+
+  @override
+  String get reminderSettings => 'Reminder Settings';
+
+  @override
+  String get savedReviewReminderSection => 'Saved Review Reminder';
+
+  @override
+  String get savedReviewReminderToggle => 'Saved Content Reminder';
+
+  @override
+  String get savedReviewReminderTime => 'Daily Reminder Time';
+
+  @override
+  String get savedReviewReminderDescription =>
+      'Review saved content during commute or before bed for best results';
+
+  @override
+  String get audioReviewReminderSection => 'Audio Review Reminder';
+
+  @override
+  String get audioReviewReminderToggle => 'Audio Due Reminder';
+
+  @override
+  String get audioReviewReminderDescription =>
+      'Get notified when it\'s time to review, helping you stay on track';
 }

@@ -474,6 +474,32 @@
 
 ---
 
+## 已完成：提醒设置功能
+
+- [x] ReminderSettings 数据模型（`lib/models/reminder_settings.dart`，防御性 fromJson + copyWith + equality）
+- [x] ReminderSettingsNotifier Provider（`lib/providers/reminder_settings_provider.dart`，keepAlive + SP 持久化）
+- [x] 改造通知调度链路（`review_reminder_provider.dart` 从设置读取 hour/minute，`review_reminder_service.dart` 新增 updateTimeCalculator + cancelAllPerAudioReminders，`main_shell.dart` 新增设置变更监听）
+- [x] 提醒设置页 UI（`lib/screens/reminder_settings_screen.dart`，每日提醒开关+时间选择+复习提醒开关）
+- [x] 设置页入口（`settings_screen.dart` 外观与存储之间新增提醒 section）
+- [x] 国际化（9 个新 key，en + zh）
+- [x] 测试（ReminderSettings 模型 18 个 + ReviewReminderService 新增 cancelAll/updateTimeCalculator 3 个 = 21 个新测试）
+
+  **完成时间**: 2026-03-22
+
+---
+
+## bug 修复
+- [ ] 在复习收藏内容（句子和单词）的时候要阻止息屏。
+- [ ] 确认一个学习任务完成之后，不能再阻止息屏了。
+
+## 加入特效
+- [ ] 一个句子/单词播放完成，一遍播放完成，播放音效
+- [ ] 任务完成，播放动画+音效
+
+## 埋点
+- [ ] 支持中国大陆区
+- [ ] 支持全球
+
 ## 任务完成记录模板
 
 <!--

@@ -1934,4 +1934,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stageBreakdownNoStageData => '详细分布数据从此版本开始记录';
+
+  @override
+  String get reminderSectionTitle => '提醒';
+
+  @override
+  String get reminderSettings => '提醒设置';
+
+  @override
+  String get savedReviewReminderSection => '收藏复习提醒';
+
+  @override
+  String get savedReviewReminderToggle => '收藏内容提醒';
+
+  @override
+  String get savedReviewReminderTime => '每日提醒时间';
+
+  @override
+  String get savedReviewReminderDescription => '通勤或睡前复习收藏内容，效果更好';
+
+  @override
+  String get audioReviewReminderSection => '音频复习提醒';
+
+  @override
+  String get audioReviewReminderToggle => '音频到期提醒';
+
+  @override
+  String get audioReviewReminderDescription => '到复习时间时通知你，帮你保持复习节奏';
 }

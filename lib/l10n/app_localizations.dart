@@ -3559,6 +3559,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detailed breakdown data starts recording from this version'**
   String get stageBreakdownNoStageData;
+
+  /// No description provided for @reminderSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get reminderSectionTitle;
+
+  /// No description provided for @reminderSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder Settings'**
+  String get reminderSettings;
+
+  /// No description provided for @savedReviewReminderSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved Review Reminder'**
+  String get savedReviewReminderSection;
+
+  /// No description provided for @savedReviewReminderToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved Content Reminder'**
+  String get savedReviewReminderToggle;
+
+  /// No description provided for @savedReviewReminderTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily Reminder Time'**
+  String get savedReviewReminderTime;
+
+  /// No description provided for @savedReviewReminderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Review saved content during commute or before bed for best results'**
+  String get savedReviewReminderDescription;
+
+  /// No description provided for @audioReviewReminderSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio Review Reminder'**
+  String get audioReviewReminderSection;
+
+  /// No description provided for @audioReviewReminderToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio Due Reminder'**
+  String get audioReviewReminderToggle;
+
+  /// No description provided for @audioReviewReminderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Get notified when it\'s time to review, helping you stay on track'**
+  String get audioReviewReminderDescription;
 }
 
 class _AppLocalizationsDelegate

@@ -113,6 +113,16 @@ class BookmarkDao extends DatabaseAccessor<AppDatabase>
     return rows.map((r) => r.sentenceIndex).toSet();
   }
 
+  /// 获取所有未删除书签的总数
+  Future<int> countAll() async {
+    final count = bookmarks.id.count();
+    final query = selectOnly(bookmarks)
+      ..addColumns([count])
+      ..where(bookmarks.deletedAt.isNull());
+    final row = await query.getSingle();
+    return row.read(count) ?? 0;
+  }
+
   /// 监听所有未删除书签（含音频名称），按音频分组
   ///
   /// JOIN audio_items 获取音频名称，用于 Favorites 页面展示。

@@ -179,6 +179,8 @@ class _FluencyAppState extends ConsumerState<FluencyApp> {
     switch (intent) {
       case OpenStudyTasks():
         ref.read(appRouterProvider).go(AppRoutes.study);
+      case OpenFavorites():
+        ref.read(appRouterProvider).go(AppRoutes.favorites);
       case OpenAudioLearningPlan(:final audioId):
         ref.read(appRouterProvider).go(AppRoutes.audioLearningPlan(audioId));
     }

@@ -9,12 +9,28 @@ import 'package:universal_io/io.dart' as io;
 import 'notification_tap_router_bridge.dart';
 import 'review_reminder_time_calculator.dart';
 
-const int kDailyReviewSummaryNotificationId = 1001;
-const String _reviewChannelId = 'daily_review_summary';
-const String _reviewChannelName = 'Daily Review Reminder';
-const String _reviewChannelDescription =
-    'Daily summary reminder for review tasks';
-const String _openStudyPayload = 'open_study_tasks';
+/// 收藏复习提醒通知 ID 范围：[1001, 1015]（15 天独立调度）
+const int _savedReviewIdBase = 1001;
+const int _savedReviewDays = 15;
+const String _savedReviewChannelId = 'saved_review';
+const String _savedReviewChannelName = 'Saved Review Reminder';
+const String _savedReviewChannelDescription =
+    'Reminder to review saved sentences and words';
+const String _openFavoritesPayload = 'open_favorites';
+
+/// 建议性文案池，按天轮换，不对用户行为做判断
+const List<String> _savedReviewBodies = [
+  '复习一下收藏的句子和单词吧',
+  '听一遍收藏的句子，巩固记忆',
+  '碎片时间听几句，积少成多',
+  '收藏的句子在等你，来复习一下',
+  '反复听才能记住，来复习吧',
+  '收藏的好句子，多听几遍才是你的',
+  '间隔重复是记忆的关键，来听一轮',
+  '熟悉的句子再听一遍，会有新感觉',
+  '收藏了就要复习，不然会忘',
+  '听力靠积累，来复习收藏的句子',
+];
 
 /// 单条音频复习通知的 channel
 const String _perAudioChannelId = 'per_audio_review';
@@ -53,7 +69,7 @@ class PerAudioReminderInfo {
 @pragma('vm:entry-point')
 void reviewReminderBackgroundNotificationTap(NotificationResponse response) {}
 
-/// 每日复习 + 单条音频精准复习提醒服务
+/// 收藏复习 + 单条音频精准复习提醒服务
 class ReviewReminderService {
   ReviewReminderService({
     required FlutterLocalNotificationsPlugin plugin,
@@ -65,7 +81,7 @@ class ReviewReminderService {
 
   final FlutterLocalNotificationsPlugin _plugin;
   final NotificationTapRouterBridge _bridge;
-  final ReviewReminderTimeCalculator _timeCalculator;
+  ReviewReminderTimeCalculator _timeCalculator;
 
   bool _initialized = false;
   bool _timezoneReady = false;
@@ -114,47 +130,67 @@ class ReviewReminderService {
     }
   }
 
-  Future<void> syncDailyReminder({required int pendingTaskCount}) async {
+  /// 调度未来 15 天的收藏复习提醒（每天一个独立通知）
+  ///
+  /// [hasSavedContent] 为 false 时取消所有已调度的收藏复习提醒。
+  /// 每次调用先 cancel 旧的 15 个，再重新调度。
+  Future<void> syncSavedReviewReminder({
+    required bool hasSavedContent,
+  }) async {
     if (!_supportsSystemNotification) return;
 
     await init();
     if (!_initialized) return;
 
-    if (pendingTaskCount <= 0) {
-      await cancelDailyReminder();
+    if (!hasSavedContent) {
+      await cancelSavedReviewReminder();
       return;
     }
 
     final now = DateTime.now();
-    final next = _timeCalculator.nextTriggerAt(now);
-    final nextTz = tz.TZDateTime.from(next, tz.local);
+    final firstTrigger = _timeCalculator.nextTriggerAt(now);
+
+    debugPrint(
+      'ReviewReminderService: scheduling $_savedReviewDays saved review '
+      'reminders starting at $firstTrigger (now=$now)',
+    );
 
     try {
-      await _plugin.cancel(kDailyReviewSummaryNotificationId);
-      await _plugin.zonedSchedule(
-        kDailyReviewSummaryNotificationId,
-        'Fluency',
-        'You have $pendingTaskCount study task(s) waiting.',
-        nextTz,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _reviewChannelId,
-            _reviewChannelName,
-            channelDescription: _reviewChannelDescription,
-            importance: Importance.high,
-            priority: Priority.high,
+      // 先取消旧的
+      for (var i = 0; i < _savedReviewDays; i++) {
+        await _plugin.cancel(_savedReviewIdBase + i);
+      }
+
+      // 调度未来 15 天
+      for (var i = 0; i < _savedReviewDays; i++) {
+        final triggerAt = firstTrigger.add(Duration(days: i));
+        final triggerTz = tz.TZDateTime.from(triggerAt, tz.local);
+        final body = _savedReviewBodies[i % _savedReviewBodies.length];
+
+        await _plugin.zonedSchedule(
+          _savedReviewIdBase + i,
+          'Fluency',
+          body,
+          triggerTz,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              _savedReviewChannelId,
+              _savedReviewChannelName,
+              channelDescription: _savedReviewChannelDescription,
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+            iOS: DarwinNotificationDetails(),
+            macOS: DarwinNotificationDetails(),
           ),
-          iOS: DarwinNotificationDetails(),
-          macOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: _openStudyPayload,
-      );
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          payload: _openFavoritesPayload,
+        );
+      }
     } on MissingPluginException {
       debugPrint('ReviewReminderService: plugin unavailable during schedule');
     } catch (e) {
-      debugPrint('ReviewReminderService.syncDailyReminder error: $e');
+      debugPrint('ReviewReminderService.syncSavedReviewReminder error: $e');
     }
   }
 
@@ -217,14 +253,53 @@ class ReviewReminderService {
     }
   }
 
-  Future<void> cancelDailyReminder() async {
+  /// 更新提醒时间计算器（设置变更时调用，不重建 service 实例）
+  void updateTimeCalculator(ReviewReminderTimeCalculator calculator) {
+    _timeCalculator = calculator;
+  }
+
+  /// 取消所有已调度的 per-audio 复习通知
+  ///
+  /// 关闭 perAudio 开关时调用，清除系统中所有 per-audio 范围内的通知
+  /// 和内存快照，确保重新开启时能重新调度。
+  Future<void> cancelAllPerAudioReminders() async {
+    if (!_supportsSystemNotification) return;
+
+    try {
+      // 查询系统中所有 pending 通知，cancel per-audio 范围内的
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final n in pending) {
+        if (n.id >= _perAudioIdMin && n.id <= _perAudioIdMax) {
+          await _plugin.cancel(n.id);
+        }
+      }
+
+      // 清理内存状态
+      for (final id in _scheduledPerAudioIds.toList()) {
+        await _plugin.cancel(id);
+      }
+      _scheduledPerAudioIds.clear();
+      _lastSnapshot = null;
+    } on MissingPluginException {
+      debugPrint(
+        'ReviewReminderService: plugin unavailable during cancelAll',
+      );
+    } catch (e) {
+      debugPrint('ReviewReminderService.cancelAllPerAudioReminders error: $e');
+    }
+  }
+
+  /// 取消所有已调度的收藏复习提醒（15 天）
+  Future<void> cancelSavedReviewReminder() async {
     if (!_supportsSystemNotification) return;
     try {
-      await _plugin.cancel(kDailyReviewSummaryNotificationId);
+      for (var i = 0; i < _savedReviewDays; i++) {
+        await _plugin.cancel(_savedReviewIdBase + i);
+      }
     } on MissingPluginException {
       debugPrint('ReviewReminderService: plugin unavailable during cancel');
     } catch (e) {
-      debugPrint('ReviewReminderService.cancelDailyReminder error: $e');
+      debugPrint('ReviewReminderService.cancelSavedReviewReminder error: $e');
     }
   }
 
@@ -293,8 +368,9 @@ class ReviewReminderService {
   /// 解析 payload 并发射对应意图
   void _handlePayload(String? payload) {
     if (payload == null) return;
-    if (payload == _openStudyPayload) {
-      _bridge.emit(const OpenStudyTasks());
+    // 兼容旧版本 payload，旧"每日提醒"已重命名为"收藏复习提醒"
+    if (payload == _openFavoritesPayload || payload == 'open_study_tasks') {
+      _bridge.emit(const OpenFavorites());
       return;
     }
     if (payload.startsWith(_openAudioPrefix)) {

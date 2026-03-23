@@ -325,9 +325,112 @@ void main() {
     });
   });
 
+  group('cancelAllPerAudioReminders', () {
+    test('取消系统中所有 per-audio 范围内的通知', () async {
+      final service = createService();
+
+      // 模拟系统中有 per-audio 通知
+      when(() => mockPlugin.pendingNotificationRequests()).thenAnswer(
+        (_) async => [
+          const PendingNotificationRequest(3000, 'Fluency', 'a', 'open_audio:a'),
+          const PendingNotificationRequest(4000, 'Fluency', 'b', 'open_audio:b'),
+          const PendingNotificationRequest(1001, 'Fluency', 'daily', 'open_study_tasks'),
+        ],
+      );
+
+      await service.cancelAllPerAudioReminders();
+
+      // 应 cancel per-audio 范围内的 3000 和 4000，不 cancel 1001
+      verify(() => mockPlugin.cancel(3000)).called(1);
+      verify(() => mockPlugin.cancel(4000)).called(1);
+      verifyNever(() => mockPlugin.cancel(1001));
+    });
+
+    test('cancel 后快照重置，下次 syncPerAudioReminders 可重新调度', () async {
+      final service = createService();
+      final reminders = [
+        PerAudioReminderInfo(
+          audioId: 'audio-1',
+          audioName: 'Test',
+          triggerAt: DateTime.now().add(const Duration(hours: 6)),
+          reviewRound: 1,
+        ),
+      ];
+
+      // 首次调度
+      await service.syncPerAudioReminders(reminders);
+      clearInteractions(mockPlugin);
+
+      // 重新 stub
+      when(() => mockPlugin.cancel(any())).thenAnswer((_) async {});
+      when(() => mockPlugin.pendingNotificationRequests())
+          .thenAnswer((_) async => <PendingNotificationRequest>[]);
+      when(
+        () => mockPlugin.zonedSchedule(
+          any(), any(), any(), any(), any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      ).thenAnswer((_) async {});
+
+      // cancelAll 重置快照
+      await service.cancelAllPerAudioReminders();
+      clearInteractions(mockPlugin);
+
+      when(() => mockPlugin.cancel(any())).thenAnswer((_) async {});
+      when(() => mockPlugin.pendingNotificationRequests())
+          .thenAnswer((_) async => <PendingNotificationRequest>[]);
+      when(
+        () => mockPlugin.zonedSchedule(
+          any(), any(), any(), any(), any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      ).thenAnswer((_) async {});
+
+      // 相同 reminders 再次同步——应该正常调度（快照已清空）
+      await service.syncPerAudioReminders(reminders);
+
+      verify(
+        () => mockPlugin.zonedSchedule(
+          any(), any(), any(), any(), any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      ).called(1);
+    });
+  });
+
+  group('updateTimeCalculator', () {
+    test('更新后 syncSavedReviewReminder 使用新的时间计算器', () async {
+      final service = createService();
+
+      // 初始 timeCalc
+      when(() => mockTimeCalc.nextTriggerAt(any()))
+          .thenReturn(DateTime(2026, 3, 22, 20, 0));
+
+      await service.syncSavedReviewReminder(hasSavedContent: true);
+
+      // 更换为新的计算器
+      final newCalc = FixedTimeReminderCalculator(hour: 8, minute: 30);
+      service.updateTimeCalculator(newCalc);
+
+      await service.syncSavedReviewReminder(hasSavedContent: true);
+
+      // 15 天 × 2 次 = 30 次 zonedSchedule
+      verify(
+        () => mockPlugin.zonedSchedule(
+          any(), any(), any(), any(), any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      ).called(30);
+    });
+  });
+
   group('NotificationIntent payload 解析（通过 launch payload）', () {
-    test('open_study_tasks payload 产生 OpenStudyTasks', () async {
-      final service = createService(launchPayload: 'open_study_tasks');
+    test('open_favorites payload 产生 OpenFavorites', () async {
+      final service = createService(launchPayload: 'open_favorites');
 
       // 先注册监听，再 init（init 内 _handlePayload 同步发射）
       final intents = <NotificationIntent>[];
@@ -338,10 +441,27 @@ void main() {
       // init 可能因为 FlutterTimezone 失败而 catch——检查 pending intent 作为备选
       if (intents.isEmpty) {
         final pending = bridge.takePendingIntent();
-        expect(pending, isA<OpenStudyTasks>());
+        expect(pending, isA<OpenFavorites>());
       } else {
         expect(intents, hasLength(1));
-        expect(intents.first, isA<OpenStudyTasks>());
+        expect(intents.first, isA<OpenFavorites>());
+      }
+    });
+
+    test('旧版 open_study_tasks payload 兼容为 OpenFavorites', () async {
+      final service = createService(launchPayload: 'open_study_tasks');
+
+      final intents = <NotificationIntent>[];
+      bridge.intents.listen(intents.add);
+
+      await service.init();
+
+      if (intents.isEmpty) {
+        final pending = bridge.takePendingIntent();
+        expect(pending, isA<OpenFavorites>());
+      } else {
+        expect(intents, hasLength(1));
+        expect(intents.first, isA<OpenFavorites>());
       }
     });
 

@@ -11,16 +11,20 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_update_info.dart';
 import '../models/learning_progress.dart';
+import '../models/reminder_settings.dart';
+import '../database/providers.dart';
 import '../providers/app_update_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import '../providers/reminder_settings_provider.dart';
 import '../providers/review_reminder_provider.dart';
 import '../providers/study_stats_provider.dart';
 import '../providers/study_task_provider.dart';
 import '../providers/tag_provider.dart';
 import '../providers/time_provider.dart';
 import '../services/review_reminder_service.dart';
+import '../services/review_reminder_time_calculator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_update_dialog.dart';
 
@@ -40,6 +44,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   ProviderSubscription<Map<String, LearningProgress>>?
       _progressMapSubscription;
   ProviderSubscription<AppUpdateState>? _appUpdateSubscription;
+  ProviderSubscription<ReminderSettings>? _reminderSettingsSubscription;
 
   @override
   void initState() {
@@ -53,10 +58,15 @@ class _MainShellState extends ConsumerState<MainShell> {
       });
       await ref.read(learningProgressNotifierProvider.notifier).loadAll();
 
+      // 启动时调度收藏复习提醒 + per-audio 提醒
+      await _syncSavedReviewReminder();
+
       _pendingTaskCountSubscription = ref.listenManual<int>(
         pendingStudyTaskCountProvider,
-        (_, next) {
-          _syncDailyReminder(next);
+        (_, __) {
+          // 任务数变化时重新同步 per-audio 提醒
+          final service = ref.read(reviewReminderServiceProvider);
+          _syncPerAudioReminders(service);
         },
         fireImmediately: true,
       );
@@ -69,6 +79,14 @@ class _MainShellState extends ConsumerState<MainShell> {
         (_, __) {
           final service = ref.read(reviewReminderServiceProvider);
           _syncPerAudioReminders(service);
+        },
+      );
+
+      // 监听提醒设置变更，触发重新同步通知调度
+      _reminderSettingsSubscription = ref.listenManual<ReminderSettings>(
+        reminderSettingsNotifierProvider,
+        (_, next) {
+          _onReminderSettingsChanged(next);
         },
       );
 
@@ -89,6 +107,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     _pendingTaskCountSubscription?.close();
     _progressMapSubscription?.close();
     _appUpdateSubscription?.close();
+    _reminderSettingsSubscription?.close();
     super.dispose();
   }
 
@@ -125,14 +144,65 @@ class _MainShellState extends ConsumerState<MainShell> {
     ref.read(studyStatsNotifierProvider.notifier).refresh();
   }
 
-  Future<void> _syncDailyReminder(int pendingTaskCount) async {
+  /// 提醒设置变更回调：重新同步收藏复习提醒和音频复习提醒
+  ///
+  /// 先手动同步 timeCalculator（避免与 ref.listen 的执行顺序竞争），
+  /// 再根据开关状态调度或取消通知。
+  Future<void> _onReminderSettingsChanged(ReminderSettings settings) async {
     final service = ref.read(reviewReminderServiceProvider);
-    await service.syncDailyReminder(pendingTaskCount: pendingTaskCount);
+
+    // 确保 service 使用最新时间，不依赖 ref.listen 的执行顺序
+    service.updateTimeCalculator(
+      FixedTimeReminderCalculator(
+        hour: settings.savedReviewReminderHour,
+        minute: settings.savedReviewReminderMinute,
+      ),
+    );
+
+    // 收藏复习提醒：开关关闭时 cancel，开启时重新调度
+    if (!settings.savedReviewReminderEnabled) {
+      await service.cancelSavedReviewReminder();
+    } else {
+      await _syncSavedReviewReminder();
+    }
+
+    // per-audio 提醒：开关关闭时全量 cancel，开启时重新调度
+    if (!settings.perAudioReminderEnabled) {
+      await service.cancelAllPerAudioReminders();
+    } else {
+      await _syncPerAudioReminders(service);
+    }
+  }
+
+  /// 查询收藏数据并调度收藏复习提醒
+  ///
+  /// 收藏句子或单词任一不为空时才调度，否则取消。
+  Future<void> _syncSavedReviewReminder() async {
+    final settings = ref.read(reminderSettingsNotifierProvider);
+    final service = ref.read(reviewReminderServiceProvider);
+
+    if (!settings.savedReviewReminderEnabled) {
+      await service.cancelSavedReviewReminder();
+      return;
+    }
+
+    // 轻量查询，只在 App 启动和设置变更时执行
+    final sentenceCount = await ref.read(bookmarkDaoProvider).countAll();
+    final words = await ref.read(savedWordDaoProvider).getAll();
+    final hasSaved = sentenceCount > 0 || words.isNotEmpty;
+
+    await service.syncSavedReviewReminder(hasSavedContent: hasSaved);
     await _syncPerAudioReminders(service);
   }
 
   /// 收集当前处于复习阶段且 nextReviewAt 在未来的音频，调度单条通知
   Future<void> _syncPerAudioReminders(ReviewReminderService service) async {
+    final settings = ref.read(reminderSettingsNotifierProvider);
+    if (!settings.perAudioReminderEnabled) {
+      await service.cancelAllPerAudioReminders();
+      return;
+    }
+
     final progressMap = ref.read(
       learningProgressNotifierProvider.select((s) => s.progressMap),
     );

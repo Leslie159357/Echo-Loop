@@ -811,5 +811,15 @@
   "stageBreakdownLessThanOneMin": "<1分",
   "stageBreakdownListenShort": "听",
   "stageBreakdownSpeakShort": "说",
-  "stageBreakdownNoStageData": "详细分布数据从此版本开始记录"
+  "stageBreakdownNoStageData": "详细分布数据从此版本开始记录",
+
+  "reminderSectionTitle": "提醒",
+  "reminderSettings": "提醒设置",
+  "savedReviewReminderSection": "收藏复习提醒",
+  "savedReviewReminderToggle": "收藏内容提醒",
+  "savedReviewReminderTime": "每日提醒时间",
+  "savedReviewReminderDescription": "通勤或睡前复习收藏内容，效果更好",
+  "audioReviewReminderSection": "音频复习提醒",
+  "audioReviewReminderToggle": "音频到期提醒",
+  "audioReviewReminderDescription": "到复习时间时通知你，帮你保持复习节奏"
 }

@@ -9,6 +9,7 @@ import '../models/app_update_info.dart';
 import '../providers/app_update_provider.dart';
 import '../providers/developer_options_provider.dart';
 import '../providers/package_info_provider.dart';
+import '../providers/reminder_settings_provider.dart';
 import '../providers/sentence_ai_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/word_ai_provider.dart';
@@ -19,6 +20,7 @@ import '../providers/tag_provider.dart';
 import '../services/demo_data_seeder.dart';
 import '../theme/app_theme.dart';
 import 'log_viewer_screen.dart';
+import 'reminder_settings_screen.dart';
 import '../widgets/app_update_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -44,6 +46,8 @@ class SettingsScreen extends ConsumerWidget {
               _buildLanguageTile(context, l10n, settings, settingsController),
             ],
           ),
+          const SizedBox(height: AppSpacing.m),
+          _buildReminderSection(context, ref, l10n),
           const SizedBox(height: AppSpacing.m),
           _buildStorageSection(context, ref, l10n),
           const SizedBox(height: AppSpacing.m),
@@ -82,6 +86,44 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         Card(child: Column(children: _intersperseDividers(children))),
+      ],
+    );
+  }
+
+  /// 构建提醒设置入口
+  Widget _buildReminderSection(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final settings = ref.watch(reminderSettingsNotifierProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return _buildSection(
+      context,
+      title: l10n.reminderSectionTitle,
+      children: [
+        ListTile(
+          leading: _emojiIcon('🔔'),
+          title: Text(l10n.reminderSettings),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (settings.savedReviewReminderEnabled)
+                Text(
+                  settings.formattedTime,
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
+                ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ReminderSettingsScreen(),
+            ),
+          ),
+        ),
       ],
     );
   }
