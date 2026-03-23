@@ -15,7 +15,7 @@ import 'consent_manager.dart';
 ///
 /// 使用示例：
 /// ```dart
-/// ref.read(analyticsServiceProvider).track(Events.sessionStart, {
+/// ref.read(analyticsServiceProvider).track(Events.learningStart, {
 ///   EventParams.audioId: audioId,
 ///   EventParams.stage: stage.name,
 /// });

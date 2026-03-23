@@ -18,11 +18,11 @@ abstract class Events {
   static const screenView = 'screen_view';
 
   // ── 学习会话 ──
-  /// 进入学习页面
-  static const sessionStart = 'session_start';
+  /// 进入学习页面（避免 Firebase 保留名 session_start）
+  static const learningStart = 'learning_start';
 
   /// 离开学习页面
-  static const sessionEnd = 'session_end';
+  static const learningEnd = 'learning_end';
 
   // ── 盲听 ──
   /// 开始全文盲听

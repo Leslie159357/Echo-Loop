@@ -72,7 +72,7 @@ void main() {
       await consent.revokeConsent();
 
       await service.track(Events.appOpen);
-      await service.track(Events.sessionStart, {EventParams.audioId: '123'});
+      await service.track(Events.learningStart, {EventParams.audioId: '123'});
 
       expect(channel.events, isEmpty);
     });
@@ -100,12 +100,12 @@ void main() {
 
       // 撤回同意：事件丢弃
       await consent.revokeConsent();
-      await service.track(Events.sessionStart);
+      await service.track(Events.learningStart);
       expect(channel.events, hasLength(1)); // 没有新增
 
       // 重新同意：事件恢复
       await consent.grantConsent();
-      await service.track(Events.sessionEnd);
+      await service.track(Events.learningEnd);
       expect(channel.events, hasLength(2));
     });
 
