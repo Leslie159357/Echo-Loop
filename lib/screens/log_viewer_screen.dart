@@ -18,7 +18,6 @@ class LogViewerScreen extends StatefulWidget {
 
 class _LogViewerScreenState extends State<LogViewerScreen> {
   final _scrollController = ScrollController();
-  bool _autoScroll = true;
 
   @override
   void initState() {
@@ -36,15 +35,13 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
   void _onLogUpdated() {
     if (!mounted) return;
     setState(() {});
-    if (_autoScroll) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(
-            _scrollController.position.maxScrollExtent,
-          );
-        }
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(
+          _scrollController.position.maxScrollExtent,
+        );
+      }
+    });
   }
 
   void _copyAll() {
@@ -69,13 +66,6 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
         title: Text('日志 (${entries.length})'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: Icon(
-              _autoScroll ? Icons.vertical_align_bottom : Icons.pause,
-            ),
-            tooltip: _autoScroll ? '自动滚动中' : '已暂停滚动',
-            onPressed: () => setState(() => _autoScroll = !_autoScroll),
-          ),
           IconButton(
             icon: const Icon(Icons.copy),
             tooltip: '复制全部',
