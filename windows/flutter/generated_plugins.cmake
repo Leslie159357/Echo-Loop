@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  firebase_core
   flutter_timezone
   flutter_tts
   sqlite3_flutter_libs

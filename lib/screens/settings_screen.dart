@@ -17,6 +17,7 @@ import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/tag_provider.dart';
+import '../analytics/analytics_providers.dart';
 import '../services/demo_data_seeder.dart';
 import '../theme/app_theme.dart';
 import 'log_viewer_screen.dart';
@@ -332,6 +333,23 @@ class SettingsScreen extends ConsumerWidget {
               builder: (_) => const LogViewerScreen(),
             ),
           ),
+        ),
+        ListTile(
+          leading: _emojiIcon('📊'),
+          title: const Text('Analytics'),
+          subtitle: Text(
+            '通道: ${ref.read(analyticsServiceProvider).channelName}',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            final service = ref.read(analyticsServiceProvider);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('当前通道: ${service.channelName}'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
         ),
         ListTile(
           leading: _emojiIcon('🎭'),

@@ -131,6 +131,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       index,
       initialLocation: index == widget.navigationShell.currentIndex,
     );
+
     // 切换到学习 tab 时刷新数据
     if (index == 1) {
       _refreshStudyData();

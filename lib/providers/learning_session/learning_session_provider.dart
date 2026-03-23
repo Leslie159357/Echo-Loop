@@ -9,6 +9,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../analytics/analytics_providers.dart';
+import '../../analytics/models/event_names.dart';
 import '../../models/blind_listen_settings.dart';
 import '../../models/playback_settings.dart';
 import '../../models/sentence.dart';
@@ -281,6 +283,28 @@ class LearningSession extends _$LearningSession {
     );
   }
 
+  /// 上报 session_start 事件
+  void _trackSessionStart() {
+    final analytics = ref.read(analyticsServiceProvider);
+    analytics.track(Events.sessionStart, {
+      if (state.audioItemId != null) EventParams.audioId: state.audioItemId!,
+      if (state.learningMode != null) EventParams.stage: state.learningMode!.name,
+      EventParams.isFreePractice: state.isFreePlay,
+    });
+  }
+
+  /// 上报 session_end 事件
+  void _trackSessionEnd() {
+    final analytics = ref.read(analyticsServiceProvider);
+    final durationMs = _studyStopwatch.elapsedMilliseconds;
+    analytics.track(Events.sessionEnd, {
+      if (state.audioItemId != null) EventParams.audioId: state.audioItemId!,
+      if (state.learningMode != null) EventParams.stage: state.learningMode!.name,
+      EventParams.durationMs: durationMs,
+      EventParams.isFreePractice: state.isFreePlay,
+    });
+  }
+
   /// 停止周期保存定时器
   void _stopPeriodicSaveTimer() {
     _periodicSaveTimer?.cancel();
@@ -405,6 +429,7 @@ class LearningSession extends _$LearningSession {
       paragraphs,
       settings ?? const BlindListenSettings(),
     );
+    _trackSessionStart();
   }
 
   /// 再听一遍：重置到第一段，递增遍数
@@ -462,6 +487,7 @@ class LearningSession extends _$LearningSession {
     // 初始化精听播放器
     final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
     await intensivePlayer.initialize(sentences, startIndex: startIndex);
+    _trackSessionStart();
   }
 
   /// 进入难句跟读模式
@@ -531,6 +557,7 @@ class LearningSession extends _$LearningSession {
       startIndex: startIndex,
       targetPlayCount: targetPlayCount,
     );
+    _trackSessionStart();
   }
 
   /// 进入段落复述模式
@@ -579,6 +606,7 @@ class LearningSession extends _$LearningSession {
       keywordsMap,
       startSentenceIndex: startSentenceIndex,
     );
+    _trackSessionStart();
   }
 
   /// 进入复习难句补练模式
@@ -640,12 +668,14 @@ class LearningSession extends _$LearningSession {
     // 初始化难句补练播放器（传入断点索引）
     final player = ref.read(reviewDifficultPracticeProvider.notifier);
     player.initialize(difficultSentences, startIndex: startIndex);
+    _trackSessionStart();
   }
 
   /// 退出学习模式
   ///
   /// 根据当前学习模式分支处理：停止播放、释放资源、恢复 LP 监听。
   Future<void> exitLearningMode() async {
+    _trackSessionEnd();
     _stopPeriodicSaveTimer();
     await _saveStudyTime();
     final mode = state.learningMode;

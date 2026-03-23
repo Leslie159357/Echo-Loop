@@ -22,6 +22,10 @@ import 'services/dictionary_service.dart';
 import 'theme/app_theme.dart';
 import 'config/api_config.dart';
 import 'services/notification_tap_router_bridge.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'analytics/analytics_providers.dart';
+import 'analytics/models/event_names.dart';
+import 'firebase_options.dart';
 
 /// 通过原生网络栈连接后端服务器。
 ///
@@ -120,6 +124,15 @@ void main() async {
     unawaited(_triggerNetworkPermission());
   }
 
+  // 初始化 Firebase（所有平台都初始化，采集开关由通道选择逻辑控制）
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // 初始化分析服务（根据 geo 选择 Firebase/友盟/Log 通道）
+  final analyticsService = await initAnalyticsService(prefs);
+  initAnalytics(analyticsService);
+
   // 预热本地词典数据库，避免首次查询时冷启动延迟（异步，不阻塞启动）
   unawaited(
     DictionaryService.instance.warmUp().catchError(
@@ -146,10 +159,35 @@ class FluencyApp extends ConsumerStatefulWidget {
 
 class _FluencyAppState extends ConsumerState<FluencyApp> {
   StreamSubscription<NotificationIntent>? _intentSubscription;
+  late final AppLifecycleListener _lifecycleListener;
+
+  /// App 进入前台的时间戳，用于计算 foreground_duration_ms
+  DateTime? _foregroundSince;
+
+  /// 启动保护标记，防止 macOS 启动过程中的 resume 事件误触发 warm open
+  bool _coldStartDone = false;
 
   @override
   void initState() {
     super.initState();
+
+    // App 生命周期事件追踪
+    _foregroundSince = DateTime.now();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onAppResumed,
+      onHide: _onAppBackground,
+    );
+
+    // 冷启动 app_open 事件 + 设置保护期
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(analyticsServiceProvider).track(Events.appOpen, {
+        EventParams.launchType: 'cold',
+      });
+      // 延迟 5 秒解除保护，避免启动过程中的 resume 误报 warm
+      Future.delayed(const Duration(seconds: 5), () {
+        _coldStartDone = true;
+      });
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final bridge = ref.read(notificationTapRouterBridgeProvider);
@@ -171,7 +209,28 @@ class _FluencyAppState extends ConsumerState<FluencyApp> {
   @override
   void dispose() {
     _intentSubscription?.cancel();
+    _lifecycleListener.dispose();
     super.dispose();
+  }
+
+  /// App 从后台恢复
+  void _onAppResumed() {
+    if (!_coldStartDone) return; // 启动保护期内忽略
+    _foregroundSince = DateTime.now();
+    ref.read(analyticsServiceProvider).track(Events.appOpen, {
+      EventParams.launchType: 'warm',
+    });
+  }
+
+  /// App 进入后台
+  void _onAppBackground() {
+    if (!_coldStartDone) return; // 启动保护期内忽略
+    final durationMs = _foregroundSince != null
+        ? DateTime.now().difference(_foregroundSince!).inMilliseconds
+        : 0;
+    ref.read(analyticsServiceProvider).track(Events.appBackground, {
+      EventParams.foregroundDurationMs: durationMs,
+    });
   }
 
   void _handleNotificationIntent(NotificationIntent intent) {

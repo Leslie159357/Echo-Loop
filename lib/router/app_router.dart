@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../analytics/analytics_observer.dart';
+import '../analytics/analytics_providers.dart';
 import '../screens/library_screen.dart';
 import '../screens/collection_detail_screen.dart';
 import '../screens/study_screen.dart';
@@ -106,9 +108,11 @@ abstract class AppRoutes {
 
 /// GoRouter Provider（keepAlive，不可 invalidate）
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final analyticsService = ref.read(analyticsServiceProvider);
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.study,
+    observers: [AnalyticsObserver(analyticsService)],
     redirect: (context, state) {
       if (state.uri.path == '/') return AppRoutes.study;
       return null;
