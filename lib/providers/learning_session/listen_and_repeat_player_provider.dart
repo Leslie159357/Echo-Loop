@@ -178,7 +178,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       targetPlayCount: targetPlayCount,
       settings: IntensiveListenSettings(repeatCount: targetPlayCount),
     );
-    ref.read(analyticsServiceProvider).track(Events.shadowingStart, {
+    ref.read(analyticsServiceProvider).track(Events.listenRepeatStart, {
       EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
       EventParams.totalSentences: _sentences.length,
     });
@@ -531,7 +531,7 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   /// 上报跟读完成事件
   void _trackShadowingComplete() {
-    ref.read(analyticsServiceProvider).track(Events.shadowingComplete, {
+    ref.read(analyticsServiceProvider).track(Events.listenRepeatComplete, {
       EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
       EventParams.totalSentences: state.totalSentences,
     });

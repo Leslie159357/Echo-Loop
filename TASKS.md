@@ -67,7 +67,7 @@
 - [x] `blind_listen_start` / `blind_listen_complete`（遍数）
 - [x] `blind_listen_difficulty_set`（难度级别）
 - [x] `intensive_listen_start` / `intensive_listen_complete`（总句数 + 难句数）
-- [x] `shadowing_start` / `shadowing_complete`（总句数）
+- [x] `listen_repeat_start` / `listen_repeat_complete`（总句数）
 - [x] `retell_start` / `retell_complete`（总段落数）
 - [x] `difficult_practice_start` / `difficult_practice_complete`（难句数）
 - [x] `first_learn_complete`（总学习时长）

@@ -43,10 +43,10 @@ abstract class Events {
 
   // ── 跟读 ──
   /// 开始跟读
-  static const shadowingStart = 'shadowing_start';
+  static const listenRepeatStart = 'listen_repeat_start';
 
   /// 跟读完成全部句子
-  static const shadowingComplete = 'shadowing_complete';
+  static const listenRepeatComplete = 'listen_repeat_complete';
 
   // ── 复述 ──
   /// 开始段落复述
