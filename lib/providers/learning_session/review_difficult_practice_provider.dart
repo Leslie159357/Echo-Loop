@@ -14,11 +14,17 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/models/event_names.dart';
+import '../../database/providers.dart';
 import '../../models/difficult_practice_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/study_stage.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
+import '../listen_and_repeat_turn_controller_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
 import 'sentence_playback_engine.dart';
@@ -144,6 +150,9 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// 难句列表（可变，取消标记时会移除）
   List<Sentence> _sentences = [];
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// 播放引擎
   late SentencePlaybackEngine _engine;
 
@@ -155,8 +164,21 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
   @override
   ReviewDifficultPracticeState build() {
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } catch (_) {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: ref.read(studyTimeServiceProvider),
+      vocabTracker: vocabTracker,
+      stage: StudyStage.reviewDifficultPractice,
+    );
+
     _engine = SentencePlaybackEngine(
       getEngine: () => ref.read(audioEngineProvider.notifier),
+      recorder: _recorder,
     );
     ref.onDispose(() {
       _engine.cleanup();
@@ -186,6 +208,11 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
       EventParams.difficultCount: _sentences.length,
     });
+
+    // 注入 recorder 到录音控制器
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(_recorder);
   }
 
   /// 更新练习设置（仅会话内生效）
@@ -193,9 +220,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// 更新后中断当前播放，以新设置重新开始当前句子。
   void updateSettings(DifficultPracticeSettings newSettings) {
     _engine.invalidateSession();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(settings: newSettings, isPlaying: false);
   }
 
@@ -240,9 +264,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   void pause() {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -301,9 +322,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
 
     final removedIndex = state.currentSentenceIndex;
     final removed = _sentences[removedIndex];
@@ -493,9 +511,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   void stopPlayback() {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -505,6 +520,9 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
   /// 释放资源
   void disposePlayer() {
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(null);
     _engine.cleanup();
     _sentences = [];
     state = const ReviewDifficultPracticeState();
@@ -594,9 +612,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// fire-and-forget，与 listen_and_repeat 的 _startSentence 模式一致。
   /// [startPlayCount] 从第几遍开始（默认第 1 遍）。
   void _startShadowReading({int startPlayCount = 1}) {
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     final sentence = currentSentence;
     if (sentence == null || sentence.duration <= Duration.zero) return;
 
@@ -624,11 +639,8 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
         state = state.copyWith(currentPlayCount: count, isPlaying: true);
       },
       onPauseStarted: (dur) {
-        // 播放完成 = 输入，停顿开始 = 用户跟读 = 输出
-        session.addInputWords(wordCount);
-        session.recordLearnedSentence(sentence.text);
+        // 停顿开始 = 用户跟读 = 输出
         session.addOutputWords(wordCount);
-        session.startOutputTimer();
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -639,17 +651,13 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
         );
       },
       onPauseEnded: () {
-        session.stopOutputTimer();
         state = state.copyWith(isPauseBetweenPlays: false);
       },
       onTick: (remaining) {
         state = state.copyWith(pauseRemaining: remaining);
       },
       onAllPlaysCompleted: () async {
-        // 最后一遍只有输入，没有跟读停顿
         // 保持 annotationMode，让句间停顿也触发自动录音（与跟读页一致）
-        session.addInputWords(wordCount);
-        session.recordLearnedSentence(sentence.text);
         await _autoAdvance();
       },
     );
@@ -657,9 +665,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
   /// 开始播放当前句子（盲听 N 遍）
   Future<void> _startSentence({int startPlayCount = 1}) async {
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     final sentence = currentSentence;
     if (sentence == null) return;
 
@@ -683,9 +688,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     );
     _persistCurrentSentenceIndexAsync();
 
-    final wordCount = countWords(sentence.text);
-    final session = ref.read(learningSessionProvider.notifier);
-
     // 盲听循环：1 遍时无遍间停顿，多遍时使用跟读停顿策略
     await _engine.playSentenceLoop(
       sentence: sentence,
@@ -701,9 +703,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
           : (_) {},
       onPauseStarted: repeatCount > 1
           ? (dur) {
-              // 每遍播完计入输入词数
-              session.addInputWords(wordCount);
-              session.recordLearnedSentence(sentence.text);
               state = state.copyWith(
                 isPauseBetweenPlays: true,
                 isPlaying: false,
@@ -725,9 +724,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
             }
           : (_) {},
       onAllPlaysCompleted: () async {
-        // 最后一遍（或唯一一遍）播完计入输入词数
-        session.addInputWords(wordCount);
-        session.recordLearnedSentence(sentence.text);
         // 盲听完成 → 句间停顿 → 自动推进
         await _autoAdvance();
       },

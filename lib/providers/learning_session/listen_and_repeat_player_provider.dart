@@ -15,12 +15,18 @@ import 'dart:math' as math;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/models/event_names.dart';
+import '../../database/providers.dart';
 import '../../models/intensive_listen_settings.dart';
+import '../../models/study_stage.dart';
 import '../../services/app_logger.dart';
 import '../../models/sentence.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
+import '../listen_and_repeat_turn_controller_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
 import 'sentence_playback_engine.dart';
@@ -134,6 +140,9 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
   /// 难句列表（可变，取消收藏时会移除）
   List<Sentence> _sentences = [];
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// 播放引擎
   late SentencePlaybackEngine _engine;
 
@@ -145,8 +154,21 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   @override
   ListenAndRepeatPlayerState build() {
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } catch (_) {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: ref.read(studyTimeServiceProvider),
+      vocabTracker: vocabTracker,
+      stage: StudyStage.listenAndRepeat,
+    );
+
     _engine = SentencePlaybackEngine(
       getEngine: () => ref.read(audioEngineProvider.notifier),
+      recorder: _recorder,
     );
     ref.onDispose(() {
       _engine.cleanup();
@@ -182,6 +204,11 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
       EventParams.totalSentences: _sentences.length,
     });
+
+    // 注入 recorder 到录音控制器
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(_recorder);
   }
 
   /// 获取当前句子
@@ -223,9 +250,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
   Future<void> pause() async {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -520,9 +544,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
   void stopPlayback() {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -532,6 +553,9 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   /// 释放资源
   void disposePlayer() {
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(null);
     _engine.cleanup();
     _sentences = [];
     state = const ListenAndRepeatPlayerState();
@@ -549,9 +573,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
 
   /// 开始播放当前句子的循环
   Future<void> _startSentence({int startPlayCount = 1}) async {
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     final sentence = currentSentence;
     if (sentence == null) return;
 
@@ -587,11 +608,8 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
         state = state.copyWith(currentPlayCount: playCount, isPlaying: true);
       },
       onPauseStarted: (pauseDur) {
-        // 播放完成 = 输入，停顿开始 = 用户跟读 = 输出
-        session.addInputWords(wordCount);
-        session.recordLearnedSentence(sentence.text);
+        // 停顿开始 = 用户跟读 = 输出
         session.addOutputWords(wordCount);
-        session.startOutputTimer();
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -602,7 +620,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
         );
       },
       onPauseEnded: () {
-        session.stopOutputTimer();
         state = state.copyWith(
           isPauseBetweenPlays: false,
           isCountdownPaused: false,
@@ -613,9 +630,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
         state = state.copyWith(pauseRemaining: remaining);
       },
       onAllPlaysCompleted: () async {
-        // 最后一遍只有输入，没有跟读停顿
-        session.addInputWords(wordCount);
-        session.recordLearnedSentence(sentence.text);
         await _autoAdvance();
       },
     );

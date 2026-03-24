@@ -14,10 +14,15 @@ import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/models/event_names.dart';
+import '../../database/providers.dart';
 import '../../models/blind_listen_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/study_stage.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
@@ -124,6 +129,9 @@ class BlindListenPlayer extends _$BlindListenPlayer {
   /// 段落列表
   List<List<Sentence>> _paragraphs = [];
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// position 监听（句子高亮）
   StreamSubscription<Duration>? _positionSub;
 
@@ -138,6 +146,18 @@ class BlindListenPlayer extends _$BlindListenPlayer {
 
   @override
   BlindListenPlayerState build() {
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } catch (_) {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: ref.read(studyTimeServiceProvider),
+      vocabTracker: vocabTracker,
+      stage: StudyStage.blindListen,
+    );
+
     final lifecycleListener = AppLifecycleListener(
       onStateChange: _handleAppLifecycleChange,
     );
@@ -376,13 +396,17 @@ class BlindListenPlayer extends _$BlindListenPlayer {
 
     if (!engine.isActiveSession(sid)) return;
 
-    // 计入输入词数
+    // 通过 recorder 记录听力时长、输入词数、已学词形
     final paragraphWordCount = countWordsInSentences(sentences);
-    try {
-      final session = ref.read(learningSessionProvider.notifier);
-      session.addInputWords(paragraphWordCount);
-      session.recordLearnedSentences(sentences);
-    } catch (_) {}
+    final durationSeconds = (sentences.last.endTime -
+            sentences.first.startTime)
+        .inSeconds;
+    final paragraphText = sentences.map((s) => s.text).join(' ');
+    _recorder.onInputCompleted(
+      durationSeconds: durationSeconds,
+      wordCount: paragraphWordCount,
+      text: paragraphText,
+    );
 
     _positionSub?.cancel();
 

@@ -14,12 +14,18 @@ import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/models/event_names.dart';
+import '../../database/providers.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/study_stage.dart';
 import '../../services/app_logger.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
 import '../../utils/keyword_extraction.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../learned_vocabulary_tracker_provider.dart';
+import '../retell_recording_controller_provider.dart';
 import 'countdown_controller.dart';
 import '../learning_progress_provider.dart';
 import 'learning_session_provider.dart';
@@ -152,6 +158,9 @@ class RetellPlayer extends _$RetellPlayer {
   /// 关键词映射：段落内句子索引 → 词索引集合
   Map<int, Set<int>> _keywordsMap = {};
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// position 监听（用于句子高亮）
   StreamSubscription<Duration>? _positionSub;
 
@@ -168,6 +177,18 @@ class RetellPlayer extends _$RetellPlayer {
 
   @override
   RetellPlayerState build() {
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } catch (_) {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: ref.read(studyTimeServiceProvider),
+      vocabTracker: vocabTracker,
+      stage: StudyStage.retell,
+    );
+
     final lifecycleListener = AppLifecycleListener(
       onStateChange: _handleAppLifecycleChange,
     );
@@ -244,6 +265,11 @@ class RetellPlayer extends _$RetellPlayer {
       EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
       EventParams.totalParagraphs: paragraphs.length,
     });
+
+    // 注入 recorder 到录音控制器
+    ref
+        .read(retellRecordingControllerProvider.notifier)
+        .setRecorder(_recorder);
   }
 
   /// 获取当前段落第一句的全局句子索引（用于保存断点）
@@ -303,12 +329,11 @@ class RetellPlayer extends _$RetellPlayer {
     );
   }
 
-  /// 记录段落输出词数并停止输出计时。
+  /// 记录段落输出词数。
   void _recordParagraphOutputStats() {
     final session = ref.read(learningSessionProvider.notifier);
     final paragraphWordCount = countWordsInSentences(currentParagraphSentences);
     session.addOutputWords(paragraphWordCount);
-    session.stopOutputTimer();
   }
 
   /// 异步保存复述断点，记录当前段首句的全局索引。
@@ -359,9 +384,6 @@ class RetellPlayer extends _$RetellPlayer {
     _sessionId = engine.newSession();
     _positionSub?.cancel();
     _invalidateRetellCountdown();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     await engine.stopPlayback();
     state = state.copyWith(
       isPlaying: false,
@@ -510,6 +532,9 @@ class RetellPlayer extends _$RetellPlayer {
 
   /// 释放资源
   void disposePlayer() {
+    ref
+        .read(retellRecordingControllerProvider.notifier)
+        .setRecorder(null);
     _cleanup();
     _paragraphs = [];
     _allSentences = [];
@@ -524,9 +549,6 @@ class RetellPlayer extends _$RetellPlayer {
   /// 使用局部变量 `sid` 捕获 sessionId，防止 pause/其他操作
   /// 覆写实例变量 `_sessionId` 后导致 guard 失效。
   Future<void> _playCurrentParagraph() async {
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     final sentences = currentParagraphSentences;
     if (sentences.isEmpty) return;
 
@@ -557,11 +579,15 @@ class RetellPlayer extends _$RetellPlayer {
     // 播放完成后进入复述阶段（用局部变量检查）
     if (!engine.isActiveSession(sid)) return;
 
-    // 计入输入词数（听完一遍段落）
+    // 通过 recorder 记录听力时长、输入词数、已学词形
     final paragraphWordCount = countWordsInSentences(sentences);
-    final session = ref.read(learningSessionProvider.notifier);
-    session.addInputWords(paragraphWordCount);
-    session.recordLearnedSentences(sentences);
+    final durationSeconds = (end - start).inSeconds;
+    final paragraphText = sentences.map((s) => s.text).join(' ');
+    _recorder.onInputCompleted(
+      durationSeconds: durationSeconds,
+      wordCount: paragraphWordCount,
+      text: paragraphText,
+    );
 
     _positionSub?.cancel();
     _enterRetellingPhase();
@@ -608,11 +634,6 @@ class RetellPlayer extends _$RetellPlayer {
   /// 不自动启动倒计时。倒计时由 screen 层在录音评估完成后触发
   /// [startPostEvaluationPause]。
   void _enterRetellingPhase() {
-    // 复述开始 = 输出时间开始
-    try {
-      ref.read(learningSessionProvider.notifier).startOutputTimer();
-    } catch (_) {}
-
     state = state.copyWith(
       phase: RetellPhase.retelling,
       isPlaying: false,
@@ -664,11 +685,10 @@ class RetellPlayer extends _$RetellPlayer {
 
   /// 复述倒计时结束
   Future<void> _onRetellCountdownFinished() async {
-    // 复述完成 = 输出词数 + 停止输出计时
+    // 复述完成 = 输出词数
     final session = ref.read(learningSessionProvider.notifier);
     final paragraphWordCount = countWordsInSentences(currentParagraphSentences);
     session.addOutputWords(paragraphWordCount);
-    session.stopOutputTimer();
 
     // 检查遍数（手动模式视为单遍）
     final effectiveRepeatCount = state.settings.isManualMode

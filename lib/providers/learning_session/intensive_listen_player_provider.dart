@@ -18,9 +18,13 @@ import 'dart:math' as math;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/models/event_names.dart';
+import '../../database/providers.dart';
 import '../../models/intensive_listen_settings.dart';
 import '../../models/sentence.dart';
-import '../../utils/word_counter.dart';
+import '../../models/study_stage.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
+import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import 'countdown_controller.dart';
@@ -195,6 +199,9 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
   /// 深拷贝的句子列表（避免与 LP 共享可变状态）
   List<Sentence> _sentences = [];
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// 可控倒计时控制器
   final CountdownController _countdown = CountdownController();
 
@@ -203,6 +210,18 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
   @override
   IntensiveListenState build() {
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } catch (_) {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: ref.read(studyTimeServiceProvider),
+      vocabTracker: vocabTracker,
+      stage: StudyStage.intensiveListen,
+    );
+
     ref.onDispose(_cleanup);
     return const IntensiveListenState();
   }
@@ -396,6 +415,9 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     if (!engine.isActiveSession(sessionId)) return;
 
+    // 详情重播也计入听力统计
+    _recorder.onSentencePlayed(sentence);
+
     await _finishAnnotationReplay();
   }
 
@@ -416,6 +438,10 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     await engine.playClipOnce(sentence, sessionId);
 
     if (!engine.isActiveSession(sessionId)) return;
+
+    // 标注模式重播也计入听力统计
+    _recorder.onSentencePlayed(sentence);
+
     state = state.copyWith(isPlaying: false);
   }
 
@@ -596,11 +622,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
       if (!engine.isActiveSession(sessionId)) return;
 
-      // 每遍播完计入输入词数
-      final wordCount = countWords(sentence.text);
-      final session = ref.read(learningSessionProvider.notifier);
-      session.addInputWords(wordCount);
-      session.recordLearnedSentence(sentence.text);
+      // 每遍播完通过 recorder 记录听力时长、输入词数、已学词形
+      _recorder.onSentencePlayed(sentence);
 
       // 手动模式：播完一遍即停止，等待用户操作
       if (isManual) {
@@ -723,9 +746,6 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
   /// 仅停止播放，弹窗由 screen 层直接调用。
   void stopPlayback() {
     _invalidateSession();
-    try {
-      ref.read(learningSessionProvider.notifier).stopOutputTimer();
-    } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,

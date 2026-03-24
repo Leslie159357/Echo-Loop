@@ -15,7 +15,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../database/daos/bookmark_dao.dart';
@@ -25,6 +24,8 @@ import '../../models/difficult_practice_settings.dart';
 import '../../models/sentence.dart';
 import '../../database/providers.dart';
 import '../../models/study_stage.dart';
+import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/study_event_recorder.dart';
 import '../../services/study_time_service.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
@@ -34,6 +35,7 @@ import '../study_stats_provider.dart';
 import 'countdown_controller.dart';
 import 'review_difficult_practice_provider.dart';
 import 'sentence_playback_engine.dart';
+import '../listen_and_repeat_turn_controller_provider.dart';
 
 part 'bookmark_review_provider.g.dart';
 
@@ -49,6 +51,9 @@ class BookmarkReview extends _$BookmarkReview {
   /// 播放引擎
   late SentencePlaybackEngine _engine;
 
+  /// 学习事件记录器
+  late final StudyEventRecorder _recorder;
+
   /// 获取 AudioItemDao 的回调（通过 ref 注入）
   late dynamic Function(String) _getAudioItemById;
 
@@ -57,15 +62,6 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 学习计时器
   final Stopwatch _studyStopwatch = Stopwatch();
-
-  /// 输入时间计时器（音频播放期间运行）
-  final Stopwatch _inputStopwatch = Stopwatch();
-
-  /// 输出时间计时器（跟读暂停期间运行）
-  final Stopwatch _outputStopwatch = Stopwatch();
-
-  /// 音频播放状态监听（用于输入时间追踪）
-  StreamSubscription<ja.PlayerState>? _inputTimePlayerStateSub;
 
   /// 评估后倒计时控制器
   final CountdownController _countdown = CountdownController();
@@ -88,8 +84,22 @@ class BookmarkReview extends _$BookmarkReview {
   @override
   ReviewDifficultPracticeState build() {
     _studyTimeService = ref.read(studyTimeServiceProvider);
+
+    LearnedVocabularyTracker? vocabTracker;
+    try {
+      vocabTracker = ref.read(learnedVocabularyTrackerProvider);
+    } on UnimplementedError {
+      // 测试环境可能未注入数据库，忽略词形统计即可。
+    }
+    _recorder = StudyEventRecorder(
+      studyTimeService: _studyTimeService,
+      vocabTracker: vocabTracker,
+      stage: StudyStage.bookmarkReview,
+    );
+
     _engine = SentencePlaybackEngine(
       getEngine: () => ref.read(audioEngineProvider.notifier),
+      recorder: _recorder,
     );
     _lifecycleListener = AppLifecycleListener(
       onStateChange: _onAppLifecycleStateChanged,
@@ -97,7 +107,6 @@ class BookmarkReview extends _$BookmarkReview {
     ref.onDispose(() {
       _engine.cleanup();
       _countdown.cancel();
-      _inputTimePlayerStateSub?.cancel();
       _periodicSaveTimer?.cancel();
       _saveAndRefreshStudyTime();
       _lifecycleListener.dispose();
@@ -113,8 +122,6 @@ class BookmarkReview extends _$BookmarkReview {
     if (lifecycleState == AppLifecycleState.paused ||
         lifecycleState == AppLifecycleState.hidden) {
       _studyStopwatch.stop();
-      _inputStopwatch.stop();
-      _outputStopwatch.stop();
       _stopPeriodicSaveTimer();
     } else if (lifecycleState == AppLifecycleState.resumed) {
       if (_sentences.isNotEmpty &&
@@ -211,21 +218,10 @@ class BookmarkReview extends _$BookmarkReview {
     _studyStopwatch.start();
     _schedulePeriodicSave();
 
-    // 启动输入时间追踪
-    _startInputTimeTracking();
-  }
-
-  /// 开始监听 AudioEngine playerState，追踪输入时间
-  void _startInputTimeTracking() {
-    _inputTimePlayerStateSub?.cancel();
-    final engine = ref.read(audioEngineProvider.notifier);
-    _inputTimePlayerStateSub = engine.playerStateStream.listen((playerState) {
-      if (playerState.playing) {
-        if (!_inputStopwatch.isRunning) _inputStopwatch.start();
-      } else {
-        _inputStopwatch.stop();
-      }
-    });
+    // 注入 recorder 到录音控制器
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(_recorder);
   }
 
   /// 更新练习设置（仅会话内生效）
@@ -233,7 +229,6 @@ class BookmarkReview extends _$BookmarkReview {
   /// 更新后中断当前播放，以新设置重新开始当前句子。
   void updateSettings(DifficultPracticeSettings newSettings) {
     _engine.invalidateSession();
-    _outputStopwatch.stop();
     state = state.copyWith(settings: newSettings, isPlaying: false);
   }
 
@@ -262,7 +257,6 @@ class BookmarkReview extends _$BookmarkReview {
   void pause() {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    _outputStopwatch.stop();
     _studyStopwatch.stop();
     state = state.copyWith(
       isPlaying: false,
@@ -305,7 +299,6 @@ class BookmarkReview extends _$BookmarkReview {
 
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    _outputStopwatch.stop();
 
     final removedIndex = state.currentSentenceIndex;
     final removed = _sentences[removedIndex];
@@ -474,7 +467,6 @@ class BookmarkReview extends _$BookmarkReview {
   void forceComplete() {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
-    _outputStopwatch.stop();
     _studyStopwatch.stop();
     _stopPeriodicSaveTimer();
     state = state.copyWith(
@@ -577,8 +569,9 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 释放资源
   void disposePlayer() {
-    _inputTimePlayerStateSub?.cancel();
-    _inputTimePlayerStateSub = null;
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .setRecorder(null);
     _stopPeriodicSaveTimer();
     _saveAndRefreshStudyTime();
     _engine.cleanup();
@@ -628,7 +621,6 @@ class BookmarkReview extends _$BookmarkReview {
 
   /// 开始播放当前句子（盲听 N 遍）
   Future<void> _startSentence({int startPlayCount = 1}) async {
-    _outputStopwatch.stop();
     final bookmarkSentence = currentBookmarkSentence;
     if (bookmarkSentence == null) return;
 
@@ -653,7 +645,6 @@ class BookmarkReview extends _$BookmarkReview {
     final repeatCount = state.settings.isManualMode
         ? 1
         : state.settings.blindListenRepeatCount;
-    final wordCount = countWords(sentence.text);
 
     state = state.copyWith(
       isPlaying: true,
@@ -678,9 +669,6 @@ class BookmarkReview extends _$BookmarkReview {
           : (_) {},
       onPauseStarted: repeatCount > 1
           ? (dur) {
-              // 每遍播完计入输入词数
-              _addInputWords(wordCount);
-              _recordLearnedSentence(sentence.text);
               state = state.copyWith(
                 isPauseBetweenPlays: true,
                 isPlaying: false,
@@ -702,9 +690,6 @@ class BookmarkReview extends _$BookmarkReview {
             }
           : (_) {},
       onAllPlaysCompleted: () async {
-        // 最后一遍（或唯一一遍）播完计入输入词数
-        _addInputWords(wordCount);
-        _recordLearnedSentence(sentence.text);
         await _autoAdvance();
       },
     );
@@ -714,7 +699,6 @@ class BookmarkReview extends _$BookmarkReview {
   ///
   /// [startPlayCount] 从第几遍开始（默认第 1 遍）。
   void _startShadowReading({int startPlayCount = 1}) {
-    _outputStopwatch.stop();
     final sentence = currentSentence;
     if (sentence == null || sentence.duration <= Duration.zero) return;
 
@@ -741,11 +725,8 @@ class BookmarkReview extends _$BookmarkReview {
         state = state.copyWith(currentPlayCount: count, isPlaying: true);
       },
       onPauseStarted: (dur) {
-        // 播放完成 = 输入，停顿开始 = 用户跟读 = 输出
-        _addInputWords(wordCount);
-        _recordLearnedSentence(sentence.text);
+        // 停顿开始 = 用户跟读 = 输出
         _addOutputWords(wordCount);
-        if (!_outputStopwatch.isRunning) _outputStopwatch.start();
         state = state.copyWith(
           isPauseBetweenPlays: true,
           isPlaying: false,
@@ -756,7 +737,6 @@ class BookmarkReview extends _$BookmarkReview {
         );
       },
       onPauseEnded: () {
-        _outputStopwatch.stop();
         state = state.copyWith(isPauseBetweenPlays: false);
       },
       onTick: (remaining) {
@@ -765,50 +745,22 @@ class BookmarkReview extends _$BookmarkReview {
       onAllPlaysCompleted: () async {
         // 最后一遍只有输入，没有跟读停顿
         // 保持 annotationMode，让句间停顿也触发自动录音（与跟读页一致）
-        _addInputWords(wordCount);
-        _recordLearnedSentence(sentence.text);
         await _autoAdvance();
       },
     );
   }
 
-  /// 停止计时并保存已记录的学习时长 + 输入/输出时间，刷新统计 UI
+  /// 停止计时并保存已记录的学习时长，刷新统计 UI
   ///
+  /// 输入/输出时间已由 [StudyEventRecorder] 事件驱动写入，无需周期保存。
   /// 所有时长 clamp 到 [_maxSessionSeconds]，防止用户睡着等异常场景。
   /// 使用 [_isSaving] 标志位防止周期保存定时器与 dispose 竞态 double-save。
   Future<void> _saveAndRefreshStudyTime() async {
     if (_isSaving) return;
     _isSaving = true;
     try {
-      const stage = StudyStage.bookmarkReview;
-
-      // 保存输入/输出时间
-      _inputStopwatch.stop();
-      final inputSecs = _inputStopwatch.elapsed.inSeconds.clamp(
-        0,
-        _maxSessionSeconds,
-      );
-      _inputStopwatch.reset();
-      if (inputSecs > 0) {
-        await _studyTimeService.addInputTime(inputSecs, stage: stage);
-      }
-
-      _outputStopwatch.stop();
-      final outputSecs = _outputStopwatch.elapsed.inSeconds.clamp(
-        0,
-        _maxSessionSeconds,
-      );
-      _outputStopwatch.reset();
-      if (outputSecs > 0) {
-        await _studyTimeService.addOutputTime(outputSecs, stage: stage);
-      }
-
       if (!_studyStopwatch.isRunning &&
           _studyStopwatch.elapsed == Duration.zero) {
-        if (inputSecs > 0 || outputSecs > 0) {
-          ref.read(dailyStudyTimeProvider.notifier).refresh();
-          ref.read(studyStatsNotifierProvider.notifier).refresh();
-        }
         return;
       }
       _studyStopwatch.stop();
@@ -818,30 +770,15 @@ class BookmarkReview extends _$BookmarkReview {
       );
       _studyStopwatch.reset();
       if (seconds > 0) {
-        await _studyTimeService.addStudyTime(seconds, stage: stage);
+        await _studyTimeService.addStudyTime(
+          seconds,
+          stage: StudyStage.bookmarkReview,
+        );
       }
       ref.read(dailyStudyTimeProvider.notifier).refresh();
       ref.read(studyStatsNotifierProvider.notifier).refresh();
     } finally {
       _isSaving = false;
-    }
-  }
-
-  /// 异步记录收藏复习中听到的词形，不影响播放流程。
-  void _recordLearnedSentence(String text) {
-    try {
-      final tracker = ref.read(learnedVocabularyTrackerProvider);
-      unawaited(tracker.recordSentence(text));
-    } on UnimplementedError {
-      // 测试环境可能未注入数据库，忽略词形统计即可。
-    }
-  }
-
-  /// 累加输入词数并刷新统计 UI
-  Future<void> _addInputWords(int count) async {
-    if (count > 0) {
-      await _studyTimeService.addInputWords(count);
-      ref.read(studyStatsNotifierProvider.notifier).refresh();
     }
   }
 
