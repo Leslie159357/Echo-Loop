@@ -288,7 +288,8 @@ class LearningSession extends _$LearningSession {
     final analytics = ref.read(analyticsServiceProvider);
     analytics.track(Events.learningStart, {
       if (state.audioItemId != null) EventParams.audioId: state.audioItemId!,
-      if (state.learningMode != null) EventParams.stage: state.learningMode!.name,
+      if (state.learningMode != null)
+        EventParams.stage: state.learningMode!.name,
       EventParams.isFreePractice: state.isFreePlay ? 1 : 0,
     });
   }
@@ -299,7 +300,8 @@ class LearningSession extends _$LearningSession {
     final durationMs = _studyStopwatch.elapsedMilliseconds;
     analytics.track(Events.learningEnd, {
       if (state.audioItemId != null) EventParams.audioId: state.audioItemId!,
-      if (state.learningMode != null) EventParams.stage: state.learningMode!.name,
+      if (state.learningMode != null)
+        EventParams.stage: state.learningMode!.name,
       EventParams.durationMs: durationMs,
       EventParams.isFreePractice: state.isFreePlay ? 1 : 0,
     });
@@ -334,6 +336,12 @@ class LearningSession extends _$LearningSession {
   /// 停止输出时间计时（跟读/复述暂停结束时调用）
   void stopOutputTimer() {
     _outputStopwatch.stop();
+  }
+
+  /// 暂停学习计时（步骤完成后调用，防止完成弹窗期间白跑时长）
+  void pauseStudyTimer() {
+    _studyStopwatch.stop();
+    _stopPeriodicSaveTimer();
   }
 
   /// 立即持久化输入词数（每播完一句调用，不丢数据）

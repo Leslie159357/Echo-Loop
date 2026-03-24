@@ -14,7 +14,7 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -73,19 +73,80 @@ class BookmarkReview extends _$BookmarkReview {
   /// 倒计时运行 ID（用于使过期倒计时失效）
   int _countdownRunId = 0;
 
+  /// 周期保存定时器（每 _maxSessionSeconds 自动保存并重置计时器）
+  Timer? _periodicSaveTimer;
+
+  /// 是否正在执行保存（防止 timer 回调与 dispose 竞态）
+  bool _isSaving = false;
+
+  /// 单次会话最大计入时长（防止用户睡着等异常场景）
+  static const _maxSessionSeconds = 5 * 60; // 5 分钟
+
+  /// App 生命周期监听器，用于在后台暂停计时
+  late final AppLifecycleListener _lifecycleListener;
+
   @override
   ReviewDifficultPracticeState build() {
     _studyTimeService = ref.read(studyTimeServiceProvider);
     _engine = SentencePlaybackEngine(
       getEngine: () => ref.read(audioEngineProvider.notifier),
     );
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: _onAppLifecycleStateChanged,
+    );
     ref.onDispose(() {
       _engine.cleanup();
       _countdown.cancel();
       _inputTimePlayerStateSub?.cancel();
+      _periodicSaveTimer?.cancel();
       _saveAndRefreshStudyTime();
+      _lifecycleListener.dispose();
     });
     return const ReviewDifficultPracticeState();
+  }
+
+  /// App 生命周期变化时暂停/恢复计时
+  ///
+  /// - 进入后台：暂停所有计时器 + 取消周期保存
+  /// - 回到前台：恢复计时 + 重新调度周期保存
+  void _onAppLifecycleStateChanged(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.paused ||
+        lifecycleState == AppLifecycleState.hidden) {
+      _studyStopwatch.stop();
+      _inputStopwatch.stop();
+      _outputStopwatch.stop();
+      _stopPeriodicSaveTimer();
+    } else if (lifecycleState == AppLifecycleState.resumed) {
+      if (_sentences.isNotEmpty &&
+          !state.stepFinished &&
+          !_studyStopwatch.isRunning) {
+        _studyStopwatch.start();
+        _schedulePeriodicSave();
+      }
+    }
+  }
+
+  /// 调度下一次周期保存（one-shot Timer，避免 periodic 的 async 竞态）
+  void _schedulePeriodicSave() {
+    _periodicSaveTimer?.cancel();
+    _periodicSaveTimer = Timer(
+      const Duration(seconds: _maxSessionSeconds),
+      () async {
+        if (_isSaving || _sentences.isEmpty) return;
+        await _saveAndRefreshStudyTime();
+        // 保存后如果仍在学习中，重新启动计时并调度下一次
+        if (_sentences.isNotEmpty && !state.stepFinished) {
+          _studyStopwatch.start();
+          _schedulePeriodicSave();
+        }
+      },
+    );
+  }
+
+  /// 停止周期保存定时器
+  void _stopPeriodicSaveTimer() {
+    _periodicSaveTimer?.cancel();
+    _periodicSaveTimer = null;
   }
 
   /// 初始化收藏复习
@@ -145,9 +206,10 @@ class BookmarkReview extends _$BookmarkReview {
       totalSentences: _sentences.length,
     );
 
-    // 启动学习计时
+    // 启动学习计时 + 周期保存
     _studyStopwatch.reset();
     _studyStopwatch.start();
+    _schedulePeriodicSave();
 
     // 启动输入时间追踪
     _startInputTimeTracking();
@@ -246,10 +308,7 @@ class BookmarkReview extends _$BookmarkReview {
     _sentences.removeAt(removedIndex);
 
     if (_sentences.isEmpty) {
-      state = state.copyWith(
-        isPlaying: false,
-        totalSentences: 0,
-      );
+      state = state.copyWith(isPlaying: false, totalSentences: 0);
       return removed;
     }
 
@@ -404,6 +463,8 @@ class BookmarkReview extends _$BookmarkReview {
     _engine.invalidateSession();
     _invalidatePostEvalCountdown();
     _outputStopwatch.stop();
+    _studyStopwatch.stop();
+    _stopPeriodicSaveTimer();
     state = state.copyWith(
       isPlaying: false,
       isPauseBetweenPlays: false,
@@ -433,6 +494,9 @@ class BookmarkReview extends _$BookmarkReview {
         isAnnotationMode: false,
       );
       if (isLastSentence) {
+        // 复习完成，停止计时
+        _studyStopwatch.stop();
+        _stopPeriodicSaveTimer();
         state = state.copyWith(isPlaying: false, stepFinished: true);
       } else {
         state = state.copyWith(
@@ -490,6 +554,12 @@ class BookmarkReview extends _$BookmarkReview {
       currentSentenceIndex: 0,
       totalSentences: _sentences.length,
     );
+
+    // 重新启动计时 + 周期保存
+    _studyStopwatch.reset();
+    _studyStopwatch.start();
+    _schedulePeriodicSave();
+
     await startPlaying();
   }
 
@@ -497,6 +567,7 @@ class BookmarkReview extends _$BookmarkReview {
   void disposePlayer() {
     _inputTimePlayerStateSub?.cancel();
     _inputTimePlayerStateSub = null;
+    _stopPeriodicSaveTimer();
     _saveAndRefreshStudyTime();
     _engine.cleanup();
     _sentences = [];
@@ -690,39 +761,58 @@ class BookmarkReview extends _$BookmarkReview {
   }
 
   /// 停止计时并保存已记录的学习时长 + 输入/输出时间，刷新统计 UI
+  ///
+  /// 所有时长 clamp 到 [_maxSessionSeconds]，防止用户睡着等异常场景。
+  /// 使用 [_isSaving] 标志位防止周期保存定时器与 dispose 竞态 double-save。
   Future<void> _saveAndRefreshStudyTime() async {
-    const stage = StudyStage.bookmarkReview;
-    // 保存输入/输出时间
-    _inputStopwatch.stop();
-    final inputSecs = _inputStopwatch.elapsed.inSeconds;
-    _inputStopwatch.reset();
-    if (inputSecs > 0) {
-      await _studyTimeService.addInputTime(inputSecs, stage: stage);
-    }
+    if (_isSaving) return;
+    _isSaving = true;
+    try {
+      const stage = StudyStage.bookmarkReview;
 
-    _outputStopwatch.stop();
-    final outputSecs = _outputStopwatch.elapsed.inSeconds;
-    _outputStopwatch.reset();
-    if (outputSecs > 0) {
-      await _studyTimeService.addOutputTime(outputSecs, stage: stage);
-    }
-
-    if (!_studyStopwatch.isRunning &&
-        _studyStopwatch.elapsed == Duration.zero) {
-      if (inputSecs > 0 || outputSecs > 0) {
-        ref.read(dailyStudyTimeProvider.notifier).refresh();
-        ref.read(studyStatsNotifierProvider.notifier).refresh();
+      // 保存输入/输出时间
+      _inputStopwatch.stop();
+      final inputSecs = _inputStopwatch.elapsed.inSeconds.clamp(
+        0,
+        _maxSessionSeconds,
+      );
+      _inputStopwatch.reset();
+      if (inputSecs > 0) {
+        await _studyTimeService.addInputTime(inputSecs, stage: stage);
       }
-      return;
+
+      _outputStopwatch.stop();
+      final outputSecs = _outputStopwatch.elapsed.inSeconds.clamp(
+        0,
+        _maxSessionSeconds,
+      );
+      _outputStopwatch.reset();
+      if (outputSecs > 0) {
+        await _studyTimeService.addOutputTime(outputSecs, stage: stage);
+      }
+
+      if (!_studyStopwatch.isRunning &&
+          _studyStopwatch.elapsed == Duration.zero) {
+        if (inputSecs > 0 || outputSecs > 0) {
+          ref.read(dailyStudyTimeProvider.notifier).refresh();
+          ref.read(studyStatsNotifierProvider.notifier).refresh();
+        }
+        return;
+      }
+      _studyStopwatch.stop();
+      final seconds = _studyStopwatch.elapsed.inSeconds.clamp(
+        0,
+        _maxSessionSeconds,
+      );
+      _studyStopwatch.reset();
+      if (seconds > 0) {
+        await _studyTimeService.addStudyTime(seconds, stage: stage);
+      }
+      ref.read(dailyStudyTimeProvider.notifier).refresh();
+      ref.read(studyStatsNotifierProvider.notifier).refresh();
+    } finally {
+      _isSaving = false;
     }
-    _studyStopwatch.stop();
-    final seconds = _studyStopwatch.elapsed.inSeconds;
-    _studyStopwatch.reset();
-    if (seconds > 0) {
-      await _studyTimeService.addStudyTime(seconds, stage: stage);
-    }
-    ref.read(dailyStudyTimeProvider.notifier).refresh();
-    ref.read(studyStatsNotifierProvider.notifier).refresh();
   }
 
   /// 异步记录收藏复习中听到的词形，不影响播放流程。
@@ -780,6 +870,9 @@ class BookmarkReview extends _$BookmarkReview {
       },
       onAdvance: () async {
         if (isLastSentence) {
+          // 复习完成，停止计时
+          _studyStopwatch.stop();
+          _stopPeriodicSaveTimer();
           state = state.copyWith(
             isPlaying: false,
             isPauseBetweenPlays: false,
