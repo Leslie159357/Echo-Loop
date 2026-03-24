@@ -500,10 +500,18 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
     );
   }
 
-  /// 使当前评估后倒计时失效
+  /// 使当前评估后倒计时失效，同时清除 state 中的倒计时标志
+  ///
+  /// 将 timer 取消和 state 清除合并在一起，避免调用点遗漏 copyWith。
   void _invalidatePostEvalCountdown() {
     _countdownRunId += 1;
     _countdown.cancel();
+    if (state.isPostEvalCountdown) {
+      state = state.copyWith(
+        isPostEvalCountdown: false,
+        isCountdownPaused: false,
+      );
+    }
   }
 
   /// 停止播放（用户在最后一句主动点击完成按钮时调用）
