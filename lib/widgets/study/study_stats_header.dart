@@ -11,6 +11,12 @@ import '../../theme/app_theme.dart';
 import 'day_stage_breakdown_sheet.dart';
 import 'learned_word_forms_sheet.dart';
 
+/// 输入（听力）主题色 — 蓝色
+const _kInputColor = Color(0xFF3B82F6);
+
+/// 输出（口语）主题色 — 绿色
+const _kOutputColor = Color(0xFF10B981);
+
 /// 学习统计头部组件
 ///
 /// 分三层信息层次：
@@ -139,7 +145,7 @@ class _TodayCard extends StatelessWidget {
                   flex: 3,
                   child: _ListenSpeakItem(
                     icon: Icons.headphones_outlined,
-                    iconColor: Colors.teal,
+                    iconColor: _kInputColor,
                     timeText: _formatTimeShort(clampedInput),
                     wordText:
                         '${_formatWordCount(stats.todayInputWords)}${l10n.localeName == 'zh' ? '词' : 'w'}',
@@ -160,7 +166,7 @@ class _TodayCard extends StatelessWidget {
                   flex: 3,
                   child: _ListenSpeakItem(
                     icon: Icons.mic_outlined,
-                    iconColor: Colors.deepPurple,
+                    iconColor: _kOutputColor,
                     timeText: _formatTimeShort(clampedOutput),
                     wordText:
                         '${_formatWordCount(stats.todayOutputWords)}${l10n.localeName == 'zh' ? '词' : 'w'}',
@@ -301,8 +307,8 @@ class _VocabItem extends StatelessWidget {
 
 /// 7 天学习时长柱状图（双色堆叠）
 ///
-/// 标题行显示"本周"累计时长，柱体底部 teal = 输入，顶部 deepPurple = 输出。
-/// 向前兼容：旧数据无 input/output 时，用 totalSeconds 当输入（teal 单色）。
+/// 标题行显示"本周"累计时长，柱体底部蓝色 = 输入，顶部绿色 = 输出。
+/// 向前兼容：旧数据无 input/output 时，用 totalSeconds 当输入（蓝色单色）。
 /// 点击有数据的柱子可查看该天各阶段详细时长。
 class _WeeklyBarChart extends StatefulWidget {
   final int weekTotalSeconds;
@@ -469,8 +475,8 @@ class _WeeklyBarChartState extends State<_WeeklyBarChart> {
                                   const EdgeInsets.symmetric(horizontal: 5),
                               decoration: BoxDecoration(
                                 color: isToday
-                                    ? Colors.teal
-                                    : Colors.teal.withValues(alpha: 0.2),
+                                    ? _kInputColor
+                                    : _kInputColor.withValues(alpha: 0.4),
                                 borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(4),
                                   bottom: Radius.circular(2),
@@ -511,28 +517,28 @@ class _WeeklyBarChartState extends State<_WeeklyBarChart> {
   }) {
     final inputHeight = (barHeight * inputRatio).clamp(1.0, barHeight - 1);
     final outputHeight = barHeight - inputHeight;
-    final alpha = isToday ? 1.0 : 0.3;
+    final alpha = isToday ? 1.0 : 0.5;
 
     return Container(
       height: barHeight,
       margin: const EdgeInsets.symmetric(horizontal: 5),
       child: Column(
         children: [
-          // 顶部：输出（deepPurple）
+          // 顶部：输出（绿色）
           Container(
             height: outputHeight,
             decoration: BoxDecoration(
-              color: Colors.deepPurple.withValues(alpha: alpha),
+              color: _kOutputColor.withValues(alpha: alpha),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(4),
               ),
             ),
           ),
-          // 底部：输入（teal）
+          // 底部：输入（蓝色）
           Container(
             height: inputHeight,
             decoration: BoxDecoration(
-              color: Colors.teal.withValues(alpha: alpha),
+              color: _kInputColor.withValues(alpha: alpha),
               borderRadius: const BorderRadius.vertical(
                 bottom: Radius.circular(2),
               ),
@@ -645,8 +651,8 @@ class CefrRecommendationTable extends StatelessWidget {
         : 'Input/output ratio trends from ~3:2 to ~1:1 as level rises';
     final sectionTitle = isZh ? '每日推荐最少练习量' : 'Daily minimum recommendation';
 
-    final tealBg = Colors.teal.withValues(alpha: isListening ? 0.08 : 0.03);
-    final purpleBg = Colors.deepPurple.withValues(alpha: isListening ? 0.03 : 0.08);
+    final inputBg = _kInputColor.withValues(alpha: isListening ? 0.08 : 0.03);
+    final outputBg = _kOutputColor.withValues(alpha: isListening ? 0.03 : 0.08);
 
     return Container(
       decoration: BoxDecoration(
@@ -684,13 +690,13 @@ class CefrRecommendationTable extends StatelessWidget {
                   _buildHeaderCell(
                     context,
                     listenHeader,
-                    Colors.teal,
+                    _kInputColor,
                     muted: !isListening,
                   ),
                   _buildHeaderCell(
                     context,
                     speakHeader,
-                    Colors.deepPurple,
+                    _kOutputColor,
                     muted: isListening,
                   ),
                 ],
@@ -730,8 +736,8 @@ class CefrRecommendationTable extends StatelessWidget {
                       context,
                       time: '${levels[i].listenMin}$minLabel',
                       words: '~${levels[i].inputWords}$wordSuffix',
-                      bgColor: tealBg,
-                      accentColor: Colors.teal,
+                      bgColor: inputBg,
+                      accentColor: _kInputColor,
                       muted: !isListening,
                     ),
                     // 口语列
@@ -739,8 +745,8 @@ class CefrRecommendationTable extends StatelessWidget {
                       context,
                       time: '${levels[i].speakMin}$minLabel',
                       words: '~${levels[i].outputWords}$wordSuffix',
-                      bgColor: purpleBg,
-                      accentColor: Colors.deepPurple,
+                      bgColor: outputBg,
+                      accentColor: _kOutputColor,
                       muted: isListening,
                     ),
                   ],
