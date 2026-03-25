@@ -6,6 +6,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' show min;
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -358,6 +359,15 @@ class LearningSession extends _$LearningSession {
     practice.suspendListeners();
     await _ensureAudioLoaded(audioItemId);
 
+    final allSentences = paragraphs.expand((p) => p).toList();
+    _logEnterMode(
+      'enterBlindListenMode',
+      audioItemId,
+      sentenceCount: allSentences.length,
+      firstSentenceText:
+          allSentences.isNotEmpty ? allSentences.first.text : null,
+    );
+
     final blindPlayer = ref.read(blindListenPlayerProvider.notifier);
     blindPlayer.initializeParagraphs(
       paragraphs,
@@ -418,6 +428,13 @@ class LearningSession extends _$LearningSession {
     // 暂停 LP 的 stream 监听
     practice.suspendListeners();
 
+    _logEnterMode(
+      'enterIntensiveListenMode',
+      audioItemId,
+      sentenceCount: sentences.length,
+      firstSentenceText: sentences.isNotEmpty ? sentences.first.text : null,
+    );
+
     // 初始化精听播放器
     final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
     await intensivePlayer.initialize(sentences, startIndex: startIndex);
@@ -437,12 +454,6 @@ class LearningSession extends _$LearningSession {
     List<Sentence> allSentences, {
     bool isFreePlay = false,
   }) async {
-    final engineAudioId = ref.read(audioEngineProvider).currentAudioId;
-    AppLogger.log(
-      'Session',
-      '🎯 enterListenAndRepeatMode: '
-          'target=$audioItemId, engine=$engineAudioId',
-    );
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
@@ -482,6 +493,14 @@ class LearningSession extends _$LearningSession {
 
     // 暂停 LP 的 stream 监听
     practice.suspendListeners();
+
+    _logEnterMode(
+      'enterListenAndRepeatMode',
+      audioItemId,
+      sentenceCount: difficultSentences.length,
+      firstSentenceText:
+          difficultSentences.isNotEmpty ? difficultSentences.first.text : null,
+    );
 
     // 初始化跟读播放器
     final player = ref.read(listenAndRepeatPlayerProvider.notifier);
@@ -531,6 +550,15 @@ class LearningSession extends _$LearningSession {
     // 暂停 LP 的 stream 监听
     practice.suspendListeners();
 
+    final retellSentences = paragraphs.expand((p) => p).toList();
+    _logEnterMode(
+      'enterRetellMode',
+      audioItemId,
+      sentenceCount: retellSentences.length,
+      firstSentenceText:
+          retellSentences.isNotEmpty ? retellSentences.first.text : null,
+    );
+
     // 初始化复述播放器
     final player = ref.read(retellPlayerProvider.notifier);
     player.initialize(
@@ -552,12 +580,6 @@ class LearningSession extends _$LearningSession {
     List<Sentence> allSentences, {
     bool isFreePlay = false,
   }) async {
-    final engineAudioId = ref.read(audioEngineProvider).currentAudioId;
-    AppLogger.log(
-      'Session',
-      '🎯 enterReviewDifficultPracticeMode: '
-          'target=$audioItemId, engine=$engineAudioId',
-    );
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
     final currentSettings = ref.read(listeningPracticeProvider).settings;
@@ -595,6 +617,14 @@ class LearningSession extends _$LearningSession {
 
     // 暂停 LP 的 stream 监听
     practice.suspendListeners();
+
+    _logEnterMode(
+      'enterReviewDifficultPracticeMode',
+      audioItemId,
+      sentenceCount: difficultSentences.length,
+      firstSentenceText:
+          difficultSentences.isNotEmpty ? difficultSentences.first.text : null,
+    );
 
     // 初始化难句补练播放器（传入断点索引）
     final player = ref.read(reviewDifficultPracticeProvider.notifier);
@@ -663,6 +693,35 @@ class LearningSession extends _$LearningSession {
     ref.read(studyStatsNotifierProvider.notifier).refresh();
 
     state = const LearningSessionState();
+  }
+
+  /// 记录进入学习模式时的音频/字幕诊断信息
+  void _logEnterMode(
+    String mode,
+    String audioItemId, {
+    int? sentenceCount,
+    String? firstSentenceText,
+  }) {
+    final engineId = ref.read(audioEngineProvider).currentAudioId;
+    final lp = ref.read(listeningPracticeProvider);
+    final lpItem = lp.currentAudioItem;
+    final preview = firstSentenceText != null
+        ? firstSentenceText.substring(0, min(40, firstSentenceText.length))
+        : (lp.sentences.isNotEmpty
+            ? lp.sentences.first.text.substring(
+                0, min(40, lp.sentences.first.text.length))
+            : 'empty');
+    AppLogger.log(
+      'Session',
+      '🎬 $mode: '
+          'targetId=$audioItemId, '
+          'engineId=$engineId, '
+          'lpId=${lpItem?.id}, '
+          'lpName=${lpItem?.name}, '
+          'transcript=${lpItem?.transcriptPath}, '
+          'sentences=${sentenceCount ?? lp.sentences.length}, '
+          'first="$preview"',
+    );
   }
 
   /// 断点是否有效（距今 ≤3 天）
