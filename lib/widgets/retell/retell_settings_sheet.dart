@@ -124,14 +124,15 @@ class _RetellSettingsSheet extends ConsumerWidget {
                   value: KeywordMethod.random,
                   label: Text(l10n.retellKeywordMethodRandom),
                 ),
-                ButtonSegment(
-                  value: KeywordMethod.ai,
-                  label: Tooltip(
-                    message: l10n.retellKeywordMethodAiComingSoon,
-                    child: Text(l10n.retellKeywordMethodAi),
-                  ),
-                  enabled: false,
-                ),
+                // TODO: AI 关键词提取功能尚未实现，暂时隐藏
+                // ButtonSegment(
+                //   value: KeywordMethod.ai,
+                //   label: Tooltip(
+                //     message: l10n.retellKeywordMethodAiComingSoon,
+                //     child: Text(l10n.retellKeywordMethodAi),
+                //   ),
+                //   enabled: false,
+                // ),
               ],
               selected: {settings.keywordMethod},
               onSelectionChanged: (selected) {
