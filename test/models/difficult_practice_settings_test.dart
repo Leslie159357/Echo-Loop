@@ -83,23 +83,31 @@ void main() {
     });
 
     group('calculateInterSentencePause', () {
-      test('smart 模式 — max(句长, 1000ms)', () {
+      test('smart 模式 — clamp(1s + 0.6×句长, 2s, 20s)', () {
         const settings = DifficultPracticeSettings(pauseMode: PauseMode.smart);
 
-        // 短句：返回最小 1000ms
+        // 短句 500ms：1000 + 300 = 1300ms → clamp → 2000ms
         expect(
           settings.calculateInterSentencePause(
             const Duration(milliseconds: 500),
           ),
-          const Duration(milliseconds: 1000),
+          const Duration(milliseconds: 2000),
         );
 
-        // 长句：返回句长
+        // 中句 3000ms：1000 + 1800 = 2800ms
         expect(
           settings.calculateInterSentencePause(
             const Duration(milliseconds: 3000),
           ),
-          const Duration(milliseconds: 3000),
+          const Duration(milliseconds: 2800),
+        );
+
+        // 长句 35000ms：1000 + 21000 = 22000ms → clamp → 20000ms
+        expect(
+          settings.calculateInterSentencePause(
+            const Duration(milliseconds: 35000),
+          ),
+          const Duration(milliseconds: 20000),
         );
       });
 
@@ -145,11 +153,12 @@ void main() {
         );
       });
 
-      test('smart 模式 — 零时长返回 1000ms', () {
+      test('smart 模式 — 零时长返回最小 2000ms', () {
         const settings = DifficultPracticeSettings(pauseMode: PauseMode.smart);
+        // 0ms：1000 + 0 = 1000ms → clamp → 2000ms
         expect(
           settings.calculateInterSentencePause(Duration.zero),
-          const Duration(milliseconds: 1000),
+          const Duration(milliseconds: 2000),
         );
       });
     });

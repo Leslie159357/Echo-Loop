@@ -66,14 +66,14 @@ class DifficultPracticeSettings {
   /// 计算句间停顿时长
   ///
   /// 根据 [pauseMode] 和句子时长计算停顿：
-  /// - smart：max(句长, 1000ms)
+  /// - smart：clamp(1秒 + 0.6 × 句子时长, 2秒, 20秒)
   /// - fixed：固定秒数
   /// - multiplier：句长 × 倍数，至少 1000ms
   Duration calculateInterSentencePause(Duration sentenceDuration) {
     switch (pauseMode) {
       case PauseMode.smart:
-        final ms = sentenceDuration.inMilliseconds;
-        return Duration(milliseconds: math.max(ms, 1000));
+        final ms = 1000 + (sentenceDuration.inMilliseconds * 0.6).round();
+        return Duration(milliseconds: ms.clamp(2000, 20000));
       case PauseMode.fixed:
         return Duration(seconds: fixedPauseSeconds);
       case PauseMode.multiplier:
