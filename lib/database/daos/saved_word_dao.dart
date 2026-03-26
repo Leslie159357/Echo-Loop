@@ -68,9 +68,10 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
-  /// 移除收藏单词（硬删除）
+  /// 移除收藏单词（软删除，设置 deletedAt）
   Future<void> removeWord(String word) {
-    return (delete(savedWords)..where((t) => t.word.equals(word))).go();
+    return (update(savedWords)..where((t) => t.word.equals(word)))
+        .write(SavedWordsCompanion(deletedAt: Value(DateTime.now())));
   }
 
   /// 查询单词是否已收藏
