@@ -800,7 +800,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get intensiveListenBriefingTip =>
-      'Listen sentence by sentence. Tap \'Can\'t understand\' to reveal text and mark difficult sentences.';
+      'Listen sentence by sentence. Tap \'Unclear\' to reveal text and mark difficult sentences.';
 
   @override
   String intensiveListenBriefingSentenceCount(int count) {

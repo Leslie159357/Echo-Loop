@@ -1547,7 +1547,7 @@ abstract class AppLocalizations {
   /// No description provided for @intensiveListenBriefingTip.
   ///
   /// In en, this message translates to:
-  /// **'Listen sentence by sentence. Tap \'Can\'t understand\' to reveal text and mark difficult sentences.'**
+  /// **'Listen sentence by sentence. Tap \'Unclear\' to reveal text and mark difficult sentences.'**
   String get intensiveListenBriefingTip;
 
   /// No description provided for @intensiveListenBriefingSentenceCount.

@@ -401,8 +401,8 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
     // 复习阶段显示阶段名和预估时长
     final l10n = AppLocalizations.of(context)!;
-    final isReview = currentStage != null &&
-        currentStage != LearningStage.firstLearn;
+    final isReview =
+        currentStage != null && currentStage != LearningStage.firstLearn;
     final totalDuration = ref.read(audioEngineProvider).totalDuration;
     final retellEstimate = totalDuration != null ? totalDuration * 3 : null;
 
@@ -1149,7 +1149,11 @@ class _FirstStudySection extends ConsumerWidget {
                 }
                 if (progress?.isSubStageCompleted(firstLearnStage, subStage) ??
                     false) {
-                  parts.add(l10n.difficultyLabel(progress!.difficulty.label));
+                  parts.add(
+                    l10n.difficultyLabel(
+                      _difficultyName(l10n, progress!.difficulty),
+                    ),
+                  );
                 }
                 if (parts.isNotEmpty) {
                   subtitle = parts.join(' · ');
@@ -2193,3 +2197,13 @@ class _BottomButton extends StatelessWidget {
     );
   }
 }
+
+/// 难度等级本地化名称
+String _difficultyName(AppLocalizations l10n, DifficultyLevel level) =>
+    switch (level) {
+      DifficultyLevel.veryEasy => l10n.difficultyVeryEasy,
+      DifficultyLevel.easy => l10n.difficultyEasy,
+      DifficultyLevel.medium => l10n.difficultyMedium,
+      DifficultyLevel.hard => l10n.difficultyHard,
+      DifficultyLevel.veryHard => l10n.difficultyVeryHard,
+    };

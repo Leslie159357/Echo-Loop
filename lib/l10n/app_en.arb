@@ -396,7 +396,7 @@
   "exitIntensiveListenMessage": "Your progress will be saved. You can continue from where you left off.",
   "intensiveListenBriefingTitle": "Intensive Listening",
   "intensiveListenBriefingSubtitle": "Initial Learning - Intensive Listening",
-  "intensiveListenBriefingTip": "Listen sentence by sentence. Tap 'Can't understand' to reveal text and mark difficult sentences.",
+  "intensiveListenBriefingTip": "Listen sentence by sentence. Tap 'Unclear' to reveal text and mark difficult sentences.",
   "intensiveListenBriefingSentenceCount": "{count} sentences",
   "@intensiveListenBriefingSentenceCount": {
     "placeholders": {
