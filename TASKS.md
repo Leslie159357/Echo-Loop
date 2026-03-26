@@ -1,12 +1,29 @@
 # Fluency 任务清单
 
-> 最后更新：2026-03-24
+> 最后更新：2026-03-26
 > 当前焦点：录音+识别功能
 
 ## 历史归档
 - [Milestone 2 - 学习流程引擎](./docs/tasks-archive/milestone-2-learning-engine.md)
 - [Milestone 3 - 收藏与标注体系 + 体验优化](./docs/tasks-archive/milestone-3-completed.md)
 - [Milestone 4 - 功能完善与体验打磨](./docs/tasks-archive/milestone-4-features-and-polish.md)
+
+---
+
+## 已完成：活动日历页面
+
+- [x] 添加 `table_calendar` 依赖
+- [x] 创建 `monthlyStudyRecordsProvider`（Family Provider，按月查询每日学习记录）
+- [x] 创建 `ActivityDayCell`（圆形日期单元格，GitHub 风格 12 级绿色热力图）
+- [x] 创建 `MonthlySummaryCard`（月度统计摘要：总计/学习天数/日均/最长连续）
+- [x] 创建 `ActivityCalendarScreen`（月历页面，table_calendar 月视图）
+- [x] Streak chip 始终显示（streak=0 灰色），点击进入日历页
+- [x] 路由注册 `/activity-calendar`
+- [x] 点击日期弹出 `DayStageBreakdownSheet`（复用已有弹窗，隐藏图例）
+- [x] 国际化（中/英双语）
+- [x] Provider 单元测试 + Widget 测试（9 个测试全通过）
+
+  **完成时间**: 2026-03-26
 
 ---
 
