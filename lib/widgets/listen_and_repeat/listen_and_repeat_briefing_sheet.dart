@@ -142,8 +142,9 @@ class ListenAndRepeatBriefingSheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.m),
 
           // 难句数量 + 遍数 + 预估时长
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 l10n.listenAndRepeatBriefingDifficultCount(difficultCount),
@@ -168,9 +169,7 @@ class ListenAndRepeatBriefingSheet extends StatelessWidget {
               ),
               if (estimatedDuration != null) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.s,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
                   child: Text(
                     '·',
                     style: theme.textTheme.bodyMedium?.copyWith(
