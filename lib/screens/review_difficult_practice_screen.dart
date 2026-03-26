@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
+import '../database/enums.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
@@ -326,7 +327,7 @@ class _ReviewDifficultPracticeScreenState
     String? nextStepName;
     if (!isLast) {
       final nextSubStage = subStages[currentIdx + 1];
-      nextStepName = nextSubStage.label;
+      nextStepName = _getSubStageName(nextSubStage, l10n);
     }
 
     return (
@@ -794,3 +795,15 @@ class _ReviewDifficultPracticeScreenState
     );
   }
 }
+
+/// 子步骤本地化名称
+String _getSubStageName(SubStageType type, AppLocalizations l10n) =>
+    switch (type) {
+      SubStageType.blindListen => l10n.stepBlindListening,
+      SubStageType.intensiveListen => l10n.stepIntensiveListening,
+      SubStageType.listenAndRepeat => l10n.stepShadowing,
+      SubStageType.retell => l10n.stepRetelling,
+      SubStageType.reviewDifficultPractice => l10n.reviewDifficultPracticeTitle,
+      SubStageType.reviewRetellParagraph => l10n.stepRetelling,
+      SubStageType.reviewRetellSummary => l10n.stepRetelling,
+    };

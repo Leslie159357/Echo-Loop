@@ -946,7 +946,7 @@ class _ProgressCard extends StatelessWidget {
     if (progress!.isCompleted) {
       return l10n.learningCompleted;
     }
-    return '${progress!.currentStage.label} ${l10n.learningInProgress}';
+    return '${reviewStageLabel(l10n, progress!.currentStage)} ${l10n.learningInProgress}';
   }
 }
 
