@@ -1090,6 +1090,7 @@
   "stageBreakdownListenShort": "Listen",
   "stageBreakdownSpeakShort": "Speak",
   "stageBreakdownNoStageData": "Detailed breakdown data starts recording from this version",
+  "stageBreakdownNoRecord": "No study record for this day",
   "chartLegendListening": "Listening",
   "chartLegendSpeaking": "Speaking",
   "chartLegendOther": "Other",

@@ -1936,6 +1936,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stageBreakdownNoStageData => '详细分布数据从此版本开始记录';
 
   @override
+  String get stageBreakdownNoRecord => '当天没有学习记录';
+
+  @override
   String get chartLegendListening => '听';
 
   @override

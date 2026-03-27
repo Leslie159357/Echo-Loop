@@ -146,7 +146,15 @@ class DayStageBreakdownSheet extends StatelessWidget {
   ) {
     final total = totalData;
     if (total == null || total.studyTimeSeconds <= 0) {
-      return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Text(
+          l10n.stageBreakdownNoRecord,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
     }
     final seconds = switch (mode) {
       StageBreakdownMode.total => total.studyTimeSeconds,

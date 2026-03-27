@@ -1992,6 +1992,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Detailed breakdown data starts recording from this version';
 
   @override
+  String get stageBreakdownNoRecord => 'No study record for this day';
+
+  @override
   String get chartLegendListening => 'Listening';
 
   @override

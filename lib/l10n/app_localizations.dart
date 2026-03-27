@@ -3560,6 +3560,12 @@ abstract class AppLocalizations {
   /// **'Detailed breakdown data starts recording from this version'**
   String get stageBreakdownNoStageData;
 
+  /// No description provided for @stageBreakdownNoRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'No study record for this day'**
+  String get stageBreakdownNoRecord;
+
   /// No description provided for @chartLegendListening.
   ///
   /// In en, this message translates to:
