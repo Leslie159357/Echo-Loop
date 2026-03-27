@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../database/app_database.dart';
 import '../database/providers.dart';
@@ -31,11 +32,20 @@ import 'log_viewer_screen.dart';
 import 'reminder_settings_screen.dart';
 import '../widgets/app_update_dialog.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  /// 连续点击版本号解锁开发者选项的计数器
+  int _devTapCount = 0;
+  DateTime? _lastDevTap;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(appSettingsProvider);
     final showDeveloperOptions = ref.watch(showDeveloperOptionsProvider);
@@ -260,16 +270,54 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.s),
-        Center(
-          child: Text(
-            'v$version',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _handleVersionTap(context, ref, l10n),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'v$version',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
+  }
+
+  /// 连续点击版本号解锁开发者选项。
+  ///
+  /// 两次点击间隔超过 1 秒重置计数。
+  /// 第 4 次起显示剩余次数提示，第 7 次解锁。
+  /// 已解锁时点击提示"已开启"。
+  void _handleVersionTap(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    if (ref.read(showDeveloperOptionsProvider)) return;
+
+    final now = DateTime.now();
+    if (_lastDevTap != null &&
+        now.difference(_lastDevTap!) > const Duration(seconds: 1)) {
+      _devTapCount = 0;
+    }
+    _lastDevTap = now;
+    _devTapCount++;
+
+    if (_devTapCount >= 7) {
+      _devTapCount = 0;
+      ref.read(showDeveloperOptionsProvider.notifier).setEnabled(true);
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.developerOptionsEnabled)),
+        );
+    }
   }
 
   /// 手动检查更新
@@ -318,6 +366,20 @@ class SettingsScreen extends ConsumerWidget {
       context,
       title: l10n.developer,
       children: [
+        // Release 构建下显示关闭开发者选项的开关
+        if (kReleaseMode)
+          SwitchListTile(
+            secondary: _emojiIcon('🛠️'),
+            title: Text(l10n.developerOptionsDisable),
+            value: true,
+            onChanged: (value) {
+              if (!value) {
+                ref
+                    .read(showDeveloperOptionsProvider.notifier)
+                    .setEnabled(false);
+              }
+            },
+          ),
         ListTile(
           leading: _emojiIcon('🔧'),
           title: Text(l10n.timeMachine),

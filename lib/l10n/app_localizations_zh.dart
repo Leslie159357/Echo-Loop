@@ -1259,6 +1259,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get developer => '开发者';
 
   @override
+  String get developerOptionsEnabled => '开发者选项已开启';
+
+  @override
+  String get developerOptionsDisable => '关闭开发者选项';
+
+  @override
   String get timeMachine => '时光机';
 
   @override

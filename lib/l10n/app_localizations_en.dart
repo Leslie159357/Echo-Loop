@@ -1298,6 +1298,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get developer => 'Developer';
 
   @override
+  String get developerOptionsEnabled => 'Developer options enabled';
+
+  @override
+  String get developerOptionsDisable => 'Disable developer options';
+
+  @override
   String get timeMachine => 'Time Machine';
 
   @override

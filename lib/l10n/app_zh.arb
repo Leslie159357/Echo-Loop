@@ -559,6 +559,8 @@
   },
 
   "developer": "开发者",
+  "developerOptionsEnabled": "开发者选项已开启",
+  "developerOptionsDisable": "关闭开发者选项",
   "timeMachine": "时光机",
   "timeMachineUseSystemTime": "使用系统时间",
   "timeMachineCurrentTime": "当前调试时间",

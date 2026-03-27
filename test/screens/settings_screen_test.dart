@@ -33,7 +33,9 @@ void main() {
   }) {
     return [
       appSettingsProvider.overrideWith(() => TestAppSettings(settings)),
-      showDeveloperOptionsProvider.overrideWithValue(showDeveloperOptions),
+      showDeveloperOptionsProvider.overrideWith(
+        () => _TestDeveloperOptions(showDeveloperOptions),
+      ),
       audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
       collectionListProvider.overrideWith(() => TestCollectionList()),
       listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
@@ -239,4 +241,18 @@ void main() {
       });
     });
   });
+}
+
+/// 测试用 DeveloperOptions Notifier，固定返回指定值。
+class _TestDeveloperOptions extends DeveloperOptions {
+  final bool _value;
+  _TestDeveloperOptions(this._value);
+
+  @override
+  bool build() => _value;
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    state = value;
+  }
 }

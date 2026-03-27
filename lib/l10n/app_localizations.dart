@@ -2354,6 +2354,18 @@ abstract class AppLocalizations {
   /// **'Developer'**
   String get developer;
 
+  /// No description provided for @developerOptionsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer options enabled'**
+  String get developerOptionsEnabled;
+
+  /// No description provided for @developerOptionsDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable developer options'**
+  String get developerOptionsDisable;
+
   /// No description provided for @timeMachine.
   ///
   /// In en, this message translates to:

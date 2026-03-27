@@ -716,6 +716,8 @@
   },
 
   "developer": "Developer",
+  "developerOptionsEnabled": "Developer options enabled",
+  "developerOptionsDisable": "Disable developer options",
   "timeMachine": "Time Machine",
   "timeMachineUseSystemTime": "Using system time",
   "timeMachineCurrentTime": "Debug time",
