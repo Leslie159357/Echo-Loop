@@ -12,6 +12,7 @@ import '../../models/sentence_ai_result.dart';
 import '../../models/speech_practice_models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/sense_group_timing.dart';
+import '../common/async_toggle_button.dart';
 import '../common/shimmer_placeholder.dart';
 import '../common/tappable_wrapper.dart';
 import '../common/text_context_menu.dart';
@@ -97,9 +98,6 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 是否有词级时间戳（决定拆意群按钮是否可用）
   final bool hasWordTimestamps;
 
-  /// 是否正在加载意群
-  final bool isSenseGroupLoading;
-
   /// 是否在卡片内部渲染工具栏
   ///
   /// 设为 false 时，工具栏不会在卡片内渲染。外部可通过
@@ -136,7 +134,6 @@ class SentenceAnnotationCard extends StatefulWidget {
     this.onTapSenseGroup,
     this.onRequestSenseGroups,
     this.hasWordTimestamps = false,
-    this.isSenseGroupLoading = false,
     this.showToolbar = true,
     this.onToolbarStateChanged,
   });
@@ -202,6 +199,12 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
         oldWidget.senseGroups == null) {
       _senseGroupVisible = true;
     }
+    // 意群数据到达时延迟通知工具栏刷新（避免在 build 阶段触发 markNeedsBuild）
+    if (widget.senseGroups != oldWidget.senseGroups) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _notifyToolbar();
+      });
+    }
   }
 
   @override
@@ -219,61 +222,30 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     widget.onToolbarStateChanged?.call();
   }
 
-  /// 拆意群按钮点击
-  void _onTapSenseGroup() {
+  /// 拆意群按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
+  Future<void> _onTapSenseGroup() async {
     final hasData =
-        widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty &&
-        widget.senseGroupTimings != null;
+        widget.senseGroups != null && widget.senseGroups!.isNotEmpty;
 
     if (hasData) {
-      // 有数据时 toggle 显示/隐藏
+      // 有数据时同步 toggle，Future 立即完成，按钮不会显示 loading
       setState(() => _senseGroupVisible = !_senseGroupVisible);
       _notifyToolbar();
     } else if (widget.onRequestSenseGroups != null) {
-      // 无数据时触发请求
-      widget.onRequestSenseGroups!();
+      // 无数据时 await 异步请求，按钮自动显示 loading
+      await widget.onRequestSenseGroups!();
     }
   }
 
-  /// 翻译按钮点击
-  void _onTapTranslation() {
-    if (_translationState == ContentLoadState.loading) return;
-
+  /// 翻译按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
+  Future<void> _onTapTranslation() async {
     if (_translationContent != null) {
-      // 有内容时 toggle 展开/折叠
       setState(() => _translationExpanded = !_translationExpanded);
       _notifyToolbar();
       return;
     }
-
-    // 首次请求
-    _requestTranslation();
-  }
-
-  /// 解析按钮点击
-  void _onTapAnalysis() {
-    if (_analysisState == ContentLoadState.loading) return;
-
-    if (_analysisContent != null) {
-      // 有内容时 toggle 展开/折叠
-      setState(() => _analysisExpanded = !_analysisExpanded);
-      _notifyToolbar();
-      return;
-    }
-
-    // 首次请求
-    _requestAnalysis();
-  }
-
-  /// 请求翻译
-  Future<void> _requestTranslation() async {
     if (widget.onRequestTranslation == null) return;
-    setState(() {
-      _translationState = ContentLoadState.loading;
-      _translationExpanded = true;
-    });
-    _notifyToolbar();
+    setState(() => _translationExpanded = true);
     try {
       final result = await widget.onRequestTranslation!();
       if (mounted) {
@@ -291,14 +263,15 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     }
   }
 
-  /// 请求解析
-  Future<void> _requestAnalysis() async {
+  /// 解析按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
+  Future<void> _onTapAnalysis() async {
+    if (_analysisContent != null) {
+      setState(() => _analysisExpanded = !_analysisExpanded);
+      _notifyToolbar();
+      return;
+    }
     if (widget.onRequestAnalysis == null) return;
-    setState(() {
-      _analysisState = ContentLoadState.loading;
-      _analysisExpanded = true;
-    });
-    _notifyToolbar();
+    setState(() => _analysisExpanded = true);
     try {
       final result = await widget.onRequestAnalysis!();
       if (mounted) {
@@ -441,8 +414,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
   // -- 工具栏相关 --
 
-  bool get _isSenseGroupEnabled =>
-      widget.hasWordTimestamps && widget.onRequestSenseGroups != null;
+  bool get _isSenseGroupEnabled => widget.onRequestSenseGroups != null;
 
   bool get _hasTranslation =>
       widget.onRequestTranslation != null || widget.cachedTranslation != null;
@@ -465,45 +437,43 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     final showSenseGroupBlocks =
         _senseGroupVisible &&
         widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty &&
-        widget.senseGroupTimings != null;
+        widget.senseGroups!.isNotEmpty;
 
     return Row(
       children: [
         Expanded(
-          child: _ToolbarButton(
+          child: AsyncToggleButton(
+            key: const ValueKey('senseGroup'),
             label: l10n.annotationBtnSenseGroup,
             icon: Icons.auto_fix_high,
             isActive: showSenseGroupBlocks,
-            isLoading: widget.isSenseGroupLoading,
             isDisabled: !_isSenseGroupEnabled,
-            onTap: _onTapSenseGroup,
-            disabledMessage: l10n.senseGroupNotAvailable,
+            onPressed: _onTapSenseGroup,
           ),
         ),
         const SizedBox(width: AppSpacing.s),
         Expanded(
-          child: _ToolbarButton(
+          child: AsyncToggleButton(
+            key: const ValueKey('translation'),
             label: l10n.annotationBtnTranslation,
             icon: Icons.translate,
             isActive:
                 _translationExpanded &&
                 _translationState != ContentLoadState.idle,
-            isLoading: _translationState == ContentLoadState.loading,
             isDisabled: !_hasTranslation,
-            onTap: _onTapTranslation,
+            onPressed: _onTapTranslation,
           ),
         ),
         const SizedBox(width: AppSpacing.s),
         Expanded(
-          child: _ToolbarButton(
+          child: AsyncToggleButton(
+            key: const ValueKey('analysis'),
             label: l10n.annotationBtnAnalysis,
             icon: Icons.auto_awesome,
             isActive:
                 _analysisExpanded && _analysisState != ContentLoadState.idle,
-            isLoading: _analysisState == ContentLoadState.loading,
             isDisabled: !_hasAnalysis,
-            onTap: _onTapAnalysis,
+            onPressed: _onTapAnalysis,
           ),
         ),
       ],
@@ -521,8 +491,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     final showSenseGroupBlocks =
         _senseGroupVisible &&
         widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty &&
-        widget.senseGroupTimings != null;
+        widget.senseGroups!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,7 +534,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
         if (showSenseGroupBlocks) ...[
           SenseGroupText(
             groups: widget.senseGroups!,
-            timings: widget.senseGroupTimings!,
+            timings: widget.senseGroupTimings ?? const [],
             playingGroupIndex: widget.playingSenseGroupIndex,
             playedGroupIndices: widget.playedSenseGroupIndices,
             onTapGroup: widget.onTapSenseGroup ?? (_) {},
@@ -678,7 +647,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
               ),
               const SizedBox(width: AppSpacing.xs),
               GestureDetector(
-                onTap: _requestTranslation,
+                onTap: _onTapTranslation,
                 child: Text(
                   l10n.aiRetry,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -713,7 +682,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
             l10n: l10n,
             state: _analysisState,
             content: _analysisContent,
-            onRetry: _requestAnalysis,
+            onRetry: _onTapAnalysis,
             contentBuilder: (content) => _AnalysisContent(content: content),
           ),
         ],
@@ -784,109 +753,6 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
         ),
         TextButton(onPressed: onRetry, child: Text(l10n.aiRetry)),
       ],
-    );
-  }
-}
-
-/// 工具栏按钮
-///
-/// 支持默认、选中、加载、禁用四种视觉状态。
-/// 按钮高度 36dp，圆角 8dp，图标 16dp + labelMedium 文字。
-class _ToolbarButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final bool isLoading;
-  final bool isDisabled;
-  final VoidCallback onTap;
-  final String? disabledMessage;
-
-  const _ToolbarButton({
-    required this.label,
-    required this.icon,
-    this.isActive = false,
-    this.isLoading = false,
-    this.isDisabled = false,
-    required this.onTap,
-    this.disabledMessage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    // 根据状态决定颜色
-    final Color backgroundColor;
-    final Color foregroundColor;
-    final Border? border;
-
-    if (isDisabled) {
-      backgroundColor = colorScheme.surfaceContainerHighest.withValues(
-        alpha: 0.3,
-      );
-      foregroundColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.38);
-      border = null;
-    } else if (isActive || isLoading) {
-      backgroundColor = colorScheme.primaryContainer;
-      foregroundColor = colorScheme.primary;
-      border = Border.all(color: colorScheme.primary, width: 1);
-    } else {
-      backgroundColor = colorScheme.surfaceContainerHighest.withValues(
-        alpha: 0.5,
-      );
-      foregroundColor = colorScheme.onSurfaceVariant;
-      border = null;
-    }
-
-    return GestureDetector(
-      onTap: () {
-        if (isLoading) return;
-        if (isDisabled) {
-          if (disabledMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(disabledMessage!),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-          return;
-        }
-        onTap();
-      },
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(8),
-          border: border,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isLoading)
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foregroundColor,
-                ),
-              )
-            else
-              Icon(icon, size: 16, color: foregroundColor),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: foregroundColor,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

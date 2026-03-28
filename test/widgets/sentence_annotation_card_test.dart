@@ -116,7 +116,8 @@ void main() {
       expect(find.text('Analysis'), findsOneWidget);
     });
 
-    testWidgets('无词级时间戳时拆意群按钮禁用', (tester) async {
+    testWidgets('无词级时间戳时拆意群按钮仍可用', (tester) async {
+      var requested = false;
       await tester.pumpWidget(
         createTestApp(
           SentenceAnnotationCard(
@@ -126,20 +127,19 @@ void main() {
             onRequestTranslation: () async => '翻译',
             onRequestAnalysis: () async => '语法${sep}词汇${sep}用法',
             hasWordTimestamps: false,
+            onRequestSenseGroups: () async {
+              requested = true;
+            },
           ),
         ),
       );
 
-      // 拆意群按钮仍然渲染，但点击显示 SnackBar
       expect(find.text('Groups'), findsOneWidget);
 
-      // 点击禁用的拆意群按钮
+      // 点击拆意群按钮可正常触发请求
       await tester.tap(find.text('Groups'));
       await tester.pump();
-      expect(
-        find.text('Only available for AI-transcribed audio'),
-        findsOneWidget,
-      );
+      expect(requested, isTrue);
     });
 
     testWidgets('无 AI 回调和缓存时翻译/解析按钮禁用', (tester) async {
@@ -451,6 +451,7 @@ void main() {
     });
 
     testWidgets('加载意群时按钮显示 spinner', (tester) async {
+      final completer = Completer<void>();
       await tester.pumpWidget(
         createTestApp(
           SentenceAnnotationCard(
@@ -459,14 +460,24 @@ void main() {
             onToggle: () {},
             onRequestTranslation: () async => '翻译',
             hasWordTimestamps: true,
-            onRequestSenseGroups: () async {},
-            isSenseGroupLoading: true,
+            onRequestSenseGroups: () => completer.future,
           ),
         ),
       );
 
-      // 加载中应显示 CircularProgressIndicator
+      // 点击意群按钮触发请求
+      await tester.tap(find.text('Groups'));
+      await tester.pump();
+
+      // 请求进行中应显示 CircularProgressIndicator
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // 完成请求
+      completer.complete();
+      await tester.pumpAndSettle();
+
+      // loading 结束
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   });
 }
