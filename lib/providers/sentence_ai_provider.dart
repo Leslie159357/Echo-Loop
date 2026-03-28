@@ -196,10 +196,7 @@ class SentenceAiNotifier {
     }
 
     // L3: API 调用
-    final analysis = await _apiClient.analyze(
-      text,
-      cancelToken: cancelToken,
-    );
+    final analysis = await _apiClient.analyze(text, cancelToken: cancelToken);
     // 写入 L1 + L2
     _analysisCache[hash] = analysis;
     await _cacheDao.upsert(
@@ -222,14 +219,19 @@ class SentenceAiNotifier {
     String text, {
     CancelToken? cancelToken,
   }) async {
-    // L2: SQLite 缓存
+    // L2: SQLite 缓存（JSON 损坏或字段不一致时跳过，fallthrough 到 L3）
     final dbResult = await _cacheDao.getByHash(hash, 'sense_groups');
     if (dbResult != null) {
-      final result = SenseGroupResult.fromJson(
-        jsonDecode(dbResult) as Map<String, dynamic>,
-      );
-      _senseGroupCache[hash] = result;
-      return result;
+      try {
+        final result = SenseGroupResult.fromJson(
+          jsonDecode(dbResult) as Map<String, dynamic>,
+        );
+        _senseGroupCache[hash] = result;
+        return result;
+      } catch (_) {
+        // 缓存格式不兼容，删除旧数据后 fallthrough 到 L3
+        await _cacheDao.deleteByHash(hash, 'sense_groups');
+      }
     }
 
     // L3: API 调用
@@ -242,9 +244,7 @@ class SentenceAiNotifier {
     await _cacheDao.upsert(
       hash,
       'sense_groups',
-      jsonEncode({
-        'groups': result.groups.map((g) => g.toJson()).toList(),
-      }),
+      jsonEncode({'groups': result.groups.map((g) => g.toJson()).toList()}),
     );
     return result;
   }

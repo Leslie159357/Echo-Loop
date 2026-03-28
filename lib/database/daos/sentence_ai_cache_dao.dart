@@ -19,16 +19,12 @@ class SentenceAiCacheDao extends DatabaseAccessor<AppDatabase>
   /// 命中时自动更新 [lastAccessedAt]，返回 JSON 字符串；未命中返回 null。
   Future<String?> getByHash(String hash, String type) async {
     final query = select(sentenceAiCache)
-      ..where(
-        (t) => t.textHash.equals(hash) & t.type.equals(type),
-      );
+      ..where((t) => t.textHash.equals(hash) & t.type.equals(type));
     final row = await query.getSingleOrNull();
     if (row == null) return null;
 
     // 更新最后访问时间
-    (update(sentenceAiCache)..where(
-      (t) => t.id.equals(row.id),
-    )).write(
+    (update(sentenceAiCache)..where((t) => t.id.equals(row.id))).write(
       SentenceAiCacheCompanion(lastAccessedAt: Value(DateTime.now())),
     );
 
@@ -58,14 +54,23 @@ class SentenceAiCacheDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// 根据哈希和类型删除单条缓存
+  ///
+  /// 用于缓存格式不兼容时清除旧数据。
+  Future<int> deleteByHash(String hash, String type) {
+    return (delete(
+      sentenceAiCache,
+    )..where((t) => t.textHash.equals(hash) & t.type.equals(type))).go();
+  }
+
   /// 删除超过指定时间未访问的缓存
   ///
   /// 用于定期清理，避免数据库无限增长。
   Future<int> deleteOlderThan(Duration age) {
     final threshold = DateTime.now().subtract(age);
-    return (delete(sentenceAiCache)..where(
-      (t) => t.lastAccessedAt.isSmallerThanValue(threshold),
-    )).go();
+    return (delete(
+      sentenceAiCache,
+    )..where((t) => t.lastAccessedAt.isSmallerThanValue(threshold))).go();
   }
 
   /// 清空所有 AI 缓存

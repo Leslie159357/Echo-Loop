@@ -1,6 +1,6 @@
 /// 意群拆分结果模型
 ///
-/// 存储 AI 返回的意群列表，每个意群包含英文文本和中文翻译。
+/// 存储 AI 返回的意群列表，每个意群包含英文文本和核心意群标记。
 /// 用于精听标注模式中的意群色块渲染。
 library;
 
@@ -25,19 +25,19 @@ class SenseGroup {
   /// 意群英文文本
   final String text;
 
-  /// 意群中文翻译
-  final String translation;
+  /// 是否为核心意群（承载句子核心语义）
+  final bool isCore;
 
-  const SenseGroup({required this.text, required this.translation});
+  const SenseGroup({required this.text, this.isCore = false});
 
   /// 从 JSON 反序列化
   factory SenseGroup.fromJson(Map<String, dynamic> json) {
     return SenseGroup(
       text: json['text'] as String,
-      translation: json['translation'] as String,
+      isCore: json['isCore'] as bool? ?? false,
     );
   }
 
   /// 序列化为 JSON
-  Map<String, dynamic> toJson() => {'text': text, 'translation': translation};
+  Map<String, dynamic> toJson() => {'text': text, 'isCore': isCore};
 }
