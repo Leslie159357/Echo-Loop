@@ -281,6 +281,18 @@
 
 ---
 
+## 已完成：精听标注模式三按钮工具栏
+
+- [x] 提取 ShimmerPlaceholder 为公共 widget
+- [x] 新增国际化 key（annotationBtnSenseGroup / annotationBtnTranslation / annotationBtnAnalysis / senseGroupNotAvailable）
+- [x] 改造 SentenceAnnotationCard：移除 AiContentSection 手风琴，改为三按钮工具栏 + 内联翻译 + 面板解析
+- [x] 工具栏固定在滚动区上方，_AnnotationModeView 改为 StatefulWidget
+- [x] 更新测试（19 个）
+
+  **完成时间**: 2026-03-28
+
+---
+
 ## 已完成：意群划分功能
 
 - [x] 后端：暴露词级时间戳 API（transcript route 返回 words）

@@ -454,8 +454,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // AI 分支将静态 placeholder 替换为 AiContentSection 组件
-      expect(find.text('Translation'), findsOneWidget);
+      // 工具栏按钮显示翻译和解析
+      expect(find.text('Translate'), findsOneWidget);
       expect(find.text('Analysis'), findsOneWidget);
     });
 

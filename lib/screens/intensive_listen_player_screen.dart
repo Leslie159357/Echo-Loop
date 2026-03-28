@@ -126,13 +126,10 @@ class _IntensiveListenPlayerScreenState
       if (!mounted) return;
 
       // 计算时间范围映射
-      final sentenceIndex = ref.read(intensiveListenPlayerProvider)
+      final sentenceIndex = ref
+          .read(intensiveListenPlayerProvider)
           .currentSentenceIndex;
-      final timings = _computeTimings(
-        result.groups,
-        sentence,
-        sentenceIndex,
-      );
+      final timings = _computeTimings(result.groups, sentence, sentenceIndex);
 
       setState(() {
         _senseGroups = result.groups;
@@ -708,8 +705,7 @@ class _IntensiveListenPlayerScreenState
                             onTapSenseGroup: _senseGroupTimings != null
                                 ? (index) {
                                     if (index < _senseGroupTimings!.length) {
-                                      final timing =
-                                          _senseGroupTimings![index];
+                                      final timing = _senseGroupTimings![index];
                                       player.playSenseGroup(
                                         timing.start,
                                         timing.end,
@@ -1007,6 +1003,7 @@ class _AnnotationWithBookmark extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.m),
           // 标注内容
           Expanded(child: child),
         ],
@@ -1015,8 +1012,245 @@ class _AnnotationWithBookmark extends StatelessWidget {
   }
 }
 
-/// 标注模式视图（仅卡片，底部控件已移至 build 底部统一 Padding）
-class _AnnotationModeView extends StatelessWidget {
+class _NormalModeView extends StatelessWidget {
+  final IntensiveListenState playerState;
+  final AppLocalizations l10n;
+  final ThemeData theme;
+  final VoidCallback onPeekToggle;
+
+  /// 切换难句标记回调（用于难句标记行）
+  final VoidCallback onToggleDifficult;
+
+  /// 听不懂（进入标注模式）
+  final VoidCallback onCantUnderstand;
+
+  /// 暂停/恢复倒计时
+  final VoidCallback onPauseCountdown;
+
+  final String? sentenceText;
+
+  /// 点击单词查词回调
+  final void Function(String word)? onWordTap;
+
+  const _NormalModeView({
+    required this.playerState,
+    required this.l10n,
+    required this.theme,
+    required this.onPeekToggle,
+    required this.onToggleDifficult,
+    required this.onCantUnderstand,
+    required this.onPauseCountdown,
+    this.sentenceText,
+    this.onWordTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDifficult = playerState.difficultSentences.contains(
+      playerState.currentSentenceIndex,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+      child: Column(
+        children: [
+          const SizedBox(height: AppSpacing.s),
+
+          // 难句标记行
+          TappableWrapper(
+            onTap: onToggleDifficult,
+            feedbackType: TapFeedback.opacity,
+            pressedOpacity: 0.4,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: Text(
+                    isDifficult
+                        ? l10n.intensiveListenMarkedDifficult
+                        : l10n.intensiveListenNotDifficult,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Icon(
+                  isDifficult ? Icons.bookmark : Icons.bookmark_border,
+                  color: isDifficult ? Colors.amber.shade700 : Colors.grey,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+
+          // 字幕区（整个区域可点击切换字幕）
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onPeekToggle,
+              child: Stack(
+                children: [
+                  // 字幕内容偏上（-0.4 ≈ 上方 30% 位置）
+                  Align(
+                    alignment: const Alignment(0, -0.4),
+                    child: playerState.isTextRevealed && sentenceText != null
+                        ? GestureDetector(
+                            onTap: () {}, // 拦截点击，不冒泡到外层
+                            onLongPressStart: (details) => TextContextMenu.show(
+                              context,
+                              details.globalPosition,
+                              sentenceText!,
+                            ),
+                            onSecondaryTapDown: (details) =>
+                                TextContextMenu.show(
+                                  context,
+                                  details.globalPosition,
+                                  sentenceText!,
+                                ),
+                            child: onWordTap != null
+                                ? _TappableText(
+                                    text: sentenceText!,
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
+                                          height: 1.6,
+                                        ) ??
+                                        const TextStyle(),
+                                    onWordTap: onWordTap!,
+                                  )
+                                : Text(
+                                    sentenceText!,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(height: 1.6),
+                                    textAlign: TextAlign.center,
+                                  ),
+                          )
+                        : _HiddenTextPlaceholder(),
+                  ),
+                  // 偷看字幕标签（固定在字幕区中间偏下）
+                  Align(
+                    alignment: const Alignment(0, 0.55),
+                    child: _PeekLabel(
+                      isRevealed: playerState.isTextRevealed,
+                      l10n: l10n,
+                      theme: theme,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 底部固定区：倒计时 + 按钮行
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 倒计时用 Consumer 隔离，避免 tick 触发外层重建
+              SizedBox(
+                height: 56,
+                child: playerState.isPauseBetweenPlays
+                    ? Consumer(
+                        builder: (context, ref, _) {
+                          final s = ref.watch(intensiveListenPlayerProvider);
+                          return CountdownChip(
+                            remaining: s.pauseRemaining,
+                            total: s.pauseDuration,
+                            isPaused: s.isCountdownPaused,
+                            onTap: onPauseCountdown,
+                          );
+                        },
+                      )
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.m),
+              // 取消标记 + 听不懂按钮
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isDifficult) ...[
+                      TextButton(
+                        onPressed: onToggleDifficult,
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.onSurfaceVariant,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: Text(
+                          l10n.practiceRemoveMark,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.m),
+                    ],
+                    FilledButton.tonal(
+                      onPressed: onCantUnderstand,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        l10n.intensiveListenCantUnderstand,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.l),
+        ],
+      ),
+    );
+  }
+}
+
+/// 隐藏文本占位（灰色线条）
+class _HiddenTextPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.hearing,
+          size: 48,
+          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+        ),
+        const SizedBox(height: AppSpacing.l),
+        // 占位灰色线条
+        for (int i = 0; i < 3; i++) ...[
+          Container(
+            width: 200 - i * 40,
+            height: 8,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// 标注模式视图
+///
+/// 工具栏固定在顶部不随内容滚动，句子文本和解析内容在下方可滚动。
+class _AnnotationModeView extends StatefulWidget {
   final String text;
   final bool isDifficult;
 
@@ -1082,48 +1316,148 @@ class _AnnotationModeView extends StatelessWidget {
   });
 
   @override
+  State<_AnnotationModeView> createState() => _AnnotationModeViewState();
+}
+
+class _AnnotationModeViewState extends State<_AnnotationModeView> {
+  /// 用于访问卡片 State 以构建外部工具栏。
+  /// 切句时重建 GlobalKey 确保卡片 State 重置。
+  GlobalKey<SentenceAnnotationCardState> _cardKey =
+      GlobalKey<SentenceAnnotationCardState>();
+
+  /// 上一次渲染的句子文本（用于检测切句）
+  String? _lastText;
+
+  /// 工具栏刷新通知器，卡片 State 变化时通知工具栏重建
+  final _toolbarNotifier = _RebuildNotifier();
+
+  @override
+  void dispose() {
+    _toolbarNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_AnnotationModeView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 切句时重建 GlobalKey，确保卡片 State 重置
+    if (widget.text != oldWidget.text) {
+      _cardKey = GlobalKey<SentenceAnnotationCardState>();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final ai = aiNotifier;
-    final cachedTranslation = ai?.getCachedTranslation(text)?.translation;
-    final cachedAnalysis = ai?.getCachedAnalysis(text);
+    final ai = widget.aiNotifier;
+    final cachedTranslation = ai
+        ?.getCachedTranslation(widget.text)
+        ?.translation;
+    final cachedAnalysis = ai?.getCachedAnalysis(widget.text);
     final cachedAnalysisText = cachedAnalysis?.toDisplayString();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(top: AppSpacing.s),
-      child: SentenceAnnotationCard(
-        key: ValueKey(text),
-        text: text,
-        isDifficult: isDifficult,
-        showAutoMarkedLabel: isAutoMarked,
-        onRequestTranslation: ai != null
-            ? () async {
-                final result = await ai.getTranslation(text);
-                return result.translation;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 固定工具栏（监听 notifier 刷新）
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.m),
+          child: ListenableBuilder(
+            listenable: _toolbarNotifier,
+            builder: (context, _) {
+              final cardState = _cardKey.currentState;
+              if (cardState == null || !cardState.hasToolbarButtons) {
+                return const SizedBox.shrink();
               }
-            : null,
-        onRequestAnalysis: ai != null
-            ? () async {
-                final result = await ai.getAnalysis(text);
-                return result.toDisplayString();
-              }
-            : null,
-        cachedTranslation: cachedTranslation,
-        cachedAnalysis: cachedAnalysisText,
-        audioItemId: audioItemId,
-        sentenceIndex: sentenceIndex,
-        sentenceStartMs: sentenceStartMs,
-        sentenceEndMs: sentenceEndMs,
-        senseGroups: senseGroups,
-        senseGroupTimings: senseGroupTimings,
-        playingSenseGroupIndex: playingSenseGroupIndex,
-        playedSenseGroupIndices: playedSenseGroupIndices,
-        onTapSenseGroup: onTapSenseGroup,
-        onRequestSenseGroups: onRequestSenseGroups,
-        hasWordTimestamps: hasWordTimestamps,
-        isSenseGroupLoading: isSenseGroupLoading,
-      ),
+              return cardState.buildToolbar(context);
+            },
+          ),
+        ),
+        // 可滚动内容区
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: AppSpacing.m),
+            child: SentenceAnnotationCard(
+              key: _cardKey,
+              text: widget.text,
+              isDifficult: widget.isDifficult,
+              showAutoMarkedLabel: widget.isAutoMarked,
+              showToolbar: false,
+              onToolbarStateChanged: _toolbarNotifier.notify,
+              onRequestTranslation: ai != null
+                  ? () async {
+                      final result = await ai.getTranslation(widget.text);
+                      return result.translation;
+                    }
+                  : null,
+              onRequestAnalysis: ai != null
+                  ? () async {
+                      final result = await ai.getAnalysis(widget.text);
+                      return result.toDisplayString();
+                    }
+                  : null,
+              cachedTranslation: cachedTranslation,
+              cachedAnalysis: cachedAnalysisText,
+              audioItemId: widget.audioItemId,
+              sentenceIndex: widget.sentenceIndex,
+              sentenceStartMs: widget.sentenceStartMs,
+              sentenceEndMs: widget.sentenceEndMs,
+              senseGroups: widget.senseGroups,
+              senseGroupTimings: widget.senseGroupTimings,
+              playingSenseGroupIndex: widget.playingSenseGroupIndex,
+              playedSenseGroupIndices: widget.playedSenseGroupIndices,
+              onTapSenseGroup: widget.onTapSenseGroup,
+              onRequestSenseGroups: widget.onRequestSenseGroups,
+              hasWordTimestamps: widget.hasWordTimestamps,
+              isSenseGroupLoading: widget.isSenseGroupLoading,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
+
+/// 简单的重建通知器，用于卡片状态变化时触发工具栏重建
+class _RebuildNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
+}
+
+/// 偷看字幕标签（字幕区下方，提示用户可点击）
+class _PeekLabel extends StatelessWidget {
+  final bool isRevealed;
+  final AppLocalizations l10n;
+  final ThemeData theme;
+
+  const _PeekLabel({
+    required this.isRevealed,
+    required this.l10n,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isRevealed
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          size: 14,
+          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          l10n.intensiveListenPeek,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 /// 底部播放控制
 ///
