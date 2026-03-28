@@ -14,11 +14,17 @@ import '../database/enums.dart';
 import '../utils/wakelock_mixin.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
+import '../models/audio_item.dart';
+import '../models/sense_group_result.dart';
+import '../models/sentence.dart';
+import '../models/word_timestamp.dart';
 import '../providers/learning_progress_provider.dart';
+import '../services/transcription_api_client.dart';
 import '../providers/learning_session/intensive_listen_player_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/listening_practice/bookmark_manager.dart';
 import '../theme/app_theme.dart';
+import '../utils/sense_group_timing.dart';
 import '../widgets/intensive_listen/intensive_listen_settings_sheet.dart';
 import '../providers/sentence_ai_provider.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
@@ -59,13 +65,135 @@ class _IntensiveListenPlayerScreenState
   /// 是否正在显示完成弹窗，防止重复弹窗
   bool _isShowingDialog = false;
 
+  /// 词级时间戳（从后端获取，按音频缓存）
+  List<WordTimestamp>? _wordTimestamps;
+
+  /// 当前句子的意群拆分结果
+  List<SenseGroup>? _senseGroups;
+
+  /// 当前句子的意群时间范围
+  List<SenseGroupTiming>? _senseGroupTimings;
+
+  /// 是否正在加载意群
+  bool _isSenseGroupLoading = false;
+
+  /// 上次请求意群的句子索引（切句时重置）
+  int? _lastSenseGroupSentenceIndex;
+
   @override
   void initState() {
     super.initState();
     // 进入后自动开始播放
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(intensiveListenPlayerProvider.notifier).startPlaying();
+      _fetchWordTimestamps();
     });
+  }
+
+  /// 从后端获取词级时间戳（仅 AI 转录的音频）
+  Future<void> _fetchWordTimestamps() async {
+    final audioDao = ref.read(audioItemDaoProvider);
+    final audioItem = await audioDao.getById(widget.audioItemId);
+    if (audioItem == null) return;
+    // 仅 AI 转录有词级时间戳
+    if (audioItem.transcriptSource != TranscriptSource.ai.index) return;
+    final sha256 = audioItem.audioSha256;
+    final language = audioItem.transcriptLanguage;
+    if (sha256 == null || language == null) return;
+
+    try {
+      final api = ref.read(transcriptionApiClientProvider);
+      final result = await api.getTranscript(sha256, language);
+      if (mounted && result.words != null && result.words!.isNotEmpty) {
+        setState(() => _wordTimestamps = result.words);
+      }
+    } catch (e) {
+      debugPrint('获取词级时间戳失败: $e');
+    }
+  }
+
+  /// 请求 AI 拆分意群
+  Future<void> _requestSenseGroups() async {
+    final player = ref.read(intensiveListenPlayerProvider.notifier);
+    final sentence = player.currentSentence;
+    if (sentence == null || _wordTimestamps == null) return;
+
+    setState(() => _isSenseGroupLoading = true);
+    try {
+      final ai = ref.read(sentenceAiNotifierProvider);
+      final result = await ai.getSenseGroups(sentence.text);
+
+      if (!mounted) return;
+
+      // 计算时间范围映射
+      final sentenceIndex = ref.read(intensiveListenPlayerProvider)
+          .currentSentenceIndex;
+      final timings = _computeTimings(
+        result.groups,
+        sentence,
+        sentenceIndex,
+      );
+
+      setState(() {
+        _senseGroups = result.groups;
+        _senseGroupTimings = timings;
+        _lastSenseGroupSentenceIndex = sentenceIndex;
+        _isSenseGroupLoading = false;
+      });
+    } catch (e) {
+      debugPrint('意群拆分失败: $e');
+      if (mounted) setState(() => _isSenseGroupLoading = false);
+    }
+  }
+
+  /// 计算意群时间范围
+  List<SenseGroupTiming> _computeTimings(
+    List<SenseGroup> groups,
+    Sentence sentence,
+    int sentenceIndex,
+  ) {
+    final words = _wordTimestamps!;
+    // 找到句子在 words 中的范围：时间范围匹配
+    final startMs = sentence.startTime.inMilliseconds;
+    final endMs = sentence.endTime.inMilliseconds;
+
+    var startIdx = 0;
+    var endIdx = words.length - 1;
+
+    // 找第一个开始时间 >= 句子开始时间的词
+    for (var i = 0; i < words.length; i++) {
+      if (words[i].startTime.inMilliseconds >= startMs - 100) {
+        startIdx = i;
+        break;
+      }
+    }
+    // 找最后一个结束时间 <= 句子结束时间的词
+    for (var i = words.length - 1; i >= 0; i--) {
+      if (words[i].endTime.inMilliseconds <= endMs + 100) {
+        endIdx = i;
+        break;
+      }
+    }
+
+    return mapSenseGroupTimings(
+      groups: groups,
+      words: words,
+      sentenceStart: sentence.startTime,
+      sentenceEnd: sentence.endTime,
+      sentenceStartWordIndex: startIdx,
+      sentenceEndWordIndex: endIdx,
+    );
+  }
+
+  /// 切句时重置意群状态
+  void _resetSenseGroupsIfNeeded(int currentIndex) {
+    if (_lastSenseGroupSentenceIndex != null &&
+        _lastSenseGroupSentenceIndex != currentIndex) {
+      _senseGroups = null;
+      _senseGroupTimings = null;
+      _lastSenseGroupSentenceIndex = null;
+      _isSenseGroupLoading = false;
+    }
   }
 
   /// 处理退出（close 按钮 / 系统返回）
@@ -483,7 +611,11 @@ class _IntensiveListenPlayerScreenState
 
     final currentSentence = player.currentSentence;
 
-    // 句子时长（如 "2.8秒"）
+    // 切句时重置意群
+    _resetSenseGroupsIfNeeded(playerState.currentSentenceIndex);
+
+    // 句子时长（如 "3.5s"）和时间戳（如 "00:32.1 - 00:35.6"）分开传递，
+    // 由 _ProgressSection 用不同样式渲染以建立视觉层级。
     final hasDuration =
         currentSentence != null && currentSentence.duration > Duration.zero;
     final durationText = hasDuration
@@ -567,6 +699,30 @@ class _IntensiveListenPlayerScreenState
                                 currentSentence?.startTime.inMilliseconds,
                             sentenceEndMs:
                                 currentSentence?.endTime.inMilliseconds,
+                            senseGroups: _senseGroups,
+                            senseGroupTimings: _senseGroupTimings,
+                            playingSenseGroupIndex:
+                                playerState.playingSenseGroupIndex,
+                            playedSenseGroupIndices:
+                                playerState.playedSenseGroupIndices,
+                            onTapSenseGroup: _senseGroupTimings != null
+                                ? (index) {
+                                    if (index < _senseGroupTimings!.length) {
+                                      final timing =
+                                          _senseGroupTimings![index];
+                                      player.playSenseGroup(
+                                        timing.start,
+                                        timing.end,
+                                        index,
+                                      );
+                                    }
+                                  }
+                                : null,
+                            onRequestSenseGroups: _wordTimestamps != null
+                                ? _requestSenseGroups
+                                : null,
+                            hasWordTimestamps: _wordTimestamps != null,
+                            isSenseGroupLoading: _isSenseGroupLoading,
                           ),
                         )
                       : PracticeNormalModeView(
@@ -882,6 +1038,30 @@ class _AnnotationModeView extends StatelessWidget {
   /// 当前句子结束时间（毫秒）
   final int? sentenceEndMs;
 
+  /// AI 意群拆分结果
+  final List<SenseGroup>? senseGroups;
+
+  /// 各意群时间范围
+  final List<SenseGroupTiming>? senseGroupTimings;
+
+  /// 正在播放的意群索引
+  final int? playingSenseGroupIndex;
+
+  /// 已播放过的意群索引集合
+  final Set<int> playedSenseGroupIndices;
+
+  /// 点击意群回调
+  final void Function(int groupIndex)? onTapSenseGroup;
+
+  /// 请求拆分意群回调
+  final Future<void> Function()? onRequestSenseGroups;
+
+  /// 是否有词级时间戳
+  final bool hasWordTimestamps;
+
+  /// 是否正在加载意群
+  final bool isSenseGroupLoading;
+
   const _AnnotationModeView({
     required this.text,
     required this.isDifficult,
@@ -891,6 +1071,14 @@ class _AnnotationModeView extends StatelessWidget {
     this.sentenceIndex,
     this.sentenceStartMs,
     this.sentenceEndMs,
+    this.senseGroups,
+    this.senseGroupTimings,
+    this.playingSenseGroupIndex,
+    this.playedSenseGroupIndices = const {},
+    this.onTapSenseGroup,
+    this.onRequestSenseGroups,
+    this.hasWordTimestamps = false,
+    this.isSenseGroupLoading = false,
   });
 
   @override
@@ -924,6 +1112,14 @@ class _AnnotationModeView extends StatelessWidget {
         sentenceIndex: sentenceIndex,
         sentenceStartMs: sentenceStartMs,
         sentenceEndMs: sentenceEndMs,
+        senseGroups: senseGroups,
+        senseGroupTimings: senseGroupTimings,
+        playingSenseGroupIndex: playingSenseGroupIndex,
+        playedSenseGroupIndices: playedSenseGroupIndices,
+        onTapSenseGroup: onTapSenseGroup,
+        onRequestSenseGroups: onRequestSenseGroups,
+        hasWordTimestamps: hasWordTimestamps,
+        isSenseGroupLoading: isSenseGroupLoading,
       ),
     );
   }

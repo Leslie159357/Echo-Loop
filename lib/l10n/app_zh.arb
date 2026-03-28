@@ -870,5 +870,12 @@
   "monthlyAvgPerDay": "日均",
   "monthlyBestStreak": "最长连续",
   "daysSuffix": "{days}天",
-  "activeDaysFraction": "{active}/{total}天"
+  "activeDaysFraction": "{active}/{total}天",
+  "senseGroupSplit": "拆分意群",
+  "senseGroupLoading": "拆分中...",
+  "senseGroupSingleGroup": "此句为单个意群",
+  "annotationBtnSenseGroup": "意群",
+  "annotationBtnTranslation": "翻译",
+  "annotationBtnAnalysis": "解析",
+  "senseGroupNotAvailable": "仅 AI 转录的音频支持意群拆分"
 }

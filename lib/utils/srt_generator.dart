@@ -17,15 +17,24 @@ class TranscriptSentence {
   /// 结束时间
   final Duration endTime;
 
+  /// 句子在全文 words 数组中的起始词索引（含）
+  final int? startWordIndex;
+
+  /// 句子在全文 words 数组中的结束词索引（含）
+  final int? endWordIndex;
+
   const TranscriptSentence({
     required this.text,
     required this.startTime,
     required this.endTime,
+    this.startWordIndex,
+    this.endWordIndex,
   });
 
   /// 从后端 JSON 创建
   ///
   /// 后端 startTime / endTime 单位为秒（浮点数），需转换为 Duration。
+  /// startWordIndex / endWordIndex 由后端 SentenceTimestamp 提供。
   factory TranscriptSentence.fromJson(Map<String, dynamic> json) {
     return TranscriptSentence(
       text: json['text'] as String,
@@ -35,6 +44,8 @@ class TranscriptSentence {
       endTime: Duration(
         milliseconds: ((json['endTime'] as num) * 1000).round(),
       ),
+      startWordIndex: json['startWordIndex'] as int?,
+      endWordIndex: json['endWordIndex'] as int?,
     );
   }
 }

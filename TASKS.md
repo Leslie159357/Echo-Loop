@@ -281,7 +281,21 @@
 
 ---
 
-## 意群划分功能
+## 已完成：意群划分功能
+
+- [x] 后端：暴露词级时间戳 API（transcript route 返回 words）
+- [x] 后端：AI 意群拆分端点（POST /api/v1/ai/sense-groups + PostgreSQL 缓存表）
+- [x] Flutter：词级时间戳模型（WordTimestamp）+ 获取
+- [x] Flutter：意群数据模型（SenseGroupResult）+ AI 客户端 + 三级缓存
+- [x] Flutter：意群时间戳映射工具（mapSenseGroupTimings）
+- [x] Flutter：意群色块 UI 组件（SenseGroupText）
+- [x] Flutter：标注模式集成（SentenceAnnotationCard 意群替换 RichText）
+- [x] Flutter：精听播放器集成（playSenseGroup / stopSenseGroupPlayback）
+- [x] 国际化（senseGroupSplit / senseGroupLoading / senseGroupSingleGroup）
+- [x] Critic Review 修复（_autoAdvance 重置意群状态、exitAnnotationMode 停止意群播放、死代码清理、SenseGroupText 改 StatelessWidget、双空格修复）
+- [x] 单元测试（27 个：模型 fromJson/toJson + 时间戳映射算法）
+
+  **完成时间**: 2026-03-14
 
 ---
 

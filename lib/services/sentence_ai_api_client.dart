@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
 import '../models/sentence_ai_result.dart';
+import '../models/sense_group_result.dart';
 import '../models/word_analysis.dart';
 
 part 'sentence_ai_api_client.g.dart';
@@ -89,6 +90,21 @@ class SentenceAiApiClient {
       cancelToken: cancelToken,
     );
     return WordAnalysis.fromJson(response.data!);
+  }
+
+  /// 拆分意群
+  ///
+  /// 调用后端 AI 意群拆分接口，返回意群列表（含中文翻译）。
+  Future<SenseGroupResult> splitSenseGroups(
+    String text, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/ai/sense-groups',
+      data: {'text': text},
+      cancelToken: cancelToken,
+    );
+    return SenseGroupResult.fromJson(response.data!);
   }
 
   /// 释放资源

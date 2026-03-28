@@ -1180,5 +1180,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "senseGroupSplit": "Split into Groups",
+  "senseGroupLoading": "Splitting...",
+  "senseGroupSingleGroup": "This sentence is a single group",
+  "annotationBtnSenseGroup": "Groups",
+  "annotationBtnTranslation": "Translate",
+  "annotationBtnAnalysis": "Analysis",
+  "senseGroupNotAvailable": "Only available for AI-transcribed audio"
 }

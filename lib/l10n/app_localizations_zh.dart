@@ -2109,4 +2109,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String activeDaysFraction(int active, int total) {
     return '$active/$total天';
   }
+
+  @override
+  String get senseGroupSplit => '拆分意群';
+
+  @override
+  String get senseGroupLoading => '拆分中...';
+
+  @override
+  String get senseGroupSingleGroup => '此句为单个意群';
+
+  @override
+  String get annotationBtnSenseGroup => '意群';
+
+  @override
+  String get annotationBtnTranslation => '翻译';
+
+  @override
+  String get annotationBtnAnalysis => '解析';
+
+  @override
+  String get senseGroupNotAvailable => '仅 AI 转录的音频支持意群拆分';
 }

@@ -3889,6 +3889,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{active}/{total} days'**
   String activeDaysFraction(int active, int total);
+
+  /// No description provided for @senseGroupSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'Split into Groups'**
+  String get senseGroupSplit;
+
+  /// No description provided for @senseGroupLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Splitting...'**
+  String get senseGroupLoading;
+
+  /// No description provided for @senseGroupSingleGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'This sentence is a single group'**
+  String get senseGroupSingleGroup;
+
+  /// No description provided for @annotationBtnSenseGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get annotationBtnSenseGroup;
+
+  /// No description provided for @annotationBtnTranslation.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate'**
+  String get annotationBtnTranslation;
+
+  /// No description provided for @annotationBtnAnalysis.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis'**
+  String get annotationBtnAnalysis;
+
+  /// No description provided for @senseGroupNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Only available for AI-transcribed audio'**
+  String get senseGroupNotAvailable;
 }
 
 class _AppLocalizationsDelegate

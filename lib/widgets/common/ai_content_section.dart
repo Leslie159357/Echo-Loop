@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'shimmer_placeholder.dart';
 
 /// AI 内容区块状态
 enum AiContentState { collapsed, loading, loaded, error }
@@ -139,11 +140,7 @@ class _AiContentSectionState extends State<AiContentSection> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    widget.icon,
-                    size: 18,
-                    color: theme.colorScheme.primary,
-                  ),
+                  Icon(widget.icon, size: 18, color: theme.colorScheme.primary),
                   const SizedBox(width: AppSpacing.s),
                   Expanded(
                     child: Text(
@@ -154,9 +151,7 @@ class _AiContentSectionState extends State<AiContentSection> {
                     ),
                   ),
                   Icon(
-                    isExpanded
-                        ? Icons.expand_less
-                        : Icons.expand_more,
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 20,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -183,7 +178,7 @@ class _AiContentSectionState extends State<AiContentSection> {
 
   Widget _buildContent(ThemeData theme, AppLocalizations l10n) {
     return switch (_state) {
-      AiContentState.loading => const _ShimmerPlaceholder(),
+      AiContentState.loading => const ShimmerPlaceholder(),
       AiContentState.loaded => _buildLoadedContent(theme),
       AiContentState.error => _buildErrorContent(theme, l10n),
       AiContentState.collapsed => const SizedBox.shrink(),
@@ -207,11 +202,7 @@ class _AiContentSectionState extends State<AiContentSection> {
   Widget _buildErrorContent(ThemeData theme, AppLocalizations l10n) {
     return Row(
       children: [
-        Icon(
-          Icons.error_outline,
-          size: 16,
-          color: theme.colorScheme.error,
-        ),
+        Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error),
         const SizedBox(width: AppSpacing.xs),
         Expanded(
           child: Text(
@@ -221,87 +212,8 @@ class _AiContentSectionState extends State<AiContentSection> {
             ),
           ),
         ),
-        TextButton(
-          onPressed: _expand,
-          child: Text(l10n.aiRetry),
-        ),
+        TextButton(onPressed: _expand, child: Text(l10n.aiRetry)),
       ],
-    );
-  }
-}
-
-/// Shimmer 骨架屏占位
-class _ShimmerPlaceholder extends StatefulWidget {
-  const _ShimmerPlaceholder();
-
-  @override
-  State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
-}
-
-class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final baseColor = theme.colorScheme.surfaceContainerHighest;
-    final highlightColor = theme.colorScheme.surface;
-
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return ShaderMask(
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [baseColor, highlightColor, baseColor],
-              stops: [
-                (_controller.value - 0.3).clamp(0.0, 1.0),
-                _controller.value,
-                (_controller.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ).createShader(bounds);
-          },
-          blendMode: BlendMode.srcATop,
-          child: child!,
-        );
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _shimmerBar(width: double.infinity),
-          const SizedBox(height: AppSpacing.s),
-          _shimmerBar(width: 200),
-        ],
-      ),
-    );
-  }
-
-  Widget _shimmerBar({required double width}) {
-    return Container(
-      width: width,
-      height: 14,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-      ),
     );
   }
 }

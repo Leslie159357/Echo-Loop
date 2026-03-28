@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
 import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
+import '../models/word_timestamp.dart';
 import '../utils/srt_generator.dart';
 
 part 'transcription_api_client.g.dart';
@@ -103,17 +104,32 @@ class TranscriptResult {
   /// 句子列表
   final List<TranscriptSentence> sentences;
 
+  /// 词级时间戳列表（AI 转录时非空）
+  final List<WordTimestamp>? words;
+
   /// 全文文本
   final String fullText;
 
-  const TranscriptResult({required this.sentences, required this.fullText});
+  const TranscriptResult({
+    required this.sentences,
+    this.words,
+    required this.fullText,
+  });
 
   factory TranscriptResult.fromJson(Map<String, dynamic> json) {
     final sentencesList = (json['sentences'] as List)
         .map((s) => TranscriptSentence.fromJson(s as Map<String, dynamic>))
         .toList();
+    final wordsList = json['words'] != null
+        ? (json['words'] as List)
+              .map(
+                (w) => WordTimestamp.fromJson(w as Map<String, dynamic>),
+              )
+              .toList()
+        : null;
     return TranscriptResult(
       sentences: sentencesList,
+      words: wordsList,
       fullText: json['fullText'] as String? ?? '',
     );
   }

@@ -2169,4 +2169,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String activeDaysFraction(int active, int total) {
     return '$active/$total days';
   }
+
+  @override
+  String get senseGroupSplit => 'Split into Groups';
+
+  @override
+  String get senseGroupLoading => 'Splitting...';
+
+  @override
+  String get senseGroupSingleGroup => 'This sentence is a single group';
+
+  @override
+  String get annotationBtnSenseGroup => 'Groups';
+
+  @override
+  String get annotationBtnTranslation => 'Translate';
+
+  @override
+  String get annotationBtnAnalysis => 'Analysis';
+
+  @override
+  String get senseGroupNotAvailable =>
+      'Only available for AI-transcribed audio';
 }

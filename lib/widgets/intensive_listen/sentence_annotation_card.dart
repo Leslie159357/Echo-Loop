@@ -7,12 +7,15 @@ library;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/sense_group_result.dart';
 import '../../models/sentence_ai_result.dart';
 import '../../models/speech_practice_models.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/sense_group_timing.dart';
 import '../common/tappable_wrapper.dart';
 import '../common/ai_content_section.dart';
 import '../common/text_context_menu.dart';
+import 'sense_group_text.dart';
 import 'word_dictionary_sheet.dart';
 
 /// 标注模式句子卡片
@@ -65,6 +68,30 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 句子正文的高亮片段；为空时按原始句子构建。
   final List<SpeechTranscriptSegment>? highlightedSegments;
 
+  /// AI 意群拆分结果（null 表示未请求或无数据）
+  final List<SenseGroup>? senseGroups;
+
+  /// 各意群时间范围
+  final List<SenseGroupTiming>? senseGroupTimings;
+
+  /// 正在播放的意群索引
+  final int? playingSenseGroupIndex;
+
+  /// 已播放过的意群索引集合
+  final Set<int> playedSenseGroupIndices;
+
+  /// 点击意群回调
+  final void Function(int groupIndex)? onTapSenseGroup;
+
+  /// 请求拆分意群回调
+  final Future<void> Function()? onRequestSenseGroups;
+
+  /// 是否有词级时间戳（决定是否显示拆分按钮）
+  final bool hasWordTimestamps;
+
+  /// 是否正在加载意群
+  final bool isSenseGroupLoading;
+
   const SentenceAnnotationCard({
     super.key,
     required this.text,
@@ -81,6 +108,14 @@ class SentenceAnnotationCard extends StatefulWidget {
     this.sentenceEndMs,
     this.inlineFeedback,
     this.highlightedSegments,
+    this.senseGroups,
+    this.senseGroupTimings,
+    this.playingSenseGroupIndex,
+    this.playedSenseGroupIndices = const {},
+    this.onTapSenseGroup,
+    this.onRequestSenseGroups,
+    this.hasWordTimestamps = false,
+    this.isSenseGroupLoading = false,
   });
 
   @override
@@ -266,28 +301,90 @@ class _SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
           const SizedBox(height: AppSpacing.m),
         ],
 
-        // 句子文本（单词可点击查词典，长按/右键复制整句）
-        GestureDetector(
-          onLongPressStart: (details) => TextContextMenu.show(
-            context,
-            details.globalPosition,
-            widget.text,
+        // 句子文本 — 意群色块模式或纯 RichText（带长按/右键复制整句）
+        if (widget.senseGroups != null &&
+            widget.senseGroups!.isNotEmpty &&
+            widget.senseGroupTimings != null) ...[
+          SenseGroupText(
+            groups: widget.senseGroups!,
+            timings: widget.senseGroupTimings!,
+            playingGroupIndex: widget.playingSenseGroupIndex,
+            playedGroupIndices: widget.playedSenseGroupIndices,
+            onTapGroup: widget.onTapSenseGroup ?? (_) {},
+            audioItemId: widget.audioItemId,
+            sentenceIndex: widget.sentenceIndex,
+            sentenceText: widget.text,
+            sentenceStartMs: widget.sentenceStartMs,
+            sentenceEndMs: widget.sentenceEndMs,
           ),
-          onSecondaryTapDown: (details) => TextContextMenu.show(
-            context,
-            details.globalPosition,
-            widget.text,
-          ),
-          child: RichText(
-            text: TextSpan(
-              style: theme.textTheme.titleMedium?.copyWith(
-                height: 1.6,
-                color: theme.colorScheme.onSurface,
+          // 单意群提示
+          if (widget.senseGroups!.length == 1) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              l10n.senseGroupSingleGroup,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-              children: _buildHighlightedWordSpans(theme),
+            ),
+          ],
+        ] else ...[
+          GestureDetector(
+            onLongPressStart: (details) => TextContextMenu.show(
+              context,
+              details.globalPosition,
+              widget.text,
+            ),
+            onSecondaryTapDown: (details) => TextContextMenu.show(
+              context,
+              details.globalPosition,
+              widget.text,
+            ),
+            child: RichText(
+              text: TextSpan(
+                style: theme.textTheme.titleMedium?.copyWith(
+                  height: 1.6,
+                  color: theme.colorScheme.onSurface,
+                ),
+                children: _buildHighlightedWordSpans(theme),
+              ),
             ),
           ),
-        ),
+          // 拆分意群按钮（仅在有词级时间戳时显示）
+          if (widget.hasWordTimestamps && widget.onRequestSenseGroups != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.s),
+              child: widget.isSenseGroupLoading
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          l10n.senseGroupLoading,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    )
+                  : TextButton.icon(
+                      onPressed: widget.onRequestSenseGroups,
+                      icon: const Icon(Icons.auto_fix_high, size: 16),
+                      label: Text(l10n.senseGroupSplit),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.s,
+                          vertical: AppSpacing.xs,
+                        ),
+                        textStyle: theme.textTheme.bodySmall,
+                      ),
+                    ),
+            ),
+        ],
         if (widget.inlineFeedback case final inlineFeedback?) ...[
           const SizedBox(height: AppSpacing.l),
           Align(alignment: Alignment.centerRight, child: inlineFeedback),

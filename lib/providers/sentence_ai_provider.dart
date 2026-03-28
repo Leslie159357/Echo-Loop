@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/daos/sentence_ai_cache_dao.dart';
 import '../database/providers.dart';
+import '../models/sense_group_result.dart';
 import '../models/sentence_ai_result.dart';
 import '../services/sentence_ai_api_client.dart';
 import '../utils/text_normalize.dart';
@@ -26,10 +27,12 @@ class SentenceAiNotifier {
   /// L1 内存缓存
   final Map<String, SentenceTranslation> _translationCache = {};
   final Map<String, SentenceAnalysis> _analysisCache = {};
+  final Map<String, SenseGroupResult> _senseGroupCache = {};
 
   /// 正在进行的请求（用于去重）
   final Map<String, Future<SentenceTranslation>> _pendingTranslations = {};
   final Map<String, Future<SentenceAnalysis>> _pendingAnalyses = {};
+  final Map<String, Future<SenseGroupResult>> _pendingSenseGroups = {};
 
   SentenceAiNotifier({
     required SentenceAiCacheDao cacheDao,
@@ -90,6 +93,31 @@ class SentenceAiNotifier {
     }
   }
 
+  /// 获取意群拆分（三级缓存查找）
+  Future<SenseGroupResult> getSenseGroups(
+    String text, {
+    CancelToken? cancelToken,
+  }) async {
+    final hash = hashText(text);
+
+    // L1: 内存缓存
+    final cached = _senseGroupCache[hash];
+    if (cached != null) return cached;
+
+    // 去重：复用正在进行的请求
+    if (_pendingSenseGroups.containsKey(hash)) {
+      return _pendingSenseGroups[hash]!;
+    }
+
+    final future = _fetchSenseGroups(hash, text, cancelToken: cancelToken);
+    _pendingSenseGroups[hash] = future;
+    try {
+      return await future;
+    } finally {
+      _pendingSenseGroups.remove(hash);
+    }
+  }
+
   /// 同步查找 L1 翻译缓存（仅内存）
   SentenceTranslation? getCachedTranslation(String text) {
     return _translationCache[hashText(text)];
@@ -100,10 +128,16 @@ class SentenceAiNotifier {
     return _analysisCache[hashText(text)];
   }
 
+  /// 同步查找 L1 意群缓存（仅内存）
+  SenseGroupResult? getCachedSenseGroups(String text) {
+    return _senseGroupCache[hashText(text)];
+  }
+
   /// 清除内存缓存
   void clearMemoryCache() {
     _translationCache.clear();
     _analysisCache.clear();
+    _senseGroupCache.clear();
   }
 
   /// L2 + L3 翻译查找
@@ -180,6 +214,39 @@ class SentenceAiNotifier {
       }),
     );
     return analysis;
+  }
+
+  /// L2 + L3 意群查找
+  Future<SenseGroupResult> _fetchSenseGroups(
+    String hash,
+    String text, {
+    CancelToken? cancelToken,
+  }) async {
+    // L2: SQLite 缓存
+    final dbResult = await _cacheDao.getByHash(hash, 'sense_groups');
+    if (dbResult != null) {
+      final result = SenseGroupResult.fromJson(
+        jsonDecode(dbResult) as Map<String, dynamic>,
+      );
+      _senseGroupCache[hash] = result;
+      return result;
+    }
+
+    // L3: API 调用
+    final result = await _apiClient.splitSenseGroups(
+      text,
+      cancelToken: cancelToken,
+    );
+    // 写入 L1 + L2
+    _senseGroupCache[hash] = result;
+    await _cacheDao.upsert(
+      hash,
+      'sense_groups',
+      jsonEncode({
+        'groups': result.groups.map((g) => g.toJson()).toList(),
+      }),
+    );
+    return result;
   }
 }
 

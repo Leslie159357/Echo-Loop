@@ -102,11 +102,11 @@ class IntensiveListenState {
   /// 本次标记的难句索引集合
   final Set<int> difficultSentences;
 
-  /// 当前句是否由“看不懂”动作自动标记为难句
+  /// 当前句是否由”看不懂”动作自动标记为难句
   ///
   /// 仅用于标注模式下的文案分支：
-  /// - true：显示“已自动标记为难句”
-  /// - false：显示“已标记为难句”
+  /// - true：显示”已自动标记为难句”
+  /// - false：显示”已标记为难句”
   final bool isCurrentSentenceAutoMarked;
 
   /// 倒计时是否暂停中
@@ -117,6 +117,12 @@ class IntensiveListenState {
 
   /// 当前步骤是否自然完成（用于 Screen 层检测完成信号）
   final bool stepFinished;
+
+  /// 当前正在播放的意群索引（null 表示无播放）
+  final int? playingSenseGroupIndex;
+
+  /// 已播放过的意群索引集合
+  final Set<int> playedSenseGroupIndices;
 
   const IntensiveListenState({
     this.currentSentenceIndex = 0,
@@ -138,7 +144,12 @@ class IntensiveListenState {
     this.isCountdownPaused = false,
     this.isCountdownFastForward = false,
     this.stepFinished = false,
+    this.playingSenseGroupIndex,
+    this.playedSenseGroupIndices = const {},
   });
+
+  // 使用 sentinel 值来区分"未传参"与"显式传 null"
+  static const _sentinel = Object();
 
   IntensiveListenState copyWith({
     int? currentSentenceIndex,
@@ -160,6 +171,8 @@ class IntensiveListenState {
     bool? isCountdownPaused,
     bool? isCountdownFastForward,
     bool? stepFinished,
+    Object? playingSenseGroupIndex = _sentinel,
+    Set<int>? playedSenseGroupIndices,
   }) {
     return IntensiveListenState(
       currentSentenceIndex: currentSentenceIndex ?? this.currentSentenceIndex,
@@ -186,6 +199,11 @@ class IntensiveListenState {
       isCountdownFastForward:
           isCountdownFastForward ?? this.isCountdownFastForward,
       stepFinished: stepFinished ?? this.stepFinished,
+      playingSenseGroupIndex: playingSenseGroupIndex == _sentinel
+          ? this.playingSenseGroupIndex
+          : playingSenseGroupIndex as int?,
+      playedSenseGroupIndices:
+          playedSenseGroupIndices ?? this.playedSenseGroupIndices,
     );
   }
 }
@@ -315,6 +333,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isCurrentSentenceAutoMarked: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      playingSenseGroupIndex: null,
+      playedSenseGroupIndices: const {},
     );
 
     await _startSentence();
@@ -339,6 +359,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isCurrentSentenceAutoMarked: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      playingSenseGroupIndex: null,
+      playedSenseGroupIndices: const {},
     );
 
     await _startSentence();
@@ -376,13 +398,23 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isCurrentSentenceAutoMarked: !wasAlreadyDifficult,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      playingSenseGroupIndex: null,
+      playedSenseGroupIndices: const {},
     );
   }
 
-  /// 退出详情模式（点击“继续”）
+  /// 退出详情模式（点击”继续”）
   ///
-  /// 保持当前页可见，带字幕重播当前句一遍，播完后按正常流程倒计时推进。
+  /// 停止意群播放，带字幕重播当前句一遍，播完后按正常流程倒计时推进。
   Future<void> exitAnnotationMode() async {
+    // 停止意群播放
+    if (state.playingSenseGroupIndex != null) {
+      _invalidateSession();
+      state = state.copyWith(
+        playingSenseGroupIndex: null,
+        isPlaying: false,
+      );
+    }
     await _startInlineAnnotationReplay();
   }
 
@@ -460,6 +492,50 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       difficultSentences: newSet,
       isCurrentSentenceAutoMarked: false,
     );
+  }
+
+  /// 播放指定意群的音频片段
+  ///
+  /// 停止当前播放，播放意群对应的时间范围。
+  Future<void> playSenseGroup(
+    Duration start,
+    Duration end,
+    int groupIndex,
+  ) async {
+    // 停止正在播放的意群
+    _invalidateSession();
+
+    final engine = ref.read(audioEngineProvider.notifier);
+    _currentSessionId = engine.newSession();
+    final sessionId = _currentSessionId;
+
+    final played = Set<int>.from(state.playedSenseGroupIndices)
+      ..add(groupIndex);
+    state = state.copyWith(
+      playingSenseGroupIndex: groupIndex,
+      playedSenseGroupIndices: played,
+      isPlaying: true,
+    );
+
+    await engine.playRangeOnce(start, end, sessionId);
+
+    if (!engine.isActiveSession(sessionId)) return;
+
+    state = state.copyWith(
+      playingSenseGroupIndex: null,
+      isPlaying: false,
+    );
+  }
+
+  /// 停止意群播放
+  void stopSenseGroupPlayback() {
+    if (state.playingSenseGroupIndex != null) {
+      _invalidateSession();
+      state = state.copyWith(
+        playingSenseGroupIndex: null,
+        isPlaying: false,
+      );
+    }
   }
 
   /// 设置偷看字幕状态（按住显示，松开隐藏）
@@ -714,6 +790,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         isCountdownFastForward: false,
         isCurrentSentenceAutoMarked: false,
         stepFinished: true,
+        playingSenseGroupIndex: null,
+        playedSenseGroupIndices: const {},
       );
       ref.read(analyticsServiceProvider).track(Events.intensiveListenComplete, {
         EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
@@ -735,6 +813,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         isCurrentSentenceAutoMarked: false,
         isCountdownPaused: false,
         isCountdownFastForward: false,
+        playingSenseGroupIndex: null,
+        playedSenseGroupIndices: const {},
       );
 
       await _startSentence();
