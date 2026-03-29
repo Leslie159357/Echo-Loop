@@ -1185,8 +1185,11 @@
   "senseGroupLoading": "Splitting...",
   "senseGroupSingleGroup": "This sentence is a single group",
   "annotationBtnSenseGroup": "Groups",
+  "annotationBtnSenseGroupMedium": "Medium",
+  "annotationBtnSenseGroupFine": "Fine",
   "annotationBtnTranslation": "Translate",
   "annotationBtnAnalysis": "Analysis",
+  "senseGroupLoadFailed": "Failed to split sense groups, please retry",
   "senseGroupNotAvailable": "Only available for AI-transcribed audio",
   "wordTimestampsNotFound": "Word-level timestamps not found. Please restart the app to retry."
 }

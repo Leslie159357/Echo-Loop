@@ -3,11 +3,9 @@
 /// 将句子按意群渲染为内联 badge 样式，保持自然文本排版。
 /// 所有意群使用统一背景色，可点击播放对应音频片段。
 /// 支持三种状态：空闲 / 播放中 / 已播放。
-/// 意群内单词仍可点击查词典。
 library;
 
 import 'package:flutter/material.dart';
-import '../../models/sense_group_result.dart';
 import '../../utils/sense_group_timing.dart';
 
 /// 意群 badge 背景色（亮色主题，统一颜色避免误导用户）
@@ -20,8 +18,8 @@ const _groupColorDark = Color(0xFF1A3A5C); // 深蓝
 ///
 /// 使用 Wrap + badge 实现，意群间留出间距，意群内单词保持正常间距。
 class SenseGroupText extends StatefulWidget {
-  /// 意群列表
-  final List<SenseGroup> groups;
+  /// 意群文本列表
+  final List<String> chunks;
 
   /// 各意群时间范围
   final List<SenseGroupTiming> timings;
@@ -37,7 +35,7 @@ class SenseGroupText extends StatefulWidget {
 
   const SenseGroupText({
     super.key,
-    required this.groups,
+    required this.chunks,
     required this.timings,
     this.playingGroupIndex,
     this.playedGroupIndices = const {},
@@ -62,7 +60,7 @@ class _SenseGroupTextState extends State<SenseGroupText> {
       spacing: 6,
       runSpacing: 6,
       children: [
-        for (var i = 0; i < widget.groups.length; i++)
+        for (var i = 0; i < widget.chunks.length; i++)
           _buildGroupBadge(i, baseStyle, colorScheme),
       ],
     );
@@ -74,7 +72,7 @@ class _SenseGroupTextState extends State<SenseGroupText> {
     TextStyle? baseStyle,
     ColorScheme colorScheme,
   ) {
-    final group = widget.groups[index];
+    final chunk = widget.chunks[index];
     final isPlaying = widget.playingGroupIndex == index;
     final isPlayed = widget.playedGroupIndices.contains(index);
 
@@ -102,10 +100,8 @@ class _SenseGroupTextState extends State<SenseGroupText> {
           border: border,
         ),
         child: Text(
-          group.text.trim(),
-          style: baseStyle?.copyWith(
-            fontWeight: group.isCore ? FontWeight.bold : FontWeight.normal,
-          ),
+          chunk.trim(),
+          style: baseStyle,
         ),
       ),
     );

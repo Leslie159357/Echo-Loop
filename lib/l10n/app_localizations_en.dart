@@ -2183,10 +2183,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get annotationBtnSenseGroup => 'Groups';
 
   @override
+  String get annotationBtnSenseGroupMedium => 'Medium';
+
+  @override
+  String get annotationBtnSenseGroupFine => 'Fine';
+
+  @override
   String get annotationBtnTranslation => 'Translate';
 
   @override
   String get annotationBtnAnalysis => 'Analysis';
+
+  @override
+  String get senseGroupLoadFailed =>
+      'Failed to split sense groups, please retry';
 
   @override
   String get senseGroupNotAvailable =>

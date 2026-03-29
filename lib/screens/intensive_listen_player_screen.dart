@@ -27,6 +27,7 @@ import '../theme/app_theme.dart';
 import '../utils/sense_group_timing.dart';
 import '../widgets/intensive_listen/intensive_listen_settings_sheet.dart';
 import '../providers/sentence_ai_provider.dart';
+import '../services/app_logger.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/review/review_briefing_sheet.dart';
@@ -68,8 +69,8 @@ class _IntensiveListenPlayerScreenState
   /// 词级时间戳（从后端获取，按音频缓存）
   List<WordTimestamp>? _wordTimestamps;
 
-  /// 当前句子的意群拆分结果
-  List<SenseGroup>? _senseGroups;
+  /// 当前句子的意群拆分结果（双粒度）
+  SenseGroupResult? _senseGroupResult;
 
   /// 当前句子的意群时间范围
   List<SenseGroupTiming>? _senseGroupTimings;
@@ -135,31 +136,49 @@ class _IntensiveListenPlayerScreenState
   Future<void> _requestSenseGroups() async {
     final player = ref.read(intensiveListenPlayerProvider.notifier);
     final sentence = player.currentSentence;
-    if (sentence == null) return;
+    if (sentence == null) {
+      AppLogger.log('SenseGroup', '请求意群：当前无句子，跳过');
+      return;
+    }
 
+    AppLogger.log('SenseGroup', '请求意群: "${sentence.text}"');
     final ai = ref.read(sentenceAiNotifierProvider);
-    final result = await ai.getSenseGroups(sentence.text);
 
-    if (!mounted) return;
+    try {
+      final result = await ai.getSenseGroups(sentence.text);
 
-    // 有词级时间戳时计算时间范围映射（支持点击播放意群）
-    final sentenceIndex = ref
-        .read(intensiveListenPlayerProvider)
-        .currentSentenceIndex;
-    final timings = _wordTimestamps != null
-        ? _computeTimings(result.groups, sentence, sentenceIndex)
-        : null;
+      if (!mounted) return;
 
-    setState(() {
-      _senseGroups = result.groups;
-      _senseGroupTimings = timings;
-      _lastSenseGroupSentenceIndex = sentenceIndex;
-    });
+      // 有词级时间戳时计算时间范围映射（支持点击播放意群）
+      // 默认使用大意群的时间映射
+      final sentenceIndex = ref
+          .read(intensiveListenPlayerProvider)
+          .currentSentenceIndex;
+      final timings = _wordTimestamps != null
+          ? _computeTimings(result.medium, sentence, sentenceIndex)
+          : null;
+
+      AppLogger.log('SenseGroup', '意群数据就绪 | medium=${result.medium.length}组 fine=${result.fine.length}组 equal=${result.areBothEqual} hasTimings=${timings != null}');
+
+      setState(() {
+        _senseGroupResult = result;
+        _senseGroupTimings = timings;
+        _lastSenseGroupSentenceIndex = sentenceIndex;
+      });
+    } catch (e) {
+      AppLogger.log('SenseGroup', '请求意群失败: $e');
+      if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n?.senseGroupLoadFailed ?? 'Failed to load sense groups, please retry')),
+        );
+      }
+    }
   }
 
   /// 计算意群时间范围
   List<SenseGroupTiming> _computeTimings(
-    List<SenseGroup> groups,
+    List<String> chunks,
     Sentence sentence,
     int sentenceIndex,
   ) {
@@ -187,7 +206,7 @@ class _IntensiveListenPlayerScreenState
     }
 
     return mapSenseGroupTimings(
-      groups: groups,
+      chunks: chunks,
       words: words,
       sentenceStart: sentence.startTime,
       sentenceEnd: sentence.endTime,
@@ -200,7 +219,7 @@ class _IntensiveListenPlayerScreenState
   void _resetSenseGroupsIfNeeded(int currentIndex) {
     if (_lastSenseGroupSentenceIndex != null &&
         _lastSenseGroupSentenceIndex != currentIndex) {
-      _senseGroups = null;
+      _senseGroupResult = null;
       _senseGroupTimings = null;
       _lastSenseGroupSentenceIndex = null;
     }
@@ -641,6 +660,7 @@ class _IntensiveListenPlayerScreenState
     return wakelockBody(
       child: LearningHotkeyScope(
         onPlayPause: () {
+          AppLogger.log('PlayPause', 'isPlaying=${playerState.isPlaying} isAnnotationReplay=${playerState.isAnnotationReplay} isPauseBetweenPlays=${playerState.isPauseBetweenPlays} isAnnotationMode=${playerState.isAnnotationMode} sgTimings=${_senseGroupTimings?.length} sgResult=${_senseGroupResult != null}');
           if (playerState.isPlaying) {
             player.pause();
           } else if (playerState.isAnnotationReplay) {
@@ -649,8 +669,10 @@ class _IntensiveListenPlayerScreenState
             player.replayDuringCountdown();
           } else if (playerState.isAnnotationMode) {
             if (_senseGroupTimings != null) {
+              AppLogger.log('PlayPause', '→ playAllSenseGroups (${_senseGroupTimings!.length}组)');
               player.playAllSenseGroups(_senseGroupTimings!);
             } else {
+              AppLogger.log('PlayPause', '→ replayInAnnotationMode');
               player.replayInAnnotationMode();
             }
           } else {
@@ -715,8 +737,24 @@ class _IntensiveListenPlayerScreenState
                                 currentSentence?.startTime.inMilliseconds,
                             sentenceEndMs:
                                 currentSentence?.endTime.inMilliseconds,
-                            senseGroups: _senseGroups,
+                            senseGroupResult: _senseGroupResult,
                             senseGroupTimings: _senseGroupTimings,
+                            onSenseGroupModeChanged: (chunks) {
+                              AppLogger.log('SenseGroup', '粒度切换回调 | chunks=${chunks.length}组 hasWordTs=${_wordTimestamps != null}');
+                              // 切换粒度时停止当前意群播放
+                              player.stopSenseGroupPlayback();
+                              if (chunks.isEmpty) {
+                                // 意群关闭（off），清空 timings，播放按钮恢复整句播放
+                                setState(() => _senseGroupTimings = null);
+                              } else if (_wordTimestamps != null && currentSentence != null) {
+                                final timings = _computeTimings(
+                                  chunks,
+                                  currentSentence,
+                                  playerState.currentSentenceIndex,
+                                );
+                                setState(() => _senseGroupTimings = timings);
+                              }
+                            },
                             playingSenseGroupIndex:
                                 playerState.playingSenseGroupIndex,
                             playedSenseGroupIndices:
@@ -872,6 +910,7 @@ class _IntensiveListenPlayerScreenState
                           }
                         },
                         onPlayPause: () {
+                          AppLogger.log('PlayPause2', 'isPlaying=${playerState.isPlaying} isAnnotationReplay=${playerState.isAnnotationReplay} isPauseBetweenPlays=${playerState.isPauseBetweenPlays} isAnnotationMode=${playerState.isAnnotationMode} sgTimings=${_senseGroupTimings?.length} sgResult=${_senseGroupResult != null}');
                           if (playerState.isPlaying) {
                             player.pause();
                           } else if (playerState.isAnnotationReplay) {
@@ -880,8 +919,10 @@ class _IntensiveListenPlayerScreenState
                             player.replayDuringCountdown();
                           } else if (playerState.isAnnotationMode) {
                             if (_senseGroupTimings != null) {
+                              AppLogger.log('PlayPause2', '→ playAllSenseGroups (${_senseGroupTimings!.length}组)');
                               player.playAllSenseGroups(_senseGroupTimings!);
                             } else {
+                              AppLogger.log('PlayPause2', '→ replayInAnnotationMode');
                               player.replayInAnnotationMode();
                             }
                           } else {
@@ -1299,11 +1340,14 @@ class _AnnotationModeView extends StatefulWidget {
   /// 当前句子结束时间（毫秒）
   final int? sentenceEndMs;
 
-  /// AI 意群拆分结果
-  final List<SenseGroup>? senseGroups;
+  /// AI 意群拆分结果（双粒度）
+  final SenseGroupResult? senseGroupResult;
 
   /// 各意群时间范围
   final List<SenseGroupTiming>? senseGroupTimings;
+
+  /// 意群粒度切换回调
+  final void Function(List<String> chunks)? onSenseGroupModeChanged;
 
   /// 正在播放的意群索引
   final int? playingSenseGroupIndex;
@@ -1329,8 +1373,9 @@ class _AnnotationModeView extends StatefulWidget {
     this.sentenceIndex,
     this.sentenceStartMs,
     this.sentenceEndMs,
-    this.senseGroups,
+    this.senseGroupResult,
     this.senseGroupTimings,
+    this.onSenseGroupModeChanged,
     this.playingSenseGroupIndex,
     this.playedSenseGroupIndices = const {},
     this.onTapSenseGroup,
@@ -1421,8 +1466,9 @@ class _AnnotationModeViewState extends State<_AnnotationModeView> {
               sentenceIndex: widget.sentenceIndex,
               sentenceStartMs: widget.sentenceStartMs,
               sentenceEndMs: widget.sentenceEndMs,
-              senseGroups: widget.senseGroups,
+              senseGroupResult: widget.senseGroupResult,
               senseGroupTimings: widget.senseGroupTimings,
+              onSenseGroupModeChanged: widget.onSenseGroupModeChanged,
               playingSenseGroupIndex: widget.playingSenseGroupIndex,
               playedSenseGroupIndices: widget.playedSenseGroupIndices,
               onTapSenseGroup: widget.onTapSenseGroup,

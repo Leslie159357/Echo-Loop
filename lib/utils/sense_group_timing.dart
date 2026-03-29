@@ -4,7 +4,6 @@
 /// 计算每个意群的精确播放时间范围。
 library;
 
-import '../models/sense_group_result.dart';
 import '../models/word_timestamp.dart';
 
 /// 意群时间范围
@@ -20,14 +19,14 @@ class SenseGroupTiming {
 
 /// 将意群列表与词时间戳对齐，返回每个意群的播放时间范围
 ///
-/// [groups] AI 拆分的意群列表。
+/// [chunks] AI 拆分的意群文本列表。
 /// [words] 全文词级时间戳数组。
 /// [sentenceStart] 句子起始时间（fallback 用）。
 /// [sentenceEnd] 句子结束时间（fallback 用）。
 /// [sentenceStartWordIndex] 本句在全文 words 中的起始索引（含）。
 /// [sentenceEndWordIndex] 本句在全文 words 中的结束索引（含）。
 List<SenseGroupTiming> mapSenseGroupTimings({
-  required List<SenseGroup> groups,
+  required List<String> chunks,
   required List<WordTimestamp> words,
   required Duration sentenceStart,
   required Duration sentenceEnd,
@@ -39,15 +38,15 @@ List<SenseGroupTiming> mapSenseGroupTimings({
   final clampedEnd = (sentenceEndWordIndex + 1).clamp(0, words.length);
   final sentenceWords = words.sublist(clampedStart, clampedEnd);
 
-  if (sentenceWords.isEmpty || groups.isEmpty) {
-    return _fallbackTimings(groups, sentenceStart, sentenceEnd);
+  if (sentenceWords.isEmpty || chunks.isEmpty) {
+    return _fallbackTimings(chunks, sentenceStart, sentenceEnd);
   }
 
   final timings = <SenseGroupTiming>[];
   var wordCursor = 0;
 
-  for (final group in groups) {
-    final groupTokens = _tokenize(group.text);
+  for (final chunk in chunks) {
+    final groupTokens = _tokenize(chunk);
     if (groupTokens.isEmpty) {
       // 空意群，使用前一个意群的结束时间作为起始
       final prevEnd = timings.isNotEmpty
@@ -66,7 +65,7 @@ List<SenseGroupTiming> mapSenseGroupTimings({
 
     if (matchStart == null) {
       // 匹配失败，回退到均分
-      return _fallbackTimings(groups, sentenceStart, sentenceEnd);
+      return _fallbackTimings(chunks, sentenceStart, sentenceEnd);
     }
 
     // 从 matchStart 开始，匹配整个意群的词数
@@ -117,20 +116,20 @@ String _normalizeWord(String word) {
 
 /// 匹配失败时的 fallback：按词数均分时间
 List<SenseGroupTiming> _fallbackTimings(
-  List<SenseGroup> groups,
+  List<String> chunks,
   Duration sentenceStart,
   Duration sentenceEnd,
 ) {
-  if (groups.isEmpty) return [];
+  if (chunks.isEmpty) return [];
 
   final totalMs = sentenceEnd.inMilliseconds - sentenceStart.inMilliseconds;
-  final totalWords = groups.fold<int>(
+  final totalWords = chunks.fold<int>(
     0,
-    (sum, g) => sum + g.text.split(RegExp(r'\s+')).length,
+    (sum, chunk) => sum + chunk.split(RegExp(r'\s+')).length,
   );
 
   if (totalWords == 0) {
-    return groups
+    return chunks
         .map((_) => SenseGroupTiming(start: sentenceStart, end: sentenceEnd))
         .toList();
   }
@@ -138,8 +137,8 @@ List<SenseGroupTiming> _fallbackTimings(
   final timings = <SenseGroupTiming>[];
   var currentMs = sentenceStart.inMilliseconds;
 
-  for (final group in groups) {
-    final wordCount = group.text.split(RegExp(r'\s+')).length;
+  for (final chunk in chunks) {
+    final wordCount = chunk.split(RegExp(r'\s+')).length;
     final durationMs = (totalMs * wordCount / totalWords).round();
     final start = Duration(milliseconds: currentMs);
     final end = Duration(milliseconds: currentMs + durationMs);

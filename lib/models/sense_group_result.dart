@@ -1,43 +1,45 @@
-/// 意群拆分结果模型
+/// 意群拆分结果模型（双粒度：中等 + 细粒度）
 ///
-/// 存储 AI 返回的意群列表，每个意群包含英文文本和核心意群标记。
-/// 用于精听标注模式中的意群色块渲染。
+/// 存储 AI 返回的两种粒度意群列表。
+/// 中等粒度为自然口语节奏的分割，细粒度让结构更清晰。
 library;
 
 /// 意群拆分结果
 class SenseGroupResult {
-  /// 意群列表
-  final List<SenseGroup> groups;
+  /// 中等粒度意群
+  final List<String> medium;
 
-  const SenseGroupResult({required this.groups});
+  /// 细粒度意群
+  final List<String> fine;
+
+  const SenseGroupResult({
+    required this.medium,
+    required this.fine,
+  });
 
   /// 从 API 响应 JSON 反序列化
   factory SenseGroupResult.fromJson(Map<String, dynamic> json) {
-    final groupsList = (json['groups'] as List)
-        .map((g) => SenseGroup.fromJson(g as Map<String, dynamic>))
+    final medium = (json['medium'] as List? ?? [])
+        .map((e) => e as String)
         .toList();
-    return SenseGroupResult(groups: groupsList);
-  }
-}
-
-/// 单个意群
-class SenseGroup {
-  /// 意群英文文本
-  final String text;
-
-  /// 是否为核心意群（承载句子核心语义）
-  final bool isCore;
-
-  const SenseGroup({required this.text, this.isCore = false});
-
-  /// 从 JSON 反序列化
-  factory SenseGroup.fromJson(Map<String, dynamic> json) {
-    return SenseGroup(
-      text: json['text'] as String,
-      isCore: json['isCore'] as bool? ?? false,
-    );
+    final fine = (json['fine'] as List? ?? [])
+        .map((e) => e as String)
+        .toList();
+    return SenseGroupResult(medium: medium, fine: fine);
   }
 
-  /// 序列化为 JSON
-  Map<String, dynamic> toJson() => {'text': text, 'isCore': isCore};
+  /// 两种粒度的分割是否相同
+  bool get areBothEqual {
+    if (medium.length != fine.length) return false;
+    for (var i = 0; i < medium.length; i++) {
+      if (medium[i] != fine[i]) return false;
+    }
+    return true;
+  }
+
+  /// 序列化为 JSON（用于 SQLite 缓存）
+  Map<String, dynamic> toJson() => {
+        'medium': medium,
+        'fine': fine,
+      };
 }

@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/app_logger.dart';
 
 import '../database/daos/sentence_ai_cache_dao.dart';
 import '../database/providers.dart';
@@ -100,15 +101,23 @@ class SentenceAiNotifier {
   }) async {
     final hash = hashText(text);
 
-    // L1: 内存缓存
+    // L1: 内存缓存（空结果不视为有效缓存）
     final cached = _senseGroupCache[hash];
-    if (cached != null) return cached;
+    if (cached != null && cached.medium.isNotEmpty) {
+      AppLogger.log('SenseGroup', 'L1 命中 | medium=${cached.medium.length}组 fine=${cached.fine.length}组 | "${text.length > 40 ? '${text.substring(0, 40)}...' : text}"');
+      return cached;
+    }
+    if (cached != null) {
+      _senseGroupCache.remove(hash);
+    }
 
     // 去重：复用正在进行的请求
     if (_pendingSenseGroups.containsKey(hash)) {
+      AppLogger.log('SenseGroup', '复用进行中请求 | "$text"');
       return _pendingSenseGroups[hash]!;
     }
 
+    AppLogger.log('SenseGroup', 'L1 未命中，开始查找 | "$text"');
     final future = _fetchSenseGroups(hash, text, cancelToken: cancelToken);
     _pendingSenseGroups[hash] = future;
     try {
@@ -226,25 +235,46 @@ class SentenceAiNotifier {
         final result = SenseGroupResult.fromJson(
           jsonDecode(dbResult) as Map<String, dynamic>,
         );
-        _senseGroupCache[hash] = result;
-        return result;
-      } catch (_) {
+        // 检查结果是否有效（旧格式数据 fromJson 不会报错但会返回空列表）
+        if (result.medium.isNotEmpty) {
+          _senseGroupCache[hash] = result;
+          AppLogger.log('SenseGroup', 'L2 SQLite 命中 | medium=${result.medium.length}组 fine=${result.fine.length}组 equal=${result.areBothEqual}');
+          return result;
+        }
+        // 空结果视为旧格式缓存，删除并 fallthrough 到 L3
+        AppLogger.log('SenseGroup', 'L2 SQLite 缓存为空（可能是旧格式），删除并重新请求');
+        await _cacheDao.deleteByHash(hash, 'sense_groups');
+      } catch (e) {
         // 缓存格式不兼容，删除旧数据后 fallthrough 到 L3
+        AppLogger.log('SenseGroup', 'L2 SQLite 格式不兼容，删除旧缓存 | error=$e');
         await _cacheDao.deleteByHash(hash, 'sense_groups');
       }
     }
 
     // L3: API 调用
+    AppLogger.log('SenseGroup', 'L3 调用 API...');
+    final sw = Stopwatch()..start();
     final result = await _apiClient.splitSenseGroups(
       text,
       cancelToken: cancelToken,
     );
+    sw.stop();
+    AppLogger.log('SenseGroup', 'L3 API 返回 | ${sw.elapsedMilliseconds}ms | medium=${result.medium.length}组 fine=${result.fine.length}组 equal=${result.areBothEqual}');
+
+    // 打印具体分组内容
+    for (var i = 0; i < result.medium.length; i++) {
+      AppLogger.log('SenseGroup', '  中等[$i]: "${result.medium[i]}"');
+    }
+    for (var i = 0; i < result.fine.length; i++) {
+      AppLogger.log('SenseGroup', '  细粒[$i]: "${result.fine[i]}"');
+    }
+
     // 写入 L1 + L2
     _senseGroupCache[hash] = result;
     await _cacheDao.upsert(
       hash,
       'sense_groups',
-      jsonEncode({'groups': result.groups.map((g) => g.toJson()).toList()}),
+      jsonEncode(result.toJson()),
     );
     return result;
   }

@@ -3914,6 +3914,18 @@ abstract class AppLocalizations {
   /// **'Groups'**
   String get annotationBtnSenseGroup;
 
+  /// No description provided for @annotationBtnSenseGroupMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get annotationBtnSenseGroupMedium;
+
+  /// No description provided for @annotationBtnSenseGroupFine.
+  ///
+  /// In en, this message translates to:
+  /// **'Fine'**
+  String get annotationBtnSenseGroupFine;
+
   /// No description provided for @annotationBtnTranslation.
   ///
   /// In en, this message translates to:
@@ -3925,6 +3937,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Analysis'**
   String get annotationBtnAnalysis;
+
+  /// No description provided for @senseGroupLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to split sense groups, please retry'**
+  String get senseGroupLoadFailed;
 
   /// No description provided for @senseGroupNotAvailable.
   ///

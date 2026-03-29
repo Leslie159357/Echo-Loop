@@ -7,6 +7,7 @@ library;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/app_logger.dart';
 import '../../models/sense_group_result.dart';
 import '../../models/sentence_ai_result.dart';
 import '../../models/speech_practice_models.dart';
@@ -21,6 +22,9 @@ import 'word_dictionary_sheet.dart';
 
 /// 内容加载状态
 enum ContentLoadState { idle, loading, loaded, error }
+
+/// 意群显示模式
+enum SenseGroupMode { off, medium, fine }
 
 /// 标注模式句子卡片
 ///
@@ -77,11 +81,14 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 句子正文的高亮片段；为空时按原始句子构建。
   final List<SpeechTranscriptSegment>? highlightedSegments;
 
-  /// AI 意群拆分结果（null 表示未请求或无数据）
-  final List<SenseGroup>? senseGroups;
+  /// AI 意群拆分结果（null 表示未请求或无数据，包含大意群和小意群）
+  final SenseGroupResult? senseGroupResult;
 
-  /// 各意群时间范围
+  /// 各意群时间范围（对应当前显示的粒度）
   final List<SenseGroupTiming>? senseGroupTimings;
+
+  /// 意群粒度切换时的回调（传入当前显示的意群列表，用于重新计算时间范围）
+  final void Function(List<String> chunks)? onSenseGroupModeChanged;
 
   /// 正在播放的意群索引
   final int? playingSenseGroupIndex;
@@ -127,8 +134,9 @@ class SentenceAnnotationCard extends StatefulWidget {
     this.sentenceEndMs,
     this.inlineFeedback,
     this.highlightedSegments,
-    this.senseGroups,
+    this.senseGroupResult,
     this.senseGroupTimings,
+    this.onSenseGroupModeChanged,
     this.playingSenseGroupIndex,
     this.playedSenseGroupIndices = const {},
     this.onTapSenseGroup,
@@ -150,8 +158,8 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
   /// 当前被按压高亮的词索引（-1 表示无）
   int _highlightedWordIndex = -1;
 
-  /// 意群色块是否显示（区分"有数据"和"用户是否激活显示"）
-  bool _senseGroupVisible = false;
+  /// 意群显示模式
+  SenseGroupMode _senseGroupMode = SenseGroupMode.off;
 
   /// 翻译面板状态
   ContentLoadState _translationState = ContentLoadState.idle;
@@ -166,9 +174,10 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
   @override
   void initState() {
     super.initState();
-    // 有意群数据时自动显示
-    if (widget.senseGroups != null && widget.senseGroups!.isNotEmpty) {
-      _senseGroupVisible = true;
+    // 有意群数据时自动显示大意群
+    if (widget.senseGroupResult != null &&
+        widget.senseGroupResult!.medium.isNotEmpty) {
+      _senseGroupMode = SenseGroupMode.medium;
     }
     // 预存缓存内容（用户点击按钮时可立即显示，但不自动展开）
     if (widget.cachedTranslation != null) {
@@ -188,14 +197,23 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
   @override
   void didUpdateWidget(SentenceAnnotationCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 意群数据从无到有时自动显示
-    if (widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty &&
-        oldWidget.senseGroups == null) {
-      _senseGroupVisible = true;
+    // 意群数据从无到有时自动进入 medium 模式
+    // 兜底逻辑：_onTapSenseGroup 的 await 返回时 widget 可能还没更新，
+    // 此处在 parent rebuild 后再次检查并进入正确模式。
+    if (widget.senseGroupResult != null &&
+        widget.senseGroupResult!.medium.isNotEmpty &&
+        oldWidget.senseGroupResult == null &&
+        _senseGroupMode == SenseGroupMode.off) {
+      setState(() => _senseGroupMode = SenseGroupMode.medium);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onSenseGroupModeChanged?.call(widget.senseGroupResult!.medium);
+          _notifyToolbar();
+        }
+      });
     }
-    // 意群数据到达时延迟通知工具栏刷新（避免在 build 阶段触发 markNeedsBuild）
-    if (widget.senseGroups != oldWidget.senseGroups) {
+    // 意群数据变化时通知工具栏刷新
+    if (widget.senseGroupResult != oldWidget.senseGroupResult) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _notifyToolbar();
       });
@@ -217,18 +235,59 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     widget.onToolbarStateChanged?.call();
   }
 
-  /// 拆意群按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
-  Future<void> _onTapSenseGroup() async {
-    final hasData =
-        widget.senseGroups != null && widget.senseGroups!.isNotEmpty;
+  /// 获取当前模式下应显示的意群列表（off 时返回 null）
+  List<String>? get _activeSenseGroups {
+    final result = widget.senseGroupResult;
+    if (result == null) return null;
+    return switch (_senseGroupMode) {
+      SenseGroupMode.medium => result.medium,
+      SenseGroupMode.fine => result.fine,
+      SenseGroupMode.off => null,
+    };
+  }
 
-    if (hasData) {
-      // 有数据时同步 toggle，Future 立即完成，按钮不会显示 loading
-      setState(() => _senseGroupVisible = !_senseGroupVisible);
+  /// 拆意群按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
+  ///
+  /// 循环逻辑：
+  /// - 两种结果相同：off → medium → off
+  /// - 两种结果不同：off → medium（大意群）→ fine（小意群）→ off
+  Future<void> _onTapSenseGroup() async {
+    final result = widget.senseGroupResult;
+    // result != null 即视为有数据（即使列表为空，也不再重复请求 API）
+    final hasData = result != null;
+
+    if (hasData && result.medium.isNotEmpty) {
+      final bothEqual = result.areBothEqual;
+      final prevMode = _senseGroupMode;
+      setState(() {
+        switch (_senseGroupMode) {
+          case SenseGroupMode.off:
+            _senseGroupMode = SenseGroupMode.medium;
+          case SenseGroupMode.medium:
+            _senseGroupMode = bothEqual ? SenseGroupMode.off : SenseGroupMode.fine;
+          case SenseGroupMode.fine:
+            _senseGroupMode = SenseGroupMode.off;
+        }
+      });
+      AppLogger.log('SenseGroup', '切换模式: $prevMode → $_senseGroupMode (bothEqual=$bothEqual)');
+      // 通知外部重新计算时间范围 + 停止播放（off 时传空列表）
+      widget.onSenseGroupModeChanged?.call(_activeSenseGroups ?? []);
       _notifyToolbar();
-    } else if (widget.onRequestSenseGroups != null) {
+    } else if (hasData && result.medium.isEmpty) {
+      // API 返回了结果但意群列表为空（极短句无法拆分），不重复请求
+      AppLogger.log('SenseGroup', '意群列表为空，无法拆分');
+    } else if (!hasData && widget.onRequestSenseGroups != null) {
       // 无数据时 await 异步请求，按钮自动显示 loading
+      AppLogger.log('SenseGroup', '无数据，发起 API 请求...');
       await widget.onRequestSenseGroups!();
+      // 请求完成后，父组件已通过 setState 将 senseGroupResult 传入。
+      // 显式进入 medium 模式（不依赖 didUpdateWidget 的时序）。
+      if (mounted && widget.senseGroupResult != null && widget.senseGroupResult!.medium.isNotEmpty) {
+        setState(() => _senseGroupMode = SenseGroupMode.medium);
+        AppLogger.log('SenseGroup', 'API 返回后进入 medium 模式');
+        widget.onSenseGroupModeChanged?.call(widget.senseGroupResult!.medium);
+        _notifyToolbar();
+      }
     }
   }
 
@@ -439,16 +498,21 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     final l10n = AppLocalizations.of(context)!;
 
     final showSenseGroupBlocks =
-        _senseGroupVisible &&
-        widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty;
+        _senseGroupMode != SenseGroupMode.off && _activeSenseGroups != null && _activeSenseGroups!.isNotEmpty;
+
+    // 按钮文案根据当前模式变化
+    final senseGroupLabel = switch (_senseGroupMode) {
+      SenseGroupMode.medium => l10n.annotationBtnSenseGroupMedium,
+      SenseGroupMode.fine => l10n.annotationBtnSenseGroupFine,
+      SenseGroupMode.off => l10n.annotationBtnSenseGroup,
+    };
 
     return Row(
       children: [
         Expanded(
           child: AsyncToggleButton(
             key: const ValueKey('senseGroup'),
-            label: l10n.annotationBtnSenseGroup,
+            label: senseGroupLabel,
             icon: Icons.auto_fix_high,
             isActive: showSenseGroupBlocks,
             isDisabled: !_isSenseGroupEnabled,
@@ -493,9 +557,9 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
     // 判断意群是否应显示色块
     final showSenseGroupBlocks =
-        _senseGroupVisible &&
-        widget.senseGroups != null &&
-        widget.senseGroups!.isNotEmpty;
+        _senseGroupMode != SenseGroupMode.off &&
+        _activeSenseGroups != null &&
+        _activeSenseGroups!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,14 +601,14 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
         // 句子文本 — 意群色块模式或纯 RichText（带长按/右键复制整句）
         if (showSenseGroupBlocks) ...[
           SenseGroupText(
-            groups: widget.senseGroups!,
+            chunks: _activeSenseGroups!,
             timings: widget.senseGroupTimings ?? const [],
             playingGroupIndex: widget.playingSenseGroupIndex,
             playedGroupIndices: widget.playedSenseGroupIndices,
             onTapGroup: widget.onTapSenseGroup ?? (_) {},
           ),
           // 单意群提示
-          if (widget.senseGroups!.length == 1) ...[
+          if (_activeSenseGroups!.length == 1) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
               l10n.senseGroupSingleGroup,

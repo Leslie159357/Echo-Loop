@@ -875,8 +875,11 @@
   "senseGroupLoading": "拆分中...",
   "senseGroupSingleGroup": "此句为单个意群",
   "annotationBtnSenseGroup": "意群",
+  "annotationBtnSenseGroupMedium": "大意群",
+  "annotationBtnSenseGroupFine": "小意群",
   "annotationBtnTranslation": "翻译",
   "annotationBtnAnalysis": "解析",
+  "senseGroupLoadFailed": "意群拆分失败，请重试",
   "senseGroupNotAvailable": "仅 AI 转录的音频支持意群拆分",
   "wordTimestampsNotFound": "词级字幕未找到，请重启应用重试"
 }

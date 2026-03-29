@@ -2123,10 +2123,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get annotationBtnSenseGroup => '意群';
 
   @override
+  String get annotationBtnSenseGroupMedium => '大意群';
+
+  @override
+  String get annotationBtnSenseGroupFine => '小意群';
+
+  @override
   String get annotationBtnTranslation => '翻译';
 
   @override
   String get annotationBtnAnalysis => '解析';
+
+  @override
+  String get senseGroupLoadFailed => '意群拆分失败，请重试';
 
   @override
   String get senseGroupNotAvailable => '仅 AI 转录的音频支持意群拆分';
