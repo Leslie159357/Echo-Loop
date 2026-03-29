@@ -648,7 +648,11 @@ class _IntensiveListenPlayerScreenState
           } else if (playerState.isPauseBetweenPlays) {
             player.replayDuringCountdown();
           } else if (playerState.isAnnotationMode) {
-            player.replayInAnnotationMode();
+            if (_senseGroupTimings != null) {
+              player.playAllSenseGroups(_senseGroupTimings!);
+            } else {
+              player.replayInAnnotationMode();
+            }
           } else {
             player.resume();
           }
@@ -729,9 +733,7 @@ class _IntensiveListenPlayerScreenState
                               } else if (_senseGroupTimings == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
-                                      l10n.wordTimestampsNotFound,
-                                    ),
+                                    content: Text(l10n.wordTimestampsNotFound),
                                   ),
                                 );
                               }
@@ -877,7 +879,11 @@ class _IntensiveListenPlayerScreenState
                           } else if (playerState.isPauseBetweenPlays) {
                             player.replayDuringCountdown();
                           } else if (playerState.isAnnotationMode) {
-                            player.replayInAnnotationMode();
+                            if (_senseGroupTimings != null) {
+                              player.playAllSenseGroups(_senseGroupTimings!);
+                            } else {
+                              player.replayInAnnotationMode();
+                            }
                           } else {
                             player.resume();
                           }

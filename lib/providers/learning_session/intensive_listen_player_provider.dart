@@ -27,6 +27,7 @@ import '../learned_vocabulary_tracker_provider.dart';
 import '../../services/app_logger.dart';
 import '../learning_progress_provider.dart';
 import '../audio_engine/audio_engine_provider.dart';
+import '../../utils/sense_group_timing.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
 
@@ -302,6 +303,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       isPauseBetweenPlays: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      playingSenseGroupIndex: null,
     );
   }
 
@@ -410,10 +412,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     // 停止意群播放
     if (state.playingSenseGroupIndex != null) {
       _invalidateSession();
-      state = state.copyWith(
-        playingSenseGroupIndex: null,
-        isPlaying: false,
-      );
+      state = state.copyWith(playingSenseGroupIndex: null, isPlaying: false);
     }
     await _startInlineAnnotationReplay();
   }
@@ -521,21 +520,56 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     if (!engine.isActiveSession(sessionId)) return;
 
-    state = state.copyWith(
-      playingSenseGroupIndex: null,
-      isPlaying: false,
-    );
+    state = state.copyWith(playingSenseGroupIndex: null, isPlaying: false);
   }
 
   /// 停止意群播放
   void stopSenseGroupPlayback() {
     if (state.playingSenseGroupIndex != null) {
       _invalidateSession();
-      state = state.copyWith(
-        playingSenseGroupIndex: null,
-        isPlaying: false,
-      );
+      state = state.copyWith(playingSenseGroupIndex: null, isPlaying: false);
     }
+  }
+
+  /// 逐个播放所有意群，意群之间暂停 1 秒
+  ///
+  /// 按顺序播放每个意群的音频片段，播放中高亮当前意群。
+  /// 通过 sessionId 机制支持取消：暂停、点击单个意群、切句等操作
+  /// 都会使 session 失效从而中断循环。
+  Future<void> playAllSenseGroups(List<SenseGroupTiming> timings) async {
+    if (timings.isEmpty) return;
+
+    final engine = ref.read(audioEngineProvider.notifier);
+    _currentSessionId = engine.newSession();
+    final sessionId = _currentSessionId;
+    _countdown.cancel();
+
+    state = state.copyWith(isPlaying: true);
+
+    for (var i = 0; i < timings.length; i++) {
+      if (!engine.isActiveSession(sessionId)) return;
+
+      final timing = timings[i];
+      final played = Set<int>.from(state.playedSenseGroupIndices)..add(i);
+      state = state.copyWith(
+        playingSenseGroupIndex: i,
+        playedSenseGroupIndices: played,
+      );
+
+      await engine.playRangeOnce(timing.start, timing.end, sessionId);
+
+      if (!engine.isActiveSession(sessionId)) return;
+
+      // 最后一个意群播完不需要暂停
+      if (i < timings.length - 1) {
+        state = state.copyWith(playingSenseGroupIndex: null);
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+
+    if (!engine.isActiveSession(sessionId)) return;
+
+    state = state.copyWith(playingSenseGroupIndex: null, isPlaying: false);
   }
 
   /// 设置偷看字幕状态（按住显示，松开隐藏）
@@ -603,8 +637,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       clampedPlayCount = newSettings.repeatCount;
     }
 
-    final switchedToManual = newSettings.isManualMode &&
-        !state.settings.isManualMode;
+    final switchedToManual =
+        newSettings.isManualMode && !state.settings.isManualMode;
     final repeatCountChanged =
         newSettings.repeatCount != state.settings.repeatCount;
 
@@ -689,7 +723,11 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     final isManual = state.settings.isManualMode;
     final repeatCount = isManual ? 1 : state.settings.repeatCount;
 
-    for (int playCount = startPlayCount; playCount <= repeatCount; playCount++) {
+    for (
+      int playCount = startPlayCount;
+      playCount <= repeatCount;
+      playCount++
+    ) {
       if (!engine.isActiveSession(sessionId)) return;
 
       state = state.copyWith(currentPlayCount: playCount, isPlaying: true);
@@ -794,7 +832,8 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         playedSenseGroupIndices: const {},
       );
       ref.read(analyticsServiceProvider).track(Events.intensiveListenComplete, {
-        EventParams.audioId: ref.read(learningSessionProvider).audioItemId ?? '',
+        EventParams.audioId:
+            ref.read(learningSessionProvider).audioItemId ?? '',
         EventParams.totalSentences: state.totalSentences,
         EventParams.difficultCount: state.difficultSentences.length,
       });
