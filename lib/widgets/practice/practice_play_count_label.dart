@@ -33,14 +33,14 @@ class PracticePlayCountLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final targetCount = playerState.isAnnotationMode
         ? playerState.targetRepeatCount
-        : (playerState.settings.isManualMode
+        : (playerState.isManualMode
               ? 1
               : playerState.settings.blindListenRepeatCount);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.m),
       child: Opacity(
-        opacity: playerState.settings.isManualMode ? 0 : 1,
+        opacity: playerState.isManualMode ? 0 : 1,
         child: Text(
           l10n.listenAndRepeatPlayCount(
             playerState.currentPlayCount,

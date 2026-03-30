@@ -83,6 +83,9 @@ class AnnotationWithRecording extends StatelessWidget {
   /// 暂停/恢复倒计时
   final VoidCallback onCountdownTap;
 
+  /// 用户点击工具栏按钮（意群/翻译/解析）时触发，通知外部切换到手动模式
+  final VoidCallback? onToolbarButtonTapped;
+
   const AnnotationWithRecording({
     super.key,
     required this.text,
@@ -105,6 +108,7 @@ class AnnotationWithRecording extends StatelessWidget {
     required this.onAttemptPlaybackTap,
     required this.onFastForward,
     required this.onCountdownTap,
+    this.onToolbarButtonTapped,
   });
 
   @override
@@ -112,16 +116,12 @@ class AnnotationWithRecording extends StatelessWidget {
     final theme = Theme.of(context);
 
     final isCountdown = playerState.isPostEvalCountdown;
-    final shouldShowTurnPanel =
-        !isCountdown && playerState.isPauseBetweenPlays;
+    final shouldShowTurnPanel = !isCountdown && playerState.isPauseBetweenPlays;
 
     return Column(
       children: [
         const SizedBox(height: AppSpacing.s),
-        BookmarkToggleRow(
-          isDifficult: isDifficult,
-          onTap: onToggleMark,
-        ),
+        BookmarkToggleRow(isDifficult: isDifficult, onTap: onToggleMark),
         const SizedBox(height: AppSpacing.m),
 
         // 固定工具栏 + 可滚动句子卡片
@@ -135,6 +135,7 @@ class AnnotationWithRecording extends StatelessWidget {
             sentenceEndMs: sentenceEndMs,
             highlightedSegments: currentAttempt?.referenceSegments,
             onStopMainPlayer: onStopMainPlayer,
+            onToolbarButtonTapped: onToolbarButtonTapped,
           ),
         ),
 

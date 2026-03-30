@@ -61,6 +61,9 @@ class AnnotationContentView extends ConsumerStatefulWidget {
   /// 意群时间范围变化回调（精听播放按钮需要知道 timings）
   final void Function(List<SenseGroupTiming>? timings)? onTimingsChanged;
 
+  /// 用户点击工具栏按钮（意群/翻译/解析）时触发，通知外部切换到手动模式
+  final VoidCallback? onToolbarButtonTapped;
+
   const AnnotationContentView({
     super.key,
     required this.text,
@@ -72,6 +75,7 @@ class AnnotationContentView extends ConsumerStatefulWidget {
     this.highlightedSegments,
     this.onStopMainPlayer,
     this.onTimingsChanged,
+    this.onToolbarButtonTapped,
   });
 
   @override
@@ -443,6 +447,7 @@ class _AnnotationContentViewState extends ConsumerState<AnnotationContentView> {
                 highlightedSegments: widget.highlightedSegments,
                 savedGroupTexts: savedTexts,
                 onTapGroupWithRect: _showActionBar,
+                onToolbarButtonTapped: widget.onToolbarButtonTapped,
               ),
             ),
           ),

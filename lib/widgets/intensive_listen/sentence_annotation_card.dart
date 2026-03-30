@@ -111,6 +111,9 @@ class SentenceAnnotationCard extends StatefulWidget {
   /// 变化后调用此回调，通知外部刷新工具栏。
   final VoidCallback? onToolbarStateChanged;
 
+  /// 用户点击工具栏按钮（意群/翻译/解析）时触发，通知外部切换到手动模式
+  final VoidCallback? onToolbarButtonTapped;
+
   const SentenceAnnotationCard({
     super.key,
     required this.text,
@@ -134,6 +137,7 @@ class SentenceAnnotationCard extends StatefulWidget {
     this.hasWordTimestamps = false,
     this.showToolbar = true,
     this.onToolbarStateChanged,
+    this.onToolbarButtonTapped,
     this.savedGroupTexts = const {},
     this.onTapGroupWithRect,
   });
@@ -244,6 +248,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
   /// - 两种结果相同：off → medium → off
   /// - 两种结果不同：off → medium（大意群）→ fine（小意群）→ off
   Future<void> _onTapSenseGroup() async {
+    widget.onToolbarButtonTapped?.call();
     final result = widget.senseGroupResult;
 
     if (result != null && result.medium.isNotEmpty) {
@@ -289,6 +294,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
   /// 翻译按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
   Future<void> _onTapTranslation() async {
+    widget.onToolbarButtonTapped?.call();
     if (_translationContent != null) {
       setState(() {
         _translationExpanded = !_translationExpanded;
@@ -318,6 +324,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
   /// 解析按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
   Future<void> _onTapAnalysis() async {
+    widget.onToolbarButtonTapped?.call();
     if (_analysisContent != null) {
       setState(() {
         _analysisExpanded = !_analysisExpanded;

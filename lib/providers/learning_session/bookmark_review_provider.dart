@@ -230,7 +230,29 @@ class BookmarkReview extends _$BookmarkReview {
   /// 更新后中断当前播放，以新设置重新开始当前句子。
   void updateSettings(DifficultPracticeSettings newSettings) {
     _engine.invalidateSession();
-    state = state.copyWith(settings: newSettings, isPlaying: false);
+    _invalidatePostEvalCountdown();
+    state = state.copyWith(
+      settings: newSettings,
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+      isPostEvalCountdown: false,
+    );
+  }
+
+  /// 当前句进入手动模式（工具栏点击、手动停止播放等触发）
+  void enterManualForSentence() {
+    if (state.isManualForSentence) return;
+    state = state.copyWith(isManualForSentence: true);
+    _engine.pauseCountdown();
+  }
+
+  /// 退出单句手动模式（切句、用户主动恢复播放时调用）
+  void exitManualForSentence() {
+    if (!state.isManualForSentence) return;
+    state = state.copyWith(isManualForSentence: false);
   }
 
   /// 获取当前句子索引
@@ -361,6 +383,7 @@ class BookmarkReview extends _$BookmarkReview {
       isPauseBetweenSentences: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      isManualForSentence: false,
     );
     await _startSentence();
   }
@@ -379,6 +402,7 @@ class BookmarkReview extends _$BookmarkReview {
       isPauseBetweenSentences: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      isManualForSentence: false,
     );
     await _startSentence();
   }
@@ -419,7 +443,7 @@ class BookmarkReview extends _$BookmarkReview {
     if (!state.isPauseBetweenPlays) return;
     if (!state.isAnnotationMode) return;
     if (state.totalSentences == 0) return;
-    if (state.settings.isManualMode) return;
+    if (state.isManualMode) return;
 
     const pauseDuration = Duration(seconds: 5);
     final runId = ++_countdownRunId;
@@ -663,7 +687,7 @@ class BookmarkReview extends _$BookmarkReview {
     }
 
     // 手动模式下盲听只播 1 遍
-    final repeatCount = state.settings.isManualMode
+    final repeatCount = state.isManualMode
         ? 1
         : state.settings.blindListenRepeatCount;
 
@@ -857,6 +881,7 @@ class BookmarkReview extends _$BookmarkReview {
             isPauseBetweenPlays: false,
             isPauseBetweenSentences: false,
             isAnnotationMode: false,
+            isManualForSentence: false,
           );
           await _startSentence();
         }

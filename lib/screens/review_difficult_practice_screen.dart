@@ -74,9 +74,6 @@ class _ReviewDifficultPracticeScreenState
   /// 是否正在显示完成弹窗，防止重复弹窗
   bool _isShowingDialog = false;
 
-  /// 用户在当前句手动停止过录音 → 本句不再自动录音/倒计时
-  bool _manualStoppedThisSentence = false;
-
   /// 录音回放服务
   final AudioPlaybackService _playbackService = AudioPlaybackService();
 
@@ -96,10 +93,10 @@ class _ReviewDifficultPracticeScreenState
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // 同步初始控制模式到录音控制器
-      final settings = ref.read(reviewDifficultPracticeProvider).settings;
+      final playerState = ref.read(reviewDifficultPracticeProvider);
       ref
           .read(shadowingRecordingControllerProvider.notifier)
-          .setManualMode(settings.isManualMode);
+          .setManualMode(playerState.isManualMode);
       ref.read(reviewDifficultPracticeProvider.notifier).startPlaying();
     });
   }
@@ -168,7 +165,7 @@ class _ReviewDifficultPracticeScreenState
     final promptId = _currentPromptId();
     if (recState.isRecordingPrompt(promptId)) {
       AppLogger.log('DifficultScreen', '手动停止录音');
-      _manualStoppedThisSentence = true;
+      player.enterManualForSentence();
       await controller.stopAndEvaluate(referenceText: currentSentence.text);
       return;
     }
@@ -202,7 +199,7 @@ class _ReviewDifficultPracticeScreenState
         .read(reviewDifficultPracticeProvider.notifier)
         .cancelPostEvalCountdown();
 
-    _manualStoppedThisSentence = true;
+    ref.read(reviewDifficultPracticeProvider.notifier).enterManualForSentence();
 
     final recState = ref.read(shadowingRecordingControllerProvider);
     final attempt = recState.currentAttempt;
@@ -375,7 +372,9 @@ class _ReviewDifficultPracticeScreenState
           playerState.totalSentences,
         ),
         onStudyAgain: () async {
-          _manualStoppedThisSentence = false;
+          ref
+              .read(reviewDifficultPracticeProvider.notifier)
+              .exitManualForSentence();
           await ref
               .read(reviewDifficultPracticeProvider.notifier)
               .resetToStart();
@@ -482,7 +481,6 @@ class _ReviewDifficultPracticeScreenState
       // 句子切换时清除上一句的录音结果，为下一句自动录音做准备
       if (prev != null &&
           prev.currentSentenceIndex != next.currentSentenceIndex) {
-        _manualStoppedThisSentence = false;
         ref
             .read(shadowingRecordingControllerProvider.notifier)
             .clearRecording();
@@ -495,13 +493,13 @@ class _ReviewDifficultPracticeScreenState
           _handleCompleted();
         }
       }
-      // 控制模式切换时同步到录音控制器
-      if (prev?.settings.controlMode != next.settings.controlMode) {
+      // 手动模式变化时同步到录音控制器（全局设置切换 或 单句手动模式变化）
+      if (prev?.isManualMode != next.isManualMode) {
         final controller = ref.read(
           shadowingRecordingControllerProvider.notifier,
         );
-        controller.setManualMode(next.settings.isManualMode);
-        if (next.settings.isManualMode) {
+        controller.setManualMode(next.isManualMode);
+        if (next.isManualMode) {
           final recState = ref.read(shadowingRecordingControllerProvider);
           if (recState.phase == ListenAndRepeatTurnPhase.awaitingSpeech ||
               recState.phase == ListenAndRepeatTurnPhase.speaking) {
@@ -522,8 +520,7 @@ class _ReviewDifficultPracticeScreenState
         final latestState = ref.read(reviewDifficultPracticeProvider);
         if (latestState.isPauseBetweenPlays &&
             latestState.isAnnotationMode &&
-            !latestState.settings.isManualMode &&
-            !_manualStoppedThisSentence) {
+            !latestState.isManualMode) {
           AppLogger.log('DifficultScreen', '评估完成 → 启动 review countdown');
           ref
               .read(reviewDifficultPracticeProvider.notifier)
@@ -537,10 +534,9 @@ class _ReviewDifficultPracticeScreenState
     final currentAttempt = turnState.currentAttempt;
     final isRecordingCurrent = turnState.isRecordingPrompt(currentPromptId);
 
-    // 手动模式 + 盲听停顿中 → 立即暂停倒计时，等用户手动下一句
-    if (!playerState.isAnnotationMode &&
-        playerState.isPauseBetweenPlays &&
-        playerState.settings.isManualMode &&
+    // 手动模式 + 停顿中 → 暂停倒计时（盲听和跟读均适用）
+    if (playerState.isPauseBetweenPlays &&
+        playerState.isManualMode &&
         !playerState.isCountdownPaused) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -550,14 +546,13 @@ class _ReviewDifficultPracticeScreenState
       });
     }
 
-    // 跟读模式 + 停顿中 + recording idle + 非倒计时中 → 暂停倒计时 + 自动录音
+    // 自动模式 + 跟读停顿中 + recording idle + 非倒计时中 → 自动录音
     if (playerState.isAnnotationMode &&
         playerState.isPauseBetweenPlays &&
         currentSentence != null &&
-        !playerState.settings.isManualMode &&
+        !playerState.isManualMode &&
         turnState.phase == ListenAndRepeatTurnPhase.idle &&
-        !playerState.isPostEvalCountdown &&
-        !_manualStoppedThisSentence) {
+        !playerState.isPostEvalCountdown) {
       final promptId = currentPromptId;
       final referenceText = currentSentence.text;
 
@@ -567,10 +562,10 @@ class _ReviewDifficultPracticeScreenState
         if (latestRecState.phase != ListenAndRepeatTurnPhase.idle) return;
         final latestPlayer = ref.read(reviewDifficultPracticeProvider);
         if (!latestPlayer.isAnnotationMode ||
-            !latestPlayer.isPauseBetweenPlays) {
+            !latestPlayer.isPauseBetweenPlays ||
+            latestPlayer.isManualMode) {
           return;
         }
-        if (_manualStoppedThisSentence) return;
 
         // 暂停 provider 层倒计时（录音由 ShadowingRecordingController 接管）
         if (!latestPlayer.isCountdownPaused) {
@@ -584,19 +579,6 @@ class _ReviewDifficultPracticeScreenState
               .read(shadowingRecordingControllerProvider.notifier)
               .startRecording(promptId: promptId, referenceText: referenceText),
         );
-      });
-    }
-
-    // 手动模式 + 跟读模式 + 停顿中 → 暂停倒计时，等用户点击录音
-    if (playerState.isAnnotationMode &&
-        playerState.isPauseBetweenPlays &&
-        playerState.settings.isManualMode &&
-        !playerState.isCountdownPaused) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final latest = ref.read(reviewDifficultPracticeProvider);
-        if (!latest.isPauseBetweenPlays || latest.isCountdownPaused) return;
-        ref.read(reviewDifficultPracticeProvider.notifier).pauseCountdown();
       });
     }
 
@@ -615,7 +597,7 @@ class _ReviewDifficultPracticeScreenState
         onPlayPause: () {
           unawaited(_cancelRecordingAndPlayback());
           if (playerState.isPauseBetweenPlays) {
-            _manualStoppedThisSentence = false;
+            player.exitManualForSentence();
             ref
                 .read(shadowingRecordingControllerProvider.notifier)
                 .clearRecording();
@@ -627,7 +609,6 @@ class _ReviewDifficultPracticeScreenState
           }
         },
         onPrevious: () {
-          _manualStoppedThisSentence = false;
           unawaited(_cancelRecordingAndPlayback());
           ref
               .read(shadowingRecordingControllerProvider.notifier)
@@ -635,7 +616,6 @@ class _ReviewDifficultPracticeScreenState
           player.goToPrevious();
         },
         onNext: () {
-          _manualStoppedThisSentence = false;
           unawaited(_cancelRecordingAndPlayback());
           ref
               .read(shadowingRecordingControllerProvider.notifier)
@@ -688,8 +668,7 @@ class _ReviewDifficultPracticeScreenState
                             text: currentSentence?.text ?? '',
                             playerState: playerState,
                             l10n: l10n,
-                            isDifficult:
-                                currentSentence?.isBookmarked ?? true,
+                            isDifficult: currentSentence?.isBookmarked ?? true,
                             onToggleMark: _handleToggleDifficult,
                             aiNotifier: ref.read(sentenceAiNotifierProvider),
                             audioItemId: widget.audioItemId,
@@ -699,12 +678,9 @@ class _ReviewDifficultPracticeScreenState
                             sentenceEndMs:
                                 currentSentence?.endTime.inMilliseconds,
                             onStopMainPlayer: () {
-                              _manualStoppedThisSentence = true;
-                              ref
-                                  .read(
-                                    reviewDifficultPracticeProvider.notifier,
-                                  )
-                                  .notifyExternalStop();
+                              ref.read(reviewDifficultPracticeProvider.notifier)
+                                ..enterManualForSentence()
+                                ..notifyExternalStop();
                               ref
                                   .read(
                                     shadowingRecordingControllerProvider
@@ -731,6 +707,19 @@ class _ReviewDifficultPracticeScreenState
                                   ? p.resumePostEvalCountdown()
                                   : p.pausePostEvalCountdown();
                             },
+                            onToolbarButtonTapped: () {
+                              ref
+                                  .read(
+                                    reviewDifficultPracticeProvider.notifier,
+                                  )
+                                  .enterManualForSentence();
+                              ref
+                                  .read(
+                                    shadowingRecordingControllerProvider
+                                        .notifier,
+                                  )
+                                  .cancelActiveRecording();
+                            },
                           ),
                         )
                       : PracticeNormalModeView(
@@ -742,8 +731,9 @@ class _ReviewDifficultPracticeScreenState
                               final s = ref.watch(
                                 reviewDifficultPracticeProvider.select(
                                   (s) => (
-                                    show: s.isPauseBetweenPlays &&
-                                        !s.settings.isManualMode,
+                                    show:
+                                        s.isPauseBetweenPlays &&
+                                        !s.isManualMode,
                                     remaining: s.pauseRemaining,
                                     total: s.pauseDuration,
                                     paused: s.isCountdownPaused,
@@ -788,7 +778,6 @@ class _ReviewDifficultPracticeScreenState
                 PracticePlaybackControls(
                   playerState: playerState,
                   onPrevious: () {
-                    _manualStoppedThisSentence = false;
                     unawaited(_cancelRecordingAndPlayback());
                     ref
                         .read(shadowingRecordingControllerProvider.notifier)
@@ -796,7 +785,6 @@ class _ReviewDifficultPracticeScreenState
                     player.goToPrevious();
                   },
                   onNext: () {
-                    _manualStoppedThisSentence = false;
                     unawaited(_cancelRecordingAndPlayback());
                     ref
                         .read(shadowingRecordingControllerProvider.notifier)
@@ -814,7 +802,7 @@ class _ReviewDifficultPracticeScreenState
                   onPlayPause: () {
                     unawaited(_cancelRecordingAndPlayback());
                     if (playerState.isPauseBetweenPlays) {
-                      _manualStoppedThisSentence = false;
+                      player.exitManualForSentence();
                       ref
                           .read(shadowingRecordingControllerProvider.notifier)
                           .clearRecording();

@@ -50,7 +50,7 @@ class ReviewDifficultPracticeState {
 
   /// 跟读模式目标遍数（手动模式下强制为 1）
   int get targetRepeatCount =>
-      settings.isManualMode ? 1 : settings.shadowReadingRepeatCount;
+      isManualMode ? 1 : settings.shadowReadingRepeatCount;
 
   /// 是否正在播放
   final bool isPlaying;
@@ -88,6 +88,12 @@ class ReviewDifficultPracticeState {
   /// 收藏标记版本号（每次 toggle 递增，用于触发 select 监听的 rebuild）
   final int bookmarkVersion;
 
+  /// 当前句是否被强制进入手动模式（工具栏点击等触发，切句时重置）
+  final bool isManualForSentence;
+
+  /// 是否处于手动模式（全局设置 OR 当前句强制手动）
+  bool get isManualMode => settings.isManualMode || isManualForSentence;
+
   const ReviewDifficultPracticeState({
     this.currentSentenceIndex = 0,
     this.totalSentences = 0,
@@ -105,6 +111,7 @@ class ReviewDifficultPracticeState {
     this.isPostEvalCountdown = false,
     this.stepFinished = false,
     this.bookmarkVersion = 0,
+    this.isManualForSentence = false,
   });
 
   ReviewDifficultPracticeState copyWith({
@@ -124,6 +131,7 @@ class ReviewDifficultPracticeState {
     bool? isPostEvalCountdown,
     bool? stepFinished,
     int? bookmarkVersion,
+    bool? isManualForSentence,
   }) {
     return ReviewDifficultPracticeState(
       currentSentenceIndex: currentSentenceIndex ?? this.currentSentenceIndex,
@@ -144,6 +152,7 @@ class ReviewDifficultPracticeState {
       isPostEvalCountdown: isPostEvalCountdown ?? this.isPostEvalCountdown,
       stepFinished: stepFinished ?? this.stepFinished,
       bookmarkVersion: bookmarkVersion ?? this.bookmarkVersion,
+      isManualForSentence: isManualForSentence ?? this.isManualForSentence,
     );
   }
 }
@@ -227,7 +236,31 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// 更新后中断当前播放，以新设置重新开始当前句子。
   void updateSettings(DifficultPracticeSettings newSettings) {
     _engine.invalidateSession();
-    state = state.copyWith(settings: newSettings, isPlaying: false);
+    _invalidatePostEvalCountdown();
+    state = state.copyWith(
+      settings: newSettings,
+      isPlaying: false,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+      isCountdownPaused: false,
+      isCountdownFastForward: false,
+      isPostEvalCountdown: false,
+    );
+  }
+
+  /// 当前句进入手动模式（工具栏点击、手动停止播放等触发）
+  ///
+  /// 同时暂停倒计时，防止自动推进。切句时自动重置。
+  void enterManualForSentence() {
+    if (state.isManualForSentence) return;
+    state = state.copyWith(isManualForSentence: true);
+    _engine.pauseCountdown();
+  }
+
+  /// 退出单句手动模式（切句、用户主动恢复播放时调用）
+  void exitManualForSentence() {
+    if (!state.isManualForSentence) return;
+    state = state.copyWith(isManualForSentence: false);
   }
 
   /// 获取当前句子索引（用于断点保存）
@@ -391,6 +424,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       isPauseBetweenSentences: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      isManualForSentence: false,
     );
     await _startSentence();
   }
@@ -409,6 +443,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       isPauseBetweenSentences: false,
       isCountdownPaused: false,
       isCountdownFastForward: false,
+      isManualForSentence: false,
     );
     await _startSentence();
   }
@@ -467,7 +502,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   void startPostEvaluationPause() {
     if (!state.isPauseBetweenPlays) return;
     if (!state.isAnnotationMode) return;
-    if (state.settings.isManualMode) return;
+    if (state.isManualMode) return;
 
     const pauseDuration = Duration(seconds: 5);
     final runId = ++_countdownRunId;
@@ -699,7 +734,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     }
 
     // 手动模式下盲听只播 1 遍
-    final repeatCount = state.settings.isManualMode
+    final repeatCount = state.isManualMode
         ? 1
         : state.settings.blindListenRepeatCount;
 
@@ -800,6 +835,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
             isPauseBetweenPlays: false,
             isPauseBetweenSentences: false,
             isAnnotationMode: false,
+            isManualForSentence: false,
           );
           await _startSentence();
         }
