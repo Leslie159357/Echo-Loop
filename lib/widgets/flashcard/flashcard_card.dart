@@ -227,7 +227,10 @@ class _FrontContent extends StatelessWidget {
               ),
               child: Text(
                 word.displayText,
-                style: theme.textTheme.displaySmall?.copyWith(
+                style: (word.displayText.length > 20
+                        ? theme.textTheme.headlineMedium
+                        : theme.textTheme.displaySmall)
+                    ?.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.5,
                 ),
@@ -458,15 +461,7 @@ class _BackContentState extends ConsumerState<_BackContent> {
 
                       // 释义
                       if (dict != null && dict.translation != null)
-                        _buildTranslation(theme, dict.translation!)
-                      else
-                        Text(
-                          l10n.flashcardNoDefinition,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
+                        _buildTranslation(theme, dict.translation!),
 
                       // 来源例句
                       if (word.sentenceText != null) ...[
