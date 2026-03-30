@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../database/providers.dart';
@@ -263,7 +264,7 @@ class _AnnotationContentViewState extends ConsumerState<AnnotationContentView> {
             final isSaved = savedTexts.contains(normalized);
 
             return Positioned(
-              left: badgeRect.left + badgeRect.width / 2 - 15,
+              left: badgeRect.left + badgeRect.width / 2 - 35,
               top: badgeRect.top - 34,
               child: TapRegion(
                 onTapOutside: (_) => _dismissActionBar(),
@@ -275,6 +276,10 @@ class _AnnotationContentViewState extends ConsumerState<AnnotationContentView> {
                     normalized,
                     isSaved,
                   ),
+                  onCopy: () {
+                    Clipboard.setData(ClipboardData(text: chunk.trim()));
+                    _dismissActionBar();
+                  },
                 ),
               ),
             );
