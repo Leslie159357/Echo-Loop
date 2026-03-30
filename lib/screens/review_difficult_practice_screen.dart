@@ -372,9 +372,6 @@ class _ReviewDifficultPracticeScreenState
           playerState.totalSentences,
         ),
         onStudyAgain: () async {
-          ref
-              .read(reviewDifficultPracticeProvider.notifier)
-              .exitManualForSentence();
           await ref
               .read(reviewDifficultPracticeProvider.notifier)
               .resetToStart();
@@ -597,7 +594,6 @@ class _ReviewDifficultPracticeScreenState
         onPlayPause: () {
           unawaited(_cancelRecordingAndPlayback());
           if (playerState.isPauseBetweenPlays) {
-            player.exitManualForSentence();
             ref
                 .read(shadowingRecordingControllerProvider.notifier)
                 .clearRecording();
@@ -803,7 +799,6 @@ class _ReviewDifficultPracticeScreenState
                   onPlayPause: () {
                     unawaited(_cancelRecordingAndPlayback());
                     if (playerState.isPauseBetweenPlays) {
-                      player.exitManualForSentence();
                       ref
                           .read(shadowingRecordingControllerProvider.notifier)
                           .clearRecording();

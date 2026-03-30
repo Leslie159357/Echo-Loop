@@ -257,12 +257,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     _engine.pauseCountdown();
   }
 
-  /// 退出单句手动模式（切句、用户主动恢复播放时调用）
-  void exitManualForSentence() {
-    if (!state.isManualForSentence) return;
-    state = state.copyWith(isManualForSentence: false);
-  }
-
   /// 获取当前句子索引（用于断点保存）
   int get currentIndex => state.currentSentenceIndex;
 

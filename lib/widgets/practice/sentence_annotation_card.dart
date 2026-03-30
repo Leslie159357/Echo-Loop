@@ -161,11 +161,13 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
   ContentLoadState _translationState = ContentLoadState.idle;
   String? _translationContent;
   bool _translationExpanded = false;
+  bool _translationActivated = false;
 
   /// 解析面板状态
   ContentLoadState _analysisState = ContentLoadState.idle;
   String? _analysisContent;
   bool _analysisExpanded = false;
+  bool _analysisActivated = false;
 
   @override
   void initState() {
@@ -298,8 +300,8 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
   /// 翻译按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
   Future<void> _onTapTranslation() async {
-    // 仅首次请求时触发手动模式（已有内容时切换展开/折叠不触发）
-    if (_translationContent == null) {
+    if (!_translationActivated) {
+      _translationActivated = true;
       widget.onToolbarButtonTapped?.call();
     }
     if (_translationContent != null) {
@@ -331,8 +333,8 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
 
   /// 解析按钮点击（返回 Future 供 AsyncToggleButton 管理 loading）
   Future<void> _onTapAnalysis() async {
-    // 仅首次请求时触发手动模式
-    if (_analysisContent == null) {
+    if (!_analysisActivated) {
+      _analysisActivated = true;
       widget.onToolbarButtonTapped?.call();
     }
     if (_analysisContent != null) {

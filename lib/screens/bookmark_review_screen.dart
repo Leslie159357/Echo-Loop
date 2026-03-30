@@ -250,7 +250,6 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
       message: l10n.bookmarkReviewCompleteMessage(playerState.totalSentences),
       replayLabel: l10n.bookmarkReviewAgain,
       onStudyAgain: () async {
-        ref.read(bookmarkReviewProvider.notifier).exitManualForSentence();
         await ref.read(bookmarkReviewProvider.notifier).resetToStart();
       },
       onExit: () async {
@@ -396,7 +395,6 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
         onPlayPause: () {
           unawaited(_cancelRecordingAndPlayback());
           if (playerState.isPauseBetweenPlays) {
-            player.exitManualForSentence();
             ref
                 .read(shadowingRecordingControllerProvider.notifier)
                 .clearRecording();
@@ -603,7 +601,6 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
                   onPlayPause: () {
                     unawaited(_cancelRecordingAndPlayback());
                     if (playerState.isPauseBetweenPlays) {
-                      player.exitManualForSentence();
                       ref
                           .read(shadowingRecordingControllerProvider.notifier)
                           .clearRecording();
