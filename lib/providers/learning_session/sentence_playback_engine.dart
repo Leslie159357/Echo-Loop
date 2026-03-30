@@ -76,6 +76,7 @@ class SentencePlaybackEngine {
     required void Function() onPauseEnded,
     required void Function(Duration remaining) onTick,
     required Future<void> Function() onAllPlaysCompleted,
+    void Function()? onInterrupted,
   }) async {
     final engine = _getEngine();
     _currentSessionId = engine.newSession();
@@ -86,13 +87,19 @@ class SentencePlaybackEngine {
       playCount <= repeatCount;
       playCount++
     ) {
-      if (!engine.isActiveSession(sessionId)) return;
+      if (!engine.isActiveSession(sessionId)) {
+        onInterrupted?.call();
+        return;
+      }
 
       onPlayCountChanged(playCount);
 
       await engine.playClipOnce(sentence, sessionId);
 
-      if (!engine.isActiveSession(sessionId)) return;
+      if (!engine.isActiveSession(sessionId)) {
+        onInterrupted?.call();
+        return;
+      }
 
       // 播完一遍，自动记录听力统计
       _recorder?.onSentencePlayed(sentence);
@@ -104,7 +111,10 @@ class SentencePlaybackEngine {
 
         await _countdown.start(pauseDur, onTick);
 
-        if (!engine.isActiveSession(sessionId)) return;
+        if (!engine.isActiveSession(sessionId)) {
+          onInterrupted?.call();
+          return;
+        }
         onPauseEnded();
       }
     }

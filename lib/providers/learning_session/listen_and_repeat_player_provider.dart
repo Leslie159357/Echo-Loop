@@ -648,6 +648,9 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       onAllPlaysCompleted: () async {
         await _autoAdvance();
       },
+      onInterrupted: () {
+        state = state.copyWith(isPlaying: false);
+      },
     );
   }
 

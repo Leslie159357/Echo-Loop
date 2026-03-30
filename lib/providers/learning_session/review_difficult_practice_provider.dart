@@ -677,6 +677,9 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
         // 保持 annotationMode，让句间停顿也触发自动录音（与跟读页一致）
         await _autoAdvance();
       },
+      onInterrupted: () {
+        state = state.copyWith(isPlaying: false);
+      },
     );
   }
 
@@ -743,6 +746,9 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       onAllPlaysCompleted: () async {
         // 盲听完成 → 句间停顿 → 自动推进
         await _autoAdvance();
+      },
+      onInterrupted: () {
+        state = state.copyWith(isPlaying: false);
       },
     );
   }
