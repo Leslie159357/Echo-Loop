@@ -102,6 +102,9 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// 清除指定音频关联的上下文信息
+  ///
+  /// 音频删除时调用，将非 FK 字段全部置 NULL。
+  /// audioItemId 由 FK SET NULL 自动处理。
   Future<void> clearContextForAudio(String audioItemId) {
     return (update(savedSenseGroups)
           ..where((t) => t.audioItemId.equals(audioItemId)))
@@ -109,6 +112,10 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
       const SavedSenseGroupsCompanion(
         sentenceIndex: Value(null),
         sentenceText: Value(null),
+        sentenceStartMs: Value(null),
+        sentenceEndMs: Value(null),
+        groupStartMs: Value(null),
+        groupEndMs: Value(null),
       ),
     );
   }

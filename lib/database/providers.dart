@@ -19,6 +19,7 @@ import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/saved_word_provider.dart';
+import '../providers/saved_sense_group_provider.dart';
 import '../providers/tag_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
@@ -76,6 +77,8 @@ void switchAppDatabase(AppDatabase newDb, WidgetRef ref) {
   ref.invalidate(collectionListProvider);
   ref.invalidate(learningProgressNotifierProvider);
   ref.invalidate(savedWordListProvider);
+  ref.invalidate(savedSenseGroupListProvider);
+  ref.invalidate(savedSenseGroupTextsProvider);
   ref.invalidate(tagListProvider);
   ref.invalidate(listeningPracticeProvider);
   ref.invalidate(bookmarkReviewProvider);

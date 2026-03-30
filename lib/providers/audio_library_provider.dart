@@ -203,6 +203,8 @@ class AudioLibrary extends _$AudioLibrary {
     // 必须在 hardDelete 之前调用，因为 hardDelete 的 CASCADE 会将 audioItemId SET NULL
     final savedWordDao = ref.read(savedWordDaoProvider);
     await savedWordDao.clearContextForAudio(id);
+    final savedSenseGroupDao = ref.read(savedSenseGroupDaoProvider);
+    await savedSenseGroupDao.clearContextForAudio(id);
 
     // 硬删除（CASCADE 会自动清理 junction、bookmarks、playback_states、learning_progresses）
     final dao = ref.read(audioItemDaoProvider);
