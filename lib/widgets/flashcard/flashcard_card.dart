@@ -900,29 +900,28 @@ class _UnsaveButton extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          isUnsaved
-              ? l10n.favoritesVocabularyRemoved
-              : l10n.flashcardUnsaveHint,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline.withValues(alpha: 0.6),
+    return GestureDetector(
+      onTap: onUnsave,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            isUnsaved
+                ? l10n.favoritesVocabularyRemoved
+                : l10n.flashcardUnsaveHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline.withValues(alpha: 0.6),
+            ),
           ),
-        ),
-        IconButton(
-          onPressed: onUnsave,
-          icon: Icon(
+          const SizedBox(width: 4),
+          Icon(
             isUnsaved ? Icons.bookmark_border : Icons.bookmark,
             size: 20,
+            color: isUnsaved ? Colors.grey : Colors.amber,
           ),
-          color: isUnsaved ? Colors.grey : Colors.amber,
-          tooltip: isUnsaved
-              ? l10n.favoritesSaveVocabulary
-              : l10n.flashcardUnsaveHint,
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
