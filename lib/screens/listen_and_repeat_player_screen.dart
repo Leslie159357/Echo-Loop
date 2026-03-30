@@ -757,6 +757,11 @@ class _ListenAndRepeatPlayerScreenState
                                     _manualStoppedThisSentence = true;
                                     ref
                                         .read(
+                                          listenAndRepeatPlayerProvider.notifier,
+                                        )
+                                        .notifyExternalStop();
+                                    ref
+                                        .read(
                                           shadowingRecordingControllerProvider
                                               .notifier,
                                         )

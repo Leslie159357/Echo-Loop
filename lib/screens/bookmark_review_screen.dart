@@ -507,6 +507,11 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
                               _manualStoppedThisSentence = true;
                               ref
                                   .read(
+                                    bookmarkReviewProvider.notifier,
+                                  )
+                                  .notifyExternalStop();
+                              ref
+                                  .read(
                                     shadowingRecordingControllerProvider
                                         .notifier,
                                   )

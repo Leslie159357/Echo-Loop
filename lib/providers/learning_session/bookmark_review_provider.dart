@@ -254,6 +254,13 @@ class BookmarkReview extends _$BookmarkReview {
     await _startSentence();
   }
 
+  /// 外部中断播放通知（如意群播放）
+  void notifyExternalStop() {
+    if (state.isPlaying) {
+      state = state.copyWith(isPlaying: false);
+    }
+  }
+
   /// 暂停播放
   void pause() {
     _engine.invalidateSession();
@@ -706,9 +713,6 @@ class BookmarkReview extends _$BookmarkReview {
       onAllPlaysCompleted: () async {
         await _autoAdvance();
       },
-      onInterrupted: () {
-        state = state.copyWith(isPlaying: false);
-      },
     );
   }
 
@@ -763,9 +767,6 @@ class BookmarkReview extends _$BookmarkReview {
         // 最后一遍只有输入，没有跟读停顿
         // 保持 annotationMode，让句间停顿也触发自动录音（与跟读页一致）
         await _autoAdvance();
-      },
-      onInterrupted: () {
-        state = state.copyWith(isPlaying: false);
       },
     );
   }

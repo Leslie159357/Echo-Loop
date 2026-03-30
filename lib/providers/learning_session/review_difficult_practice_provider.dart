@@ -266,6 +266,13 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   }
 
   /// 暂停播放
+  /// 外部中断播放通知（如意群播放）
+  void notifyExternalStop() {
+    if (state.isPlaying) {
+      state = state.copyWith(isPlaying: false);
+    }
+  }
+
   ///
   /// 跟读模式下保留 isAnnotationMode 标记，resume 时恢复跟读循环。
   void pause() {
@@ -677,9 +684,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
         // 保持 annotationMode，让句间停顿也触发自动录音（与跟读页一致）
         await _autoAdvance();
       },
-      onInterrupted: () {
-        state = state.copyWith(isPlaying: false);
-      },
     );
   }
 
@@ -746,9 +750,6 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
       onAllPlaysCompleted: () async {
         // 盲听完成 → 句间停顿 → 自动推进
         await _autoAdvance();
-      },
-      onInterrupted: () {
-        state = state.copyWith(isPlaying: false);
       },
     );
   }

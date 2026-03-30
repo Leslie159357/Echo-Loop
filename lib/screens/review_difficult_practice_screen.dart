@@ -703,6 +703,11 @@ class _ReviewDifficultPracticeScreenState
                               _manualStoppedThisSentence = true;
                               ref
                                   .read(
+                                    reviewDifficultPracticeProvider.notifier,
+                                  )
+                                  .notifyExternalStop();
+                              ref
+                                  .read(
                                     shadowingRecordingControllerProvider
                                         .notifier,
                                   )

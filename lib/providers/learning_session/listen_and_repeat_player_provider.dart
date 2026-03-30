@@ -252,6 +252,16 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
     await _startSentence();
   }
 
+  /// 外部中断播放通知（如意群播放）
+  ///
+  /// 只更新 isPlaying 状态，不影响 isPauseBetweenPlays 等其他状态，
+  /// 避免录音面板等 UI 意外消失。
+  void notifyExternalStop() {
+    if (state.isPlaying) {
+      state = state.copyWith(isPlaying: false);
+    }
+  }
+
   /// 暂停播放
   Future<void> pause() async {
     _engine.invalidateSession();
@@ -647,9 +657,6 @@ class ListenAndRepeatPlayer extends _$ListenAndRepeatPlayer {
       },
       onAllPlaysCompleted: () async {
         await _autoAdvance();
-      },
-      onInterrupted: () {
-        state = state.copyWith(isPlaying: false);
       },
     );
   }
