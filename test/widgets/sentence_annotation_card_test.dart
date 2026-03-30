@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluency/models/sense_group_result.dart';
 import 'package:fluency/models/sentence_ai_result.dart';
 import 'package:fluency/utils/sense_group_timing.dart';
-import 'package:fluency/widgets/intensive_listen/sense_group_text.dart';
+import 'package:fluency/widgets/practice/sense_group_text.dart';
 import 'package:fluency/widgets/intensive_listen/sentence_annotation_card.dart';
 
 import '../helpers/test_app.dart';

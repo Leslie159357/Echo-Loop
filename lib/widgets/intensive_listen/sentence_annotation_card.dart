@@ -16,7 +16,7 @@ import '../../utils/sense_group_timing.dart';
 import '../common/async_toggle_button.dart';
 import '../common/shimmer_placeholder.dart';
 import '../common/text_context_menu.dart';
-import 'sense_group_text.dart';
+import '../practice/sense_group_text.dart';
 import 'word_dictionary_sheet.dart';
 
 /// 内容加载状态
