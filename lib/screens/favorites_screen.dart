@@ -214,24 +214,51 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
 class _FloatingFlashcardButton extends ConsumerWidget {
   const _FloatingFlashcardButton();
 
+  /// 将收藏意群转为 SavedWord 格式（用于闪卡复习）
+  static SavedWord _phraseToSavedWord(SavedSenseGroup p) {
+    return SavedWord(
+      id: -p.id, // 负数 ID 避免与真实单词冲突
+      word: p.displayText,
+      audioItemId: p.audioItemId,
+      sentenceIndex: p.sentenceIndex,
+      sentenceText: p.sentenceText,
+      sentenceStartMs: p.sentenceStartMs,
+      sentenceEndMs: p.sentenceEndMs,
+      practiceCount: p.practiceCount,
+      totalStudyMs: 0,
+      viewedBack: false,
+      lastPracticedAt: null,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      deletedAt: null,
+      syncStatus: 0,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final savedWordsAsync = ref.watch(savedWordListProvider);
+    final savedPhrasesAsync = ref.watch(savedSenseGroupListProvider);
 
-    return savedWordsAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (words) {
-        if (words.isEmpty) return const SizedBox.shrink();
-        final l10n = AppLocalizations.of(context)!;
-        return _FloatingReviewButton(
-          icon: Icons.style_outlined,
-          label: '${l10n.flashcardStartQuiz} (${words.length})',
-          onPressed: () {
-            ref.read(flashcardNotifierProvider.notifier).initialize(words);
-            context.push(AppRoutes.flashcard);
-          },
-        );
+    final words = savedWordsAsync.valueOrNull ?? [];
+    final phrases = savedPhrasesAsync.valueOrNull ?? [];
+    final totalCount = words.length + phrases.length;
+
+    if (totalCount == 0) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context)!;
+    return _FloatingReviewButton(
+      icon: Icons.style_outlined,
+      label: '${l10n.flashcardStartQuiz} ($totalCount)',
+      onPressed: () {
+        // 合并单词和意群（意群转为 SavedWord 格式），按 createdAt 倒序
+        final allItems = [
+          ...words,
+          ...phrases.map(_phraseToSavedWord),
+        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        ref.read(flashcardNotifierProvider.notifier).initialize(allItems);
+        context.push(AppRoutes.flashcard);
       },
     );
   }
