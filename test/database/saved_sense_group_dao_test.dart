@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fluency/database/app_database.dart';
+import 'package:fluency/database/daos/bookmark_dao.dart';
 
 /// 创建内存数据库用于测试
 AppDatabase _createTestDb() {
@@ -231,6 +232,82 @@ void main() {
       expect(item.groupEndMs, isNull);
       // audioItemId 不在此方法清除（由 FK SET NULL 处理）
       expect(item.audioItemId, 'audio-1');
+    });
+
+    test('getDeletedSenseGroups 返回已软删除的意群', () async {
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'first of all',
+        displayText: 'First of all',
+      );
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'in conclusion',
+        displayText: 'In conclusion',
+      );
+
+      await db.savedSenseGroupDao.removeSenseGroup('first of all');
+
+      final deleted = await db.savedSenseGroupDao.getDeletedSenseGroups(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted.length, 1);
+      expect(deleted.first.phraseText, 'first of all');
+    });
+
+    test('restoreSenseGroup 恢复已软删除的意群', () async {
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'by the way',
+        displayText: 'By the way',
+      );
+      await db.savedSenseGroupDao.removeSenseGroup('by the way');
+      expect(
+        await db.savedSenseGroupDao.isSenseGroupSaved('by the way'),
+        false,
+      );
+
+      await db.savedSenseGroupDao.restoreSenseGroup('by the way');
+      expect(
+        await db.savedSenseGroupDao.isSenseGroupSaved('by the way'),
+        true,
+      );
+    });
+
+    test('permanentlyDeleteSenseGroup 物理删除意群', () async {
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'in fact',
+        displayText: 'In fact',
+      );
+      await db.savedSenseGroupDao.removeSenseGroup('in fact');
+      await db.savedSenseGroupDao.permanentlyDeleteSenseGroup('in fact');
+
+      await db.savedSenseGroupDao.restoreSenseGroup('in fact');
+      expect(
+        await db.savedSenseGroupDao.isSenseGroupSaved('in fact'),
+        false,
+      );
+    });
+
+    test('permanentlyDeleteAllDeleted 清空回收站但不影响活跃意群', () async {
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'on the other hand',
+        displayText: 'On the other hand',
+      );
+      await db.savedSenseGroupDao.saveSenseGroup(
+        phraseText: 'as a result',
+        displayText: 'As a result',
+      );
+
+      await db.savedSenseGroupDao.removeSenseGroup('on the other hand');
+      await db.savedSenseGroupDao.permanentlyDeleteAllDeleted();
+
+      final deleted = await db.savedSenseGroupDao.getDeletedSenseGroups(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted, isEmpty);
+
+      expect(
+        await db.savedSenseGroupDao.isSenseGroupSaved('as a result'),
+        true,
+      );
     });
 
     test('watchSavedPhraseTexts 返回归一化文本集合', () async {

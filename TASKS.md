@@ -1,6 +1,6 @@
 # Fluency 任务清单
 
-> 最后更新：2026-03-26
+> 最后更新：2026-03-30
 > 当前焦点：录音+识别功能
 
 ## 历史归档
@@ -313,6 +313,21 @@
 - [x] 新增 SentenceAiCacheDao.deleteByHash() 方法
 
   **完成时间**: 2026-03-14 (初版) / 2026-03-28 (重构)
+
+---
+
+## 已完成：收藏回收站功能
+
+- [x] 取消收藏改为软删除（bookmark/word/senseGroup 的 remove 方法设 deletedAt 而非物理删除）
+- [x] 三个 DAO 新增回收站方法：getDeleted / restore / permanentlyDelete / permanentlyDeleteAllDeleted
+- [x] 收藏页 AppBar 改造：标题左对齐 + 右侧回收站图标按钮
+- [x] 句子回收站弹窗（左滑删除 + 书签按钮恢复 + 清空 + 排序）
+- [x] 词汇回收站弹窗（合并 word+senseGroup，内存归并排序）
+- [x] 公共组件提取：RecycleBinSheetScaffold / RecycleBinDismissible / RecycleBinRestoreButton
+- [x] 国际化（10 个新 key，en + zh）
+- [x] DAO 单元测试（12 个新测试）
+
+  **完成时间**: 2026-03-30
 
 ---
 

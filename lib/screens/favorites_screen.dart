@@ -28,6 +28,8 @@ import '../services/dictionary_service.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/ai_content_section.dart';
+import '../widgets/favorites/sentence_recycle_bin_sheet.dart';
+import '../widgets/favorites/vocabulary_recycle_bin_sheet.dart';
 import '../widgets/intensive_listen/word_dictionary_sheet.dart';
 
 /// 收藏页面视图模式
@@ -64,7 +66,22 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         : l10n.favoritesVocabulary;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.favorites), centerTitle: true),
+      appBar: AppBar(
+        title: Text(l10n.favorites),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.restore_from_trash_rounded),
+            tooltip: l10n.recycleBinTitle,
+            onPressed: () {
+              if (_currentView == _FavoritesView.sentences) {
+                showSentenceRecycleBinSheet(context: context);
+              } else {
+                showVocabularyRecycleBinSheet(context: context);
+              }
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // SegmentedButton 切换

@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fluency/database/app_database.dart';
+import 'package:fluency/database/daos/bookmark_dao.dart';
 
 /// 创建内存数据库用于测试（启用外键约束）
 AppDatabase createTestDatabase() {
@@ -462,6 +463,110 @@ void main() {
       final bookmarks = await db.bookmarkDao.getByAudioId('audio-1');
       expect(bookmarks.length, 1);
       expect(bookmarks.first.sentenceText, 'Updated');
+    });
+
+    test('getDeletedBookmarks 返回已软删除的书签', () async {
+      final now = DateTime.now();
+      // 添加 3 个书签
+      for (int i = 0; i < 3; i++) {
+        await db.bookmarkDao.addBookmark(
+          BookmarksCompanion(
+            audioItemId: Value('audio-1'),
+            sentenceIndex: Value(i),
+            sentenceText: Value('Sentence $i'),
+            startTime: Value(i * 1.0),
+            endTime: Value(i * 1.0 + 1.0),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      // 软删除其中 2 个
+      await db.bookmarkDao.removeBookmark('audio-1', 0);
+      await db.bookmarkDao.removeBookmark('audio-1', 2);
+
+      final deleted = await db.bookmarkDao.getDeletedBookmarks(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted.length, 2);
+      expect(deleted.map((d) => d.bookmark.sentenceIndex).toSet(), {0, 2});
+      expect(deleted.first.audioName, 'Audio 1');
+    });
+
+    test('restoreBookmark 恢复已软删除的书签', () async {
+      final now = DateTime.now();
+      await db.bookmarkDao.addBookmark(
+        BookmarksCompanion(
+          audioItemId: Value('audio-1'),
+          sentenceIndex: Value(0),
+          sentenceText: Value('Test'),
+          startTime: Value(0.0),
+          endTime: Value(1.0),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      await db.bookmarkDao.removeBookmark('audio-1', 0);
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), isEmpty);
+
+      await db.bookmarkDao.restoreBookmark('audio-1', 0);
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), {0});
+    });
+
+    test('permanentlyDeleteBookmark 物理删除书签', () async {
+      final now = DateTime.now();
+      await db.bookmarkDao.addBookmark(
+        BookmarksCompanion(
+          audioItemId: Value('audio-1'),
+          sentenceIndex: Value(0),
+          sentenceText: Value('Test'),
+          startTime: Value(0.0),
+          endTime: Value(1.0),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      await db.bookmarkDao.removeBookmark('audio-1', 0);
+      await db.bookmarkDao.permanentlyDeleteBookmark('audio-1', 0);
+
+      // 恢复后也查不到了（已物理删除）
+      await db.bookmarkDao.restoreBookmark('audio-1', 0);
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), isEmpty);
+    });
+
+    test('permanentlyDeleteAllDeleted 清空回收站', () async {
+      final now = DateTime.now();
+      for (int i = 0; i < 3; i++) {
+        await db.bookmarkDao.addBookmark(
+          BookmarksCompanion(
+            audioItemId: Value('audio-1'),
+            sentenceIndex: Value(i),
+            sentenceText: Value('Sentence $i'),
+            startTime: Value(i * 1.0),
+            endTime: Value(i * 1.0 + 1.0),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      // 软删除 2 个，保留 1 个
+      await db.bookmarkDao.removeBookmark('audio-1', 0);
+      await db.bookmarkDao.removeBookmark('audio-1', 2);
+
+      await db.bookmarkDao.permanentlyDeleteAllDeleted();
+
+      // 回收站为空
+      final deleted = await db.bookmarkDao.getDeletedBookmarks(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted, isEmpty);
+
+      // 未删除的书签仍在
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), {1});
     });
 
     test('CASCADE 删除：音频删除后书签自动清理', () async {

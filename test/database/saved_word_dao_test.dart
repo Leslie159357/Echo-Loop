@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fluency/database/app_database.dart';
+import 'package:fluency/database/daos/bookmark_dao.dart';
 
 /// 创建内存数据库用于测试
 AppDatabase _createTestDb() {
@@ -235,6 +236,62 @@ void main() {
       // 时间信息保留（删除字幕后仍可播放）
       expect(word.sentenceStartMs, 1000);
       expect(word.sentenceEndMs, 2500);
+    });
+
+    test('getDeletedWords 返回已软删除的单词', () async {
+      await db.savedWordDao.saveWord(word: 'apple');
+      await db.savedWordDao.saveWord(word: 'banana');
+      await db.savedWordDao.saveWord(word: 'cherry');
+
+      await db.savedWordDao.removeWord('apple');
+      await db.savedWordDao.removeWord('cherry');
+
+      final deleted = await db.savedWordDao.getDeletedWords(
+        sortMode: RecycleBinSortMode.alphaAsc,
+      );
+      expect(deleted.length, 2);
+      expect(deleted.first.word, 'apple');
+      expect(deleted.last.word, 'cherry');
+
+      // 活跃列表只剩 banana
+      final active = await db.savedWordDao.getAll();
+      expect(active.length, 1);
+      expect(active.first.word, 'banana');
+    });
+
+    test('restoreWord 恢复已软删除的单词', () async {
+      await db.savedWordDao.saveWord(word: 'hello');
+      await db.savedWordDao.removeWord('hello');
+      expect(await db.savedWordDao.isWordSaved('hello'), false);
+
+      await db.savedWordDao.restoreWord('hello');
+      expect(await db.savedWordDao.isWordSaved('hello'), true);
+    });
+
+    test('permanentlyDeleteWord 物理删除单词', () async {
+      await db.savedWordDao.saveWord(word: 'hello');
+      await db.savedWordDao.removeWord('hello');
+      await db.savedWordDao.permanentlyDeleteWord('hello');
+
+      await db.savedWordDao.restoreWord('hello');
+      expect(await db.savedWordDao.isWordSaved('hello'), false);
+    });
+
+    test('permanentlyDeleteAllDeleted 清空回收站但不影响活跃单词', () async {
+      await db.savedWordDao.saveWord(word: 'apple');
+      await db.savedWordDao.saveWord(word: 'banana');
+
+      await db.savedWordDao.removeWord('apple');
+      await db.savedWordDao.permanentlyDeleteAllDeleted();
+
+      final deleted = await db.savedWordDao.getDeletedWords(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted, isEmpty);
+
+      final active = await db.savedWordDao.getAll();
+      expect(active.length, 1);
+      expect(active.first.word, 'banana');
     });
 
     test('删除音频时 audioItemId 置空', () async {
