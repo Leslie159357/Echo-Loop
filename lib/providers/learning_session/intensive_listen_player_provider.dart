@@ -444,7 +444,10 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     await engine.playClipOnce(sentence, sessionId);
 
-    if (!engine.isActiveSession(sessionId)) return;
+    if (!engine.isActiveSession(sessionId)) {
+      state = state.copyWith(isPlaying: false);
+      return;
+    }
 
     // 详情重播也计入听力统计
     _recorder.onSentencePlayed(sentence);
@@ -468,7 +471,11 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     await engine.playClipOnce(sentence, sessionId);
 
-    if (!engine.isActiveSession(sessionId)) return;
+    if (!engine.isActiveSession(sessionId)) {
+      // 被意群播放等外部操作中断，更新播放状态
+      state = state.copyWith(isPlaying: false);
+      return;
+    }
 
     // 标注模式重播也计入听力统计
     _recorder.onSentencePlayed(sentence);
