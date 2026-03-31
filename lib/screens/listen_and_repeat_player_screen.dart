@@ -530,9 +530,11 @@ class _ListenAndRepeatPlayerScreenState
       if (prev != null &&
           prev.currentSentenceIndex != next.currentSentenceIndex) {
         _manualStoppedThisSentence = false;
-        ref
-            .read(shadowingRecordingControllerProvider.notifier)
-            .clearRecording();
+        final controller = ref.read(
+          shadowingRecordingControllerProvider.notifier,
+        );
+        controller.setManualMode(next.settings.isManualMode);
+        controller.clearRecording();
       }
       // 监听自然完成信号 → 触发完成弹窗
       if (prev != null && !_isExiting) {
@@ -587,6 +589,7 @@ class _ListenAndRepeatPlayerScreenState
 
     // 自动模式录音触发（对应复述页面的 !state.isRetellCountdown）：
     // 停顿中 + 未完成 + 非手动模式 + recording idle + 非倒计时中 + 本句未手动停止过
+    AppLogger.log('ShadowScreen', 'build 自动录音检查: pause=${playerState.isPauseBetweenPlays}, globalManual=${playerState.settings.isManualMode}, recPhase=${turnState.phase.name}, postEval=${playerState.isPostEvalCountdown}, manualStopped=$_manualStoppedThisSentence');
     if (playerState.isPauseBetweenPlays &&
         !playerState.settings.isManualMode &&
         turnState.phase == ListenAndRepeatTurnPhase.idle &&
@@ -659,9 +662,9 @@ class _ListenAndRepeatPlayerScreenState
     return wakelockBody(
       child: LearningHotkeyScope(
         onPlayPause: () {
+          AppLogger.log('ShadowScreen', '播放按钮: isPause=${playerState.isPauseBetweenPlays}, manualStopped=$_manualStoppedThisSentence');
           unawaited(_cancelRecordingAndPlayback());
           if (playerState.isPauseBetweenPlays) {
-            _manualStoppedThisSentence = false;
             ref
                 .read(shadowingRecordingControllerProvider.notifier)
                 .clearRecording();
@@ -760,28 +763,32 @@ class _ListenAndRepeatPlayerScreenState
                                               .notifier,
                                         )
                                         .notifyExternalStop();
-                                    ref
-                                        .read(
-                                          shadowingRecordingControllerProvider
-                                              .notifier,
-                                        )
-                                        .cancelActiveRecording();
+                                    final controller = ref.read(
+                                      shadowingRecordingControllerProvider
+                                          .notifier,
+                                    );
+                                    controller.setManualMode(true);
+                                    controller.cancelActiveRecording();
                                   },
                                   onToolbarButtonTapped: () {
-                                    if (_manualStoppedThisSentence) return;
+                                    if (_manualStoppedThisSentence) {
+                                      AppLogger.log('ShadowScreen', '工具栏点击: 已手动模式，跳过');
+                                      return;
+                                    }
                                     _manualStoppedThisSentence = true;
+                                    AppLogger.log('ShadowScreen', '工具栏点击: 进入句子手动模式');
                                     ref
                                         .read(
                                           listenAndRepeatPlayerProvider
                                               .notifier,
                                         )
                                         .pauseCountdown();
-                                    ref
-                                        .read(
-                                          shadowingRecordingControllerProvider
-                                              .notifier,
-                                        )
-                                        .cancelActiveRecording();
+                                    final controller = ref.read(
+                                      shadowingRecordingControllerProvider
+                                          .notifier,
+                                    );
+                                    controller.setManualMode(true);
+                                    controller.cancelActiveRecording();
                                   },
                                 ),
                               ),
@@ -893,7 +900,6 @@ class _ListenAndRepeatPlayerScreenState
                         onPlayPause: () {
                           unawaited(_cancelRecordingAndPlayback());
                           if (playerState.isPauseBetweenPlays) {
-                            _manualStoppedThisSentence = false;
                             ref
                                 .read(
                                   shadowingRecordingControllerProvider.notifier,
