@@ -18,12 +18,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../database/enums.dart';
-import '../models/intensive_listen_settings.dart';
 import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
-import '../providers/learning_session/listen_and_repeat_player_provider.dart';
 import '../providers/listen_and_repeat_turn_controller_provider.dart';
 import '../providers/shadowing/shadowing_controller.dart';
 import '../providers/shadowing/shadowing_phase.dart';
@@ -86,47 +84,27 @@ class _ListenAndRepeatPlayerScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 从旧 Player 读取初始化数据（句子列表、起始索引、设置）
-      final player = ref.read(listenAndRepeatPlayerProvider.notifier);
-      final playerState = ref.read(listenAndRepeatPlayerProvider);
+      final session = ref.read(learningSessionProvider);
+      final sentences = session.shadowingSentences ?? [];
       final ctrl = ref.read(shadowingControllerProvider.notifier);
 
       _config = ShadowingConfig(
         audioItemId: widget.audioItemId,
-        getRepeatCount: (_) => playerState.settings.repeatCount,
-        getIntervalDuration: (s) =>
-            _calculateInterval(s.duration, playerState.settings),
-        isManualMode: () =>
-            ref.read(listenAndRepeatPlayerProvider).settings.isManualMode,
+        getRepeatCount: (_) => session.shadowingTargetPlayCount,
+        getIntervalDuration: (s) => Duration(
+          milliseconds: math.max(s.duration.inMilliseconds * 2, 2000),
+        ),
+        isManualMode: () => false, // TODO: 设置面板控制
       );
       ctrl.startSession(
-        sentences: player.sentences,
+        sentences: sentences,
         config: _config,
-        startIndex: playerState.currentSentenceIndex,
+        startIndex: session.shadowingStartIndex,
       );
     });
   }
 
   // No resources to dispose — ShadowingController manages playback/recording.
-
-  /// 根据设置计算停顿时长
-  Duration _calculateInterval(
-    Duration sentenceDuration,
-    IntensiveListenSettings settings,
-  ) {
-    return switch (settings.pauseMode) {
-      PauseMode.smart => Duration(
-        milliseconds: math.max(sentenceDuration.inMilliseconds * 2, 2000),
-      ),
-      PauseMode.fixed => Duration(seconds: settings.fixedPauseSeconds),
-      PauseMode.multiplier => Duration(
-        milliseconds: math.max(
-          (sentenceDuration.inMilliseconds * settings.pauseMultiplier).round(),
-          1000,
-        ),
-      ),
-    };
-  }
 
   /// 构造当前句子的 promptId（用于匹配录音状态）
   String _currentPromptId(ShadowingSessionState ctrlState) {
@@ -385,8 +363,7 @@ class _ListenAndRepeatPlayerScreenState
   /// 仅在自动模式、倒计时中、录音已完成时显示。
   bool _shouldShowCountdown(ShadowingSessionState ctrlState) {
     if (ctrlState.phase is! WaitingInterval) return false;
-    final settings = ref.read(listenAndRepeatPlayerProvider).settings;
-    if (settings.isManualMode) return false;
+    if (_config.isManualMode()) return false;
     // 有录音评分 = 录音已完成，正在 review 倒计时
     return ctrlState.recordingScore != null;
   }
@@ -412,10 +389,6 @@ class _ListenAndRepeatPlayerScreenState
     );
     final ctrlState = ref.read(shadowingControllerProvider);
     final ctrl = ref.read(shadowingControllerProvider.notifier);
-
-    // 监听旧 Player 的设置变化（设置面板仍写入旧 Player）
-    ref.watch(listenAndRepeatPlayerProvider.select((s) => s.settings));
-    final settings = ref.read(listenAndRepeatPlayerProvider).settings;
 
     // watch 录音相关状态（仅监听 build 中实际使用的字段，避免转录更新触发重建）
     ref.watch(
@@ -771,7 +744,7 @@ class _ListenAndRepeatPlayerScreenState
                       ),
                       // 遍数 + 模式指示器
                       PracticePlayCountLabel(
-                        isManualMode: settings.isManualMode,
+                        isManualMode: _config.isManualMode(),
                         playCountText: l10n.listenAndRepeatPlayCount(
                           ctrlState.repeatIndex + 1,
                           ctrlState.totalRepeats,

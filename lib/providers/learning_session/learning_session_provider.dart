@@ -30,7 +30,6 @@ import '../retell_recording_controller_provider.dart';
 import '../listening_practice/listening_practice_provider.dart';
 import 'blind_listen_player_provider.dart';
 import 'intensive_listen_player_provider.dart';
-import 'listen_and_repeat_player_provider.dart';
 import 'retell_player_provider.dart';
 import 'review_difficult_practice_provider.dart';
 import 'sentence_playback_engine.dart';
@@ -78,6 +77,15 @@ class LearningSessionState {
   /// 目标盲听遍数（暂时硬编码，后续由 AI 决定）
   final int targetBlindListenPasses;
 
+  /// 跟读难句列表（enterListenAndRepeatMode 准备，Screen 读取初始化 ShadowingController）
+  final List<Sentence>? shadowingSentences;
+
+  /// 跟读起始句子索引
+  final int shadowingStartIndex;
+
+  /// 跟读目标遍数
+  final int shadowingTargetPlayCount;
+
   const LearningSessionState({
     this.learningMode,
     this.blindListenCompleted = false,
@@ -86,6 +94,9 @@ class LearningSessionState {
     this.savedSettings,
     this.isFreePlay = false,
     this.targetBlindListenPasses = 1,
+    this.shadowingSentences,
+    this.shadowingStartIndex = 0,
+    this.shadowingTargetPlayCount = 3,
   });
 
   /// 是否处于学习模式中
@@ -105,9 +116,13 @@ class LearningSessionState {
     PlaybackSettings? savedSettings,
     bool? isFreePlay,
     int? targetBlindListenPasses,
+    List<Sentence>? shadowingSentences,
+    int? shadowingStartIndex,
+    int? shadowingTargetPlayCount,
     bool clearLearningMode = false,
     bool clearSavedSettings = false,
     bool clearAudioItemId = false,
+    bool clearShadowingSentences = false,
   }) {
     return LearningSessionState(
       learningMode: clearLearningMode
@@ -122,6 +137,13 @@ class LearningSessionState {
       isFreePlay: isFreePlay ?? this.isFreePlay,
       targetBlindListenPasses:
           targetBlindListenPasses ?? this.targetBlindListenPasses,
+      shadowingSentences: clearShadowingSentences
+          ? null
+          : (shadowingSentences ?? this.shadowingSentences),
+      shadowingStartIndex:
+          shadowingStartIndex ?? this.shadowingStartIndex,
+      shadowingTargetPlayCount:
+          shadowingTargetPlayCount ?? this.shadowingTargetPlayCount,
     );
   }
 }
@@ -505,12 +527,11 @@ class LearningSession extends _$LearningSession {
           difficultSentences.isNotEmpty ? difficultSentences.first.text : null,
     );
 
-    // 初始化跟读播放器
-    final player = ref.read(listenAndRepeatPlayerProvider.notifier);
-    await player.initialize(
-      difficultSentences,
-      startIndex: startIndex,
-      targetPlayCount: targetPlayCount,
+    // 存储难句数据供 Screen 初始化 ShadowingController
+    state = state.copyWith(
+      shadowingSentences: difficultSentences,
+      shadowingStartIndex: startIndex,
+      shadowingTargetPlayCount: targetPlayCount,
     );
     _trackSessionStart();
   }
@@ -657,9 +678,7 @@ class LearningSession extends _$LearningSession {
       final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
       intensivePlayer.disposePlayer();
     } else if (mode == LearningMode.listenAndRepeat) {
-      // 释放跟读播放器资源
-      final player = ref.read(listenAndRepeatPlayerProvider.notifier);
-      player.disposePlayer();
+      // 跟读资源由 ShadowingController 在 Screen 层释放
     } else if (mode == LearningMode.retell) {
       // 释放复述播放器资源
       final retellPlayer = ref.read(retellPlayerProvider.notifier);

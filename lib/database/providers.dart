@@ -26,8 +26,8 @@ import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/blind_listen_player_provider.dart';
 import '../providers/learning_session/intensive_listen_player_provider.dart';
-import '../providers/learning_session/listen_and_repeat_player_provider.dart';
 import '../providers/learning_session/retell_player_provider.dart';
+import '../providers/shadowing/shadowing_controller.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../providers/flashcard/flashcard_provider.dart';
 import '../providers/transcription_task_provider.dart';
@@ -85,7 +85,7 @@ void switchAppDatabase(AppDatabase newDb, WidgetRef ref) {
   ref.invalidate(learningSessionProvider);
   ref.invalidate(blindListenPlayerProvider);
   ref.invalidate(intensiveListenPlayerProvider);
-  ref.invalidate(listenAndRepeatPlayerProvider);
+  ref.invalidate(shadowingControllerProvider);
   ref.invalidate(retellPlayerProvider);
   ref.invalidate(reviewDifficultPracticeProvider);
   ref.invalidate(flashcardNotifierProvider);
