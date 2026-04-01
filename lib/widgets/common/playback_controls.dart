@@ -1,57 +1,54 @@
-/// 练习页面共享的底部播放控制组件
+/// 播放控制栏（所有学习页面共享）
 ///
-/// 布局：[上一句] --- [播放/暂停] --- [下一句/完成]
-/// 最后一句自动切换为完成图标（check_circle_rounded），`canGoNext` 始终 true。
-/// 用于难句补练（ReviewDifficultPracticeScreen）和收藏复习（BookmarkReviewScreen）。
+/// 通用的 [上一个] [播放/暂停] [下一个/完成] 控制栏。
+/// 回调驱动，不依赖任何具体 Provider。
+/// 用于盲听、精听、跟读、复述、难句补练、收藏复习页面。
 library;
 
 import 'package:flutter/material.dart';
-
-import '../../providers/learning_session/review_difficult_practice_provider.dart';
-import '../common/tappable_wrapper.dart';
 import '../../theme/app_theme.dart';
+import 'tappable_wrapper.dart';
 
-/// 底部播放控制
-class PracticePlaybackControls extends StatelessWidget {
-  /// 播放状态
-  final ReviewDifficultPracticeState playerState;
+/// 播放控制栏：[上一个] [播放/暂停] [下一个/完成]
+class PlaybackControls extends StatelessWidget {
+  /// 是否可以返回上一个
+  final bool canGoPrev;
 
-  /// 上一句回调
-  final VoidCallback onPrevious;
+  /// 是否为最后一个（影响下一个按钮图标：skip_next → check_circle）
+  final bool isLast;
 
-  /// 下一句/完成回调
-  final VoidCallback onNext;
+  /// 中间按钮图标（播放/暂停）
+  final IconData centerIcon;
 
-  /// 播放/暂停回调
-  final VoidCallback onPlayPause;
+  /// 中间按钮点击回调
+  final VoidCallback? onCenter;
 
-  const PracticePlaybackControls({
+  /// 上一个回调
+  final VoidCallback? onPrevious;
+
+  /// 下一个回调
+  final VoidCallback? onNext;
+
+  const PlaybackControls({
     super.key,
-    required this.playerState,
-    required this.onPrevious,
-    required this.onNext,
-    required this.onPlayPause,
+    required this.canGoPrev,
+    required this.isLast,
+    required this.centerIcon,
+    this.onCenter,
+    this.onPrevious,
+    this.onNext,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final canGoPrev = playerState.currentSentenceIndex > 0;
-    final isLastSentence =
-        playerState.currentSentenceIndex >= playerState.totalSentences - 1;
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.l,
-        AppSpacing.xs,
-        AppSpacing.l,
-        AppSpacing.xs,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _NavButton(
+          PlaybackNavButton(
             icon: Icons.skip_previous_rounded,
             enabled: canGoPrev,
             onTap: canGoPrev ? onPrevious : null,
@@ -59,7 +56,7 @@ class PracticePlaybackControls extends StatelessWidget {
           const SizedBox(width: 48),
 
           TappableWrapper(
-            onTap: onPlayPause,
+            onTap: onCenter,
             feedbackType: TapFeedback.scale,
             scaleDown: 0.92,
             child: Container(
@@ -77,9 +74,7 @@ class PracticePlaybackControls extends StatelessWidget {
                 ],
               ),
               child: Icon(
-                playerState.isPlaying
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
+                centerIcon,
                 size: 28,
                 color: theme.colorScheme.onPrimary,
               ),
@@ -87,10 +82,8 @@ class PracticePlaybackControls extends StatelessWidget {
           ),
           const SizedBox(width: 48),
 
-          _NavButton(
-            icon: isLastSentence
-                ? Icons.check_circle_rounded
-                : Icons.skip_next_rounded,
+          PlaybackNavButton(
+            icon: isLast ? Icons.check_circle_rounded : Icons.skip_next_rounded,
             enabled: true,
             onTap: onNext,
           ),
@@ -100,13 +93,23 @@ class PracticePlaybackControls extends StatelessWidget {
   }
 }
 
-/// 导航按钮（上一句/下一句/完成，按压时 opacity 提升 + 轻微缩放）
-class _NavButton extends StatelessWidget {
+/// 导航按钮（上一个/下一个/完成）
+class PlaybackNavButton extends StatelessWidget {
+  /// 按钮图标
   final IconData icon;
+
+  /// 是否可用
   final bool enabled;
+
+  /// 点击回调
   final VoidCallback? onTap;
 
-  const _NavButton({required this.icon, required this.enabled, this.onTap});
+  const PlaybackNavButton({
+    super.key,
+    required this.icon,
+    required this.enabled,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
