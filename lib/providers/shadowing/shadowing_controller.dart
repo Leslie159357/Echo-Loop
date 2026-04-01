@@ -187,6 +187,14 @@ class ShadowingController extends _$ShadowingController {
     await _jumpToSentence(state.sentenceIndex - 1);
   }
 
+  /// 手动开始录音（手动模式下用户点击录音按钮）
+  ///
+  /// 只在 WaitingInterval 阶段允许开始录音。
+  void startManualRecording() {
+    if (state.phase is! WaitingInterval) return;
+    _startRecording();
+  }
+
   /// 手动停止录音
   Future<void> stopRecording() async {
     if (state.phase is! ShadowingRecording) return;
@@ -288,8 +296,39 @@ class ShadowingController extends _$ShadowingController {
     state = const ShadowingSessionState();
   }
 
+  /// 重播当前句子（倒计时期间用户点击播放按钮时调用）
+  ///
+  /// 停止所有资源，保持当前遍数，重新播放当前句子。
+  Future<void> replayCurrentSentence() async {
+    _stopAllResources();
+    ref
+        .read(shadowingRecordingControllerProvider.notifier)
+        .clearRecording();
+    state = state.copyWith(
+      recordingPath: null,
+      recordingScore: null,
+      flowToken: state.flowToken + 1,
+    );
+    await _playCurrentSentence();
+  }
+
+  /// 切换当前句子的收藏标记（不从列表移除）
+  ///
+  /// 仅更新内存中的 isBookmarked 状态，DB 操作由 Screen 层负责。
+  void toggleCurrentBookmark() {
+    if (_sentences.isEmpty) return;
+    final idx = state.sentenceIndex;
+    final s = _sentences[idx];
+    _sentences[idx] = s.copyWith(isBookmarked: !s.isBookmarked);
+    // 递增 flowToken 触发 UI 重建（bookmark 变化不影响流程）
+    state = state.copyWith(flowToken: state.flowToken + 1);
+  }
+
   /// 获取当前句子（供 Screen 读取）
   Sentence? get currentSentence => _currentSentence;
+
+  /// 获取当前句子索引（供 Screen 保存断点）
+  int get currentIndex => state.sentenceIndex;
 
   /// 获取句子列表（只读）
   List<Sentence> get sentences => List.unmodifiable(_sentences);

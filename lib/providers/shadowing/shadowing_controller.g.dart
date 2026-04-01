@@ -7,7 +7,7 @@ part of 'shadowing_controller.dart';
 // **************************************************************************
 
 String _$shadowingControllerHash() =>
-    r'9a3f7f76a2c5a6e872a110bbd1fbbdea93eedd92';
+    r'd79b3bfd49f94abd3c937d139ffdf880d7c55f56';
 
 /// 跟读会话控制器
 ///
