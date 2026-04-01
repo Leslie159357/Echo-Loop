@@ -10,32 +10,32 @@
 library;
 
 /// 跟读流程阶段
-sealed class ShadowingPhase {
-  const ShadowingPhase();
+sealed class ListenAndRepeatPhase {
+  const ListenAndRepeatPhase();
 }
 
 /// 空闲（未开始或已停止）
-class Idle extends ShadowingPhase {
+class Idle extends ListenAndRepeatPhase {
   const Idle();
 }
 
 /// 播放原句中
-class PlayingPrompt extends ShadowingPhase {
+class PlayingPrompt extends ListenAndRepeatPhase {
   const PlayingPrompt();
 }
 
 /// 录音中（用户跟读）
-class ShadowingRecording extends ShadowingPhase {
-  const ShadowingRecording();
+class Recording extends ListenAndRepeatPhase {
+  const Recording();
 }
 
 /// 播放录音回放中
-class ReviewingRecording extends ShadowingPhase {
+class ReviewingRecording extends ListenAndRepeatPhase {
   const ReviewingRecording();
 }
 
 /// 遍间等待（倒计时 T 秒，唯一可以有倒计时的阶段）
-class WaitingInterval extends ShadowingPhase {
+class WaitingInterval extends ListenAndRepeatPhase {
   const WaitingInterval();
 }
 
@@ -44,17 +44,16 @@ class WaitingInterval extends ShadowingPhase {
 /// 录音失败/超时需要重试、用户点了翻译/解析/查词、打开设置弹窗等场景。
 /// 不自动推进，等用户主动操作（录音/播放/切句）后恢复自动流程。
 /// 与 [WaitingInterval] 的区别：没有倒计时。
-class WaitingForUser extends ShadowingPhase {
+class WaitingForUser extends ListenAndRepeatPhase {
   const WaitingForUser();
 }
 
 /// 当前句子所有遍数完成（短暂过渡，自动推进到下一句或完成）
-class SentenceCompleted extends ShadowingPhase {
+class SentenceCompleted extends ListenAndRepeatPhase {
   const SentenceCompleted();
 }
 
 /// 整个会话完成（所有句子全部跟读完）
-class SessionCompleted extends ShadowingPhase {
+class SessionCompleted extends ListenAndRepeatPhase {
   const SessionCompleted();
 }
-

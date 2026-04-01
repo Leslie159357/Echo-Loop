@@ -4,12 +4,12 @@
 /// 包含所有 UI 渲染需要的信息，不包含业务逻辑。
 library;
 
-import 'shadowing_phase.dart';
+import 'listen_and_repeat_phase.dart';
 
 /// 跟读会话状态
-class ShadowingSessionState {
+class ListenAndRepeatSessionState {
   /// 当前阶段
-  final ShadowingPhase phase;
+  final ListenAndRepeatPhase phase;
 
   /// 当前句子索引（0-based）
   final int sentenceIndex;
@@ -41,7 +41,7 @@ class ShadowingSessionState {
   /// 流程令牌（每次切句/重置递增，异步回调校验用）
   final int flowToken;
 
-  const ShadowingSessionState({
+  const ListenAndRepeatSessionState({
     this.phase = const Idle(),
     this.sentenceIndex = 0,
     this.totalSentences = 0,
@@ -55,8 +55,8 @@ class ShadowingSessionState {
     this.flowToken = 0,
   });
 
-  ShadowingSessionState copyWith({
-    ShadowingPhase? phase,
+  ListenAndRepeatSessionState copyWith({
+    ListenAndRepeatPhase? phase,
     int? sentenceIndex,
     int? totalSentences,
     int? repeatIndex,
@@ -68,7 +68,7 @@ class ShadowingSessionState {
     Object? recordingScore = _noChange,
     int? flowToken,
   }) {
-    return ShadowingSessionState(
+    return ListenAndRepeatSessionState(
       phase: phase ?? this.phase,
       sentenceIndex: sentenceIndex ?? this.sentenceIndex,
       totalSentences: totalSentences ?? this.totalSentences,

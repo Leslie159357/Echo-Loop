@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/intensive_listen_settings.dart';
-import '../../providers/shadowing/shadowing_settings_provider.dart';
+import '../../providers/listen_and_repeat/listen_and_repeat_settings_provider.dart';
 import '../../theme/app_theme.dart';
 
 /// 显示跟读设置底部弹窗
@@ -31,7 +31,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final settings = ref.watch(shadowingSettingsProvider);
+    final settings = ref.watch(listenAndRepeatSettingsProvider);
 
     return SafeArea(
       child: Padding(
@@ -146,7 +146,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
             selected: {settings.controlMode},
             onSelectionChanged: (selected) {
               ref
-                  .read(shadowingSettingsProvider.notifier)
+                  .read(listenAndRepeatSettingsProvider.notifier)
                   .update(
                     settings.copyWith(controlMode: selected.first),
                   );
@@ -202,7 +202,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
           onChanged: (value) {
             if (value != null) {
               ref
-                  .read(shadowingSettingsProvider.notifier)
+                  .read(listenAndRepeatSettingsProvider.notifier)
                   .update(settings.copyWith(repeatCount: value));
             }
           },
@@ -237,7 +237,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
         selected: {settings.pauseMode},
         onSelectionChanged: (selected) {
           ref
-              .read(shadowingSettingsProvider.notifier)
+              .read(listenAndRepeatSettingsProvider.notifier)
               .update(settings.copyWith(pauseMode: selected.first));
         },
         showSelectedIcon: false,
@@ -288,7 +288,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
                 label: '${options[idx]}s',
                 onChanged: (v) {
                   ref
-                      .read(shadowingSettingsProvider.notifier)
+                      .read(listenAndRepeatSettingsProvider.notifier)
                       .update(
                         settings.copyWith(
                           fixedPauseSeconds: options[v.round()],
@@ -336,7 +336,7 @@ class _ListenAndRepeatSettingsSheet extends ConsumerWidget {
               onChanged: (value) {
                 if (value != null) {
                   ref
-                      .read(shadowingSettingsProvider.notifier)
+                      .read(listenAndRepeatSettingsProvider.notifier)
                       .update(
                         settings.copyWith(pauseMultiplier: value),
                       );

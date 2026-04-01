@@ -77,7 +77,7 @@ class LearningSessionState {
   /// 目标盲听遍数（暂时硬编码，后续由 AI 决定）
   final int targetBlindListenPasses;
 
-  /// 跟读难句列表（enterListenAndRepeatMode 准备，Screen 读取初始化 ShadowingController）
+  /// 跟读难句列表（enterListenAndRepeatMode 准备，Screen 读取初始化 ListenAndRepeatController）
   final List<Sentence>? shadowingSentences;
 
   /// 跟读起始句子索引
@@ -527,7 +527,7 @@ class LearningSession extends _$LearningSession {
           difficultSentences.isNotEmpty ? difficultSentences.first.text : null,
     );
 
-    // 存储难句数据供 Screen 初始化 ShadowingController
+    // 存储难句数据供 Screen 初始化 ListenAndRepeatController
     state = state.copyWith(
       shadowingSentences: difficultSentences,
       shadowingStartIndex: startIndex,
@@ -678,7 +678,7 @@ class LearningSession extends _$LearningSession {
       final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
       intensivePlayer.disposePlayer();
     } else if (mode == LearningMode.listenAndRepeat) {
-      // 跟读资源由 ShadowingController 在 Screen 层释放
+      // 跟读资源由 ListenAndRepeatController 在 Screen 层释放
     } else if (mode == LearningMode.retell) {
       // 释放复述播放器资源
       final retellPlayer = ref.read(retellPlayerProvider.notifier);

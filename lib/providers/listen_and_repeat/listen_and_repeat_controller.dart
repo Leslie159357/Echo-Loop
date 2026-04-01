@@ -24,15 +24,15 @@ import '../learning_session/countdown_controller.dart';
 import '../learning_session/learning_session_provider.dart';
 import '../listen_and_repeat_turn_controller_provider.dart';
 import '../listening_practice/bookmark_manager.dart';
-import 'shadowing_phase.dart';
-import 'shadowing_session_state.dart';
+import 'listen_and_repeat_phase.dart';
+import 'listen_and_repeat_session_state.dart';
 
-part 'shadowing_controller.g.dart';
+part 'listen_and_repeat_controller.g.dart';
 
 /// 跟读差异化配置
 ///
 /// 各页面（跟读/难句补练/收藏复习）通过不同 Config 注入差异行为。
-class ShadowingConfig {
+class ListenAndRepeatConfig {
   /// 音频项 ID（用于构建 promptId）
   final String audioItemId;
 
@@ -51,7 +51,7 @@ class ShadowingConfig {
   /// 句子播完一遍的回调（用于学习统计）
   final void Function(Sentence sentence)? onSentencePlayed;
 
-  const ShadowingConfig({
+  const ListenAndRepeatConfig({
     required this.audioItemId,
     required this.getRepeatCount,
     required this.getIntervalDuration,
@@ -63,12 +63,12 @@ class ShadowingConfig {
 
 /// 跟读会话控制器
 @Riverpod(keepAlive: true)
-class ShadowingController extends _$ShadowingController {
+class ListenAndRepeatController extends _$ListenAndRepeatController {
   /// 句子列表
   List<Sentence> _sentences = [];
 
   /// 差异化配置
-  late ShadowingConfig _config;
+  late ListenAndRepeatConfig _config;
 
   /// 倒计时控制器
   final CountdownController _countdown = CountdownController();
@@ -80,7 +80,7 @@ class ShadowingController extends _$ShadowingController {
   StreamSubscription<bool>? _playbackSub;
 
   @override
-  ShadowingSessionState build() {
+  ListenAndRepeatSessionState build() {
     // 监听录音控制器状态变化（评估完成时推进流程）
     ref.listen(shadowingRecordingControllerProvider, _onRecordingStateChanged);
 
@@ -89,7 +89,7 @@ class ShadowingController extends _$ShadowingController {
       _playbackSub?.cancel();
       _playbackService.dispose();
     });
-    return const ShadowingSessionState();
+    return const ListenAndRepeatSessionState();
   }
 
   // ========== 公开方法（Screen 调用） ==========
@@ -97,7 +97,7 @@ class ShadowingController extends _$ShadowingController {
   /// 初始化并开始会话
   Future<void> startSession({
     required List<Sentence> sentences,
-    required ShadowingConfig config,
+    required ListenAndRepeatConfig config,
     int startIndex = 0,
   }) async {
     _sentences = sentences.map((s) => s.copyWith()).toList();
@@ -116,7 +116,7 @@ class ShadowingController extends _$ShadowingController {
         : startIndex.clamp(0, _sentences.length - 1);
     final sentence = _sentences[safeIndex];
 
-    state = ShadowingSessionState(
+    state = ListenAndRepeatSessionState(
       phase: const Idle(),
       sentenceIndex: safeIndex,
       totalSentences: _sentences.length,
@@ -180,7 +180,7 @@ class ShadowingController extends _$ShadowingController {
   /// 如果未检测到语音，取消录音（不评估）回到 WaitingInterval 等用户重试。
   /// 如果已检测到语音，停止并评估。
   Future<void> stopRecording() async {
-    if (state.phase is! ShadowingRecording) return;
+    if (state.phase is! Recording) return;
     final sentence = _currentSentence;
     if (sentence == null) return;
 
@@ -299,7 +299,7 @@ class ShadowingController extends _$ShadowingController {
     _atomicReset();
     ref.read(shadowingRecordingControllerProvider.notifier).fullReset();
     _sentences = [];
-    state = const ShadowingSessionState();
+    state = const ListenAndRepeatSessionState();
   }
 
   /// 重播当前句子（倒计时期间用户点击播放按钮时调用）
@@ -409,7 +409,7 @@ class ShadowingController extends _$ShadowingController {
     }
 
     // 录音取消/超时（→ idle 无结果）→ 等待用户操作
-    if (state.phase is ShadowingRecording &&
+    if (state.phase is Recording &&
         next.phase == ListenAndRepeatTurnPhase.idle &&
         next.currentAttempt == null) {
       AppLogger.log('Shadowing', '录音取消/超时 → WaitingForUser');
@@ -440,7 +440,7 @@ class ShadowingController extends _$ShadowingController {
   /// 录音完成回调（自动/手动统一收口）
   void _onRecordingFinished(int token, String? filePath, double? score) {
     if (token != state.flowToken) return;
-    if (state.phase is! ShadowingRecording) return;
+    if (state.phase is! Recording) return;
 
     AppLogger.log(
       'Shadowing',
@@ -452,7 +452,7 @@ class ShadowingController extends _$ShadowingController {
     if (score == null) {
       AppLogger.log('Shadowing', '→ 识别失败，等待用户重试');
       // 先改 phase，再 clear，避免 clearRecording 触发 _onRecordingStateChanged 时
-      // state.phase 还是 ShadowingRecording 导致二次触发
+      // state.phase 还是 Recording 导致二次触发
       state = state.copyWith(
         phase: const WaitingForUser(),
         recordingPath: null,
@@ -537,7 +537,7 @@ class ShadowingController extends _$ShadowingController {
     final sentence = _currentSentence;
     if (sentence == null) return;
 
-    state = state.copyWith(phase: const ShadowingRecording());
+    state = state.copyWith(phase: const Recording());
 
     final promptId = 'shadowing:${_config.audioItemId}:${sentence.index}';
 

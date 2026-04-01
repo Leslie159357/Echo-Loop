@@ -3,7 +3,7 @@
 /// 难句跟读界面，逐句显示难句文本（带★标记），
 /// 用户听完后在停顿时间内跟读。
 ///
-/// 流程控制通过 [ShadowingController] 驱动（统一管理播放、录音、倒计时）。
+/// 流程控制通过 [ListenAndRepeatController] 驱动（统一管理播放、录音、倒计时）。
 /// 录音 UI 状态通过 [ShadowingRecordingController] 读取（转录文本、评估结果）。
 ///
 /// 完成处理：所有句子播完 → 完成对话框 → completeCurrentSubStage → 退出
@@ -23,11 +23,11 @@ import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/listen_and_repeat_turn_controller_provider.dart';
-import '../providers/shadowing/shadowing_controller.dart';
-import '../providers/shadowing/shadowing_phase.dart';
-import '../providers/shadowing/shadowing_settings_provider.dart';
+import '../providers/listen_and_repeat/listen_and_repeat_controller.dart';
+import '../providers/listen_and_repeat/listen_and_repeat_phase.dart';
+import '../providers/listen_and_repeat/listen_and_repeat_settings_provider.dart';
 import '../models/intensive_listen_settings.dart';
-import '../providers/shadowing/shadowing_session_state.dart';
+import '../providers/listen_and_repeat/listen_and_repeat_session_state.dart';
 import '../services/app_logger.dart';
 import '../theme/app_theme.dart';
 import '../providers/sentence_ai_provider.dart';
@@ -80,7 +80,7 @@ class _ListenAndRepeatPlayerScreenState
   bool _isShowingDialog = false;
 
   /// 跟读配置（initState 中初始化，onStudyAgain 复用）
-  late ShadowingConfig _config;
+  late ListenAndRepeatConfig _config;
 
   @override
   void initState() {
@@ -88,19 +88,19 @@ class _ListenAndRepeatPlayerScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final session = ref.read(learningSessionProvider);
       final sentences = session.shadowingSentences ?? [];
-      final ctrl = ref.read(shadowingControllerProvider.notifier);
+      final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
 
       // 用 learningSession 的目标遍数初始化设置
       ref
-          .read(shadowingSettingsProvider.notifier)
+          .read(listenAndRepeatSettingsProvider.notifier)
           .initialize(repeatCount: session.shadowingTargetPlayCount);
 
-      _config = ShadowingConfig(
+      _config = ListenAndRepeatConfig(
         audioItemId: widget.audioItemId,
         getRepeatCount: (_) =>
-            ref.read(shadowingSettingsProvider).repeatCount,
+            ref.read(listenAndRepeatSettingsProvider).repeatCount,
         getIntervalDuration: (s) {
-          final settings = ref.read(shadowingSettingsProvider);
+          final settings = ref.read(listenAndRepeatSettingsProvider);
           return switch (settings.pauseMode) {
             PauseMode.smart => Duration(
                 milliseconds:
@@ -119,7 +119,7 @@ class _ListenAndRepeatPlayerScreenState
           };
         },
         isManualMode: () =>
-            ref.read(shadowingSettingsProvider).isManualMode,
+            ref.read(listenAndRepeatSettingsProvider).isManualMode,
       );
       ctrl.startSession(
         sentences: sentences,
@@ -129,11 +129,11 @@ class _ListenAndRepeatPlayerScreenState
     });
   }
 
-  // No resources to dispose — ShadowingController manages playback/recording.
+  // No resources to dispose — ListenAndRepeatController manages playback/recording.
 
   /// 构造当前句子的 promptId（用于匹配录音状态）
-  String _currentPromptId(ShadowingSessionState ctrlState) {
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
+  String _currentPromptId(ListenAndRepeatSessionState ctrlState) {
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
     final sentence = ctrl.currentSentence;
     final sentenceIndex = sentence?.index ?? ctrlState.sentenceIndex;
     return 'shadowing:${widget.audioItemId}:$sentenceIndex';
@@ -141,14 +141,14 @@ class _ListenAndRepeatPlayerScreenState
 
   /// 处理录音按钮点击
   Future<void> _handleRecordTap() async {
-    final ctrlState = ref.read(shadowingControllerProvider);
+    final ctrlState = ref.read(listenAndRepeatControllerProvider);
     if (ctrlState.phase is! WaitingInterval &&
         ctrlState.phase is! WaitingForUser &&
-        ctrlState.phase is! ShadowingRecording) {
+        ctrlState.phase is! Recording) {
       return;
     }
 
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
     final recState = ref.read(shadowingRecordingControllerProvider);
     final currentSentence = ctrl.currentSentence;
     if (currentSentence == null) return;
@@ -169,8 +169,8 @@ class _ListenAndRepeatPlayerScreenState
 
   /// 处理录音回放按钮点击
   Future<void> _handleAttemptPlaybackTap() async {
-    final ctrlState = ref.read(shadowingControllerProvider);
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
+    final ctrlState = ref.read(listenAndRepeatControllerProvider);
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
 
     if (ctrlState.phase is ReviewingRecording) {
       await ctrl.stopPlayback();
@@ -183,7 +183,7 @@ class _ListenAndRepeatPlayerScreenState
   /// 处理退出（close 按钮 / 系统返回）
   Future<void> _handleExit() async {
     _isExiting = true;
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
     ctrl.enterWaitingForUser();
     if (!mounted) return;
 
@@ -285,8 +285,8 @@ class _ListenAndRepeatPlayerScreenState
     if (_isShowingDialog || _isExiting || !mounted) return;
     _isShowingDialog = true;
 
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
-    final ctrlState = ref.read(shadowingControllerProvider);
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
+    final ctrlState = ref.read(listenAndRepeatControllerProvider);
     final session = ref.read(learningSessionProvider);
 
     if (!mounted) return;
@@ -376,17 +376,17 @@ class _ListenAndRepeatPlayerScreenState
 
   /// 判断当前是否处于"等待用户操作"的停顿状态
   ///
-  /// 包含 WaitingInterval（录音前/后）和 ShadowingRecording（录音中）。
-  bool _isInPauseState(ShadowingPhase phase) {
+  /// 包含 WaitingInterval（录音前/后）和 Recording（录音中）。
+  bool _isInPauseState(ListenAndRepeatPhase phase) {
     return phase is WaitingInterval ||
         phase is WaitingForUser ||
-        phase is ShadowingRecording;
+        phase is Recording;
   }
 
   /// 判断是否应显示倒计时芯片
   ///
   /// 仅在自动模式、倒计时中、录音已完成时显示。
-  bool _shouldShowCountdown(ShadowingSessionState ctrlState) {
+  bool _shouldShowCountdown(ListenAndRepeatSessionState ctrlState) {
     if (ctrlState.phase is! WaitingInterval) return false;
     if (_config.isManualMode()) return false;
     // 有录音评分 = 录音已完成，正在 review 倒计时
@@ -398,9 +398,9 @@ class _ListenAndRepeatPlayerScreenState
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    // 监听 ShadowingController 状态变化（避免倒计时 tick 重建整个页面）
+    // 监听 ListenAndRepeatController 状态变化（避免倒计时 tick 重建整个页面）
     ref.watch(
-      shadowingControllerProvider.select(
+      listenAndRepeatControllerProvider.select(
         (s) => (
           s.sentenceIndex,
           s.totalSentences,
@@ -412,8 +412,8 @@ class _ListenAndRepeatPlayerScreenState
         ),
       ),
     );
-    final ctrlState = ref.read(shadowingControllerProvider);
-    final ctrl = ref.read(shadowingControllerProvider.notifier);
+    final ctrlState = ref.read(listenAndRepeatControllerProvider);
+    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
 
     // watch 录音相关状态（仅监听 build 中实际使用的字段，避免转录更新触发重建）
     ref.watch(
@@ -424,7 +424,7 @@ class _ListenAndRepeatPlayerScreenState
     final turnState = ref.read(shadowingRecordingControllerProvider);
 
     // 监听完成信号 → 触发完成弹窗
-    ref.listen<ShadowingSessionState>(shadowingControllerProvider, (
+    ref.listen<ListenAndRepeatSessionState>(listenAndRepeatControllerProvider, (
       prev,
       next,
     ) {
@@ -536,7 +536,7 @@ class _ListenAndRepeatPlayerScreenState
                               BookmarkToggleRow(
                                 isDifficult: currentSentence.isBookmarked,
                                 onTap: () => ref
-                                    .read(shadowingControllerProvider.notifier)
+                                    .read(listenAndRepeatControllerProvider.notifier)
                                     .toggleCurrentBookmark(),
                               ),
                               const SizedBox(height: AppSpacing.m),
@@ -610,7 +610,7 @@ class _ListenAndRepeatPlayerScreenState
                                 child: Consumer(
                                   builder: (context, ref, _) {
                                     final s = ref.watch(
-                                      shadowingControllerProvider.select(
+                                      listenAndRepeatControllerProvider.select(
                                         (s) => (
                                           s.intervalRemaining,
                                           s.intervalTotal,
@@ -620,12 +620,12 @@ class _ListenAndRepeatPlayerScreenState
                                     final remaining = s.$1;
                                     final total = s.$2;
                                     final isPaused = ref.watch(
-                                      shadowingControllerProvider.select(
+                                      listenAndRepeatControllerProvider.select(
                                         (s) => s.isIntervalPaused,
                                       ),
                                     );
                                     final ctrl = ref.read(
-                                      shadowingControllerProvider.notifier,
+                                      listenAndRepeatControllerProvider.notifier,
                                     );
                                     return Row(
                                       mainAxisSize: MainAxisSize.min,

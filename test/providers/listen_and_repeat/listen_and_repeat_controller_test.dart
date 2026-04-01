@@ -15,9 +15,9 @@ import 'package:fluency/models/audio_engine_state.dart';
 import 'package:fluency/models/sentence.dart';
 import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
 import 'package:fluency/providers/listen_and_repeat_turn_controller_provider.dart';
-import 'package:fluency/providers/shadowing/shadowing_controller.dart';
-import 'package:fluency/providers/shadowing/shadowing_phase.dart';
-import 'package:fluency/providers/shadowing/shadowing_session_state.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_controller.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_phase.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
 
 import '../../helpers/mock_providers.dart';
 
@@ -46,12 +46,12 @@ class _InstantAudioEngine extends TestAudioEngine {
 }
 
 /// 测试用默认配置
-ShadowingConfig _testConfig({
+ListenAndRepeatConfig _testConfig({
   int repeatCount = 3,
   Duration interval = const Duration(milliseconds: 100),
   bool isManualMode = false,
 }) {
-  return ShadowingConfig(
+  return ListenAndRepeatConfig(
     audioItemId: 'test-audio',
     getRepeatCount: (_) => repeatCount,
     getIntervalDuration: (_) => interval,
@@ -61,7 +61,7 @@ ShadowingConfig _testConfig({
 
 void main() {
   late ProviderContainer container;
-  late ShadowingController controller;
+  late ListenAndRepeatController controller;
 
   setUp(() {
     container = ProviderContainer(
@@ -72,15 +72,15 @@ void main() {
         ),
       ],
     );
-    controller = container.read(shadowingControllerProvider.notifier);
+    controller = container.read(listenAndRepeatControllerProvider.notifier);
   });
 
   tearDown(() {
     container.dispose();
   });
 
-  ShadowingSessionState readState() =>
-      container.read(shadowingControllerProvider);
+  ListenAndRepeatSessionState readState() =>
+      container.read(listenAndRepeatControllerProvider);
 
   group('startSession', () {
     test('初始化后进入 PlayingPrompt', () async {
@@ -91,7 +91,7 @@ void main() {
 
       // playClipOnce 即时完成 → 自动进入 Recording（自动模式）
       // 但录音还没接入，_onPromptFinished 会设置 Recording
-      expect(readState().phase, isA<ShadowingRecording>());
+      expect(readState().phase, isA<Recording>());
       expect(readState().sentenceIndex, 0);
       expect(readState().totalSentences, 3);
       expect(readState().repeatIndex, 0);
@@ -127,7 +127,7 @@ void main() {
         config: _testConfig(),
       );
 
-      expect(readState().phase, isA<ShadowingRecording>());
+      expect(readState().phase, isA<Recording>());
 
       controller.enterWaitingForUser();
 
@@ -255,7 +255,7 @@ void main() {
 
       // 当前在 Recording，不是 WaitingInterval
       controller.fastForwardInterval();
-      expect(readState().phase, isA<ShadowingRecording>()); // 不变
+      expect(readState().phase, isA<Recording>()); // 不变
     });
   });
 
