@@ -16,6 +16,7 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/models/intensive_listen_settings.dart';
 import 'package:fluency/models/speech_practice_models.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/playback_phase.dart';
 import 'package:fluency/providers/speech_practice_session_provider.dart';
 import 'package:fluency/providers/sentence_ai_provider.dart';
 import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
@@ -132,6 +133,8 @@ class _FakeSpeechPracticeBackend implements SpeechPracticeBackend {
 
 void main() {
   /// 创建测试用的跟读播放器状态
+  ///
+  /// 内部将布尔参数映射为 [PlaybackPhase] sealed class 实例。
   ListenAndRepeatPlayerState createPlayerState({
     int currentSentenceIndex = 0,
     int totalSentences = 5,
@@ -143,17 +146,36 @@ void main() {
     Duration pauseRemaining = Duration.zero,
     Duration pauseDuration = Duration.zero,
   }) {
+    // 将布尔标志映射为 PlaybackPhase
+    final PlaybackPhase phase;
+    if (isPauseBetweenSentences) {
+      phase = AdvancePausePhase(
+        countdown: CountdownState(
+          remaining: pauseRemaining,
+          total: pauseDuration,
+        ),
+      );
+    } else if (isPauseBetweenPlays) {
+      phase = RepeatPausePhase(
+        completedPlayCount: currentPlayCount,
+        countdown: CountdownState(
+          remaining: pauseRemaining,
+          total: pauseDuration,
+        ),
+      );
+    } else if (isPlaying) {
+      phase = PlayingPhase(playCount: currentPlayCount);
+    } else {
+      phase = const IdlePhase();
+    }
+
     return ListenAndRepeatPlayerState(
       currentSentenceIndex: currentSentenceIndex,
       totalSentences: totalSentences,
       currentPlayCount: currentPlayCount,
       targetPlayCount: targetPlayCount,
       settings: IntensiveListenSettings(repeatCount: targetPlayCount),
-      isPlaying: isPlaying,
-      isPauseBetweenPlays: isPauseBetweenPlays,
-      isPauseBetweenSentences: isPauseBetweenSentences,
-      pauseRemaining: pauseRemaining,
-      pauseDuration: pauseDuration,
+      phase: phase,
     );
   }
 

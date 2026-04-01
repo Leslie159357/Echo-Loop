@@ -6,7 +6,7 @@ part of 'audio_library_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$audioLibraryHash() => r'50a49294a9ff06ae2f79de9f993a098698f21d24';
+String _$audioLibraryHash() => r'd042ca9532dfd855f36026500e886f967b1ef9b6';
 
 /// See also [AudioLibrary].
 @ProviderFor(AudioLibrary)

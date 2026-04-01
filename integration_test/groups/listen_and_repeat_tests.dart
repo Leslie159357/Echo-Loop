@@ -11,6 +11,7 @@ import 'package:fluency/main.dart';
 import 'package:fluency/database/enums.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/playback_phase.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/router/app_router.dart';
 import 'package:fluency/screens/listen_and_repeat_player_screen.dart';
@@ -145,7 +146,7 @@ void listenAndRepeatTests() {
               as TestListenAndRepeatPlayer;
       player.setState(player.state.copyWith(
         currentSentenceIndex: player.state.totalSentences - 1,
-        isPlaying: false,
+        phase: const IdlePhase(),
       ));
       await tester.pumpAndSettle();
       // 最后一句时，下一步按钮图标变为 check_circle_rounded
@@ -244,10 +245,13 @@ void listenAndRepeatTests() {
 
       player.setState(
         player.state.copyWith(
-          isPlaying: false,
-          isPauseBetweenPlays: true,
-          pauseRemaining: const Duration(seconds: 3),
-          pauseDuration: const Duration(seconds: 3),
+          phase: RepeatPausePhase(
+            completedPlayCount: player.state.currentPlayCount,
+            countdown: const CountdownState(
+              remaining: Duration(seconds: 3),
+              total: Duration(seconds: 3),
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();

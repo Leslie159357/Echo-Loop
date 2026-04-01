@@ -15,6 +15,7 @@ import 'package:fluency/database/enums.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/playback_phase.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/router/app_router.dart';
 import 'package:fluency/screens/intensive_listen_player_screen.dart';
@@ -310,7 +311,7 @@ void statsDisplayTests() {
               as TestListenAndRepeatPlayer;
       p.setState(p.state.copyWith(
         currentSentenceIndex: p.state.totalSentences - 1,
-        isPlaying: false,
+        phase: const IdlePhase(),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.check_circle_rounded));
@@ -388,7 +389,7 @@ void statsDisplayTests() {
               as TestListenAndRepeatPlayer;
       p.setState(p.state.copyWith(
         currentSentenceIndex: p.state.totalSentences - 1,
-        isPlaying: false,
+        phase: const IdlePhase(),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.check_circle_rounded));

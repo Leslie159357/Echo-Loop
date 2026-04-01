@@ -13,7 +13,7 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/router/app_router.dart';
 import 'package:fluency/screens/blind_listen_player_screen.dart';
 import 'package:fluency/widgets/common/countdown_chip.dart';
-import 'package:fluency/widgets/common/paragraph_bottom_controls.dart';
+import 'package:fluency/widgets/common/playback_controls.dart';
 import 'package:fluency/widgets/dialogs/step_complete_dialog.dart';
 
 import '../helpers/test_notifiers.dart';
@@ -56,7 +56,7 @@ void blindListenTests() {
       expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 
       // 验证段落底部控制栏和进度条
-      expect(find.byType(ParagraphBottomControls), findsOneWidget);
+      expect(find.byType(PlaybackControls), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
     });
 

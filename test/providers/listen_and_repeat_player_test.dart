@@ -11,6 +11,7 @@ import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/playback_phase.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -86,15 +87,21 @@ void main() {
       const state = ListenAndRepeatPlayerState();
       expect(state.stepFinished, false);
 
-      final finished = state.copyWith(stepFinished: true);
+      final finished = state.copyWith(
+        phase: const IdlePhase(stepFinished: true),
+      );
       expect(finished.stepFinished, true);
 
-      // 不传值时保留
-      final updated = finished.copyWith(isPlaying: true);
-      expect(updated.stepFinished, true);
+      // 不传值时保留（切换到播放阶段后 stepFinished getter 返回 false）
+      final updated = finished.copyWith(
+        phase: const PlayingPhase(playCount: 1),
+      );
+      expect(updated.isPlaying, true);
 
-      // 重置
-      final reset = finished.copyWith(stepFinished: false);
+      // 重置回 idle
+      final reset = finished.copyWith(
+        phase: const IdlePhase(stepFinished: false),
+      );
       expect(reset.stepFinished, false);
     });
   });
@@ -206,7 +213,7 @@ void main() {
                 totalSentences: 2,
                 currentPlayCount: 1,
                 settings: IntensiveListenSettings(repeatCount: 3),
-                isPauseBetweenPlays: true,
+                phase: RepeatPausePhase(completedPlayCount: 1),
               ),
               createTestSentences(count: 2),
             ),
@@ -234,8 +241,7 @@ void main() {
                 totalSentences: 2,
                 currentPlayCount: 3,
                 settings: IntensiveListenSettings(repeatCount: 3),
-                isPauseBetweenPlays: true,
-                isPauseBetweenSentences: true,
+                phase: AdvancePausePhase(),
               ),
               createTestSentences(count: 2),
             ),

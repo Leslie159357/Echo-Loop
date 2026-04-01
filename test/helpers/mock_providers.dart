@@ -30,6 +30,7 @@ import 'package:fluency/providers/learning_session/learning_session_provider.dar
 import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
 import 'package:fluency/providers/learning_session/listen_and_repeat_player_provider.dart';
+import 'package:fluency/providers/learning_session/playback_phase.dart';
 import 'package:fluency/providers/learning_session/retell_player_provider.dart';
 import 'package:fluency/models/retell_settings.dart';
 import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
@@ -1010,21 +1011,21 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
 
   @override
   Future<void> startPlaying() async {
-    state = state.copyWith(isPlaying: true);
-  }
-
-  @override
-  Future<void> pause() async {
     state = state.copyWith(
-      isPlaying: false,
-      isPauseBetweenPlays: false,
-      isPauseBetweenSentences: false,
+      phase: PlayingPhase(playCount: state.currentPlayCount),
     );
   }
 
   @override
+  Future<void> pause() async {
+    state = state.copyWith(phase: const IdlePhase());
+  }
+
+  @override
   Future<void> resume() async {
-    state = state.copyWith(isPlaying: true);
+    state = state.copyWith(
+      phase: PlayingPhase(playCount: state.currentPlayCount),
+    );
   }
 
   @override
@@ -1038,8 +1039,7 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
       state = state.copyWith(
         currentSentenceIndex: state.currentSentenceIndex + 1,
         currentPlayCount: 1,
-        isPauseBetweenPlays: false,
-        isPauseBetweenSentences: false,
+        phase: const IdlePhase(),
       );
     }
   }
@@ -1050,55 +1050,112 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
       state = state.copyWith(
         currentSentenceIndex: state.currentSentenceIndex - 1,
         currentPlayCount: 1,
-        isPauseBetweenPlays: false,
-        isPauseBetweenSentences: false,
+        phase: const IdlePhase(),
       );
     }
   }
 
   @override
   void pauseCountdown() {
-    state = state.copyWith(isCountdownPaused: true);
+    final phase = state.phase;
+    if (phase is RepeatPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: true),
+        ),
+      );
+    } else if (phase is AdvancePausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: true),
+        ),
+      );
+    } else if (phase is PostEvalPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: true),
+        ),
+      );
+    }
   }
 
   @override
   void resumeCountdown() {
-    state = state.copyWith(isCountdownPaused: false);
+    final phase = state.phase;
+    if (phase is RepeatPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: false),
+        ),
+      );
+    } else if (phase is AdvancePausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: false),
+        ),
+      );
+    } else if (phase is PostEvalPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(isPaused: false),
+        ),
+      );
+    }
   }
 
   @override
   void toggleCountdownFastForward() {
-    state = state.copyWith(
-      isCountdownFastForward: !state.isCountdownFastForward,
-      isCountdownPaused: false,
-    );
+    final phase = state.phase;
+    final newFf = !state.isCountdownFastForward;
+    if (phase is RepeatPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(
+            isFastForward: newFf,
+            isPaused: false,
+          ),
+        ),
+      );
+    } else if (phase is AdvancePausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(
+            isFastForward: newFf,
+            isPaused: false,
+          ),
+        ),
+      );
+    } else if (phase is PostEvalPausePhase) {
+      state = state.copyWith(
+        phase: phase.copyWith(
+          countdown: phase.countdown.copyWith(
+            isFastForward: newFf,
+            isPaused: false,
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Future<void> completePausedTurn() async {
     if (state.isPauseBetweenSentences) {
       if (state.currentSentenceIndex >= state.totalSentences - 1) {
-        state = state.copyWith(
-          isPlaying: false,
-          isPauseBetweenPlays: false,
-          isPauseBetweenSentences: false,
-        );
+        state = state.copyWith(phase: const IdlePhase());
         return;
       }
 
       state = state.copyWith(
         currentSentenceIndex: state.currentSentenceIndex + 1,
         currentPlayCount: 1,
-        isPauseBetweenPlays: false,
-        isPauseBetweenSentences: false,
+        phase: const IdlePhase(),
       );
       return;
     }
 
     state = state.copyWith(
       currentPlayCount: state.currentPlayCount + 1,
-      isPauseBetweenPlays: false,
-      isPauseBetweenSentences: false,
+      phase: const IdlePhase(),
     );
   }
 
@@ -1112,7 +1169,7 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
 
     if (_testSentences.isEmpty) {
       state = state.copyWith(
-        isPlaying: false,
+        phase: const IdlePhase(),
         totalSentences: 0,
       );
       return removed;
@@ -1126,7 +1183,7 @@ class TestListenAndRepeatPlayer extends ListenAndRepeatPlayer {
       currentSentenceIndex: newIndex,
       totalSentences: _testSentences.length,
       currentPlayCount: 1,
-      isPlaying: false,
+      phase: const IdlePhase(),
     );
 
     return removed;
