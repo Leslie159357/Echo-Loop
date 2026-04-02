@@ -89,14 +89,6 @@ class _ListenAndRepeatPlayerScreenState
 
   // No resources to dispose — ListenAndRepeatController manages playback/recording.
 
-  /// 构造当前句子的 promptId（用于匹配录音状态）
-  String _currentPromptId(ListenAndRepeatSessionState ctrlState) {
-    final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
-    final sentence = ctrl.currentSentence;
-    final sentenceIndex = sentence?.index ?? ctrlState.sentenceIndex;
-    return 'shadowing:${widget.audioItemId}:$sentenceIndex';
-  }
-
   /// 处理录音按钮点击
   Future<void> _handleRecordTap() async {
     final ctrlState = ref.read(listenAndRepeatControllerProvider);
@@ -111,7 +103,7 @@ class _ListenAndRepeatPlayerScreenState
     final currentSentence = ctrl.currentSentence;
     if (currentSentence == null) return;
 
-    final promptId = _currentPromptId(ctrlState);
+    final promptId = ctrl.currentPromptId;
     if (recState.isRecordingPrompt(promptId)) {
       AppLogger.log('L&R Screen', '手动停止录音 → 评估');
       await ctrl.stopRecording();
@@ -334,22 +326,12 @@ class _ListenAndRepeatPlayerScreenState
     GoRouter.of(context).push(route);
   }
 
-  /// 判断当前是否处于"等待用户操作"的停顿状态
-  ///
-  /// 包含 WaitingInterval（录音前/后）和 Recording（录音中）。
-  bool _isInPauseState(ListenAndRepeatPhase phase) {
-    return phase is WaitingInterval ||
-        phase is WaitingForUser ||
-        phase is Recording;
-  }
-
   /// 判断是否应显示倒计时芯片
   ///
   /// 仅在自动模式、倒计时中、录音已完成时显示。
   bool _shouldShowCountdown(ListenAndRepeatSessionState ctrlState) {
     if (ctrlState.phase is! WaitingInterval) return false;
     if (ref.read(listenAndRepeatSettingsProvider).isManualMode) return false;
-    // 有录音评分 = 录音已完成，正在 review 倒计时
     return ctrlState.recordingScore != null;
   }
 
@@ -398,12 +380,12 @@ class _ListenAndRepeatPlayerScreenState
     });
 
     final currentSentence = ctrl.currentSentence;
-    final currentPromptId = _currentPromptId(ctrlState);
+    final currentPromptId = ctrl.currentPromptId;
     final currentAttempt = turnState.currentAttempt;
     final isRecordingCurrent = turnState.isRecordingPrompt(currentPromptId);
 
     final isPlaying = ctrlState.phase is PlayingPrompt;
-    final isInPause = _isInPauseState(ctrlState.phase);
+    final isInPause = ctrlState.isInPause;
     final showCountdown = _shouldShowCountdown(ctrlState);
 
     // 句子时长（如 "2.8秒"）

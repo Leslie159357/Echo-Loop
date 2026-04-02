@@ -499,6 +499,13 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   /// 获取当前句子（供 Screen 读取）
   Sentence? get currentSentence => _currentSentence;
 
+  /// 当前句子的 promptId（供 Screen 匹配录音状态）
+  String get currentPromptId {
+    final sentence = _currentSentence;
+    final idx = sentence?.index ?? state.sentenceIndex;
+    return 'lar:${_config.audioItemId}:$idx';
+  }
+
   /// 当前配置（供 onStudyAgain 复用）
   ListenAndRepeatConfig get config => _config;
 
@@ -672,7 +679,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     final sentence = _currentSentence;
     if (sentence == null) return;
 
-    final promptId = 'shadowing:${_config.audioItemId}:${sentence.index}';
+    final promptId = 'lar:${_config.audioItemId}:${sentence.index}';
     state = state.copyWith(phase: Recording(promptId: promptId));
 
     // 设置录音阈值：max(2.5 × sentenceDuration + 5s, 10s)
