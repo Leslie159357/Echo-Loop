@@ -101,11 +101,9 @@ class ListenAndRepeatSessionState {
   /// 是否在等待用户操作
   bool get isWaitingForUser => phase is WaitingForUser;
 
-  /// 是否处于停顿状态（录音/等待/倒计时）
+  /// 是否处于停顿状态（包含 Recording：播放已结束，等待用户操作或录音完成）
   bool get isInPause =>
-      phase is WaitingInterval ||
-      phase is WaitingForUser ||
-      phase is Recording;
+      phase is WaitingInterval || phase is WaitingForUser || phase is Recording;
 
   /// 是否已完成
   bool get isCompleted =>

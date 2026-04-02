@@ -19,6 +19,7 @@ import '../database/enums.dart';
 import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
+import '../models/speech_practice_models.dart';
 import '../providers/speech/speech_recording_controller.dart';
 import '../providers/listen_and_repeat/listen_and_repeat_controller.dart';
 import '../providers/listen_and_repeat/listen_and_repeat_phase.dart';
@@ -40,12 +41,8 @@ import '../widgets/dialogs/step_complete_dialog.dart';
 import '../widgets/review/review_briefing_sheet.dart';
 import '../widgets/player_hotkey_scope.dart';
 import '../widgets/practice/annotation_content_view.dart';
-import '../widgets/common/playback_controls.dart';
-import '../widgets/practice/practice_play_count_label.dart';
+import '../widgets/common/repeat_practice_panel.dart';
 import '../widgets/practice/practice_progress_section.dart';
-
-/// 录音/倒计时区域固定高度（录音面板最高：24 状态 + 4 间距 + 56 按钮 + 16 底部 = 100）
-const double _kTurnAreaHeight = 100;
 
 /// 跟读播放器页面
 class ListenAndRepeatPlayerScreen extends ConsumerStatefulWidget {
@@ -75,8 +72,6 @@ class _ListenAndRepeatPlayerScreenState
   /// 是否正在显示完成弹窗，防止重复弹窗
   bool _isShowingDialog = false;
 
-  /// 跟读配置（initState 中初始化，onStudyAgain 复用）
-
   @override
   void initState() {
     super.initState();
@@ -87,9 +82,6 @@ class _ListenAndRepeatPlayerScreenState
     });
   }
 
-  // No resources to dispose — ListenAndRepeatController manages playback/recording.
-
-
   /// 处理退出（close 按钮 / 系统返回）
   Future<void> _handleExit() async {
     _isExiting = true;
@@ -97,8 +89,8 @@ class _ListenAndRepeatPlayerScreenState
     ctrl.enterWaitingForUser();
     if (!mounted) return;
 
-    final session = ref.read(listenAndRepeatControllerProvider);
-    if (session.isFreePlay) {
+    final ctrlState = ref.read(listenAndRepeatControllerProvider);
+    if (ctrlState.isFreePlay) {
       await ctrl.saveBreakpoint(isFreePlay: true);
       await ctrl.exitLearningMode();
       if (mounted) context.pop();
@@ -197,7 +189,6 @@ class _ListenAndRepeatPlayerScreenState
 
     final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
     final ctrlState = ref.read(listenAndRepeatControllerProvider);
-    final session = ref.read(listenAndRepeatControllerProvider);
 
     if (!mounted) return;
 
@@ -207,7 +198,7 @@ class _ListenAndRepeatPlayerScreenState
     if (!mounted) return;
 
     // 自由练习模式
-    if (session.isFreePlay) {
+    if (ctrlState.isFreePlay) {
       final l10n = AppLocalizations.of(context)!;
       await handleFreePlayComplete(
         context: context,
@@ -286,6 +277,95 @@ class _ListenAndRepeatPlayerScreenState
     GoRouter.of(context).push(route);
   }
 
+  /// 构建中间区域内容（倒计时 / 录音按钮+状态标签 / 加载动画）
+  Widget _buildCenterContent({
+    required bool showCountdown,
+    required bool isInPause,
+    required SpeechRecordingState turnState,
+    required String currentPromptId,
+    required bool isRecordingCurrent,
+    required SpeechPracticeAttempt? currentAttempt,
+    required AppLocalizations l10n,
+  }) {
+    if (showCountdown) {
+      return Center(
+        child: Consumer(
+          builder: (context, ref, _) {
+            final phase = ref.watch(
+              listenAndRepeatControllerProvider.select((s) => s.phase),
+            );
+            if (phase is! WaitingInterval) {
+              return const SizedBox.shrink();
+            }
+            final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
+            return CountdownChip(
+              remaining: phase.remaining,
+              total: phase.total,
+              isPaused: phase.isPaused,
+              onPause: ctrl.pauseInterval,
+              onResume: ctrl.resumeInterval,
+            );
+          },
+        ),
+      );
+    }
+
+    if (isInPause) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.m),
+        child: Builder(
+          builder: (context) {
+            final isProcessing =
+                turnState.promptId == currentPromptId &&
+                turnState.phase == SpeechRecordingPhase.processing;
+
+            if (isProcessing) {
+              return ProcessingIndicator(text: l10n.listenAndRepeatAnalyzing);
+            }
+
+            final mode = isRecordingCurrent
+                ? switch (turnState.phase) {
+                    SpeechRecordingPhase.awaitingSpeech ||
+                    SpeechRecordingPhase.speaking =>
+                      RecordingButtonMode.recording,
+                    _ => RecordingButtonMode.idle,
+                  }
+                : RecordingButtonMode.idle;
+
+            final hasError = currentAttempt?.errorMessage != null;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StatusLabel(
+                  text: hasError
+                      ? currentAttempt!.errorMessage
+                      : switch (mode) {
+                          RecordingButtonMode.idle =>
+                            l10n.listenAndRepeatTapToRecord,
+                          RecordingButtonMode.recording =>
+                            l10n.listenAndRepeatRecordingInProgress,
+                          RecordingButtonMode.disabled => null,
+                        },
+                  color: hasError ? Theme.of(context).colorScheme.error : null,
+                  bold: hasError,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                RecordingButton(
+                  mode: mode,
+                  onTap: () => ref
+                      .read(listenAndRepeatControllerProvider.notifier)
+                      .onRecordButtonTapped(),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +404,9 @@ class _ListenAndRepeatPlayerScreenState
     ) {
       if (prev != null && !_isExiting) {
         if (next.phase is SessionCompleted && prev.phase is! SessionCompleted) {
-          ref.read(listenAndRepeatControllerProvider.notifier).pauseStudyTimer();
+          ref
+              .read(listenAndRepeatControllerProvider.notifier)
+              .pauseStudyTimer();
           shortenIdleTimeout(5);
           _handleCompleted();
         }
@@ -371,15 +453,11 @@ class _ListenAndRepeatPlayerScreenState
           }
         },
         onPrevious: () {
-          ref
-              .read(speechRecordingControllerProvider.notifier)
-              .clearRecording();
+          ref.read(speechRecordingControllerProvider.notifier).clearRecording();
           unawaited(ctrl.previousSentence());
         },
         onNext: () {
-          ref
-              .read(speechRecordingControllerProvider.notifier)
-              .clearRecording();
+          ref.read(speechRecordingControllerProvider.notifier).clearRecording();
           unawaited(ctrl.nextSentence());
         },
         child: PopScope(
@@ -399,8 +477,12 @@ class _ListenAndRepeatPlayerScreenState
               actions: [
                 IconButton(
                   icon: const Icon(Icons.tune),
-                  onPressed: () =>
-                      showListenAndRepeatSettingsSheet(context: context),
+                  onPressed: () {
+                    ref
+                        .read(listenAndRepeatControllerProvider.notifier)
+                        .enterWaitingForUser();
+                    showListenAndRepeatSettingsSheet(context: context);
+                  },
                 ),
               ],
             ),
@@ -430,7 +512,10 @@ class _ListenAndRepeatPlayerScreenState
                               BookmarkToggleRow(
                                 isDifficult: currentSentence.isBookmarked,
                                 onTap: () => ref
-                                    .read(listenAndRepeatControllerProvider.notifier)
+                                    .read(
+                                      listenAndRepeatControllerProvider
+                                          .notifier,
+                                    )
                                     .toggleCurrentBookmark(),
                               ),
                               const SizedBox(height: AppSpacing.m),
@@ -452,10 +537,7 @@ class _ListenAndRepeatPlayerScreenState
                                     ctrl.onUserInteraction();
                                   },
                                   onToolbarButtonTapped: () {
-                                    AppLogger.log(
-                                      'L&R Screen',
-                                      '工具栏点击: 打断流程',
-                                    );
+                                    AppLogger.log('L&R Screen', '工具栏点击: 打断流程');
                                     ctrl.onUserInteraction();
                                   },
                                 ),
@@ -466,209 +548,103 @@ class _ListenAndRepeatPlayerScreenState
                   ),
                 ),
 
-                // 底部区域：录音/提示 + 播放控制 + 遍数
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppSpacing.l,
-                    right: AppSpacing.l,
-                    bottom: AppSpacing.m,
+                // 底部区域：评分 + 录音/倒计时 + 播放控制 + 遍数
+                RepeatPracticePanel(
+                  l10n: l10n,
+                  theme: theme,
+                  ratingBadge:
+                      (currentAttempt != null && currentAttempt.score != null)
+                      ? SpeechRatingBadge(
+                          l10n: l10n,
+                          attempt: currentAttempt,
+                          isPlaying: ctrlState.phase is ReviewingRecording,
+                          onTap: currentAttempt.hasRecording
+                              ? () => ref
+                                    .read(
+                                      listenAndRepeatControllerProvider
+                                          .notifier,
+                                    )
+                                    .togglePlayback()
+                              : null,
+                        )
+                      : null,
+                  centerContent: _buildCenterContent(
+                    showCountdown: showCountdown,
+                    isInPause: isInPause,
+                    turnState: turnState,
+                    currentPromptId: currentPromptId,
+                    isRecordingCurrent: isRecordingCurrent,
+                    currentAttempt: currentAttempt,
+                    l10n: l10n,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 评级 badge（点击播放录音），和复述页面同位置
-                      if (currentAttempt != null &&
-                          currentAttempt.score != null)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            top: AppSpacing.s,
-                            bottom: AppSpacing.xs,
-                          ),
-                          child: Center(
-                            child: SpeechRatingBadge(
-                              l10n: l10n,
-                              attempt: currentAttempt,
-                              isPlaying: ctrlState.phase is ReviewingRecording,
-                              onTap: currentAttempt.hasRecording
-                                  ? () => ref.read(listenAndRepeatControllerProvider.notifier).togglePlayback()
-                                  : null,
-                            ),
-                          ),
-                        ),
-                      // 评估后倒计时 / 录音面板
-                      // 固定高度，避免倒计时消失后 badge 位置跳动
-                      SizedBox(
-                        height: _kTurnAreaHeight,
-                        child: showCountdown
-                            ? Center(
-                                child: Consumer(
-                                  builder: (context, ref, _) {
-                                    // select 安全取值（select 在任何 state 变化时都执行）
-                                    final phase = ref.watch(
-                                      listenAndRepeatControllerProvider.select(
-                                        (s) => s.phase,
-                                      ),
-                                    );
-                                    if (phase is! WaitingInterval) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    final remaining = phase.remaining;
-                                    final total = phase.total;
-                                    final isPaused = phase.isPaused;
-                                    final ctrl = ref.read(
-                                      listenAndRepeatControllerProvider.notifier,
-                                    );
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        CountdownChip(
-                                          remaining: remaining,
-                                          total: total,
-                                          isPaused: isPaused,
-                                          onPause: ctrl.pauseInterval,
-                                          onResume: ctrl.resumeInterval,
-                                        ),
-                                        if (!isPaused) ...[
-                                          const SizedBox(width: 16),
-                                          GestureDetector(
-                                            onTap: ctrl.fastForwardInterval,
-                                            child: Icon(
-                                              Icons.fast_forward_rounded,
-                                              size: 32,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                                  .withValues(alpha: 0.6),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    );
-                                  },
+                  fastForwardButton: showCountdown
+                      ? Consumer(
+                          builder: (context, ref, _) {
+                            final phase = ref.watch(
+                              listenAndRepeatControllerProvider.select(
+                                (s) => s.phase,
+                              ),
+                            );
+                            if (phase is! WaitingInterval || phase.isPaused) {
+                              return const SizedBox.shrink();
+                            }
+                            return GestureDetector(
+                              onTap: ref
+                                  .read(
+                                    listenAndRepeatControllerProvider.notifier,
+                                  )
+                                  .fastForwardInterval,
+                              child: Icon(
+                                Icons.fast_forward_rounded,
+                                size: 32,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
                                 ),
-                              )
-                            : isInPause
-                            ? Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpacing.m,
-                                ),
-                                child: Builder(
-                                  builder: (context) {
-                                    final isProcessing =
-                                        turnState.promptId == currentPromptId &&
-                                        turnState.phase ==
-                                            SpeechRecordingPhase.processing;
-
-                                    // 评估中 → 显示 ProcessingIndicator
-                                    if (isProcessing) {
-                                      return ProcessingIndicator(
-                                        text: l10n.listenAndRepeatAnalyzing,
-                                      );
-                                    }
-
-                                    final mode = isRecordingCurrent
-                                        ? switch (turnState.phase) {
-                                            SpeechRecordingPhase
-                                                .awaitingSpeech ||
-                                            SpeechRecordingPhase.speaking =>
-                                              RecordingButtonMode.recording,
-                                            _ => RecordingButtonMode.idle,
-                                          }
-                                        : RecordingButtonMode.idle;
-
-                                    final hasError =
-                                        currentAttempt?.errorMessage != null;
-
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        StatusLabel(
-                                          text: hasError
-                                              ? currentAttempt!.errorMessage
-                                              : switch (mode) {
-                                                  RecordingButtonMode.idle =>
-                                                    l10n.listenAndRepeatTapToRecord,
-                                                  RecordingButtonMode
-                                                      .recording =>
-                                                    l10n.listenAndRepeatRecordingInProgress,
-                                                  RecordingButtonMode
-                                                      .disabled =>
-                                                    null,
-                                                },
-                                          color: hasError
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.error
-                                              : null,
-                                          bold: hasError,
-                                        ),
-                                        const SizedBox(height: AppSpacing.xs),
-                                        RecordingButton(
-                                          mode: mode,
-                                          onTap: () => ref.read(listenAndRepeatControllerProvider.notifier).onRecordButtonTapped(),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      // 播放控制
-                      PlaybackControls(
-                        canGoPrev: !ctrlState.isFirstSentence,
-                        isLast: ctrlState.isLastSentence,
-                        centerIcon: isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        onPrevious: () {
-                          ref
-                              .read(
-                                speechRecordingControllerProvider.notifier,
-                              )
-                              .clearRecording();
-                          unawaited(ctrl.previousSentence());
-                        },
-                        onNext: () {
-                          ref
-                              .read(
-                                speechRecordingControllerProvider.notifier,
-                              )
-                              .clearRecording();
-                          if (ctrlState.isLastSentence) {
-                            // 最后一句：停止播放，直接弹窗
-                            ctrl.stopSession();
-                            _handleCompleted();
-                          } else {
-                            unawaited(ctrl.nextSentence());
-                          }
-                        },
-                        onCenter: () {
-                          if (isInPause) {
-                            ref
-                                .read(
-                                  speechRecordingControllerProvider.notifier,
-                                )
-                                .clearRecording();
-                            ctrl.replayCurrentSentence();
-                          } else if (isPlaying) {
-                            ctrl.enterWaitingForUser();
-                          } else {
-                            ctrl.replayCurrentSentence();
-                          }
-                        },
-                      ),
-                      // 遍数 + 模式指示器
-                      PracticePlayCountLabel(
-                        isManualMode: ref.read(listenAndRepeatSettingsProvider).isManualMode,
-                        playCountText: l10n.listenAndRepeatPlayCount(
-                          ctrlState.repeatIndex + 1,
-                          ctrlState.totalRepeats,
-                        ),
-                        l10n: l10n,
-                        theme: theme,
-                      ),
-                    ],
+                              ),
+                            );
+                          },
+                        )
+                      : null,
+                  canGoPrev: !ctrlState.isFirstSentence,
+                  isLast: ctrlState.isLastSentence,
+                  centerIcon: isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  onPrevious: () {
+                    ref
+                        .read(speechRecordingControllerProvider.notifier)
+                        .clearRecording();
+                    unawaited(ctrl.previousSentence());
+                  },
+                  onNext: () {
+                    ref
+                        .read(speechRecordingControllerProvider.notifier)
+                        .clearRecording();
+                    if (ctrlState.isLastSentence) {
+                      ctrl.stopSession();
+                      _handleCompleted();
+                    } else {
+                      unawaited(ctrl.nextSentence());
+                    }
+                  },
+                  onCenter: () {
+                    if (isInPause) {
+                      ref
+                          .read(speechRecordingControllerProvider.notifier)
+                          .clearRecording();
+                      ctrl.replayCurrentSentence();
+                    } else if (isPlaying) {
+                      ctrl.enterWaitingForUser();
+                    } else {
+                      ctrl.replayCurrentSentence();
+                    }
+                  },
+                  isManualMode: ref
+                      .read(listenAndRepeatSettingsProvider)
+                      .isManualMode,
+                  playCountText: l10n.listenAndRepeatPlayCount(
+                    ctrlState.repeatIndex + 1,
+                    ctrlState.totalRepeats,
                   ),
                 ),
               ],

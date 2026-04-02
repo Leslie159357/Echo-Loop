@@ -34,6 +34,27 @@ import 'listen_and_repeat_settings_provider.dart';
 
 part 'listen_and_repeat_controller.g.dart';
 
+/// 智能停顿模式下句子时长的倍数
+const _kSmartPauseMultiplier = 2;
+
+/// 智能停顿最小时长（毫秒）
+const _kSmartPauseMinMs = 2000;
+
+/// 倍率停顿最小时长（毫秒）
+const _kMultiplierPauseMinMs = 1000;
+
+/// 倒计时快进速度倍率
+const _kFastForwardSpeed = 10.0;
+
+/// 录音最大时长 = sentenceDuration × 此倍率 + _kRecordingTimeoutBase
+const _kRecordingDurationMultiplier = 2.5;
+
+/// 录音超时基础时长
+const _kRecordingTimeoutBase = Duration(seconds: 5);
+
+/// 录音最小超时时长
+const _kRecordingMinTimeout = Duration(seconds: 10);
+
 /// 跟读差异化配置
 ///
 /// 各页面（跟读/难句补练/收藏复习）通过不同 Config 注入差异行为。
@@ -70,7 +91,6 @@ class ListenAndRepeatConfig {
 @Riverpod(keepAlive: true)
 class ListenAndRepeatController extends _$ListenAndRepeatController
     with StudyTaskControllerMixin {
-
   /// 句子列表
   List<Sentence> _sentences = [];
 
@@ -82,7 +102,6 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
 
   /// 录音回放服务
   final AudioPlaybackService _playbackService = AudioPlaybackService();
-
 
   @override
   ListenAndRepeatSessionState build() {
@@ -126,7 +145,9 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   }) async {
     // 从 DB 读难句索引
     final bookmarkDao = ref.read(bookmarkDaoProvider);
-    final bookmarkedIndices = await bookmarkDao.getBookmarkedIndices(audioItemId);
+    final bookmarkedIndices = await bookmarkDao.getBookmarkedIndices(
+      audioItemId,
+    );
     final difficultSentences = allSentences
         .where((s) => bookmarkedIndices.contains(s.index))
         .toList();
@@ -143,8 +164,9 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     }
 
     // 根据难度计算目标遍数
-    final targetPlayCount =
-        targetPlayCountForDifficulty(progress.difficulty.value);
+    final targetPlayCount = targetPlayCountForDifficulty(
+      progress.difficulty.value,
+    );
 
     // 初始化设置
     ref
@@ -162,23 +184,28 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     // 构造 config 并启动会话
     final config = ListenAndRepeatConfig(
       audioItemId: audioItemId,
-      getRepeatCount: (_) => ref.read(listenAndRepeatSettingsProvider).repeatCount,
+      getRepeatCount: (_) =>
+          ref.read(listenAndRepeatSettingsProvider).repeatCount,
       getIntervalDuration: (s) {
         final st = ref.read(listenAndRepeatSettingsProvider);
         return switch (st.pauseMode) {
           PauseMode.smart => Duration(
-              milliseconds: math.max(s.duration.inMilliseconds * 2, 2000),
+            milliseconds: math.max(
+              s.duration.inMilliseconds * _kSmartPauseMultiplier,
+              _kSmartPauseMinMs,
             ),
+          ),
           PauseMode.fixed => Duration(seconds: st.fixedPauseSeconds),
           PauseMode.multiplier => Duration(
-              milliseconds: math.max(
-                (s.duration.inMilliseconds * st.pauseMultiplier).round(),
-                1000,
-              ),
+            milliseconds: math.max(
+              (s.duration.inMilliseconds * st.pauseMultiplier).round(),
+              _kMultiplierPauseMinMs,
             ),
+          ),
         };
       },
-      isManualMode: () => ref.read(listenAndRepeatSettingsProvider).isManualMode,
+      isManualMode: () =>
+          ref.read(listenAndRepeatSettingsProvider).isManualMode,
     );
 
     // 只准备数据，不自动播放。Screen 进入后调 startPlaying()。
@@ -239,7 +266,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
       return;
     }
 
-    _stopAllResources();
+    _stopActiveResources();
     state = state.copyWith(
       phase: const WaitingForUser(WaitingReason.userInteraction),
     );
@@ -309,9 +336,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     final sentence = _currentSentence;
     if (sentence == null) return;
 
-    final recController = ref.read(
-      speechRecordingControllerProvider.notifier,
-    );
+    final recController = ref.read(speechRecordingControllerProvider.notifier);
     final recState = ref.read(speechRecordingControllerProvider);
 
     if (!recState.hasDetectedSpeech) {
@@ -335,18 +360,15 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     if (path == null || path.isEmpty) return;
 
     final phase = state.phase;
-    if (phase is! WaitingInterval &&
-        phase is! WaitingForUser &&
-        phase is! Idle) return;
+    if (phase is! WaitingInterval && phase is! WaitingForUser && phase is! Idle)
+      return;
 
     // 如果在倒计时中，取消倒计时
     if (phase is WaitingInterval) {
       _countdown.cancel();
     }
 
-    state = state.copyWith(
-      phase: ReviewingRecording(recordingPath: path),
-    );
+    state = state.copyWith(phase: ReviewingRecording(recordingPath: path));
     final token = state.flowToken;
     AppLogger.log('L&R', '播放录音回放: $path');
 
@@ -389,8 +411,11 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     );
     if (state.phase is! WaitingInterval) return;
     if (!_countdown.isActive) return;
-    _countdown.setSpeed(10.0);
-    AppLogger.log('L&R', '倒计时快进 10x → speed=${_countdown.speed}');
+    _countdown.setSpeed(_kFastForwardSpeed);
+    AppLogger.log(
+      'L&R',
+      '倒计时快进 ${_kFastForwardSpeed}x → speed=${_countdown.speed}',
+    );
   }
 
   /// 暂停倒计时（WaitingInterval 中用户点击倒计时圆环）
@@ -444,7 +469,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   ///
   /// 停止所有资源，保持当前遍数，重新播放当前句子。
   Future<void> replayCurrentSentence() async {
-    _stopAllResources();
+    _stopActiveResources();
     ref.read(speechRecordingControllerProvider.notifier).clearRecording();
     state = state.copyWith(
       recordingPath: null,
@@ -705,10 +730,12 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     final promptId = 'lar:${_config.audioItemId}:${sentence.index}';
     state = state.copyWith(phase: Recording(promptId: promptId));
 
-    // 设置录音阈值：max(2.5 × sentenceDuration + 5s, 10s)
-    final computed = sentence.duration * 2.5 + const Duration(seconds: 5);
-    final maxDuration = computed < const Duration(seconds: 10)
-        ? const Duration(seconds: 10)
+    // 设置录音阈值：max(multiplier × sentenceDuration + base, minTimeout)
+    final computed =
+        sentence.duration * _kRecordingDurationMultiplier +
+        _kRecordingTimeoutBase;
+    final maxDuration = computed < _kRecordingMinTimeout
+        ? _kRecordingMinTimeout
         : computed;
 
     final controller = ref.read(speechRecordingControllerProvider.notifier);
@@ -760,10 +787,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
       }
     } else {
       final nextRepeat = state.repeatIndex + 1;
-      AppLogger.log(
-        'L&R',
-        '下一遍: ${nextRepeat + 1}/${state.totalRepeats}',
-      );
+      AppLogger.log('L&R', '下一遍: ${nextRepeat + 1}/${state.totalRepeats}');
       ref.read(speechRecordingControllerProvider.notifier).clearRecording();
       state = state.copyWith(
         repeatIndex: nextRepeat,
@@ -795,22 +819,20 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
 
   /// 原子重置：停止所有资源 + 递增 token
   void _atomicReset() {
-    _stopAllResources();
+    _stopActiveResources();
     state = state.copyWith(flowToken: state.flowToken + 1);
   }
 
-  /// 停止所有资源服务
-  void _stopAllResources() {
+  /// 停止正在进行的活动（播放/倒计时/录音），保留已有评估结果。
+  void _stopActiveResources() {
     ref.read(audioEngineProvider.notifier).pause();
     _countdown.cancel();
-    final recController = ref.read(
-      speechRecordingControllerProvider.notifier,
-    );
+    final recController = ref.read(speechRecordingControllerProvider.notifier);
     recController.cancelActiveRecording();
-    recController.clearRecording();
+    // 不调 clearRecording()：保留已有评分 badge 和匹配高亮。
+    // 录音数据由 Screen 在导航操作（切句/重播）前显式清除。
     _playbackService.stop();
   }
-
 
   /// 当前句子
   Sentence? get _currentSentence =>
