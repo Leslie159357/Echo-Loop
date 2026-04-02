@@ -389,7 +389,10 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   }
 
   /// 用户打开弹窗（查词典/设置等）→ 进入等待用户状态
+  ///
+  /// 仅自动模式生效。手动模式下用户完全自主控制，不自动打断。
   void onUserInteraction() {
+    if (_config.isManualMode()) return;
     enterWaitingForUser();
   }
 
