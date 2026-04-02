@@ -39,6 +39,9 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   /// 是否为自由练习模式
   bool _isFreePlay = false;
 
+  /// 当前会话句子列表（包含页面级业务字段，如 bookmark 状态）
+  List<Sentence> _sentences = [];
+
   @override
   ListenAndRepeatSessionState build() {
     // 创建引擎
@@ -173,8 +176,9 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     bool isFreePlay = false,
   }) async {
     _isFreePlay = isFreePlay;
+    _sentences = sentences.map((s) => s.copyWith()).toList();
     _engine.prepare(
-      sentences: sentences,
+      sentences: _sentences,
       config: config,
       startIndex: startIndex,
     );
@@ -228,8 +232,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   void resumeInterval() => _engine.resumeInterval();
 
   /// 重播当前句子
-  Future<void> replayCurrentSentence() async =>
-      _engine.replayCurrentSentence();
+  Future<void> replayCurrentSentence() async => _engine.replayCurrentSentence();
 
   /// 停止会话
   void stopSession() => _engine.stopSession();
@@ -240,13 +243,17 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     ref.read(speechRecordingControllerProvider.notifier).fullReset();
   }
 
-  /// 用户关闭设置弹窗 → 同步设置变更并重新开始当前句
-  Future<void> onSettingsClosed() async {
+  /// 应用会话内设置变更，并立即按新配置重建当前句流程。
+  ///
+  /// 设置面板是即时写回 Provider 的，因此这里不能等弹窗关闭后再处理。
+  Future<void> applySettingsChange() async {
     ref
         .read(speechRecordingControllerProvider.notifier)
         .setManualMode(_engine.config.isManualMode());
-    // 设置可能改变了遍数/停顿时长，从第一遍重新开始
-    await _engine.restartCurrentSentence();
+    // 等待态只刷新当前句配置，不应立刻自动重播。
+    await _engine.restartCurrentSentence(
+      autoplay: state.phase is! WaitingForUser,
+    );
   }
 
   /// 暂停学习计时（完成弹窗显示时调用）
@@ -257,13 +264,12 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
 
   /// 切换当前句子的收藏标记
   Future<void> toggleCurrentBookmark() async {
-    final sentences = _engine.sentences;
-    if (sentences.isEmpty) return;
+    if (_sentences.isEmpty) return;
     final idx = state.sentenceIndex;
-    final s = sentences[idx];
+    final s = _sentences[idx];
     final wasBookmarked = s.isBookmarked;
-
-    _engine.updateSentenceBookmark(idx, !wasBookmarked);
+    _sentences[idx] = s.copyWith(isBookmarked: !wasBookmarked);
+    state = state.copyWith(currentSentenceBookmarked: !wasBookmarked);
 
     final bookmarkDao = ref.read(bookmarkDaoProvider);
     if (wasBookmarked) {
@@ -322,7 +328,10 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   // ========== 数据访问 ==========
 
   /// 当前句子
-  Sentence? get currentSentence => _engine.currentSentence;
+  Sentence? get currentSentence =>
+      _sentences.isNotEmpty && state.sentenceIndex < _sentences.length
+      ? _sentences[state.sentenceIndex]
+      : null;
 
   /// 当前 promptId
   String get currentPromptId => _engine.currentPromptId;
@@ -334,15 +343,20 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   int get currentIndex => state.sentenceIndex;
 
   /// 句子列表
-  List<Sentence> get sentences => _engine.sentences;
+  List<Sentence> get sentences => List.unmodifiable(_sentences);
 
   // ========== Engine 回调实现 ==========
 
   /// Engine 状态变化 → 更新 Riverpod state
   void _onEngineStateChanged(RepeatFlowState flowState) {
+    final isBookmarked =
+        _sentences.isNotEmpty && flowState.sentenceIndex < _sentences.length
+        ? _sentences[flowState.sentenceIndex].isBookmarked
+        : false;
     state = ListenAndRepeatSessionState.fromFlowState(
       flowState,
       isFreePlay: _isFreePlay,
+      currentSentenceBookmarked: isBookmarked,
     );
   }
 

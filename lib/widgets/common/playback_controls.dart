@@ -11,6 +11,8 @@ import 'tappable_wrapper.dart';
 
 /// 播放控制栏：[上一个] [播放/暂停] [下一个/完成]
 class PlaybackControls extends StatelessWidget {
+  static const double controlButtonSize = 56;
+
   /// 是否可以返回上一个
   final bool canGoPrev;
 
@@ -60,8 +62,8 @@ class PlaybackControls extends StatelessWidget {
             feedbackType: TapFeedback.scale,
             scaleDown: 0.92,
             child: Container(
-              width: 56,
-              height: 56,
+              width: controlButtonSize,
+              height: controlButtonSize,
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
@@ -129,12 +131,18 @@ class PlaybackNavButton extends StatelessWidget {
       feedbackType: TapFeedback.opacityAndScale,
       pressedOpacity: 0.4,
       scaleDown: 0.85,
-      child: Opacity(
-        opacity: 0.6,
-        child: Icon(
-          icon,
-          size: 32,
-          color: Theme.of(context).colorScheme.onSurface,
+      child: SizedBox(
+        width: PlaybackControls.controlButtonSize,
+        height: PlaybackControls.controlButtonSize,
+        child: Center(
+          child: Opacity(
+            opacity: 0.6,
+            child: Icon(
+              icon,
+              size: 32,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
         ),
       ),
     );

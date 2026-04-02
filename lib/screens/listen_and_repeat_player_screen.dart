@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../database/enums.dart';
+import '../models/intensive_listen_settings.dart';
 import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
@@ -67,6 +68,9 @@ class _ListenAndRepeatPlayerScreenState
   /// 是否正在显示完成弹窗，防止重复弹窗
   bool _isShowingDialog = false;
 
+  ProviderSubscription<ListenAndRepeatSessionState>? _controllerSubscription;
+  ProviderSubscription<IntensiveListenSettings>? _settingsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -76,12 +80,47 @@ class _ListenAndRepeatPlayerScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(listenAndRepeatControllerProvider.notifier).startPlaying();
     });
+    _controllerSubscription = ref.listenManual<ListenAndRepeatSessionState>(
+      listenAndRepeatControllerProvider,
+      _handleControllerStateChanged,
+    );
+    _settingsSubscription = ref.listenManual<IntensiveListenSettings>(
+      listenAndRepeatSettingsProvider,
+      _handleSettingsChanged,
+    );
   }
 
   @override
   void dispose() {
+    _settingsSubscription?.close();
+    _controllerSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _handleControllerStateChanged(
+    ListenAndRepeatSessionState? prev,
+    ListenAndRepeatSessionState next,
+  ) {
+    if (prev != null && !_isExiting) {
+      if (next.phase is SessionCompleted && prev.phase is! SessionCompleted) {
+        ref.read(listenAndRepeatControllerProvider.notifier).pauseStudyTimer();
+        shortenIdleTimeout(5);
+        unawaited(_handleCompleted());
+      }
+    }
+  }
+
+  void _handleSettingsChanged(
+    IntensiveListenSettings? prev,
+    IntensiveListenSettings next,
+  ) {
+    if (prev == null || _isExiting) return;
+    unawaited(
+      ref
+          .read(listenAndRepeatControllerProvider.notifier)
+          .applySettingsChange(),
+    );
   }
 
   @override
@@ -304,9 +343,12 @@ class _ListenAndRepeatPlayerScreenState
           s.totalRepeats,
           s.phase.runtimeType,
           s.recordingScore,
-          s.flowToken,
+          s.currentSentenceBookmarked,
         ),
       ),
+    );
+    final isManualMode = ref.watch(
+      listenAndRepeatSettingsProvider.select((s) => s.isManualMode),
     );
     final ctrlState = ref.read(listenAndRepeatControllerProvider);
     final ctrl = ref.read(listenAndRepeatControllerProvider.notifier);
@@ -318,22 +360,6 @@ class _ListenAndRepeatPlayerScreenState
       ),
     );
     final turnState = ref.read(speechRecordingControllerProvider);
-
-    // 监听完成信号 → 触发完成弹窗
-    ref.listen<ListenAndRepeatSessionState>(listenAndRepeatControllerProvider, (
-      prev,
-      next,
-    ) {
-      if (prev != null && !_isExiting) {
-        if (next.phase is SessionCompleted && prev.phase is! SessionCompleted) {
-          ref
-              .read(listenAndRepeatControllerProvider.notifier)
-              .pauseStudyTimer();
-          shortenIdleTimeout(5);
-          _handleCompleted();
-        }
-      }
-    });
 
     final currentSentence = ctrl.currentSentence;
     final currentPromptId = ctrl.currentPromptId;
@@ -430,7 +456,8 @@ class _ListenAndRepeatPlayerScreenState
                             children: [
                               const SizedBox(height: AppSpacing.s),
                               BookmarkToggleRow(
-                                isDifficult: currentSentence.isBookmarked,
+                                isDifficult:
+                                    ctrlState.currentSentenceBookmarked,
                                 onTap: () => ref
                                     .read(
                                       listenAndRepeatControllerProvider
@@ -500,8 +527,9 @@ class _ListenAndRepeatPlayerScreenState
                           child: Consumer(
                             builder: (context, ref, _) {
                               final phase = ref.watch(
-                                listenAndRepeatControllerProvider
-                                    .select((s) => s.phase),
+                                listenAndRepeatControllerProvider.select(
+                                  (s) => s.phase,
+                                ),
                               );
                               if (phase is! WaitingInterval) {
                                 return const SizedBox.shrink();
@@ -579,9 +607,7 @@ class _ListenAndRepeatPlayerScreenState
                       ctrl.replayCurrentSentence();
                     }
                   },
-                  isManualMode: ref
-                      .read(listenAndRepeatSettingsProvider)
-                      .isManualMode,
+                  isManualMode: isManualMode,
                   playCountText: l10n.listenAndRepeatPlayCount(
                     ctrlState.repeatIndex + 1,
                     ctrlState.totalRepeats,

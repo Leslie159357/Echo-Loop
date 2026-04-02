@@ -8,9 +8,15 @@
 /// - flowToken 防竞态
 /// - 快进倒计时
 /// - 手动模式
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
+import 'package:fluency/database/daos/bookmark_dao.dart';
+import 'package:fluency/database/providers.dart';
+import 'package:fluency/database/app_database.dart';
 import 'package:fluency/models/audio_engine_state.dart';
 import 'package:fluency/models/sentence.dart';
 import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
@@ -18,15 +24,18 @@ import 'package:fluency/providers/speech/speech_recording_controller.dart';
 import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_controller.dart';
 import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_phase.dart';
 import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
+import 'package:fluency/providers/repeat_flow/repeat_flow_engine.dart';
 
 import '../../helpers/mock_providers.dart';
+
+class _MockBookmarkDao extends Mock implements BookmarkDao {}
 
 /// 测试用 AudioEngine — playClipOnce 即时完成
 class _InstantAudioEngine extends TestAudioEngine {
   int _sessionId = 0;
 
   _InstantAudioEngine()
-      : super(initialState: const AudioEngineState(sessionId: 0));
+    : super(initialState: const AudioEngineState(sessionId: 0));
 
   @override
   int newSession() {
@@ -45,13 +54,38 @@ class _InstantAudioEngine extends TestAudioEngine {
   }
 }
 
+/// 测试用可控 AudioEngine
+class _ControlledAudioEngine extends TestAudioEngine {
+  int _sessionId = 0;
+  Completer<void>? playCompleter;
+
+  _ControlledAudioEngine()
+    : super(initialState: const AudioEngineState(sessionId: 0));
+
+  @override
+  int newSession() {
+    _sessionId += 1;
+    return _sessionId;
+  }
+
+  @override
+  bool isActiveSession(int id) => id == _sessionId;
+
+  @override
+  Future<void> playClipOnce(Sentence sentence, int sessionId) async {
+    if (!isActiveSession(sessionId)) return;
+    final completer = playCompleter ??= Completer<void>();
+    await completer.future;
+  }
+}
+
 /// 测试用默认配置
-ListenAndRepeatConfig _testConfig({
+RepeatFlowConfig _testConfig({
   int repeatCount = 3,
   Duration interval = const Duration(milliseconds: 100),
   bool isManualMode = false,
 }) {
-  return ListenAndRepeatConfig(
+  return RepeatFlowConfig(
     audioItemId: 'test-audio',
     getRepeatCount: (_) => repeatCount,
     getIntervalDuration: (_) => interval,
@@ -60,6 +94,10 @@ ListenAndRepeatConfig _testConfig({
 }
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(const BookmarksCompanion());
+  });
+
   late ProviderContainer container;
   late ListenAndRepeatController controller;
 
@@ -88,7 +126,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       // playClipOnce 即时完成 → 自动进入 Recording（自动模式）
       // 但录音还没接入，_onPromptFinished 会设置 Recording
@@ -106,7 +144,7 @@ void main() {
         config: _testConfig(),
         startIndex: 2,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       expect(readState().sentenceIndex, 2);
     });
@@ -117,7 +155,7 @@ void main() {
         config: _testConfig(),
         startIndex: 99,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       expect(readState().sentenceIndex, 2); // clamped to last
     });
@@ -129,7 +167,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       expect(readState().phase, isA<Recording>());
 
@@ -149,7 +187,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
       controller.enterWaitingForUser();
       expect(readState().phase, isA<WaitingForUser>());
 
@@ -162,7 +200,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       controller.onUserInteraction();
 
@@ -176,7 +214,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
       final tokenBefore = readState().flowToken;
 
       await controller.nextSentence();
@@ -193,7 +231,7 @@ void main() {
         config: _testConfig(),
         startIndex: 2,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       await controller.previousSentence();
 
@@ -206,7 +244,7 @@ void main() {
         config: _testConfig(),
         startIndex: 0,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       await controller.previousSentence();
       expect(readState().sentenceIndex, 0); // 不变
@@ -218,7 +256,7 @@ void main() {
         config: _testConfig(),
         startIndex: 2,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       await controller.nextSentence();
       expect(readState().sentenceIndex, 2); // 不变
@@ -231,7 +269,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       // 记录当前 token
       final oldToken = readState().flowToken;
@@ -243,6 +281,65 @@ void main() {
       // 旧 token 的回调不应该影响新状态
       // （controller 内部 _onPromptFinished 等方法会检查 token）
     });
+
+    test('播放中切换书签不应使当前播放回调失效', () async {
+      final controlledEngine = _ControlledAudioEngine();
+      final controlledContainer = ProviderContainer(
+        overrides: [
+          audioEngineProvider.overrideWith(() => controlledEngine),
+          bookmarkDaoProvider.overrideWithValue(_MockBookmarkDao()),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+        ],
+      );
+      final bookmarkDao = controlledContainer.read(bookmarkDaoProvider);
+      when(
+        () => bookmarkDao.removeBookmark(any(), any()),
+      ).thenAnswer((_) async {});
+      when(() => bookmarkDao.addBookmark(any())).thenAnswer((_) async {});
+      addTearDown(controlledContainer.dispose);
+
+      final controlledController = controlledContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+      final initialSentences = createTestSentences(
+        count: 3,
+      ).map((s) => s.index == 0 ? s.copyWith(isBookmarked: true) : s).toList();
+
+      await controlledController.prepareSession(
+        sentences: initialSentences,
+        config: _testConfig(),
+      );
+
+      final startFuture = controlledController.startPlaying();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controlledContainer.read(listenAndRepeatControllerProvider).phase,
+        isA<PlayingPrompt>(),
+      );
+
+      final tokenBefore = controlledContainer
+          .read(listenAndRepeatControllerProvider)
+          .flowToken;
+
+      await controlledController.toggleCurrentBookmark();
+
+      final stateAfterToggle = controlledContainer.read(
+        listenAndRepeatControllerProvider,
+      );
+      expect(stateAfterToggle.flowToken, tokenBefore);
+      expect(stateAfterToggle.currentSentenceBookmarked, isFalse);
+
+      controlledEngine.playCompleter?.complete();
+      await startFuture;
+
+      expect(
+        controlledContainer.read(listenAndRepeatControllerProvider).phase,
+        isA<Recording>(),
+      );
+    });
   });
 
   group('手动模式', () {
@@ -251,7 +348,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(isManualMode: true),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       // 手动模式：播放完成后进入 WaitingForUser，等用户手动操作
       expect(readState().phase, isA<WaitingForUser>());
@@ -264,7 +361,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       // 当前在 Recording，不是 WaitingInterval
       controller.fastForwardInterval();
@@ -278,7 +375,7 @@ void main() {
         sentences: createTestSentences(count: 3),
         config: _testConfig(),
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       controller.stopSession();
       expect(readState().phase, isA<Idle>());
@@ -292,7 +389,7 @@ void main() {
         config: _testConfig(),
         startIndex: 0,
       );
-    await controller.startPlaying();
+      await controller.startPlaying();
 
       expect(readState().isFirstSentence, isTrue);
       expect(readState().isLastSentence, isFalse);

@@ -1,30 +1,32 @@
-// 跟读播放器页面测试
-//
-// TODO: 旧 ListenAndRepeatPlayer / PlaybackPhase 已删除，
-// 以下测试需要基于新播放器架构重写。
-// 当前已移除对旧 Provider 的引用，所有测试标记 skip。
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+
+import 'package:fluency/database/daos/audio_item_dao.dart';
+import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
+import 'package:fluency/database/providers.dart';
 import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/screens/listen_and_repeat_player_screen.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
+import 'package:fluency/models/speech_practice_models.dart';
+import 'package:fluency/models/sentence.dart';
+import 'package:fluency/models/intensive_listen_settings.dart';
 import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
 import 'package:fluency/providers/learning_progress_provider.dart';
 import 'package:fluency/providers/learning_session/learning_session_provider.dart';
-import 'package:fluency/models/speech_practice_models.dart';
-import 'package:fluency/providers/speech_practice_session_provider.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_controller.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_phase.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_settings_provider.dart';
+import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
 import 'package:fluency/providers/sentence_ai_provider.dart';
-import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
+import 'package:fluency/providers/speech/speech_recording_controller.dart';
+import 'package:fluency/screens/listen_and_repeat_player_screen.dart';
 import 'package:fluency/services/sentence_ai_api_client.dart';
-import 'package:fluency/services/speech_practice_platform.dart';
-import 'package:fluency/widgets/common/recording_button.dart';
+import 'package:fluency/services/transcription_api_client.dart';
 import 'package:fluency/theme/app_theme.dart';
+import 'package:fluency/widgets/common/playback_controls.dart';
+import 'package:fluency/widgets/common/recording_button.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -32,153 +34,437 @@ class _MockCacheDao extends Mock implements SentenceAiCacheDao {}
 
 class _MockApiClient extends Mock implements SentenceAiApiClient {}
 
-class _FakeSpeechPracticeBackend implements SpeechPracticeBackend {
-  _FakeSpeechPracticeBackend({this.autoEmitFinal = true});
+class _MockAudioItemDao extends Mock implements AudioItemDao {}
 
-  SpeechPracticePermissionState permissions =
-      const SpeechPracticePermissionState(
-        microphone: SpeechPracticePermissionStatus.granted,
-        speech: SpeechPracticePermissionStatus.granted,
+class _TestListenAndRepeatController extends ListenAndRepeatController {
+  _TestListenAndRepeatController(
+    this._initialState,
+    this._sentences, {
+    this.startPlayingNoop = false,
+  });
+
+  final ListenAndRepeatSessionState _initialState;
+  final List<Sentence> _sentences;
+  final bool startPlayingNoop;
+  int? nextAppliedRepeatCount;
+  int applySettingsChangeCallCount = 0;
+  bool keepWaitingForUserOnSettingsChange = false;
+
+  @override
+  ListenAndRepeatSessionState build() => _initialState;
+
+  @override
+  Sentence? get currentSentence =>
+      _sentences.isEmpty ? null : _sentences[state.sentenceIndex];
+
+  @override
+  String get currentPromptId =>
+      'lar:test-audio:${currentSentence?.index ?? state.sentenceIndex}';
+
+  @override
+  Future<void> startPlaying() async {
+    if (startPlayingNoop) return;
+    state = state.copyWith(phase: const PlayingPrompt());
+  }
+
+  @override
+  void enterWaitingForUser() {
+    state = state.copyWith(
+      phase: const WaitingForUser(WaitingReason.userInteraction),
+    );
+  }
+
+  @override
+  Future<void> replayCurrentSentence() async {
+    state = state.copyWith(phase: const PlayingPrompt());
+  }
+
+  @override
+  Future<void> nextSentence() async {
+    if (state.sentenceIndex >= _sentences.length - 1) return;
+    state = state.copyWith(sentenceIndex: state.sentenceIndex + 1);
+  }
+
+  @override
+  Future<void> previousSentence() async {
+    if (state.sentenceIndex <= 0) return;
+    state = state.copyWith(sentenceIndex: state.sentenceIndex - 1);
+  }
+
+  @override
+  Future<void> toggleCurrentBookmark() async {
+    final sentence = currentSentence;
+    if (sentence == null) return;
+    _sentences[state.sentenceIndex] = sentence.copyWith(
+      isBookmarked: !sentence.isBookmarked,
+    );
+    state = state.copyWith(currentSentenceBookmarked: !sentence.isBookmarked);
+  }
+
+  @override
+  void pauseStudyTimer() {}
+
+  @override
+  Future<void> incrementPassCount() async {}
+
+  @override
+  Future<void> clearBreakpoint({required bool isFreePlay}) async {}
+
+  @override
+  Future<void> completeSubStage() async {}
+
+  @override
+  Future<void> exitLearningMode() async {}
+
+  @override
+  Future<void> applySettingsChange() async {
+    applySettingsChangeCallCount += 1;
+    if (nextAppliedRepeatCount != null) {
+      state = state.copyWith(
+        repeatIndex: 0,
+        totalRepeats: nextAppliedRepeatCount,
+        phase: keepWaitingForUserOnSettingsChange
+            ? const WaitingForUser(WaitingReason.userInteraction)
+            : const PlayingPrompt(),
       );
-  final _controller = StreamController<SpeechPracticeEvent>.broadcast();
-  String finalTranscript = '';
-  final bool autoEmitFinal;
-  int _counter = 0;
-  String? _activePromptId;
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  Stream<SpeechPracticeEvent> get events => _controller.stream;
-
-  @override
-  Future<SpeechPracticePermissionState> getPermissionStatus() async {
-    return permissions;
-  }
-
-  @override
-  Future<SpeechPracticePermissionState> requestPermissions() async {
-    return permissions;
-  }
-
-  @override
-  Future<void> warmup({String locale = 'en-US'}) async {}
-
-  @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<String> startSession({
-    required String promptId,
-    String locale = 'en-US',
-  }) async {
-    _activePromptId = promptId;
-    _counter += 1;
-    return '/tmp/$promptId-$_counter.caf';
-  }
-
-  @override
-  Future<SpeechPracticeStopResult> stopSession() async {
-    final promptId = _activePromptId ?? 'shadowing:a1:0';
-    if (autoEmitFinal) {
-      scheduleMicrotask(() {
-        emitFinal(promptId: promptId);
-      });
     }
-    return SpeechPracticeStopResult(filePath: '/tmp/$promptId-$_counter.caf');
   }
 
-  @override
-  Future<void> cancelSession() async {}
-
-  @override
-  Future<void> deleteRecording(String filePath) async {}
-
-  void emitSpeechStarted({String? promptId}) {
-    _controller.add(
-      SpeechPracticeEvent(
-        type: SpeechPracticeEventType.speechStarted,
-        promptId: promptId ?? _activePromptId ?? 'shadowing:a1:0',
-      ),
-    );
-  }
-
-  void emitSilenceProgress({
-    String? promptId,
-    required Duration silenceDuration,
-  }) {
-    _controller.add(
-      SpeechPracticeEvent(
-        type: SpeechPracticeEventType.silenceProgress,
-        promptId: promptId ?? _activePromptId ?? 'shadowing:a1:0',
-        silenceDuration: silenceDuration,
-      ),
-    );
-  }
-
-  void emitFinal({String? promptId, String? transcript}) {
-    _controller.add(
-      SpeechPracticeEvent(
-        type: SpeechPracticeEventType.finalTranscriptReady,
-        promptId: promptId ?? _activePromptId ?? 'shadowing:a1:0',
-        transcript: transcript ?? finalTranscript,
-      ),
-    );
-  }
-
-  Future<void> dispose() async {
-    await _controller.close();
+  void completeSession() {
+    state = state.copyWith(phase: const SessionCompleted());
   }
 }
 
+Widget _createTestWidget({
+  required _TestListenAndRepeatController controller,
+  SpeechRecordingState recordingState = const SpeechRecordingState(),
+}) {
+  final audioItemDao = _MockAudioItemDao();
+  when(
+    () => audioItemDao.getWordTimestamps(any()),
+  ).thenAnswer((_) async => null);
+  when(() => audioItemDao.getById(any())).thenAnswer((_) async => null);
+
+  final router = GoRouter(
+    initialLocation: '/collections/c1/a1/listen-and-repeat',
+    routes: [
+      GoRoute(
+        path: '/collections/:collectionId/:audioId/listen-and-repeat',
+        builder: (context, state) {
+          return ListenAndRepeatPlayerScreen(
+            collectionId: state.pathParameters['collectionId'],
+            audioItemId: state.pathParameters['audioId']!,
+          );
+        },
+      ),
+    ],
+  );
+
+  return ProviderScope(
+    overrides: [
+      audioEngineProvider.overrideWith(() => TestAudioEngine()),
+      learningProgressNotifierProvider.overrideWith(
+        () => TestLearningProgressNotifier(),
+      ),
+      learningSessionProvider.overrideWith(
+        () => TestLearningSession(
+          const LearningSessionState(
+            learningMode: LearningMode.listenAndRepeat,
+            audioItemId: 'a1',
+          ),
+        ),
+      ),
+      listenAndRepeatControllerProvider.overrideWith(() => controller),
+      speechRecordingControllerProvider.overrideWith(
+        () => _StaticSpeechRecordingController(recordingState),
+      ),
+      sentenceAiNotifierProvider.overrideWithValue(
+        SentenceAiNotifier(
+          cacheDao: _MockCacheDao(),
+          apiClient: _MockApiClient(),
+        ),
+      ),
+      transcriptionApiClientProvider.overrideWithValue(
+        createTestTranscriptionApiClient(),
+      ),
+      audioItemDaoProvider.overrideWithValue(audioItemDao),
+    ],
+    child: MaterialApp.router(
+      supportedLocales: const [Locale('en'), Locale('zh')],
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: AppTheme.light(),
+      routerConfig: router,
+    ),
+  );
+}
+
+class _StaticSpeechRecordingController extends SpeechRecordingController {
+  _StaticSpeechRecordingController(this._initialState);
+
+  final SpeechRecordingState _initialState;
+
+  @override
+  SpeechRecordingState build() => _initialState;
+
+  @override
+  Future<void> clearRecording() async {
+    state = const SpeechRecordingState();
+  }
+
+  @override
+  Future<void> fullReset() async {
+    state = const SpeechRecordingState();
+  }
+
+  @override
+  Future<void> cancelActiveRecording() async {}
+}
+
 void main() {
-  // TODO: createPlayerState / createTestWidget 依赖旧 ListenAndRepeatPlayer，
-  // 需要基于新播放器重写。
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  ListenAndRepeatSessionState createState({
+    RepeatFlowPhase phase = const WaitingForUser(WaitingReason.userInteraction),
+    int sentenceIndex = 0,
+    int totalSentences = 5,
+    int repeatIndex = 0,
+    int totalRepeats = 3,
+  }) {
+    return ListenAndRepeatSessionState(
+      phase: phase,
+      sentenceIndex: sentenceIndex,
+      totalSentences: totalSentences,
+      repeatIndex: repeatIndex,
+      totalRepeats: totalRepeats,
+      flowToken: 1,
+      currentSentenceBookmarked: true,
+    );
+  }
 
   group('ListenAndRepeatPlayerScreen', () {
-    testWidgets('显示跟读 AppBar 标题', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('显示标题、进度和句子文本', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(sentenceIndex: 1, totalSentences: 5),
+        createTestSentences(count: 5),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listen & Repeat'), findsOneWidget);
+      expect(find.text('Sentence 2/5'), findsOneWidget);
     });
 
-    testWidgets('显示当前句子文本', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('显示底部控制按钮', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(sentenceIndex: 1, totalSentences: 3),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byIcon(Icons.skip_previous_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
     });
 
-    testWidgets('显示播放遍数信息', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('上一句下一句按钮点击区域与播放按钮一样大', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final controlSizedBoxes = find.byWidgetPredicate(
+        (widget) =>
+            widget is SizedBox &&
+            widget.width == PlaybackControls.controlButtonSize &&
+            widget.height == PlaybackControls.controlButtonSize,
+      );
+
+      expect(controlSizedBoxes, findsNWidgets(2));
     });
 
-    testWidgets('进度指示器显示当前/总句数', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('停顿态显示录音按钮', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(phase: const WaitingForUser(WaitingReason.userInteraction)),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(RecordingButton), findsOneWidget);
+      expect(find.text('Tap to record'), findsOneWidget);
+      expect(find.text('Recording...'), findsNothing);
     });
 
-    testWidgets('底部控制栏包含上一句、播放/暂停、下一句按钮', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('停止录音后 idle 态不应继续显示红色录音按钮', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(phase: const WaitingForUser(WaitingReason.userInteraction)),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      const recordingState = SpeechRecordingState(
+        phase: SpeechRecordingPhase.idle,
+        currentAttempt: SpeechPracticeAttempt(
+          promptId: 'lar:test-audio:0',
+          filePath: '/tmp/test.m4a',
+        ),
+      );
+
+      await tester.pumpWidget(
+        _createTestWidget(
+          controller: controller,
+          recordingState: recordingState,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Tap to record'), findsOneWidget);
+      expect(find.text('Recording...'), findsNothing);
     });
 
-    testWidgets('AppBar 包含设置按钮', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('播放原句阶段显示提示而不显示录音按钮', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(phase: const PlayingPrompt()),
+        createTestSentences(count: 3),
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listen then repeat'), findsOneWidget);
+      expect(find.byType(RecordingButton), findsNothing);
     });
 
-    testWidgets('播放中显示暂停图标', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('会话完成后弹出完成对话框', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      controller.completeSession();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listen & Repeat Complete'), findsOneWidget);
     });
 
-    testWidgets('点击播放按钮切换为暂停图标', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('修改重复次数后当前句遍数标签立即刷新', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(totalRepeats: 3),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      )..nextAppliedRepeatCount = 5;
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Auto · Play 1/3'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ListenAndRepeatPlayerScreen)),
+      );
+      container
+          .read(listenAndRepeatSettingsProvider.notifier)
+          .update(const IntensiveListenSettings(repeatCount: 5));
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(controller.applySettingsChangeCallCount, 1);
+      expect(find.text('Auto · Play 1/5'), findsOneWidget);
     });
 
-    testWidgets('播放原句阶段不显示录音按钮', skip: true, // 需要基于新播放器重写
-    (tester) async {
+    testWidgets('WaitingForUser 态修改设置后应保持等待态', (tester) async {
+      final controller =
+          _TestListenAndRepeatController(
+              createState(
+                phase: const WaitingForUser(WaitingReason.userInteraction),
+              ),
+              createTestSentences(count: 3),
+              startPlayingNoop: true,
+            )
+            ..nextAppliedRepeatCount = 5
+            ..keepWaitingForUserOnSettingsChange = true;
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Tap to record'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ListenAndRepeatPlayerScreen)),
+      );
+      container
+          .read(listenAndRepeatSettingsProvider.notifier)
+          .update(const IntensiveListenSettings(repeatCount: 5));
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(controller.applySettingsChangeCallCount, 1);
+      expect(find.text('Tap to record'), findsOneWidget);
+      expect(find.text('Listen then repeat'), findsNothing);
+      expect(find.text('Auto · Play 1/5'), findsOneWidget);
     });
 
-    testWidgets('轮到用户说时自动开始录音并显示录音按钮', skip: true, // 需要基于新播放器重写
-    (tester) async {
-    });
+    testWidgets('切换手动模式后底部标签立即更新', (tester) async {
+      final controller = _TestListenAndRepeatController(
+        createState(),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      )..nextAppliedRepeatCount = 3;
 
-    testWidgets('停顿中显示录音状态文字（Recording...）', skip: true, // 需要基于新播放器重写
-    (tester) async {
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Auto · Play 1/3'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ListenAndRepeatPlayerScreen)),
+      );
+      container
+          .read(listenAndRepeatSettingsProvider.notifier)
+          .update(
+            const IntensiveListenSettings(
+              controlMode: ShadowingControlMode.manual,
+            ),
+          );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Manual'), findsOneWidget);
+      expect(find.text('Auto · Play 1/3'), findsNothing);
     });
   });
 }

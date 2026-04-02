@@ -15,6 +15,9 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
   /// 是否为自由练习模式
   final bool isFreePlay;
 
+  /// 当前句是否仍被标记为难句
+  final bool currentSentenceBookmarked;
+
   const ListenAndRepeatSessionState({
     super.phase,
     super.sentenceIndex,
@@ -26,12 +29,14 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
     super.recordingScore,
     super.flowToken,
     this.isFreePlay = false,
+    this.currentSentenceBookmarked = false,
   });
 
   /// 从 [RepeatFlowState] 和 [isFreePlay] 构建
   factory ListenAndRepeatSessionState.fromFlowState(
     RepeatFlowState flow, {
     bool isFreePlay = false,
+    bool currentSentenceBookmarked = false,
   }) {
     return ListenAndRepeatSessionState(
       phase: flow.phase,
@@ -44,6 +49,7 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
       recordingScore: flow.recordingScore,
       flowToken: flow.flowToken,
       isFreePlay: isFreePlay,
+      currentSentenceBookmarked: currentSentenceBookmarked,
     );
   }
 
@@ -59,6 +65,7 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
     Object? recordingScore = _noChange,
     int? flowToken,
     bool? isFreePlay,
+    bool? currentSentenceBookmarked,
   }) {
     return ListenAndRepeatSessionState(
       phase: phase ?? this.phase,
@@ -75,6 +82,8 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
           : recordingScore as double?,
       flowToken: flowToken ?? this.flowToken,
       isFreePlay: isFreePlay ?? this.isFreePlay,
+      currentSentenceBookmarked:
+          currentSentenceBookmarked ?? this.currentSentenceBookmarked,
     );
   }
 }
