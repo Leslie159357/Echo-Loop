@@ -83,8 +83,6 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   /// 录音回放服务
   final AudioPlaybackService _playbackService = AudioPlaybackService();
 
-  /// 回放结束监听
-  StreamSubscription<bool>? _playbackSub;
 
   @override
   ListenAndRepeatSessionState build() {
@@ -110,7 +108,6 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
 
     ref.onDispose(() {
       _countdown.cancel();
-      _playbackSub?.cancel();
       _playbackService.dispose();
     });
     return const ListenAndRepeatSessionState();
@@ -204,14 +201,6 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   }) async {
     _sentences = sentences.map((s) => s.copyWith()).toList();
     _config = config;
-
-    // 监听回放结束
-    _playbackSub?.cancel();
-    _playbackSub = _playbackService.isPlayingStream.listen((isPlaying) {
-      if (!isPlaying && state.phase is ReviewingRecording) {
-        _onReviewPlaybackFinished();
-      }
-    });
 
     final safeIndex = _sentences.isEmpty
         ? 0
@@ -358,16 +347,25 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
     state = state.copyWith(
       phase: ReviewingRecording(recordingPath: path),
     );
-    AppLogger.log('L&R', '播放录音回放');
+    final token = state.flowToken;
+    AppLogger.log('L&R', '播放录音回放: $path');
+
     await _playbackService.play(path);
-    // 播放结束由 _playbackSub 监听触发 _onReviewPlaybackFinished
+
+    // 等待播放结束（监听 stream 的 false 事件）
+    await _playbackService.isPlayingStream.firstWhere((playing) => !playing);
+
+    // 校验 token + phase，防止播放期间用户已切句/停止
+    if (token != state.flowToken) return;
+    if (state.phase is! ReviewingRecording) return;
+    _onReviewPlaybackFinished();
   }
 
   /// 停止录音回放
   Future<void> stopPlayback() async {
     if (state.phase is! ReviewingRecording) return;
     await _playbackService.stop();
-    // _playbackSub 会触发 _onReviewPlaybackFinished
+    _onReviewPlaybackFinished();
   }
 
   /// 用户打开弹窗（查词典/设置等）→ 进入等待用户状态
