@@ -39,6 +39,7 @@ import '../models/speech_practice_models.dart';
 import '../providers/repeat_flow/repeat_flow_phase.dart';
 import '../providers/repeat_flow/repeat_flow_state.dart';
 import '../widgets/common/countdown_chip.dart';
+import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../widgets/common/repeat_practice_panel.dart';
 import '../widgets/practice/practice_normal_mode_view.dart';
 import '../widgets/practice/annotation_content_view.dart';
@@ -619,14 +620,19 @@ class _ReviewDifficultPracticeScreenState
     final isPlaying = flowState.phase is PlayingPrompt;
     final isInPause = flowState.isInPause;
     final showCountdown = flowState.isCountingDown;
-
     final effectivePromptId = engine?.currentPromptId ?? currentPromptId;
+    final isRecording = turnState.isRecordingPrompt(effectivePromptId);
+    final recordingMode = isRecording
+        ? RecordingButtonMode.recording
+        : RecordingButtonMode.idle;
+    final isProcessing = turnState.promptId == effectivePromptId &&
+        turnState.phase == SpeechRecordingPhase.processing;
 
     return RepeatPracticePanel(
       l10n: l10n,
       theme: theme,
-      turnState: turnState,
-      currentPromptId: effectivePromptId,
+      recordingMode: recordingMode,
+      isProcessing: isProcessing,
       currentAttempt: currentAttempt,
       hintText: isPlaying ? l10n.listenAndRepeatListenHint : null,
       showCountdown: showCountdown,
@@ -658,7 +664,9 @@ class _ReviewDifficultPracticeScreenState
         if (engine == null) return;
         unawaited(engine.onRecordButtonTapped());
       },
-      onFastForward: showCountdown
+      onFastForward: showCountdown &&
+              flowState.phase is WaitingInterval &&
+              !(flowState.phase as WaitingInterval).isPaused
           ? (engine?.fastForwardInterval ?? noop)
           : null,
       onBeforePlayback: engine != null

@@ -19,8 +19,7 @@ import '../models/sentence.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/retell_player_provider.dart';
-import '../providers/speech/speech_recording_controller.dart'
-    show SpeechRecordingPhase, SpeechRecordingState;
+import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../providers/retell_recording_controller_provider.dart';
 import '../services/app_logger.dart';
 import '../utils/wakelock_mixin.dart';
@@ -699,8 +698,13 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     );
     final retellRecState = ref.read(retellRecordingControllerProvider);
 
-    // 映射为 SpeechRecordingState 供 RecordingButton 复用
-    final turnState = _mapToTurnState(retellRecState);
+    // 录音按钮模式（RetellRecordingPhase → RecordingButtonMode）
+    final recordingMode = switch (retellRecState.phase) {
+      RetellRecordingPhase.recording => RecordingButtonMode.recording,
+      _ => RecordingButtonMode.idle,
+    };
+    final isProcessing =
+        retellRecState.phase == RetellRecordingPhase.processing;
 
     final sentences = player.currentParagraphSentences;
     final paragraphDuration = player.currentParagraphDuration;
@@ -760,8 +764,8 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
               practiceControls: RepeatPracticePanel(
                 l10n: l10n,
                 theme: theme,
-                turnState: turnState,
-                currentPromptId: _currentPromptId(),
+                recordingMode: recordingMode,
+                isProcessing: isProcessing,
                 currentAttempt: currentAttempt,
                 hintText: state.phase == RetellPhase.listening
                     ? (state.isPlaying
@@ -790,7 +794,8 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                       )
                     : null,
                 onRecordTap: _handleRecordTap,
-                onFastForward: state.isRetellCountdown
+                onFastForward: state.isRetellCountdown &&
+                        !state.isCountdownPaused
                     ? () => ref
                         .read(retellPlayerProvider.notifier)
                         .toggleCountdownFastForward()
@@ -831,18 +836,4 @@ bool _isRetellMainPlaybackActive(RetellPlayerState state) {
       !state.isRetellCountdown &&
       !state.isCountdownPaused &&
       !state.isWaitingForUser;
-}
-
-/// 将 [RetellRecordingState] 映射为 [SpeechRecordingState]，
-/// 供 [RecordingButton] 复用。
-SpeechRecordingState _mapToTurnState(RetellRecordingState rs) {
-  return SpeechRecordingState(
-    phase: switch (rs.phase) {
-      RetellRecordingPhase.idle => SpeechRecordingPhase.idle,
-      RetellRecordingPhase.recording => SpeechRecordingPhase.speaking,
-      RetellRecordingPhase.processing => SpeechRecordingPhase.processing,
-    },
-    promptId: rs.promptId,
-    currentAttempt: rs.currentAttempt,
-  );
 }

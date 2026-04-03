@@ -37,6 +37,7 @@ import '../widgets/review/review_briefing_sheet.dart';
 import '../widgets/player_hotkey_scope.dart';
 import '../widgets/practice/annotation_content_view.dart';
 import '../widgets/common/practice_playback_footer.dart';
+import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../widgets/common/repeat_practice_panel.dart';
 import '../widgets/practice/practice_progress_section.dart';
 
@@ -342,6 +343,9 @@ class _ListenAndRepeatPlayerScreenState
           s.repeatIndex,
           s.totalRepeats,
           s.phase.runtimeType,
+          s.isCountingDown && s.phase is WaitingInterval
+              ? (s.phase as WaitingInterval).isPaused
+              : false,
           s.recordingScore,
           s.currentSentenceBookmarked,
         ),
@@ -367,6 +371,12 @@ class _ListenAndRepeatPlayerScreenState
     final isPlaying = ctrlState.phase is PlayingPrompt;
     final isInPause = ctrlState.isInPause;
     final showCountdown = ctrlState.isCountingDown;
+    final isRecording = turnState.isRecordingPrompt(currentPromptId);
+    final recordingMode = isRecording
+        ? RecordingButtonMode.recording
+        : RecordingButtonMode.idle;
+    final isProcessing = turnState.promptId == currentPromptId &&
+        turnState.phase == SpeechRecordingPhase.processing;
 
     // 句子时长（如 "2.8秒"）
     final hasDuration =
@@ -500,8 +510,8 @@ class _ListenAndRepeatPlayerScreenState
                 RepeatPracticePanel(
                   l10n: l10n,
                   theme: theme,
-                  turnState: turnState,
-                  currentPromptId: currentPromptId,
+                  recordingMode: recordingMode,
+                  isProcessing: isProcessing,
                   currentAttempt: currentAttempt,
                   hintText: isPlaying
                       ? l10n.listenAndRepeatListenHint
@@ -532,7 +542,9 @@ class _ListenAndRepeatPlayerScreenState
                         )
                       : null,
                   onRecordTap: () => ctrl.onRecordButtonTapped(),
-                  onFastForward: showCountdown
+                  onFastForward: showCountdown &&
+                          ctrlState.phase is WaitingInterval &&
+                          !(ctrlState.phase as WaitingInterval).isPaused
                       ? ctrl.fastForwardInterval
                       : null,
                   onBeforePlayback: () => ref

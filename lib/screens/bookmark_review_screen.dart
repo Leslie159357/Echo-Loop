@@ -40,6 +40,7 @@ import '../widgets/practice/practice_progress_section.dart';
 import '../widgets/practice/annotation_content_view.dart';
 import '../widgets/common/bookmark_toggle_row.dart';
 import '../widgets/common/practice_playback_footer.dart';
+import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../widgets/common/repeat_practice_panel.dart';
 import '../providers/repeat_flow/repeat_flow_phase.dart';
 
@@ -415,11 +416,18 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
     final isInPause = flowState.isInPause;
     final showCountdown = flowState.isCountingDown;
 
+    final isRecording = turnState.isRecordingPrompt(currentPromptId);
+    final recordingMode = isRecording
+        ? RecordingButtonMode.recording
+        : RecordingButtonMode.idle;
+    final isProcessingState = turnState.promptId == currentPromptId &&
+        turnState.phase == SpeechRecordingPhase.processing;
+
     return RepeatPracticePanel(
       l10n: l10n,
       theme: theme,
-      turnState: turnState,
-      currentPromptId: currentPromptId,
+      recordingMode: recordingMode,
+      isProcessing: isProcessingState,
       currentAttempt: currentAttempt,
       hintText: isPlaying ? l10n.listenAndRepeatListenHint : null,
       showCountdown: showCountdown,
@@ -451,7 +459,9 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
         if (engine == null) return;
         unawaited(engine.onRecordButtonTapped());
       },
-      onFastForward: showCountdown
+      onFastForward: showCountdown &&
+              flowState.phase is WaitingInterval &&
+              !(flowState.phase as WaitingInterval).isPaused
           ? (engine?.fastForwardInterval ?? noop)
           : null,
       onBeforePlayback: engine != null

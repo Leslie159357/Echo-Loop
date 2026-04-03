@@ -16,7 +16,6 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/speech_practice_models.dart';
-import '../../providers/speech/speech_recording_controller.dart';
 import '../../theme/app_theme.dart';
 import 'playback_controls.dart' show PlaybackControls;
 import 'processing_indicator.dart';
@@ -44,11 +43,11 @@ const double kTurnAreaHeight =
 class RepeatPracticePanel extends StatelessWidget {
   // ========== 数据 ==========
 
-  /// 录音状态
-  final SpeechRecordingState turnState;
+  /// 录音按钮模式（由调用方根据录音状态计算）
+  final RecordingButtonMode recordingMode;
 
-  /// 当前 promptId
-  final String currentPromptId;
+  /// 是否处于评估加载中
+  final bool isProcessing;
 
   /// 当前评估结果
   final SpeechPracticeAttempt? currentAttempt;
@@ -93,8 +92,8 @@ class RepeatPracticePanel extends StatelessWidget {
 
   const RepeatPracticePanel({
     super.key,
-    required this.turnState,
-    required this.currentPromptId,
+    this.recordingMode = RecordingButtonMode.idle,
+    this.isProcessing = false,
     this.currentAttempt,
     required this.l10n,
     required this.theme,
@@ -108,15 +107,10 @@ class RepeatPracticePanel extends StatelessWidget {
     this.thresholds = RatingThresholds.listenAndRepeat,
   });
 
-  bool get _isProcessing =>
-      isInPause &&
-      turnState.promptId == currentPromptId &&
-      turnState.phase == SpeechRecordingPhase.processing;
-
   @override
   Widget build(BuildContext context) {
     // processing 状态：加载动画独占整个区域（自然高度 > 56px，不适合按钮行）
-    if (_isProcessing) {
+    if (isProcessing) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
         child: SizedBox(
@@ -187,7 +181,7 @@ class RepeatPracticePanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 48),
                   // 中间槽位：主内容
-                  _buildCenterContent(context),
+                  _buildCenterContent(),
                   const SizedBox(width: 48),
                   // 右槽位：快进按钮（与 next 按钮同宽同位）
                   SizedBox(
@@ -225,8 +219,8 @@ class RepeatPracticePanel extends StatelessWidget {
     );
   }
 
-  /// 中间内容（优先级：hintText > countdown > processing > recording > empty）
-  Widget _buildCenterContent(BuildContext context) {
+  /// 中间内容（优先级：hintText > countdown > recording > empty）
+  Widget _buildCenterContent() {
     // 播放中：显示提示文本
     if (hintText != null) {
       return Row(
@@ -254,26 +248,9 @@ class RepeatPracticePanel extends StatelessWidget {
       return countdownWidget!;
     }
 
-    // 停顿中：录音按钮 / 加载动画
+    // 停顿中：录音按钮
     if (isInPause) {
-      final isProcessing =
-          turnState.promptId == currentPromptId &&
-          turnState.phase == SpeechRecordingPhase.processing;
-
-      if (isProcessing) {
-        return ProcessingIndicator(text: l10n.listenAndRepeatAnalyzing);
-      }
-
-      final isRecordingCurrent = turnState.isRecordingPrompt(currentPromptId);
-      final mode = isRecordingCurrent
-          ? switch (turnState.phase) {
-              SpeechRecordingPhase.awaitingSpeech ||
-              SpeechRecordingPhase.speaking => RecordingButtonMode.recording,
-              _ => RecordingButtonMode.idle,
-            }
-          : RecordingButtonMode.idle;
-
-      return RecordingButton(mode: mode, onTap: onRecordTap);
+      return RecordingButton(mode: recordingMode, onTap: onRecordTap);
     }
 
     return const SizedBox.shrink();
@@ -281,13 +258,7 @@ class RepeatPracticePanel extends StatelessWidget {
 
   /// 状态文字（录音提示 / 错误信息）
   Widget? _buildStatusText(BuildContext context) {
-    // 非停顿状态无状态文字
-    if (!isInPause) return null;
-
-    final isProcessing =
-        turnState.promptId == currentPromptId &&
-        turnState.phase == SpeechRecordingPhase.processing;
-    if (isProcessing) return null;
+    if (!isInPause || isProcessing) return null;
 
     final hasError = currentAttempt?.errorMessage != null;
     if (hasError) {
@@ -298,16 +269,7 @@ class RepeatPracticePanel extends StatelessWidget {
       );
     }
 
-    final isRecordingCurrent = turnState.isRecordingPrompt(currentPromptId);
-    final mode = isRecordingCurrent
-        ? switch (turnState.phase) {
-            SpeechRecordingPhase.awaitingSpeech ||
-            SpeechRecordingPhase.speaking => RecordingButtonMode.recording,
-            _ => RecordingButtonMode.idle,
-          }
-        : RecordingButtonMode.idle;
-
-    if (mode == RecordingButtonMode.recording) {
+    if (recordingMode == RecordingButtonMode.recording) {
       return StatusLabel(text: l10n.listenAndRepeatRecordingInProgress);
     }
 
