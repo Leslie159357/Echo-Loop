@@ -361,23 +361,22 @@ class _TaskCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 3),
-                                Row(
+                                Wrap(
+                                  spacing: AppSpacing.s,
+                                  runSpacing: 4,
+                                  crossAxisAlignment:
+                                      WrapCrossAlignment.center,
                                   children: [
-                                    Flexible(
-                                      child: Text(
-                                        stageLabel,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                            ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    Text(
+                                      stageLabel,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                     ),
-                                    if (statusText.isNotEmpty) ...[
-                                      const SizedBox(width: AppSpacing.s),
+                                    if (statusText.isNotEmpty)
                                       _StatusBadge(
                                         text: statusText,
                                         isOverdue: isOverdue,
@@ -385,7 +384,6 @@ class _TaskCard extends StatelessWidget {
                                             statusText ==
                                             l10n.learningInProgress,
                                       ),
-                                    ],
                                   ],
                                 ),
                               ],
