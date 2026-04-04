@@ -150,7 +150,7 @@ class _TodayCard extends StatelessWidget {
                       child: _ListenSpeakItem(
                         icon: Icons.headphones_outlined,
                         iconColor: kInputColor,
-                        timeText: _formatTimeShort(clampedInput),
+                        timeText: _formatTimeShort(clampedInput, isZh: l10n.localeName == 'zh'),
                         wordText:
                             '${_formatWordCount(stats.todayInputWords)}${l10n.localeName == 'zh' ? '词' : 'w'}',
                         onTap: () => showDayStageBreakdownSheet(
@@ -173,7 +173,7 @@ class _TodayCard extends StatelessWidget {
                       child: _ListenSpeakItem(
                         icon: Icons.mic_outlined,
                         iconColor: kOutputColor,
-                        timeText: _formatTimeShort(clampedOutput),
+                        timeText: _formatTimeShort(clampedOutput, isZh: l10n.localeName == 'zh'),
                         onTap: () => showDayStageBreakdownSheet(
                           context: context,
                           date: today,
@@ -601,11 +601,13 @@ class _WeeklyBarChartState extends State<_WeeklyBarChart> {
 
 /// 格式化秒数为简短时间显示（用于听/说明细）
 ///
-/// 0 → "0分", < 3600 → "N分", >= 3600 → "Nh Mm"
-String _formatTimeShort(int seconds) {
-  if (seconds <= 0) return '0分';
+/// 中文: 0 → "0分", < 3600 → "N分", >= 3600 → "Nh Mm"
+/// 英文: 0 → "0m", < 3600 → "Nm", >= 3600 → "Nh Mm"
+String _formatTimeShort(int seconds, {bool isZh = true}) {
+  final minUnit = isZh ? '分' : 'm';
+  if (seconds <= 0) return '0$minUnit';
   final totalMinutes = (seconds / 60).ceil();
-  if (totalMinutes < 60) return '$totalMinutes分';
+  if (totalMinutes < 60) return '$totalMinutes$minUnit';
   final hours = totalMinutes ~/ 60;
   final minutes = totalMinutes % 60;
   if (minutes == 0) return '${hours}h';

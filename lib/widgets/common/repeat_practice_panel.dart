@@ -146,68 +146,83 @@ class RepeatPracticePanel extends StatelessWidget {
             ),
             const SizedBox(height: _kSlotGap),
             // 按钮行：badge(左) + 中间内容(居中) + 快进(右)
+            // 使用 Stack 让 hintText 可以占满整行宽度，不被左右槽位挤压
             SizedBox(
               height: _kButtonRowHeight,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
                 children: [
-                  // 左槽位：badge（与 prev 按钮同宽同位）
-                  SizedBox(
-                    width: PlaybackControls.controlButtonSize,
-                    height: _kButtonRowHeight,
-                    child: OverflowBox(
-                      maxWidth: 160,
-                      minHeight: 0,
-                      alignment: Alignment.center,
-                      child: AnimatedOpacity(
-                        opacity: hasBadge ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: IgnorePointer(
-                          ignoring: !hasBadge,
-                          child: hasBadge
-                              ? SpeechRatingBadge(
-                                  l10n: l10n,
-                                  attempt: currentAttempt!,
-                                  onBeforePlayback:
-                                      currentAttempt!.hasRecording
-                                      ? onBeforePlayback
-                                      : null,
-                                  thresholds: thresholds,
-                                )
-                              : const SizedBox.shrink(),
+                  // 底层：三栏布局（badge + 中间内容 + 快进）
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 左槽位：badge（与 prev 按钮同宽同位）
+                      SizedBox(
+                        width: PlaybackControls.controlButtonSize,
+                        height: _kButtonRowHeight,
+                        child: OverflowBox(
+                          maxWidth: 160,
+                          minHeight: 0,
+                          alignment: Alignment.center,
+                          child: AnimatedOpacity(
+                            opacity: hasBadge ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: IgnorePointer(
+                              ignoring: !hasBadge,
+                              child: hasBadge
+                                  ? SpeechRatingBadge(
+                                      l10n: l10n,
+                                      attempt: currentAttempt!,
+                                      onBeforePlayback:
+                                          currentAttempt!.hasRecording
+                                          ? onBeforePlayback
+                                          : null,
+                                      thresholds: thresholds,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 48),
-                  // 中间槽位：主内容
-                  _buildCenterContent(),
-                  const SizedBox(width: 48),
-                  // 右槽位：快进按钮（与 next 按钮同宽同位）
-                  SizedBox(
-                    width: PlaybackControls.controlButtonSize,
-                    height: _kButtonRowHeight,
-                    child: Center(
-                      child: AnimatedOpacity(
-                        opacity: hasFF ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: IgnorePointer(
-                          ignoring: !hasFF,
-                          child: hasFF
-                              ? GestureDetector(
-                                  onTap: onFastForward,
-                                  child: Icon(
-                                    Icons.fast_forward_rounded,
-                                    size: 32,
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.6),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
+                      const SizedBox(width: 48),
+                      // 中间槽位：主内容（hintText 时为空，由顶层覆盖）
+                      Expanded(
+                        child: Center(
+                          child: hintText != null
+                              ? const SizedBox.shrink()
+                              : _buildCenterContent(),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 48),
+                      // 右槽位：快进按钮（与 next 按钮同宽同位）
+                      SizedBox(
+                        width: PlaybackControls.controlButtonSize,
+                        height: _kButtonRowHeight,
+                        child: Center(
+                          child: AnimatedOpacity(
+                            opacity: hasFF ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: IgnorePointer(
+                              ignoring: !hasFF,
+                              child: hasFF
+                                  ? GestureDetector(
+                                      onTap: onFastForward,
+                                      child: Icon(
+                                        Icons.fast_forward_rounded,
+                                        size: 32,
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  // 顶层：hintText 占满整行居中显示
+                  if (hintText != null)
+                    Center(child: _buildCenterContent()),
                 ],
               ),
             ),
@@ -224,7 +239,7 @@ class RepeatPracticePanel extends StatelessWidget {
     // 播放中：显示提示文本
     if (hintText != null) {
       return Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.headphones_rounded,
@@ -234,6 +249,7 @@ class RepeatPracticePanel extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             hintText!,
+            maxLines: 1,
             style: theme.textTheme.titleSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
