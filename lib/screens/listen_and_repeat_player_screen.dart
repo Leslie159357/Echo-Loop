@@ -583,7 +583,7 @@ class _ListenAndRepeatPlayerScreenState
                           .clearRecording();
                       ctrl.replayCurrentSentence();
                     } else if (isPlaying) {
-                      ctrl.enterWaitingForUserAfterCurrentPrompt();
+                      ctrl.enterWaitingForUser();
                     } else {
                       ctrl.replayCurrentSentence();
                     }
