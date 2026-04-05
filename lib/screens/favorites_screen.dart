@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../database/app_database.dart';
 import '../database/daos/bookmark_dao.dart';
@@ -214,7 +213,7 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
     if (validBookmarks.isEmpty) return const SizedBox.shrink();
 
     return _FloatingReviewButton(
-      icon: Symbols.exercise,
+      icon: Icons.fitness_center,
       label: AppLocalizations.of(
         context,
       )!.bookmarkReviewStartCount(validBookmarks.length),
@@ -375,18 +374,21 @@ class _AudioBookmarkGroup extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         initiallyExpanded: false,
+        iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
         tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-        title: Text(
-          audioName,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+        title: Row(
           children: [
+            Expanded(
+              child: Text(
+                audioName,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             Text(
               l10n.favoritesBookmarkCount(bookmarks.length),
               style: theme.textTheme.bodySmall?.copyWith(
@@ -399,7 +401,7 @@ class _AudioBookmarkGroup extends ConsumerWidget {
               width: 32,
               height: 32,
               child: IconButton(
-                icon: const Icon(Symbols.exercise, size: 18),
+                icon: const Icon(Icons.fitness_center, size: 18),
                 color: theme.colorScheme.primary,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -414,8 +416,6 @@ class _AudioBookmarkGroup extends ConsumerWidget {
                 },
               ),
             ),
-            const SizedBox(width: 2),
-            const Icon(Icons.expand_more, size: 20),
           ],
         ),
         children: [
@@ -586,7 +586,7 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
             icon: Icon(
               Icons.arrow_forward_ios,
               size: 16,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
             ),
             onPressed: _openDetail,
           ),
@@ -831,6 +831,8 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
       child: Card(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
         child: ExpansionTile(
+          iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
           tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
           onExpansionChanged: (expanded) {
             setState(() => _isExpanded = expanded);
@@ -1115,6 +1117,8 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       child: Card(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
         child: ExpansionTile(
+          iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
           tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
           onExpansionChanged: (expanded) {
             setState(() => _isExpanded = expanded);

@@ -1267,7 +1267,7 @@ class _FirstStudySection extends ConsumerWidget {
                   duration: const Duration(milliseconds: 200),
                   child: Icon(
                     Icons.expand_more,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   ),
                 ),
               ],
@@ -1891,7 +1891,7 @@ class _ReviewRoundSection extends ConsumerWidget {
         description: l10n.stepRetellingDesc,
       ),
       SubStageType.reviewDifficultPractice => _StepData(
-        icon: Icons.record_voice_over,
+        icon: Icons.fitness_center,
         iconColor: Colors.orange,
         name: isZh ? '难句补练' : 'Difficult sentence practice',
         description: isZh
@@ -2139,7 +2139,7 @@ class _ReviewRoundSection extends ConsumerWidget {
                     duration: const Duration(milliseconds: 200),
                     child: Icon(
                       Icons.expand_more,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     ),
                   ),
                 ],

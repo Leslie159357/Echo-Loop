@@ -316,8 +316,8 @@ class AudioListTile extends ConsumerWidget {
       icon: Icon(
         audioItem.isStarred ? Icons.star : Icons.star_border,
         color: audioItem.isStarred
-            ? AppTheme.bookmarkColor
-            : theme.colorScheme.onSurfaceVariant,
+            ? AppTheme.bookmarkColor.withValues(alpha: 0.7)
+            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
       ),
       onPressed: () {
         ref.read(audioLibraryProvider.notifier).toggleStar(audioItem.id);
@@ -366,6 +366,7 @@ class AudioListTile extends ConsumerWidget {
     );
 
     return PopupMenuButton<String>(
+      iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
       itemBuilder: (context) => [
         PopupMenuItem(
           value: 'rename',

@@ -219,8 +219,8 @@ class _CollectionGridTile extends ConsumerWidget {
                       icon: Icon(
                         collection.isStarred ? Icons.star : Icons.star_border,
                         color: collection.isStarred
-                            ? AppTheme.bookmarkColor
-                            : null,
+                            ? AppTheme.bookmarkColor.withValues(alpha: 0.7)
+                            : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                       ),
                       onPressed: () {
                         ref
@@ -235,6 +235,7 @@ class _CollectionGridTile extends ConsumerWidget {
                     child: PopupMenuButton(
                       padding: EdgeInsets.zero,
                       iconSize: 18,
+                      iconColor: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                       itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'rename',
@@ -347,7 +348,9 @@ class _CollectionListTile extends ConsumerWidget {
               child: IconButton(
                 icon: Icon(
                   collection.isStarred ? Icons.star : Icons.star_border,
-                  color: collection.isStarred ? AppTheme.bookmarkColor : null,
+                  color: collection.isStarred
+                      ? AppTheme.bookmarkColor.withValues(alpha: 0.7)
+                      : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                   size: 22,
                 ),
                 padding: EdgeInsets.zero,
@@ -363,6 +366,7 @@ class _CollectionListTile extends ConsumerWidget {
               child: PopupMenuButton(
                 padding: EdgeInsets.zero,
                 iconSize: 22,
+                iconColor: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'rename',
