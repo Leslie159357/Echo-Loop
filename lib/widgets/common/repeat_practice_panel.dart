@@ -147,6 +147,7 @@ class RepeatPracticePanel extends StatelessWidget {
             const SizedBox(height: _kSlotGap),
             // 按钮行：badge(左) + 中间内容(居中) + 快进(右)
             // 使用 Stack 让 hintText 可以占满整行宽度，不被左右槽位挤压
+            // 固定宽度结构与 PlaybackControls 一致，保证左右槽位对齐 prev/next
             SizedBox(
               height: _kButtonRowHeight,
               child: Stack(
@@ -184,8 +185,10 @@ class RepeatPracticePanel extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 48),
-                      // 中间槽位：主内容（hintText 时为空，由顶层覆盖）
-                      Expanded(
+                      // 中间槽位：固定宽度与 PlaybackControls 中心按钮一致
+                      SizedBox(
+                        width: PlaybackControls.controlButtonSize,
+                        height: _kButtonRowHeight,
                         child: Center(
                           child: hintText != null
                               ? const SizedBox.shrink()
