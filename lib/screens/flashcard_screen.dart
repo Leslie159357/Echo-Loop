@@ -2,6 +2,8 @@
 ///
 /// 全屏页面，显示翻转卡片 + 底部控制栏 + 倒计时进度条。
 /// 支持左右滑动切换卡片、点击翻转、自动倒计时。
+///
+/// 所有状态从 [FlashcardNotifier] 读取，用户操作调用 Notifier 方法。
 library;
 
 import 'package:flutter/material.dart';
@@ -31,9 +33,11 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
   void initState() {
     super.initState();
     _lifecycleListener = AppLifecycleListener(
-      onPause: () => ref.read(flashcardNotifierProvider.notifier).pause(),
-      onResume: () => ref.read(flashcardNotifierProvider.notifier).resume(),
-      onInactive: () => ref.read(flashcardNotifierProvider.notifier).pause(),
+      onPause: () =>
+          ref.read(flashcardNotifierProvider.notifier).onAppBackgrounded(),
+      onInactive: () =>
+          ref.read(flashcardNotifierProvider.notifier).onAppBackgrounded(),
+      // onResume 不做任何操作 — 保持 WaitingForUser 状态
     );
   }
 
@@ -51,9 +55,7 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
 
   @override
   Widget build(BuildContext context) {
-    // 监听完成状态变化，控制屏幕常亮：
-    // 完成 → 关闭常亮；「再来一遍」→ 恢复常亮
-    // 完成 → 缩短空闲超时加速关屏；「再来一遍」→ 恢复默认超时
+    // 监听完成状态变化，控制屏幕常亮
     ref.listen(flashcardNotifierProvider.select((s) => s.isCompleted), (
       prev,
       next,
@@ -64,7 +66,7 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
     });
 
     // 只监听影响卡片/AppBar 的字段，排除倒计时相关字段，
-    // 避免倒计时每 100ms tick 导致整个页面（含 3D 变换卡片）重建
+    // 避免倒计时每 100ms tick 导致整个页面重建
     final state = ref.watch(
       flashcardNotifierProvider.select(
         (s) => (
@@ -73,7 +75,6 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
           isShowingBack: s.isShowingBack,
           isCompleted: s.isCompleted,
           removedCount: s.removedCount,
-          settings: s.settings,
         ),
       ),
     );
@@ -130,13 +131,13 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
                   onHorizontalDragEnd: (details) {
                     final velocity = details.primaryVelocity ?? 0;
                     if (velocity < -200) {
-                      // 左滑 → 下一张
-                      ref.read(flashcardNotifierProvider.notifier).nextCard();
-                    } else if (velocity > 200) {
-                      // 右滑 → 上一张
                       ref
                           .read(flashcardNotifierProvider.notifier)
-                          .previousCard();
+                          .userNextCard();
+                    } else if (velocity > 200) {
+                      ref
+                          .read(flashcardNotifierProvider.notifier)
+                          .userPreviousCard();
                     }
                   },
                   child: Padding(
@@ -151,24 +152,18 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
                             isShowingBack: state.isShowingBack,
                             onFlip: () => ref
                                 .read(flashcardNotifierProvider.notifier)
-                                .flipCard(),
+                                .userFlipCard(),
                             onUnsave: () => _handleUnsave(context),
                             isUnsaved: ref
                                 .read(flashcardNotifierProvider.notifier)
                                 .isCurrentWordUnsaved,
-                            autoPlaySentence: state.settings.autoPlaySentence,
-                            autoPlayWord: state.settings.autoPlayWord,
-                            onPlayWord: () => ref
-                                .read(flashcardNotifierProvider.notifier)
-                                .speakWordAndRestartCountdown(),
                           )
                         : const SizedBox.shrink(),
                   ),
                 ),
               ),
 
-              // 底部控制栏：用 Consumer 隔离倒计时重建，
-              // 避免倒计时 tick 触发卡片区域重建
+              // 底部控制栏：用 Consumer 隔离倒计时重建
               Consumer(
                 builder: (context, ref, _) {
                   final s = ref.watch(flashcardNotifierProvider);
@@ -177,21 +172,18 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
                     totalCount: s.words.length,
                     countdownRemaining: s.countdownRemaining,
                     countdownTotal: s.countdownTotal,
-                    isPaused: s.isPaused,
-                    showCountdown:
-                        !s.settings.isManualMode &&
-                        s.countdownTotal > Duration.zero,
+                    showCountdown: s.showCountdown,
                     onPrevious: s.currentIndex > 0
                         ? () => ref
                               .read(flashcardNotifierProvider.notifier)
-                              .previousCard()
+                              .userPreviousCard()
                         : null,
-                    onNext: () =>
-                        ref.read(flashcardNotifierProvider.notifier).nextCard(),
-                    onPause: () =>
-                        ref.read(flashcardNotifierProvider.notifier).pause(),
-                    onResume: () =>
-                        ref.read(flashcardNotifierProvider.notifier).resume(),
+                    onNext: () => ref
+                        .read(flashcardNotifierProvider.notifier)
+                        .userNextCard(),
+                    onCountdownTapped: () => ref
+                        .read(flashcardNotifierProvider.notifier)
+                        .onCountdownTapped(),
                   );
                 },
               ),
@@ -205,7 +197,7 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
   /// 显示设置弹窗
   void _showSettings(BuildContext context) {
     final notifier = ref.read(flashcardNotifierProvider.notifier);
-    notifier.pause();
+    notifier.onSettingsOpened();
 
     showModalBottomSheet(
       context: context,
@@ -219,12 +211,11 @@ class _FlashcardScreenState extends ConsumerState<FlashcardScreen>
           notifier.updateSettings(settings);
         },
       ),
-    ).then((_) {
-      notifier.resume();
-    });
+    );
+    // 关闭后不 resume — 保持 WaitingForUser
   }
 
-  /// 切换收藏状态（只写 DB，卡片保留在列表中继续复习）
+  /// 切换收藏状态（不影响 phase）
   void _handleUnsave(BuildContext context) {
     ref.read(flashcardNotifierProvider.notifier).toggleCurrentWordSave();
   }
@@ -236,24 +227,20 @@ class _BottomControls extends StatelessWidget {
   final int totalCount;
   final Duration countdownRemaining;
   final Duration countdownTotal;
-  final bool isPaused;
   final bool showCountdown;
   final VoidCallback? onPrevious;
   final VoidCallback onNext;
-  final VoidCallback onPause;
-  final VoidCallback onResume;
+  final VoidCallback onCountdownTapped;
 
   const _BottomControls({
     required this.currentIndex,
     required this.totalCount,
     required this.countdownRemaining,
     required this.countdownTotal,
-    required this.isPaused,
     required this.showCountdown,
     this.onPrevious,
     required this.onNext,
-    required this.onPause,
-    required this.onResume,
+    required this.onCountdownTapped,
   });
 
   @override
@@ -279,14 +266,14 @@ class _BottomControls extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
 
-            // 环形倒计时（可暂停/恢复）
+            // 环形倒计时（仅在 Countdown phase 显示）
             if (showCountdown)
               CountdownChip(
                 remaining: countdownRemaining,
                 total: countdownTotal,
-                isPaused: isPaused,
-                onPause: onPause,
-                onResume: onResume,
+                isPaused: false,
+                onPause: onCountdownTapped,
+                onResume: onCountdownTapped,
               )
             else
               const SizedBox(width: 56, height: 56),

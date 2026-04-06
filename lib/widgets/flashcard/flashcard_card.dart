@@ -1,11 +1,13 @@
 /// Flashcard 卡片组件
 ///
 /// 包含 3D 翻转动画（Matrix4.rotateY），正面显示单词+音标+发音，
-/// 背面显示释义+来源例句。右上角取消收藏按钮。
+/// 背面显示释义+来源例句。底部收藏切换按钮。
+///
+/// 纯展示层，所有状态从 [FlashcardNotifier] 读取，
+/// 用户操作通过调用 Notifier 方法触发。
 library;
 
 import 'dart:math' as math;
-import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,14 +16,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../database/providers.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/audio_item.dart' as model;
 import '../../models/dict_entry.dart';
-import '../../providers/audio_engine/audio_engine_provider.dart';
 import '../../models/flashcard_item.dart';
+import '../../providers/flashcard/flashcard_flow_phase.dart';
 import '../../providers/flashcard/flashcard_provider.dart';
 import '../../router/app_router.dart';
-import '../../services/app_logger.dart';
-import '../../services/tts_service.dart';
 import '../../theme/app_theme.dart';
 import '../common/text_context_menu.dart';
 
@@ -42,15 +41,6 @@ class FlashcardCard extends StatefulWidget {
   /// 当前单词是否已取消收藏
   final bool isUnsaved;
 
-  /// 是否自动播放来源例句
-  final bool autoPlaySentence;
-
-  /// 是否自动 TTS 朗读单词
-  final bool autoPlayWord;
-
-  /// 正面点击发音按钮时的回调（用于重置倒计时等）
-  final VoidCallback? onPlayWord;
-
   const FlashcardCard({
     super.key,
     required this.item,
@@ -58,9 +48,6 @@ class FlashcardCard extends StatefulWidget {
     required this.onFlip,
     required this.onUnsave,
     this.isUnsaved = false,
-    this.autoPlaySentence = true,
-    this.autoPlayWord = true,
-    this.onPlayWord,
   });
 
   @override
@@ -149,7 +136,6 @@ class _FlashcardCardState extends State<FlashcardCard>
                     item: widget.item,
                     onUnsave: widget.onUnsave,
                     isUnsaved: widget.isUnsaved,
-                    onPlayWord: widget.onPlayWord,
                   )
                 : Transform(
                     alignment: Alignment.center,
@@ -158,8 +144,6 @@ class _FlashcardCardState extends State<FlashcardCard>
                       item: widget.item,
                       onUnsave: widget.onUnsave,
                       isUnsaved: widget.isUnsaved,
-                      autoPlaySentence: widget.autoPlaySentence,
-                      autoPlayWord: widget.autoPlayWord,
                     ),
                   ),
           );
@@ -174,13 +158,11 @@ class _FrontContent extends StatelessWidget {
   final FlashcardItem item;
   final VoidCallback onUnsave;
   final bool isUnsaved;
-  final VoidCallback? onPlayWord;
 
   const _FrontContent({
     required this.item,
     required this.onUnsave,
     this.isUnsaved = false,
-    this.onPlayWord,
   });
 
   @override
@@ -236,27 +218,28 @@ class _FrontContent extends StatelessWidget {
               ),
             ],
 
-            // 发音按钮
+            // 发音按钮 — 调用 notifier.userPlayWord()
             const SizedBox(height: AppSpacing.m),
-            IconButton.filled(
-              onPressed:
-                  onPlayWord ?? () => TtsService.instance.speak(word.displayText),
-              icon: const Icon(Icons.volume_up),
-              style: IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primaryContainer.withValues(
-                  alpha: 0.5,
-                ),
-                foregroundColor: theme.colorScheme.primary,
-              ),
+            Consumer(
+              builder: (context, ref, _) {
+                return IconButton.filled(
+                  onPressed: () => ref
+                      .read(flashcardNotifierProvider.notifier)
+                      .userPlayWord(),
+                  icon: const Icon(Icons.volume_up),
+                  style: IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primaryContainer
+                        .withValues(alpha: 0.5),
+                    foregroundColor: theme.colorScheme.primary,
+                  ),
+                );
+              },
             ),
 
             const Spacer(),
 
             // 收藏切换按钮
-            _SaveToggleButton(
-              onTap: onUnsave,
-              isUnsaved: isUnsaved,
-            ),
+            _SaveToggleButton(onTap: onUnsave, isUnsaved: isUnsaved),
 
             const SizedBox(height: AppSpacing.m),
           ],
@@ -271,15 +254,11 @@ class _BackContent extends ConsumerStatefulWidget {
   final FlashcardItem item;
   final VoidCallback onUnsave;
   final bool isUnsaved;
-  final bool autoPlaySentence;
-  final bool autoPlayWord;
 
   const _BackContent({
     required this.item,
     required this.onUnsave,
     this.isUnsaved = false,
-    this.autoPlaySentence = true,
-    this.autoPlayWord = true,
   });
 
   @override
@@ -287,20 +266,12 @@ class _BackContent extends ConsumerStatefulWidget {
 }
 
 class _BackContentState extends ConsumerState<_BackContent> {
-  bool _isPlaying = false;
-
-  /// 用户手动点击播放时置 true，阻止自动播放覆盖
-  bool _autoPlayCancelled = false;
-
   /// 源音频名称（异步加载）
   String? _audioName;
 
   @override
   void initState() {
     super.initState();
-    // 翻转到背面时：先 TTS 朗读单词（如开启），再自动播放来源例句（如开启）
-    _autoPlayOnFlipToBack();
-    // 异步加载源音频名称
     _loadAudioName();
   }
 
@@ -312,41 +283,6 @@ class _BackContentState extends ConsumerState<_BackContent> {
     final row = await dao.getById(audioId);
     if (mounted && row != null) {
       setState(() => _audioName = row.name);
-    }
-  }
-
-  /// 翻转到背面时的自动播放逻辑
-  ///
-  /// TTS + 例句全部播完后通知 Provider 启动倒计时。
-  Future<void> _autoPlayOnFlipToBack() async {
-    var didPlay = false;
-
-    // TTS 朗读单词
-    if (widget.autoPlayWord) {
-      didPlay = true;
-      await TtsService.instance.speak(widget.item.displayText);
-      if (!mounted) return;
-      // TTS 播完，计入 1 个输入词
-      ref.read(flashcardNotifierProvider.notifier).onWordPlayed();
-    }
-
-    // 自动播放来源例句
-    if (widget.autoPlaySentence && widget.item.sentenceText != null) {
-      didPlay = true;
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      AppLogger.log(
-        'FC-Audio',
-        'autoPlay: 600ms elapsed, cancelled=$_autoPlayCancelled, '
-            'mounted=$mounted',
-      );
-      if (!mounted || _autoPlayCancelled) return;
-      await _playSentence();
-      if (!mounted) return;
-    }
-
-    // 仅在实际播放了内容时才通知（避免 autoPlay 全关时重复启动倒计时）
-    if (didPlay) {
-      ref.read(flashcardNotifierProvider.notifier).onAutoPlayCompleted();
     }
   }
 
@@ -378,12 +314,11 @@ class _BackContentState extends ConsumerState<_BackContent> {
                           details.globalPosition,
                           word.displayText,
                         ),
-                        onSecondaryTapDown: (details) =>
-                            TextContextMenu.show(
-                              context,
-                              details.globalPosition,
-                              word.displayText,
-                            ),
+                        onSecondaryTapDown: (details) => TextContextMenu.show(
+                          context,
+                          details.globalPosition,
+                          word.displayText,
+                        ),
                         child: Text(
                           word.displayText,
                           style: theme.textTheme.titleLarge?.copyWith(
@@ -404,20 +339,22 @@ class _BackContentState extends ConsumerState<_BackContent> {
                             ),
                           if (dict != null && dict.phonetic.isNotEmpty)
                             const SizedBox(width: AppSpacing.xs),
-                          SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: IconButton(
-                              onPressed: () async {
-                                await ref
-                                    .read(flashcardNotifierProvider.notifier)
-                                    .speakWordAndRestartCountdown();
-                              },
-                              icon: const Icon(Icons.volume_up, size: 18),
-                              color: theme.colorScheme.primary,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
+                          Consumer(
+                            builder: (context, ref, _) {
+                              return SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: IconButton(
+                                  onPressed: () => ref
+                                      .read(flashcardNotifierProvider.notifier)
+                                      .userPlayWord(),
+                                  icon: const Icon(Icons.volume_up, size: 18),
+                                  color: theme.colorScheme.primary,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -440,7 +377,7 @@ class _BackContentState extends ConsumerState<_BackContent> {
                         const SizedBox(height: AppSpacing.m),
                         const Divider(height: 1),
                         const SizedBox(height: AppSpacing.m),
-                        _buildSentenceRow(theme, word),
+                        _SentenceRow(item: word),
                       ],
 
                       // 源音频引用
@@ -463,311 +400,10 @@ class _BackContentState extends ConsumerState<_BackContent> {
               onTap: widget.onUnsave,
               isUnsaved: widget.isUnsaved,
             ),
-
           ],
         ),
       ),
     );
-  }
-
-  /// 来源例句行 — 点击整行播放句子原声
-  Widget _buildSentenceRow(ThemeData theme, dynamic word) {
-    final canPlay =
-        word.audioItemId != null &&
-        (word.sentenceIndex != null ||
-            (word.sentenceStartMs != null && word.sentenceEndMs != null));
-
-    final row = Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (canPlay)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, right: 8),
-            child: Icon(
-              _isPlaying
-                  ? Icons.stop_circle_outlined
-                  : Icons.play_circle_outline,
-              size: 22,
-              color: _isPlaying
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.primary,
-            ),
-          ),
-        Expanded(
-          child: Text(
-            word.sentenceText!,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.6,
-            ),
-          ),
-        ),
-      ],
-    );
-
-    // 可播放时，整行点击触发播放（同时阻止冒泡到卡片翻转）
-    // 长按/右键弹出复制菜单
-    if (canPlay) {
-      return GestureDetector(
-        onTap: () => _playSentence(isUserTap: true),
-        onLongPressStart: (details) => TextContextMenu.show(
-          context,
-          details.globalPosition,
-          word.sentenceText!,
-        ),
-        onSecondaryTapDown: (details) => TextContextMenu.show(
-          context,
-          details.globalPosition,
-          word.sentenceText!,
-        ),
-        behavior: HitTestBehavior.opaque,
-        child: row,
-      );
-    }
-    // 不可播放时也支持长按/右键复制
-    return GestureDetector(
-      onLongPressStart: (details) => TextContextMenu.show(
-        context,
-        details.globalPosition,
-        word.sentenceText!,
-      ),
-      onSecondaryTapDown: (details) => TextContextMenu.show(
-        context,
-        details.globalPosition,
-        word.sentenceText!,
-      ),
-      child: row,
-    );
-  }
-
-  /// 播放来源句子的原声片段
-  ///
-  /// [isUserTap] 为 true 表示用户手动点击，会取消自动播放。
-  Future<void> _playSentence({bool isUserTap = false}) async {
-    if (isUserTap) _autoPlayCancelled = true;
-
-    final word = widget.item;
-    if (word.audioItemId == null) return;
-
-    final hasStoredTiming =
-        word.sentenceStartMs != null && word.sentenceEndMs != null;
-    if (!hasStoredTiming && word.sentenceIndex == null) {
-      AppLogger.log(
-        'FC-Audio',
-        '_playSentence RETURN: no stored timing and sentenceIndex is null',
-      );
-      return;
-    }
-
-    final notifier = ref.read(flashcardNotifierProvider.notifier);
-
-    if (_isPlaying) {
-      AppLogger.log(
-        'FC-Audio',
-        '_playSentence STOP: already playing, calling engine.stop()',
-      );
-      ref.read(audioEngineProvider.notifier).stop();
-      setState(() => _isPlaying = false);
-      notifier.onSentencePlaybackEnded();
-      return;
-    }
-
-    setState(() => _isPlaying = true);
-    notifier.onSentencePlaybackStarted();
-
-    try {
-      final engine = ref.read(audioEngineProvider.notifier);
-      final engineState = ref.read(audioEngineProvider);
-
-      final dao = ref.read(audioItemDaoProvider);
-      final row = await dao.getById(word.audioItemId!);
-      AppLogger.log(
-        'FC-Audio',
-        'DB fetch: ${row != null ? "found" : "NULL"}, '
-            'audioPath=${row?.audioPath}',
-      );
-      if (row == null || !mounted) {
-        AppLogger.log('FC-Audio', '_playSentence RETURN: row=$row, mounted=$mounted');
-        if (mounted) setState(() => _isPlaying = false);
-        notifier.onSentencePlaybackEnded();
-        return;
-      }
-
-      final audioItem = model.AudioItem(
-        id: row.id,
-        name: row.name,
-        audioPath: row.audioPath,
-        transcriptPath: row.transcriptPath,
-        addedDate: row.addedDate,
-        totalDuration: row.totalDuration,
-        sentenceCount: row.sentenceCount,
-        wordCount: row.wordCount,
-        isStarred: row.isStarred,
-        transcriptSource: model.TranscriptSource.fromIndex(
-          row.transcriptSource,
-        ),
-        audioSha256: row.audioSha256,
-        transcriptLanguage: row.transcriptLanguage,
-      );
-
-      final needReload = engineState.currentAudioId != word.audioItemId;
-      AppLogger.log(
-        'FC-Audio',
-        'Audio load: currentAudioId=${engineState.currentAudioId}, '
-            'needed=${word.audioItemId}, reload=$needReload, '
-            'sessionId=${engineState.sessionId}',
-      );
-      if (needReload) {
-        await engine.loadAudio(audioItem, 1.0);
-        AppLogger.log(
-          'FC-Audio',
-          'loadAudio done. newAudioId=${ref.read(audioEngineProvider).currentAudioId}, '
-              'sessionId=${ref.read(audioEngineProvider).sessionId}',
-        );
-      }
-      if (!mounted) return;
-
-      Duration startTime;
-      Duration endTime;
-
-      /// 存储时间是否可信（最少 200ms）
-      const minDurationMs = 200;
-      final storedDurationOk = hasStoredTiming &&
-          (word.sentenceEndMs! - word.sentenceStartMs!) >= minDurationMs;
-
-      // 优先用存储时间，但如果太短（数据异常）则回退 transcript
-      if (hasStoredTiming && storedDurationOk) {
-        startTime = Duration(milliseconds: word.sentenceStartMs!);
-        endTime = Duration(milliseconds: word.sentenceEndMs!);
-        AppLogger.log(
-          'FC-Audio',
-          'Timing(stored): ${startTime.inMilliseconds}-${endTime.inMilliseconds}ms, '
-              'duration=${(endTime - startTime).inMilliseconds}ms',
-        );
-      } else {
-        // 存储时间异常时记录警告
-        if (hasStoredTiming && !storedDurationOk) {
-          AppLogger.log(
-            'FC-Audio',
-            '⚠ Stored timing too short: '
-                '${word.sentenceStartMs}-${word.sentenceEndMs}ms '
-                '(${word.sentenceEndMs! - word.sentenceStartMs!}ms), '
-                'falling back to transcript',
-          );
-        }
-        if (word.sentenceIndex == null) {
-          AppLogger.log(
-            'FC-Audio',
-            '_playSentence RETURN: no valid timing and sentenceIndex is null',
-          );
-          if (mounted) setState(() => _isPlaying = false);
-          notifier.onSentencePlaybackEnded();
-          return;
-        }
-        if (row.transcriptPath == null) {
-          AppLogger.log('FC-Audio', '_playSentence RETURN: transcriptPath is null');
-          if (mounted) setState(() => _isPlaying = false);
-          notifier.onSentencePlaybackEnded();
-          return;
-        }
-        final sentences = await engine.loadTranscript(audioItem);
-        AppLogger.log(
-          'FC-Audio',
-          'Transcript loaded: ${sentences.length} sentences, '
-              'need index=${word.sentenceIndex}',
-        );
-        if (!mounted || sentences.isEmpty) {
-          if (mounted) setState(() => _isPlaying = false);
-          notifier.onSentencePlaybackEnded();
-          return;
-        }
-
-        // 优先用 sentenceIndex，但若字幕重新生成导致索引错位，
-        // 则通过 sentenceText 匹配找到正确句子
-        final idx = word.sentenceIndex!;
-        var sentence = idx < sentences.length ? sentences[idx] : null;
-        final storedText = word.sentenceText;
-
-        // 检测索引错位：索引对应句子文本与存储文本不匹配
-        if (sentence != null &&
-            storedText != null &&
-            sentence.text.trim() != storedText.trim()) {
-          AppLogger.log(
-            'FC-Audio',
-            '⚠ Index mismatch! index=$idx text="${sentence.text.substring(0, min(30, sentence.text.length))}" '
-                'vs stored="${storedText.substring(0, min(30, storedText.length))}", '
-                'trying text match',
-          );
-          // 文本匹配回退
-          sentence = null;
-          for (final s in sentences) {
-            if (s.text.trim() == storedText.trim()) {
-              sentence = s;
-              AppLogger.log(
-                'FC-Audio',
-                '✓ Text match found at index=${s.index}, '
-                    '${s.startTime.inMilliseconds}-${s.endTime.inMilliseconds}ms',
-              );
-              break;
-            }
-          }
-        }
-
-        if (sentence == null) {
-          AppLogger.log(
-            'FC-Audio',
-            '_playSentence RETURN: no matching sentence found '
-                '(index=$idx, totalSentences=${sentences.length})',
-          );
-          if (mounted) setState(() => _isPlaying = false);
-          notifier.onSentencePlaybackEnded();
-          return;
-        }
-
-        startTime = sentence.startTime;
-        endTime = sentence.endTime;
-        AppLogger.log(
-          'FC-Audio',
-          'Timing(transcript): ${startTime.inMilliseconds}-${endTime.inMilliseconds}ms, '
-              'duration=${(endTime - startTime).inMilliseconds}ms, '
-              'transcriptText="${sentence.text.substring(0, min(40, sentence.text.length))}"',
-        );
-      }
-
-      final sessionId = engine.newSession();
-      AppLogger.log(
-        'FC-Audio',
-        'Calling playRangeOnce: '
-            '${startTime.inMilliseconds}-${endTime.inMilliseconds}ms, '
-            'sessionId=$sessionId',
-      );
-      await engine.playRangeOnce(startTime, endTime, sessionId);
-      AppLogger.log(
-        'FC-Audio',
-        'playRangeOnce returned. mounted=$mounted, _isPlaying=$_isPlaying',
-      );
-
-      // 例句播放完成，计入输入词数
-      if (mounted && word.sentenceText != null) {
-        ref
-            .read(flashcardNotifierProvider.notifier)
-            .onSentencePlayed(word.sentenceText!);
-      }
-    } catch (e, stackTrace) {
-      AppLogger.log(
-        'FC-Audio',
-        '⚠ _playSentence error: $e\n$stackTrace',
-      );
-    } finally {
-      AppLogger.log(
-        'FC-Audio',
-        '_playSentence FINALLY: mounted=$mounted, _isPlaying=$_isPlaying',
-      );
-      if (mounted && _isPlaying) {
-        setState(() => _isPlaying = false);
-        notifier.onSentencePlaybackEnded();
-      }
-    }
   }
 
   /// 释义内容 — 解析词性前缀
@@ -860,6 +496,96 @@ class _BackContentState extends ConsumerState<_BackContent> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 来源例句行 — 点击整行播放句子原声
+///
+/// 从 provider 读取 isSentencePlaying 控制播放/停止图标。
+class _SentenceRow extends ConsumerWidget {
+  final FlashcardItem item;
+
+  const _SentenceRow({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    final canPlay =
+        item.audioItemId != null &&
+        (item.sentenceIndex != null ||
+            (item.sentenceStartMs != null && item.sentenceEndMs != null));
+
+    // 从 provider 读取播放状态（自动播放用 phase，手动播放用 isSentencePlaying）
+    final isPlaying = ref.watch(
+      flashcardNotifierProvider.select(
+        (s) => s.isSentencePlaying || s.phase is FlashcardPlayingSentence,
+      ),
+    );
+
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (canPlay)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 8),
+            child: Icon(
+              isPlaying
+                  ? Icons.stop_circle_outlined
+                  : Icons.play_circle_outline,
+              size: 22,
+              color: isPlaying
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+            ),
+          ),
+        Expanded(
+          child: Text(
+            item.sentenceText!,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    // 可播放时，整行点击触发播放
+    // onTapDown 确保在手势竞技场中胜出，阻止外层 onTap（翻转）触发
+    if (canPlay) {
+      return GestureDetector(
+        onTapDown: (_) {},
+        onTap: () =>
+            ref.read(flashcardNotifierProvider.notifier).userPlaySentence(),
+        onLongPressStart: (details) => TextContextMenu.show(
+          context,
+          details.globalPosition,
+          item.sentenceText!,
+        ),
+        onSecondaryTapDown: (details) => TextContextMenu.show(
+          context,
+          details.globalPosition,
+          item.sentenceText!,
+        ),
+        behavior: HitTestBehavior.opaque,
+        child: row,
+      );
+    }
+    // 不可播放时也支持长按/右键复制
+    return GestureDetector(
+      onLongPressStart: (details) => TextContextMenu.show(
+        context,
+        details.globalPosition,
+        item.sentenceText!,
+      ),
+      onSecondaryTapDown: (details) => TextContextMenu.show(
+        context,
+        details.globalPosition,
+        item.sentenceText!,
+      ),
+      child: row,
     );
   }
 }
@@ -968,10 +694,7 @@ TextStyle? _displayTextStyle(ThemeData theme, int length) {
   } else {
     base = theme.textTheme.titleLarge; // ~22sp
   }
-  return base?.copyWith(
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
-  );
+  return base?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.5);
 }
 
 class _CollinsStars extends StatelessWidget {
