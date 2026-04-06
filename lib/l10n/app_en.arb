@@ -52,6 +52,7 @@
   "themeModeLight": "Light Mode",
   "themeModeDark": "Dark Mode",
   "language": "Language",
+  "languageSystem": "Follow System",
   "languageEnglish": "English",
   "languageChinese": "简体中文",
   "about": "About",

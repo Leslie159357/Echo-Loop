@@ -12,7 +12,11 @@ const _demoModeKey = 'demo_mode';
 
 class AppSettingsState {
   final ThemeMode themeMode;
-  final Locale locale;
+
+  /// 用户选择的语言。
+  ///
+  /// 为 null 时表示跟随系统语言，不支持的系统语言回退到英语。
+  final Locale? locale;
 
   /// 开发者选项：时光机时间。
   ///
@@ -29,7 +33,7 @@ class AppSettingsState {
 
   const AppSettingsState({
     this.themeMode = ThemeMode.system,
-    this.locale = const Locale('en'),
+    this.locale,
     this.timeMachineDateTime,
     this.isDemoMode = false,
     this.isDemoModeLoading = false,
@@ -38,6 +42,7 @@ class AppSettingsState {
   AppSettingsState copyWith({
     ThemeMode? themeMode,
     Locale? locale,
+    bool clearLocale = false,
     DateTime? timeMachineDateTime,
     bool clearTimeMachineDateTime = false,
     bool? isDemoMode,
@@ -45,7 +50,7 @@ class AppSettingsState {
   }) {
     return AppSettingsState(
       themeMode: themeMode ?? this.themeMode,
-      locale: locale ?? this.locale,
+      locale: clearLocale ? null : locale ?? this.locale,
       timeMachineDateTime: clearTimeMachineDateTime
           ? null
           : timeMachineDateTime ?? this.timeMachineDateTime,
@@ -73,8 +78,12 @@ class AppSettings extends _$AppSettings {
       _ => ThemeMode.system,
     };
 
-    final localeString = prefs.getString(_localeKey) ?? 'en';
-    final locale = Locale(localeString);
+    final localeString = prefs.getString(_localeKey);
+    final Locale? locale = switch (localeString) {
+      'en' => const Locale('en'),
+      'zh' => const Locale('zh'),
+      _ => null, // 'system' 或无值时跟随系统
+    };
 
     final timeMachineDateTime = await _loadTimeMachineDateTime(prefs);
     final isDemoMode = prefs.getBool(_demoModeKey) ?? false;
@@ -121,11 +130,16 @@ class AppSettings extends _$AppSettings {
     await prefs.setString(_themeModeKey, modeString);
   }
 
-  Future<void> setLocale(Locale locale) async {
-    state = state.copyWith(locale: locale);
+  /// 设置语言。
+  ///
+  /// 传入 null 时跟随系统语言。
+  Future<void> setLocale(Locale? locale) async {
+    state = locale == null
+        ? state.copyWith(clearLocale: true)
+        : state.copyWith(locale: locale);
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_localeKey, locale.languageCode);
+    await prefs.setString(_localeKey, locale?.languageCode ?? 'system');
   }
 
   /// 设置开发者时光机时间。

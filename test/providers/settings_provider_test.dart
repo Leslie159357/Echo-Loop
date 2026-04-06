@@ -11,7 +11,7 @@ void main() {
         const state = AppSettingsState();
 
         expect(state.themeMode, ThemeMode.system);
-        expect(state.locale, const Locale('en'));
+        expect(state.locale, isNull);
       });
     });
 
@@ -21,7 +21,7 @@ void main() {
         final copied = state.copyWith(themeMode: ThemeMode.dark);
 
         expect(copied.themeMode, ThemeMode.dark);
-        expect(copied.locale, const Locale('en')); // 未修改
+        expect(copied.locale, isNull); // 未修改
       });
 
       test('setLocale 更新状态', () {
@@ -54,6 +54,13 @@ void main() {
 
         expect(copied.themeMode, ThemeMode.dark);
         expect(copied.locale, const Locale('zh'));
+      });
+
+      test('clearLocale 可将 locale 重置为 null（跟随系统）', () {
+        const state = AppSettingsState(locale: Locale('zh'));
+        final copied = state.copyWith(clearLocale: true);
+
+        expect(copied.locale, isNull);
       });
 
       test('可清除时光机时间', () {
@@ -170,6 +177,75 @@ void main() {
       expect(migrated!.isAfter(before.add(const Duration(days: 364))), isTrue);
       expect(prefs.getInt('developer_time_machine_at_ms'), isNotNull);
       expect(prefs.getBool('unlock_all_reviews'), isNull);
+    });
+
+    test('无 locale 配置时默认跟随系统（null）', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(appSettingsProvider);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(appSettingsProvider).locale, isNull);
+    });
+
+    test('locale 配置为 system 时加载为 null', () async {
+      SharedPreferences.setMockInitialValues({'locale': 'system'});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(appSettingsProvider);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(appSettingsProvider).locale, isNull);
+    });
+
+    test('locale 配置为 zh 时正确加载', () async {
+      SharedPreferences.setMockInitialValues({'locale': 'zh'});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(appSettingsProvider);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(appSettingsProvider).locale, const Locale('zh'));
+    });
+
+    test('setLocale(null) 持久化为 system', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.setLocale(null);
+
+      expect(container.read(appSettingsProvider).locale, isNull);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('locale'), 'system');
+    });
+
+    test('setLocale(Locale("zh")) 持久化为 zh', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.setLocale(const Locale('zh'));
+
+      expect(container.read(appSettingsProvider).locale, const Locale('zh'));
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('locale'), 'zh');
     });
   });
 }

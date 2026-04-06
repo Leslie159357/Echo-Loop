@@ -1034,10 +1034,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     };
   }
 
-  String _getLanguageName(AppLocalizations l10n, Locale locale) {
-    return switch (locale.languageCode) {
+  String _getLanguageName(AppLocalizations l10n, Locale? locale) {
+    return switch (locale?.languageCode) {
       'zh' => l10n.languageChinese,
-      _ => l10n.languageEnglish,
+      'en' => l10n.languageEnglish,
+      _ => l10n.languageSystem,
     };
   }
 
@@ -1137,6 +1138,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               l10n,
               settings,
               controller,
+              null,
+              '⚙️',
+              l10n.languageSystem,
+            ),
+            _buildLanguageOption(
+              context,
+              l10n,
+              settings,
+              controller,
               const Locale('en'),
               '🇺🇸',
               l10n.languageEnglish,
@@ -1161,7 +1171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppLocalizations l10n,
     AppSettingsState settings,
     AppSettings controller,
-    Locale locale,
+    Locale? locale,
     String emoji,
     String label,
   ) {

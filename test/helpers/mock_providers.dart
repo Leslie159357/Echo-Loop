@@ -207,8 +207,10 @@ class TestAppSettings extends AppSettings {
   }
 
   @override
-  Future<void> setLocale(Locale locale) async {
-    state = state.copyWith(locale: locale);
+  Future<void> setLocale(Locale? locale) async {
+    state = locale == null
+        ? state.copyWith(clearLocale: true)
+        : state.copyWith(locale: locale);
   }
 
   @override

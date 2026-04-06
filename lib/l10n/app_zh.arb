@@ -45,6 +45,7 @@
   "themeModeLight": "浅色模式",
   "themeModeDark": "深色模式",
   "language": "语言",
+  "languageSystem": "跟随系统",
   "languageEnglish": "English",
   "languageChinese": "简体中文",
   "about": "关于",
