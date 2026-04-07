@@ -721,7 +721,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String intensiveListenPlayCount(int current, int total) {
-    return 'Play $current/$total';
+    return 'Round $current/$total';
   }
 
   @override
@@ -944,7 +944,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String listenAndRepeatPlayCount(int current, int total) {
-    return 'Play $current/$total';
+    return 'Round $current/$total';
   }
 
   @override
@@ -1710,7 +1710,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get flashcardTapToFlip => 'Tap to flip back';
 
   @override
-  String get flashcardUnsaveHint => 'Unsave when mastered';
+  String get flashcardUnsaveHint => 'Unmark when mastered';
 
   @override
   String flashcardProgress(int current, int total) {

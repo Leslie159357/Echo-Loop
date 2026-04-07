@@ -351,7 +351,7 @@
       "total": { "type": "int" }
     }
   },
-  "intensiveListenPlayCount": "Play {current}/{total}",
+  "intensiveListenPlayCount": "Round {current}/{total}",
   "@intensiveListenPlayCount": {
     "placeholders": {
       "current": { "type": "int" },
@@ -490,7 +490,7 @@
       "total": { "type": "int" }
     }
   },
-  "listenAndRepeatPlayCount": "Play {current}/{total}",
+  "listenAndRepeatPlayCount": "Round {current}/{total}",
   "@listenAndRepeatPlayCount": {
     "placeholders": {
       "current": { "type": "int" },
@@ -944,7 +944,7 @@
   "flashcardTitle": "Flashcards",
   "flashcardViewAnswer": "Ready? View answer",
   "flashcardTapToFlip": "Tap to flip back",
-  "flashcardUnsaveHint": "Unsave when mastered",
+  "flashcardUnsaveHint": "Unmark when mastered",
   "flashcardProgress": "{current}/{total}",
   "@flashcardProgress": {
     "placeholders": {

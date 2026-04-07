@@ -1409,7 +1409,7 @@ abstract class AppLocalizations {
   /// No description provided for @intensiveListenPlayCount.
   ///
   /// In en, this message translates to:
-  /// **'Play {current}/{total}'**
+  /// **'Round {current}/{total}'**
   String intensiveListenPlayCount(int current, int total);
 
   /// No description provided for @intensiveListenPeek.
@@ -1781,7 +1781,7 @@ abstract class AppLocalizations {
   /// No description provided for @listenAndRepeatPlayCount.
   ///
   /// In en, this message translates to:
-  /// **'Play {current}/{total}'**
+  /// **'Round {current}/{total}'**
   String listenAndRepeatPlayCount(int current, int total);
 
   /// No description provided for @listenAndRepeatPauseBetweenPlays.
@@ -3053,7 +3053,7 @@ abstract class AppLocalizations {
   /// No description provided for @flashcardUnsaveHint.
   ///
   /// In en, this message translates to:
-  /// **'Unsave when mastered'**
+  /// **'Unmark when mastered'**
   String get flashcardUnsaveHint;
 
   /// No description provided for @flashcardProgress.
