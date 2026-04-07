@@ -741,6 +741,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiLoadFailed => '加载失败，点击重试';
 
   @override
+  String get aiTranslationFailed => '翻译失败，请重试';
+
+  @override
+  String get aiAnalysisFailed => '解析失败，请重试';
+
+  @override
   String get aiRetry => '重试';
 
   @override

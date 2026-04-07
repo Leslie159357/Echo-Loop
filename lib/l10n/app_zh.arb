@@ -228,6 +228,8 @@
   "aiTranslation": "翻译",
   "aiAnalysis": "解析",
   "aiLoadFailed": "加载失败，点击重试",
+  "aiTranslationFailed": "翻译失败，请重试",
+  "aiAnalysisFailed": "解析失败，请重试",
   "aiRetry": "重试",
   "aiGrammar": "语法",
   "aiVocabulary": "词汇",

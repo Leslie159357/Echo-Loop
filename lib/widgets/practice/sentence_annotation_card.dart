@@ -325,8 +325,16 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _translationState = ContentLoadState.error);
+        setState(() {
+          _translationExpanded = false;
+          _translationState = ContentLoadState.idle;
+        });
         _notifyToolbar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.aiTranslationFailed),
+          ),
+        );
       }
     }
   }
@@ -359,10 +367,15 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _analysisExpanded = true;
-          _analysisState = ContentLoadState.error;
+          _analysisExpanded = false;
+          _analysisState = ContentLoadState.idle;
         });
         _notifyToolbar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.aiAnalysisFailed),
+          ),
+        );
       }
     }
   }
@@ -671,36 +684,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
           ),
         );
       case ContentLoadState.error:
-        content = Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.xs),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 14,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                l10n.aiLoadFailed,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              GestureDetector(
-                onTap: _onTapTranslation,
-                child: Text(
-                  l10n.aiRetry,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
+        content = const SizedBox.shrink();
       case ContentLoadState.idle:
         content = const SizedBox.shrink();
     }
@@ -725,7 +709,6 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
             l10n: l10n,
             state: _analysisState,
             content: _analysisContent,
-            onRetry: _onTapAnalysis,
             contentBuilder: (content) => _AnalysisContent(content: content),
           ),
         ],
@@ -733,13 +716,12 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     );
   }
 
-  /// 构建单个内容面板（shimmer / 内容 / 错误）
+  /// 构建单个内容面板（shimmer / 内容）
   Widget _buildContentPanel({
     required ThemeData theme,
     required AppLocalizations l10n,
     required ContentLoadState state,
     required String? content,
-    required VoidCallback onRetry,
     Widget Function(String)? contentBuilder,
   }) {
     return Container(
@@ -756,7 +738,7 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
           content ?? '',
           contentBuilder,
         ),
-        ContentLoadState.error => _buildErrorContent(theme, l10n, onRetry),
+        ContentLoadState.error => const SizedBox.shrink(),
         ContentLoadState.idle => const SizedBox.shrink(),
       },
     );
@@ -777,27 +759,6 @@ class SentenceAnnotationCardState extends State<SentenceAnnotationCard> {
     );
   }
 
-  Widget _buildErrorContent(
-    ThemeData theme,
-    AppLocalizations l10n,
-    VoidCallback onRetry,
-  ) {
-    return Row(
-      children: [
-        Icon(Icons.error_outline, size: 16, color: theme.colorScheme.error),
-        const SizedBox(width: AppSpacing.xs),
-        Expanded(
-          child: Text(
-            l10n.aiLoadFailed,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-            ),
-          ),
-        ),
-        TextButton(onPressed: onRetry, child: Text(l10n.aiRetry)),
-      ],
-    );
-  }
 }
 
 /// 解析内容结构化展示

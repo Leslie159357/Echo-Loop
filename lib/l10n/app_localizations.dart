@@ -1466,6 +1466,18 @@ abstract class AppLocalizations {
   /// **'Failed to load, tap to retry'**
   String get aiLoadFailed;
 
+  /// No description provided for @aiTranslationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation failed, please retry'**
+  String get aiTranslationFailed;
+
+  /// No description provided for @aiAnalysisFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis failed, please retry'**
+  String get aiAnalysisFailed;
+
   /// No description provided for @aiRetry.
   ///
   /// In en, this message translates to:
@@ -4031,13 +4043,13 @@ abstract class AppLocalizations {
   /// No description provided for @annotationBtnSenseGroupMedium.
   ///
   /// In en, this message translates to:
-  /// **'Medium'**
+  /// **'Larger Groups'**
   String get annotationBtnSenseGroupMedium;
 
   /// No description provided for @annotationBtnSenseGroupFine.
   ///
   /// In en, this message translates to:
-  /// **'Fine'**
+  /// **'Smaller Groups'**
   String get annotationBtnSenseGroupFine;
 
   /// No description provided for @annotationBtnTranslation.
@@ -4055,7 +4067,7 @@ abstract class AppLocalizations {
   /// No description provided for @senseGroupLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to split sense groups, please retry'**
+  /// **'Sense group splitting failed, please retry'**
   String get senseGroupLoadFailed;
 
   /// No description provided for @senseGroupNotAvailable.

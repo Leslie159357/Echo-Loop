@@ -753,6 +753,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiLoadFailed => 'Failed to load, tap to retry';
 
   @override
+  String get aiTranslationFailed => 'Translation failed, please retry';
+
+  @override
+  String get aiAnalysisFailed => 'Analysis failed, please retry';
+
+  @override
   String get aiRetry => 'Retry';
 
   @override
@@ -2241,10 +2247,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get annotationBtnSenseGroup => 'Groups';
 
   @override
-  String get annotationBtnSenseGroupMedium => 'Medium';
+  String get annotationBtnSenseGroupMedium => 'Larger Groups';
 
   @override
-  String get annotationBtnSenseGroupFine => 'Fine';
+  String get annotationBtnSenseGroupFine => 'Smaller Groups';
 
   @override
   String get annotationBtnTranslation => 'Translate';
@@ -2254,7 +2260,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get senseGroupLoadFailed =>
-      'Failed to split sense groups, please retry';
+      'Sense group splitting failed, please retry';
 
   @override
   String get senseGroupNotAvailable =>
