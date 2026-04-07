@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../data/demo_content.dart';
 import '../database/app_database.dart';
+import '../models/study_stage.dart';
 
 /// 演示数据种子服务
 ///
@@ -114,6 +115,12 @@ class DemoDataSeeder {
 
       // 7. 插入每日学习记录
       await _seedDailyStudyRecords(now);
+
+      // 8. 插入收藏意群
+      await _seedSavedSenseGroups(now);
+
+      // 9. 插入每日分阶段学习记录
+      await _seedDailyStageStudyRecords(now);
     });
   }
 
@@ -289,17 +296,69 @@ class DemoDataSeeder {
   Future<void> _seedDailyStudyRecords(DateTime now) async {
     final today = DateTime(now.year, now.month, now.day);
 
-    for (final (daysAgo, inputSec, outputSec, inputW, outputW)
+    for (final (daysAgo, totalSec, inputSec, outputSec, inputW, outputW)
         in demoDailyRecords) {
       final date = today.subtract(Duration(days: daysAgo));
       await db.into(db.dailyStudyRecords).insert(
         DailyStudyRecordsCompanion.insert(
           date: date,
-          studyTimeSeconds: Value(inputSec + outputSec),
+          studyTimeSeconds: Value(totalSec),
           inputWords: Value(inputW),
           outputWords: Value(outputW),
           inputTimeSeconds: Value(inputSec),
           outputTimeSeconds: Value(outputSec),
+        ),
+      );
+    }
+  }
+
+  /// 插入收藏意群
+  Future<void> _seedSavedSenseGroups(DateTime now) async {
+    for (var i = 0; i < demoSavedSenseGroups.length; i++) {
+      final sg = demoSavedSenseGroups[i];
+      final audio = demoAudios[sg.audioIndex];
+      final sentence = audio.sentences[sg.sentenceIndex];
+      final sentenceStartMs = (sentence.startTime * 1000).round();
+      final sentenceEndMs = (sentence.endTime * 1000).round();
+
+      await db.into(db.savedSenseGroups).insert(
+        SavedSenseGroupsCompanion.insert(
+          phraseText: sg.displayText.toLowerCase().trim(),
+          displayText: sg.displayText,
+          audioItemId: Value(audio.id),
+          sentenceIndex: Value(sg.sentenceIndex),
+          sentenceText: Value(sentence.text),
+          sentenceStartMs: Value(sentenceStartMs),
+          sentenceEndMs: Value(sentenceEndMs),
+          groupStartMs: Value(sentenceStartMs + sg.offsetStartMs),
+          groupEndMs: Value(sentenceStartMs + sg.offsetEndMs),
+          practiceCount: Value(i < 5 ? 3 : (i < 8 ? 1 : 0)),
+          totalStudyMs: Value(i < 5 ? 18000 : (i < 8 ? 6000 : 0)),
+          viewedBack: Value(i < 8),
+          lastPracticedAt: Value(
+            i < 8 ? now.subtract(Duration(days: i ~/ 2)) : null,
+          ),
+          createdAt: now.subtract(Duration(days: 10 - i)),
+          updatedAt: now,
+        ),
+      );
+    }
+  }
+
+  /// 插入每日分阶段学习记录
+  Future<void> _seedDailyStageStudyRecords(DateTime now) async {
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (final (daysAgo, stageIndex, studyTime, inputTime, outputTime)
+        in demoDailyStageRecords) {
+      final date = today.subtract(Duration(days: daysAgo));
+      await db.into(db.dailyStageStudyRecords).insert(
+        DailyStageStudyRecordsCompanion.insert(
+          date: date,
+          stage: StudyStage.values[stageIndex],
+          studyTimeSeconds: Value(studyTime),
+          inputTimeSeconds: Value(inputTime),
+          outputTimeSeconds: Value(outputTime),
         ),
       );
     }
