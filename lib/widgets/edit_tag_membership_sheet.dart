@@ -29,11 +29,24 @@ class EditTagMembershipSheet extends ConsumerWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.m),
+        padding:
+            const EdgeInsets.fromLTRB(0, AppSpacing.m, 0, AppSpacing.s),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 拖动手柄
+            Center(
+              child: Container(
+                width: 32,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: AppSpacing.m),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             // 标题栏
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
@@ -44,7 +57,7 @@ class EditTagMembershipSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            const Divider(),
+            const SizedBox(height: AppSpacing.m),
             // 标签列表
             if (tags.isEmpty)
               Padding(
@@ -63,9 +76,11 @@ class EditTagMembershipSheet extends ConsumerWidget {
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.4,
                 ),
-                child: ListView.builder(
+                child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: tags.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final tag = tags[index];
                     final isSelected = audioTagIds.contains(tag.id);
