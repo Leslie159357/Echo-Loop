@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import 'dialogs/text_input_dialog.dart';
 
 /// 合集归属编辑 BottomSheet
 ///
@@ -85,6 +86,9 @@ class EditCollectionMembershipSheet extends ConsumerWidget {
                     final isSelected =
                         audioCollectionIds.contains(collection.id);
                     return CheckboxListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.m,
+                      ),
                       title: Text(collection.name),
                       value: isSelected,
                       onChanged: (value) {
@@ -121,57 +125,36 @@ class EditCollectionMembershipSheet extends ConsumerWidget {
     );
   }
 
-  /// 创建新合集对话框
+  /// 创建新合集对话框（复用通用文本输入对话框）
   void _showCreateCollectionDialog(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController();
+    final container = ProviderScope.containerOf(context);
 
-    showDialog(
+    showTextInputDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.createCollection),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: l10n.collectionName,
-            hintText: l10n.enterCollectionName,
-          ),
-          onSubmitted: (_) => _createAndAssign(ctx, ref, controller),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => _createAndAssign(ctx, ref, controller),
-            child: Text(l10n.add),
-          ),
-        ],
-      ),
-    );
-  }
+      title: l10n.createCollection,
+      labelText: l10n.collectionName,
+      hintText: l10n.enterCollectionName,
+      confirmLabel: l10n.add,
+      cancelLabel: l10n.cancel,
+      validator: (name) {
+        if (name.isEmpty) return l10n.collectionNameEmpty;
+        final collectionState = container.read(collectionListProvider);
+        final exists = collectionState.collections.any(
+          (c) => c.name.toLowerCase() == name.toLowerCase(),
+        );
+        if (exists) return l10n.collectionNameExists;
+        return null;
+      },
+    ).then((name) async {
+      if (name == null) return;
+      final notifier = container.read(collectionListProvider.notifier);
+      await notifier.createCollection(name);
 
-  /// 创建合集并自动关联到当前音频
-  Future<void> _createAndAssign(
-    BuildContext dialogContext,
-    WidgetRef ref,
-    TextEditingController controller,
-  ) async {
-    final name = controller.text.trim();
-    if (name.isEmpty) return;
-
-    final notifier = ref.read(collectionListProvider.notifier);
-    await notifier.createCollection(name);
-
-    // 获取新创建的合集 ID 并立刻关联
-    final collections = ref.read(collectionListProvider).rawCollections;
-    final newCollection = collections.lastWhere((c) => c.name == name);
-    await notifier.addAudioToCollection(newCollection.id, audioId);
-
-    if (dialogContext.mounted) {
-      Navigator.pop(dialogContext);
-    }
+      // 获取新创建的合集 ID 并立刻关联
+      final collections = container.read(collectionListProvider).rawCollections;
+      final newCollection = collections.lastWhere((c) => c.name == name);
+      await notifier.addAudioToCollection(newCollection.id, audioId);
+    });
   }
 }

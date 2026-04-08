@@ -85,6 +85,9 @@ class EditTagMembershipSheet extends ConsumerWidget {
                     final tag = tags[index];
                     final isSelected = audioTagIds.contains(tag.id);
                     return CheckboxListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.m,
+                      ),
                       secondary: Container(
                         width: 24,
                         height: 24,
