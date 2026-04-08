@@ -138,7 +138,7 @@ require_command xcrun
 require_command plutil
 require_command codesign
 require_command security
-ensure_apple_toolchain_path()
+ensure_apple_toolchain_path
 
 if [[ -x "scripts/preflight.sh" ]]; then
   scripts/preflight.sh
