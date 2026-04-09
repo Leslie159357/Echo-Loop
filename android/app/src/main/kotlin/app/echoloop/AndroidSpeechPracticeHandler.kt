@@ -178,7 +178,7 @@ class AndroidSpeechPracticeHandler(
         }
 
         isEngineReady = true
-        result.success(emptyMap<String, Any>())
+        result.success(mapOf("hasGms" to asrAvailable))
     }
 
     private fun shutdown(result: MethodChannel.Result) {

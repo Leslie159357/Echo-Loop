@@ -132,10 +132,18 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
         .asBroadcastStream();
   }
 
+  /// 最近一次 warmup 返回的 hasGms 标志。
+  ///
+  /// Android 端 warmup 时检测 GMS 可用性并返回，
+  /// iOS/macOS 不返回此字段，默认视为 true（平台 ASR 可用）。
+  bool? hasGms;
+
   @override
   Future<void> warmup({String locale = 'en-US'}) async {
     _ensureSupported();
-    await _invokeMap('warmup', {'locale': locale});
+    final result = await _invokeMap('warmup', {'locale': locale});
+    // 仅当 Native 端返回了 hasGms 时才更新（二次 warmup 时 Android 返回空 map）。
+    hasGms = (result['hasGms'] as bool?) ?? hasGms;
   }
 
   @override
