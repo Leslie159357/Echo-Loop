@@ -154,8 +154,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       final latestState = ref.read(retellPlayerProvider);
       if (latestState.phase == RetellPhase.retelling &&
           !latestState.isWaitingForUser &&
-          !latestState.settings.isManualMode &&
-          !_manualStoppedThisParagraph) {
+          !latestState.settings.isManualMode) {
         AppLogger.log('RetellScreen', '评估完成 → 启动段间停顿');
         ref
             .read(retellPlayerProvider.notifier)
