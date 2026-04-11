@@ -1,6 +1,6 @@
 /// 开发者 ASR 引擎测试页面。
 ///
-/// 支持选择 Platform ASR 或本地离线模型（Moonshine / Whisper），
+/// 支持选择 Platform ASR（Apple Speech）或本地离线模型（Whisper），
 /// 提供录音、转录、性能指标和事件日志功能。
 library;
 
@@ -23,7 +23,7 @@ import '../services/speech_practice_platform.dart';
 
 /// ASR 测试方式。
 enum _AsrMode {
-  /// 平台内置（GMS SpeechRecognizer / SFSpeechRecognizer）。
+  /// 平台内置（Apple SFSpeechRecognizer）。
   platform,
 
   /// 本地离线（sherpa-onnx）。
@@ -236,6 +236,7 @@ class _AsrTestScreenState extends ConsumerState<AsrTestScreen> {
     _eventSubscription = platform.events.listen(_handlePlatformEvent);
 
     try {
+      await platform.setRecognitionEnabled(true);
       _addLog('warmup');
       await platform.warmup();
       _addLog('warmup done');
@@ -286,6 +287,7 @@ class _AsrTestScreenState extends ConsumerState<AsrTestScreen> {
     final platform = SpeechPracticePlatform.instance;
 
     try {
+      await platform.setRecognitionEnabled(false);
       _addLog('warmup');
       await platform.warmup();
       _addLog('warmup done');
