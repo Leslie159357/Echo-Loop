@@ -259,7 +259,12 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
     );
 
     try {
-      await _recordingService.startRecording(promptId: promptId);
+      final asrSettings = ref.read(offlineAsrSettingsProvider);
+      await _recordingService.startRecording(
+        promptId: promptId,
+        recognitionEnabled:
+            asrSettings.enabled && asrSettings.backend == AsrBackend.platform,
+      );
       // 订阅事件流
       _eventSub?.cancel();
       _eventSub = _recordingService.events.listen(_handleRecordingEvent);

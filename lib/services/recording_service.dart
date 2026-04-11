@@ -109,9 +109,13 @@ class RecordingService {
 
   /// 开始录音。
   ///
-  /// 自动执行权限检查 → warmup → startSession。
+  /// 自动执行 setRecognitionEnabled → 权限检查 → warmup → startSession。
+  /// [recognitionEnabled] 控制平台原生 ASR 是否启动（Apple Speech 时为 true）。
   /// 返回录音文件路径，失败时抛出 [SpeechPracticePlatformException]。
-  Future<String> startRecording({required String promptId}) async {
+  Future<String> startRecording({
+    required String promptId,
+    bool recognitionEnabled = false,
+  }) async {
     if (!_backend.isSupported) {
       throw const SpeechPracticePlatformException(
         'notAvailable',
@@ -133,6 +137,9 @@ class RecordingService {
           'Microphone or speech recognition permission denied.',
         );
       }
+
+      // 设置平台 ASR 模式（必须在 warmup 之前）
+      await _backend.setRecognitionEnabled(recognitionEnabled);
 
       // warmup 引擎
       await _backend.warmup();

@@ -16,26 +16,18 @@ import 'asr/offline_asr_backend.dart';
 
 /// 统一后端 provider。
 ///
-/// 根据 ASR 设置选择后端组合：
-/// - ASR 关闭 → 平台后端（recognition=false，纯录音）
-/// - Apple Speech → 平台后端（recognition=true，平台 ASR）
-/// - Echo Loop AI + 引擎就绪 → OfflineAsrBackend（recognition=false + 离线转录）
-/// - Echo Loop AI + 引擎未就绪 → 平台后端（recognition=false，降级为纯录音）
+/// 只负责选择后端实例，不调用副作用方法。
+/// recognition 模式由 [RecordingService.startRecording] 在 warmup 前设置。
+///
+/// - ASR 关闭 → 平台后端（纯录音）
+/// - Apple Speech → 平台后端（平台 ASR）
+/// - Echo Loop AI + 引擎就绪 → OfflineAsrBackend（离线转录）
+/// - Echo Loop AI + 引擎未就绪 → 平台后端（降级为纯录音）
 final speechPracticeBackendProvider = Provider<SpeechPracticeBackend>((ref) {
   final s = ref.watch(offlineAsrSettingsProvider);
   final platform = SpeechPracticePlatform.instance;
 
-  if (s.enabled && s.backend == AsrBackend.platform) {
-    // Apple Speech：启用平台 ASR
-    platform.setRecognitionEnabled(true);
-    return platform;
-  }
-
-  // 其他情况（ASR 关闭、Echo Loop AI）：纯录音模式
-  platform.setRecognitionEnabled(false);
-
   if (s.isOfflineReady) {
-    // Echo Loop AI：离线引擎就绪，包装平台后端
     final engine = ref.read(offlineAsrEngineProvider);
     return OfflineAsrBackend(platform: platform, engine: engine);
   }
