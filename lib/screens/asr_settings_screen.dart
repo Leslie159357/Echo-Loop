@@ -133,9 +133,7 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
             const Divider(height: 1, indent: 16, endIndent: 16),
             RadioListTile<AsrBackend>(
               title: Text(l10n.asrBackendOffline),
-              subtitle: Text(l10n.asrBackendOfflineDescription(
-                _estimatedModelSize(state.recommendedModel.id),
-              )),
+              subtitle: Text(l10n.asrBackendOfflineDescription),
               value: AsrBackend.offline,
             ),
           ],
@@ -330,14 +328,6 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
   }
 
   // ========== 工具方法 ==========
-
-  /// 根据模型 ID 返回近似下载大小。
-  static String _estimatedModelSize(String modelId) {
-    if (modelId.contains('tiny')) return '40 MB';
-    if (modelId.contains('base')) return '75 MB';
-    if (modelId.contains('small')) return '250 MB';
-    return '75 MB';
-  }
 
   static String _modelLabel(String modelId) {
     if (modelId.contains('tiny')) return 'Fast';

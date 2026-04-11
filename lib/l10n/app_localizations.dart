@@ -2471,8 +2471,8 @@ abstract class AppLocalizations {
   /// No description provided for @asrBackendOfflineDescription.
   ///
   /// In en, this message translates to:
-  /// **'Uses the app\'s AI model, works offline (~{size} download)'**
-  String asrBackendOfflineDescription(String size);
+  /// **'Uses the app\'s AI model, works offline, requires download'**
+  String get asrBackendOfflineDescription;
 
   /// No description provided for @localSpeechRecognition.
   ///

@@ -1316,9 +1316,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get asrBackendOffline => 'Echo Loop AI';
 
   @override
-  String asrBackendOfflineDescription(String size) {
-    return '使用应用自带的 AI 模型，支持离线（需下载约 $size）';
-  }
+  String get asrBackendOfflineDescription => '使用应用自带的 AI 模型，支持离线使用，需下载';
 
   @override
   String get localSpeechRecognition => '本地语音识别';

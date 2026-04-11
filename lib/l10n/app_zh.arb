@@ -578,12 +578,7 @@
   "asrBackendPlatform": "Apple Speech",
   "asrBackendPlatformDescription": "使用系统自带的语音识别，无需下载",
   "asrBackendOffline": "Echo Loop AI",
-  "asrBackendOfflineDescription": "使用应用自带的 AI 模型，支持离线（需下载约 {size}）",
-  "@asrBackendOfflineDescription": {
-    "placeholders": {
-      "size": { "type": "String" }
-    }
-  },
+  "asrBackendOfflineDescription": "使用应用自带的 AI 模型，支持离线使用，需下载",
   "localSpeechRecognition": "本地语音识别",
   "speechModelSize": "模型大小：约 {size}",
   "speechModelReady": "已就绪 · {size}",

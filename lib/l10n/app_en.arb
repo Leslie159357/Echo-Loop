@@ -735,12 +735,7 @@
   "asrBackendPlatform": "Apple Speech",
   "asrBackendPlatformDescription": "Uses the built-in system speech recognition, no download needed",
   "asrBackendOffline": "Echo Loop AI",
-  "asrBackendOfflineDescription": "Uses the app's AI model, works offline (~{size} download)",
-  "@asrBackendOfflineDescription": {
-    "placeholders": {
-      "size": { "type": "String" }
-    }
-  },
+  "asrBackendOfflineDescription": "Uses the app's AI model, works offline, requires download",
   "localSpeechRecognition": "Local Speech Recognition",
   "speechModelSize": "Model size: ~{size}",
   "@speechModelSize": {

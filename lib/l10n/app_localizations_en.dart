@@ -1360,9 +1360,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get asrBackendOffline => 'Echo Loop AI';
 
   @override
-  String asrBackendOfflineDescription(String size) {
-    return 'Uses the app\'s AI model, works offline (~$size download)';
-  }
+  String get asrBackendOfflineDescription =>
+      'Uses the app\'s AI model, works offline, requires download';
 
   @override
   String get localSpeechRecognition => 'Local Speech Recognition';
