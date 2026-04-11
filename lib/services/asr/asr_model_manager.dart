@@ -18,11 +18,8 @@ import 'offline_asr_engine.dart';
 // 模型注册表
 // ---------------------------------------------------------------------------
 
-/// HuggingFace 镜像基础 URL（大陆可用）。
-const _hfMirrorBase = 'https://hf-mirror.com';
-
-/// HuggingFace 官方基础 URL。
-const _hfOfficialBase = 'https://huggingface.co';
+/// CDN 基础 URL。
+const _cdnBase = 'https://cdn.echo-loop.top';
 
 /// 单个模型文件的固定元数据。
 class AsrModelFileSpec {
@@ -37,21 +34,15 @@ class AsrModelFileSpec {
 
 /// 模型文件清单：每个模型需要下载的文件及其固定校验信息。
 class AsrModelManifest {
-  final String hfRepo;
-  final String commit;
   final List<AsrModelFileSpec> files;
-  const AsrModelManifest({
-    required this.hfRepo,
-    required this.commit,
-    required this.files,
-  });
+  const AsrModelManifest({required this.files});
 }
 
-/// 各模型对应的 HuggingFace 仓库和文件清单。
+/// 各模型的文件清单。
+///
+/// 下载 URL: `$_cdnBase/model/$modelId/$filename`
 const _defaultModelFileRegistry = <String, AsrModelManifest>{
   'moonshine-tiny-en-int8': AsrModelManifest(
-    hfRepo: 'csukuangfj/sherpa-onnx-moonshine-tiny-en-int8',
-    commit: 'bf2b762c076d8ea61e2af0b3851c9564fb77552e',
     files: [
       AsrModelFileSpec(
         path: 'preprocess.onnx',
@@ -81,8 +72,6 @@ const _defaultModelFileRegistry = <String, AsrModelManifest>{
     ],
   ),
   'moonshine-base-en-int8': AsrModelManifest(
-    hfRepo: 'csukuangfj/sherpa-onnx-moonshine-base-en-int8',
-    commit: '052b0798ad1bf046a140fdd4efcd9426530fa3f5',
     files: [
       AsrModelFileSpec(
         path: 'preprocess.onnx',
@@ -112,8 +101,6 @@ const _defaultModelFileRegistry = <String, AsrModelManifest>{
     ],
   ),
   'whisper-tiny-en-int8': AsrModelManifest(
-    hfRepo: 'csukuangfj/sherpa-onnx-whisper-tiny.en',
-    commit: 'd026532c022fa99fd789d6b32446a1df7b6bfc43',
     files: [
       AsrModelFileSpec(
         path: 'tiny.en-encoder.int8.onnx',
@@ -133,8 +120,6 @@ const _defaultModelFileRegistry = <String, AsrModelManifest>{
     ],
   ),
   'whisper-base-en-int8': AsrModelManifest(
-    hfRepo: 'csukuangfj/sherpa-onnx-whisper-base.en',
-    commit: '59eea950fc76df2453efb57e6c0fd334548e8ffe',
     files: [
       AsrModelFileSpec(
         path: 'base.en-encoder.int8.onnx',
@@ -154,8 +139,6 @@ const _defaultModelFileRegistry = <String, AsrModelManifest>{
     ],
   ),
   'whisper-small-en-int8': AsrModelManifest(
-    hfRepo: 'csukuangfj/sherpa-onnx-whisper-small.en',
-    commit: 'd9533f69affd85061aee349af7fea5cb2996dbbe',
     files: [
       AsrModelFileSpec(
         path: 'small.en-encoder.int8.onnx',
@@ -257,9 +240,6 @@ class AsrModelDownloadProgress {
 class AsrModelManager {
   final Dio _dio;
 
-  /// 是否使用 HuggingFace 镜像（大陆优先）。
-  final bool useMirror;
-
   /// 可选的下载基地址覆盖，仅用于测试。
   final String? baseUrlOverride;
 
@@ -268,7 +248,6 @@ class AsrModelManager {
 
   AsrModelManager({
     Dio? dio,
-    this.useMirror = true,
     this.baseUrlOverride,
     Map<String, AsrModelManifest>? modelRegistryOverride,
   }) : _dio = dio ?? Dio(),
@@ -324,10 +303,9 @@ class AsrModelManager {
     final dir = await modelDir(modelId);
     await Directory(dir).create(recursive: true);
 
-    final baseUrl =
-        baseUrlOverride ?? (useMirror ? _hfMirrorBase : _hfOfficialBase);
+    final baseUrl = baseUrlOverride ?? _cdnBase;
     AppLogger.log('ASRModel', '┌ downloadModel modelId=$modelId dir=$dir');
-    AppLogger.log('ASRModel', '│ repo=${manifest.hfRepo} baseUrl=$baseUrl');
+    AppLogger.log('ASRModel', '│ baseUrl=$baseUrl');
 
     final totalFileCount = manifest.files.length;
     var completedFileCount = 0;
@@ -368,8 +346,7 @@ class AsrModelManager {
 
       final tempFile = File('${localFile.path}.tmp');
       try {
-        final downloadUrl =
-            '$baseUrl/${manifest.hfRepo}/resolve/${manifest.commit}/${file.path}';
+        final downloadUrl = '$baseUrl/model/$modelId/${file.path}';
         AppLogger.log('ASRModel', '│ downloading file=${file.path}');
         await _dio.download(
           downloadUrl,

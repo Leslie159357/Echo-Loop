@@ -13,7 +13,6 @@ class _TestAsrModelManager extends AsrModelManager {
     required super.modelRegistryOverride,
     super.dio,
     super.baseUrlOverride,
-    super.useMirror,
   });
 
   final Directory rootDir;
@@ -33,8 +32,6 @@ void main() {
 
     manifest = {
       'test-model': AsrModelManifest(
-        hfRepo: 'test/repo',
-        commit: 'commit-a',
         files: [
           AsrModelFileSpec(
             path: 'encoder.onnx',
@@ -114,7 +111,6 @@ void main() {
     final manager = _TestAsrModelManager(
       rootDir,
       dio: Dio(),
-      useMirror: false,
       baseUrlOverride: 'http://${server.address.host}:${server.port}',
       modelRegistryOverride: manifest,
     );
