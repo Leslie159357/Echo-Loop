@@ -162,25 +162,24 @@ class RecordingService {
     }
   }
 
-  /// 停止录音并等待 final transcript。
+  /// 停止录音，返回文件路径。不等待转录结果。
   ///
-  /// 内部在拿到 final transcript 后自动 shutdown 释放麦克风。
-  /// 录音时长在方法入口处计算（不含等待 transcript 的时间），
-  /// 并在这里统一写入 recorder，避免各个 controller 分散记账。
-  Future<RecordingResult> stopRecording({
+  /// 录音时长在此处计算并写入 recorder。
+  /// 调用后需调用 [waitForTranscript] 获取转录结果，或直接存录音。
+  Future<RecordingResult> stopSession({
     required String promptId,
     int? effectiveDurationMs,
   }) async {
     AppLogger.log(
       'Recording',
-      '┌ stopRecording promptId=$promptId '
+      '┌ stopSession promptId=$promptId '
           'recordingPromptId=$_recordingPromptId '
           'durationMs=${effectiveDurationMs ?? -1}',
     );
     if (_recordingPromptId != promptId) {
       AppLogger.log(
         'Recording',
-        '└ stopRecording skipped: invalidState '
+        '└ stopSession skipped: invalidState '
             'recordingPromptId=$_recordingPromptId expected=$promptId',
       );
       return const RecordingResult(
@@ -199,47 +198,43 @@ class RecordingService {
       recorder?.onRecordingCompleted(durationMs);
     }
 
+    _finalEventPromptId = promptId;
+    _finalEventCompleter = Completer<SpeechPracticeEvent>();
+
+    AppLogger.log('Recording', '│ backend.stopSession() ...');
+    final stopResult = await _backend.stopSession();
+    final filePath = stopResult.filePath ?? _currentFilePath;
+    _recordingPromptId = null;
+    _recordingStartedAt = null;
+    AppLogger.log(
+      'Recording',
+      '└ stopSession done filePath=${filePath ?? '(null)'}',
+    );
+
+    return RecordingResult(filePath: filePath);
+  }
+
+  /// 等待转录结果并释放引擎。
+  ///
+  /// 必须在 [stopSession] 之后调用。等待平台或离线引擎返回 finalTranscript。
+  Future<RecordingResult> waitForTranscript({required String filePath}) async {
     try {
-      _finalEventPromptId = promptId;
-      _finalEventCompleter = Completer<SpeechPracticeEvent>();
-
-      AppLogger.log('Recording', '│ backend.stopSession() ...');
-      final stopResult = await _backend.stopSession();
-      final filePath = stopResult.filePath ?? _currentFilePath;
-      _recordingPromptId = null;
-      _recordingStartedAt = null;
-      AppLogger.log(
-        'Recording',
-        '│ stopSession done filePath=${filePath ?? '(null)'}',
-      );
-
-      if (filePath == null || filePath.isEmpty) {
-        await _shutdown();
-        AppLogger.log('Recording', '└ stopRecording failed: noFile');
-        return const RecordingResult(
-          errorCode: 'noFile',
-          errorMessage: 'Recording file missing.',
-        );
-      }
-
-      // 等待 final transcript
-      AppLogger.log('Recording', '│ waiting final transcript ...');
+      AppLogger.log('Recording', '┌ waitForTranscript ...');
       final event = await _finalEventCompleter!.future.timeout(
         _finalTranscriptTimeout,
       );
       _clearFinalCompleter();
-
       await _shutdown();
+
       AppLogger.log(
         'Recording',
-        '│ final event received type=${event.type.name} '
-            'promptId=${event.promptId} '
+        '│ final event type=${event.type.name} '
             'transcriptLen=${event.transcript?.trim().length ?? 0} '
             'errorCode=${event.errorCode ?? '(null)'}',
       );
 
       if (event.type == SpeechPracticeEventType.error) {
-        AppLogger.log('Recording', '└ stopRecording failed: ASR error');
+        AppLogger.log('Recording', '└ waitForTranscript: ASR error');
         return RecordingResult(
           filePath: filePath,
           errorCode: event.errorCode,
@@ -247,40 +242,54 @@ class RecordingService {
         );
       }
 
-      AppLogger.log('Recording', '└ stopRecording done: finalTranscript ready');
+      AppLogger.log('Recording', '└ waitForTranscript: done');
       return RecordingResult(
         filePath: filePath,
         finalTranscript: (event.transcript ?? '').trim(),
       );
     } on TimeoutException {
       _clearFinalCompleter();
-      _recordingPromptId = null;
-      _recordingStartedAt = null;
       await _shutdown();
-      AppLogger.log(
-        'Recording',
-        '└ stopRecording failed: final transcript timeout',
-      );
+      AppLogger.log('Recording', '└ waitForTranscript: timeout');
       return RecordingResult(
-        filePath: _currentFilePath,
+        filePath: filePath,
         errorCode: 'timeout',
         errorMessage: 'Final transcript timed out.',
       );
     } on SpeechPracticePlatformException catch (e) {
       _clearFinalCompleter();
-      _recordingPromptId = null;
-      _recordingStartedAt = null;
       await _shutdown();
       AppLogger.log(
         'Recording',
-        '└ stopRecording failed: platform ${e.code} ${e.message}',
+        '└ waitForTranscript: platform ${e.code} ${e.message}',
       );
       return RecordingResult(
-        filePath: _currentFilePath,
+        filePath: filePath,
         errorCode: e.code,
         errorMessage: e.message,
       );
     }
+  }
+
+  /// 停止录音并等待转录（便捷方法，保持向后兼容）。
+  Future<RecordingResult> stopRecording({
+    required String promptId,
+    int? effectiveDurationMs,
+  }) async {
+    final stopResult = await stopSession(
+      promptId: promptId,
+      effectiveDurationMs: effectiveDurationMs,
+    );
+    if (stopResult.errorCode != null) return stopResult;
+    final filePath = stopResult.filePath;
+    if (filePath == null || filePath.isEmpty) {
+      await _shutdown();
+      return const RecordingResult(
+        errorCode: 'noFile',
+        errorMessage: 'Recording file missing.',
+      );
+    }
+    return waitForTranscript(filePath: filePath);
   }
 
   /// 取消当前录音，删除录音文件，释放麦克风。
@@ -329,6 +338,11 @@ class RecordingService {
     if (_backend.isSupported) {
       await _backend.shutdown();
     }
+  }
+
+  /// 关闭引擎并取消事件订阅（公开方法，ASR 关闭时直接释放资源）。
+  Future<void> shutdown() async {
+    await _shutdown();
   }
 
   /// 关闭引擎并取消事件订阅。

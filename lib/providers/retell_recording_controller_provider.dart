@@ -371,12 +371,13 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
 
   // ========== 内部方法 ==========
 
-  /// 停止录音 + 评估
+  /// 停止录音 → processing → 等待转录 → 评估 → idle。
   Future<void> _doStopAndEvaluate({
     required String promptId,
     required String referenceText,
   }) async {
     final backend = ref.read(speechPracticeBackendProvider);
+    final asrEnabled = ref.read(offlineAsrSettingsProvider).enabled;
     _cancelAllTimers();
     await _eventSub?.cancel();
     _eventSub = null;
@@ -391,17 +392,51 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
                 state.silenceDuration.inMilliseconds,
           );
 
-    final result = await _recordingService.stopRecording(
+    // ── 阶段 1：停止录音（立即返回）──
+    final stopResult = await _recordingService.stopSession(
       promptId: promptId,
       effectiveDurationMs: effectiveDurationMs,
     );
+    final filePath = stopResult.filePath;
     AppLogger.log('RetellRec', '│ backend=${backend.runtimeType}');
-    AppLogger.log(
-      'RetellRec',
-      '│ stopRecording result filePath=${result.filePath ?? '(null)'} '
-          'finalLen=${result.finalTranscript?.trim().length ?? 0} '
-          'errorCode=${result.errorCode ?? '(null)'}',
-    );
+
+    if (stopResult.errorCode != null || filePath == null || filePath.isEmpty) {
+      AppLogger.log('RetellRec', '✗ 停止录音失败: ${stopResult.errorCode}');
+      state = state.copyWith(
+        phase: RetellRecordingPhase.idle,
+        currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
+          filePath: filePath,
+          status: SpeechPracticeAttemptStatus.unavailable,
+        ),
+        clearLiveTranscript: true,
+        hasDetectedSpeech: false,
+        silenceDuration: Duration.zero,
+      );
+      return;
+    }
+
+    // ── ASR 关闭：直接存录音 ──
+    if (!asrEnabled) {
+      AppLogger.log('RetellRec', '✗ ASR 关闭，跳过转录');
+      await _recordingService.shutdown();
+      state = state.copyWith(
+        phase: RetellRecordingPhase.idle,
+        currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
+          filePath: filePath,
+          status: SpeechPracticeAttemptStatus.unavailable,
+        ),
+        clearLiveTranscript: true,
+        hasDetectedSpeech: false,
+        silenceDuration: Duration.zero,
+      );
+      return;
+    }
+
+    // ── 阶段 2：进入 processing ──
+    _enterProcessing(promptId);
+
+    // ── 阶段 3：等待转录结果 ──
+    final result = await _recordingService.waitForTranscript(filePath: filePath);
 
     // 确定用于评估的 transcript：优先 final，超时时回退到 live
     String? transcript = result.finalTranscript;
@@ -418,24 +453,18 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
 
     AppLogger.log('RetellRec', '📋 final: "${transcript ?? '(null)'}"');
 
-    // ASR 关闭时强制视为无 transcript（iOS 平台后端仍会返回 transcript，但用户意图是不评分）
-    final asrEnabled = ref.read(offlineAsrSettingsProvider).enabled;
-    if (!asrEnabled) transcript = null;
-
-    // 无法获得任何 transcript → 直接存录音，跳过 processing 和评估
     if (transcript == null || transcript.isEmpty) {
       final status = result.errorCode != null
           ? _statusFromError(result.errorCode)
           : SpeechPracticeAttemptStatus.unavailable;
-      final attempt = SpeechPracticeAttempt(promptId: promptId).copyWith(
-        filePath: result.filePath,
-        status: status,
-        errorMessage: result.errorMessage,
-      );
       AppLogger.log('RetellRec', '✗ 无转录结果: status=${status.name}');
       state = state.copyWith(
         phase: RetellRecordingPhase.idle,
-        currentAttempt: attempt,
+        currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
+          filePath: filePath,
+          status: status,
+          errorMessage: result.errorMessage,
+        ),
         clearLiveTranscript: true,
         hasDetectedSpeech: false,
         silenceDuration: Duration.zero,
@@ -443,10 +472,7 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
       return;
     }
 
-    // 有转录 → 进入 processing + 评估（同步块内完成）
-    _enterProcessing(promptId);
-
-    // 评估：覆盖率 + embedding 取最高级别
+    // ── 阶段 4：评估 ──
     final matcher = ref.read(speechTranscriptMatcherProvider);
     AppLogger.log(
       'RetellRec',
@@ -468,7 +494,7 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
         : matchResult.status;
 
     final attempt = SpeechPracticeAttempt(promptId: promptId).copyWith(
-      filePath: result.filePath,
+      filePath: filePath,
       status: effectiveStatus,
       finalTranscript: matchResult.finalTranscript,
       score: effectiveScore,

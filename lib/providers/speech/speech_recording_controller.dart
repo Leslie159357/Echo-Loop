@@ -426,14 +426,18 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   /// 停止录音并评估。
   ///
-  /// 异步部分：停止录音、等待 final transcript。
-  /// 同步部分：[_evaluateResult]，processing → evaluate → idle 在同一同步块内完成，
-  /// UI 来不及刷新"分析中..."就已经到 idle。
+  /// 停止录音 → processing → 等待转录 → 评估 → idle。
+  ///
+  /// 三个清晰阶段：
+  /// 1. stopSession — 立即停止录音
+  /// 2. processing — ASR 启用时显示"分析中..."
+  /// 3. waitForTranscript + evaluate — 等待转录并评估
   Future<void> _doStopAndEvaluate({
     required String promptId,
     required String referenceText,
   }) async {
     final backend = ref.read(speechPracticeBackendProvider);
+    final asrEnabled = ref.read(offlineAsrSettingsProvider).enabled;
     _cancelAllTimers();
     await _eventSub?.cancel();
     _eventSub = null;
@@ -449,14 +453,54 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
                 state.silenceDuration.inMilliseconds,
           );
 
-    final result = await _recordingService.stopRecording(
+    // ── 阶段 1：停止录音（立即返回）──
+    final stopResult = await _recordingService.stopSession(
       promptId: promptId,
       effectiveDurationMs: effectiveDurationMs,
     );
+    final filePath = stopResult.filePath;
     AppLogger.log('SpeechRec', '│ backend=${backend.runtimeType}');
+
+    if (stopResult.errorCode != null || filePath == null || filePath.isEmpty) {
+      AppLogger.log('SpeechRec', '✗ 停止录音失败: ${stopResult.errorCode}');
+      state = state.copyWith(
+        phase: SpeechRecordingPhase.idle,
+        currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
+          filePath: filePath,
+          status: SpeechPracticeAttemptStatus.unavailable,
+        ),
+        clearLiveTranscript: true,
+        hasDetectedSpeech: false,
+        silenceDuration: Duration.zero,
+      );
+      return;
+    }
+
+    // ── ASR 关闭：直接存录音，不等转录 ──
+    if (!asrEnabled) {
+      AppLogger.log('SpeechRec', '✗ ASR 关闭，跳过转录');
+      await _recordingService.shutdown();
+      state = state.copyWith(
+        phase: SpeechRecordingPhase.idle,
+        currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
+          filePath: filePath,
+          status: SpeechPracticeAttemptStatus.unavailable,
+        ),
+        clearLiveTranscript: true,
+        hasDetectedSpeech: false,
+        silenceDuration: Duration.zero,
+      );
+      return;
+    }
+
+    // ── 阶段 2：进入 processing（显示"分析中..."）──
+    _enterProcessing(promptId);
+
+    // ── 阶段 3：等待转录结果 ──
+    final result = await _recordingService.waitForTranscript(filePath: filePath);
     AppLogger.log(
       'SpeechRec',
-      '│ stopRecording result filePath=${result.filePath ?? '(null)'} '
+      '│ transcript filePath=${filePath} '
           'finalLen=${result.finalTranscript?.trim().length ?? 0} '
           'errorCode=${result.errorCode ?? '(null)'}',
     );
@@ -465,31 +509,25 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       '📋 final: "${result.finalTranscript ?? '(null)'}"',
     );
 
-    // ASR 关闭时跳过评估（iOS 平台后端仍会返回 transcript，但用户意图是不评分）
-    final asrEnabled = ref.read(offlineAsrSettingsProvider).enabled;
-
     // 判断是否有可用的转录结果（final 或 live）
-    final hasTranscript = asrEnabled &&
-        ((result.isSuccess &&
-                (result.finalTranscript?.trim().isNotEmpty ?? false)) ||
-            (_lastKnownTranscript != null &&
-                _lastKnownTranscript!.trim().isNotEmpty));
+    final hasTranscript =
+        (result.isSuccess &&
+            (result.finalTranscript?.trim().isNotEmpty ?? false)) ||
+        (_lastKnownTranscript != null &&
+            _lastKnownTranscript!.trim().isNotEmpty);
 
     if (hasTranscript) {
-      // 有转录 → processing + 评估（同步块内完成，UI 不会闪"分析中..."）
-      _enterProcessing(promptId);
       _evaluateResult(
         promptId: promptId,
         referenceText: referenceText,
         result: result,
       );
     } else {
-      // 无转录（ASR 未启用或未检测到语音）→ 直接存录音，跳过评估
       AppLogger.log('SpeechRec', '✗ 无转录结果，跳过评估');
       state = state.copyWith(
         phase: SpeechRecordingPhase.idle,
         currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
-          filePath: result.filePath,
+          filePath: filePath,
           status: SpeechPracticeAttemptStatus.unavailable,
         ),
         clearLiveTranscript: true,
