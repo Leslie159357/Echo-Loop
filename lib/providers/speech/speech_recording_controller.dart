@@ -31,6 +31,7 @@ import '../../services/speech_completion_detector.dart';
 import '../../services/speech_practice_matcher.dart';
 import '../../services/speech_practice_platform.dart';
 import '../../services/study_event_recorder.dart';
+import '../offline_asr_settings_provider.dart';
 
 /// 等待开口最大时长
 const _awaitingSpeechTimeout = Duration(seconds: 60);
