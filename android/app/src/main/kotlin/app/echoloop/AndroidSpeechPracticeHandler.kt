@@ -183,8 +183,6 @@ class AndroidSpeechPracticeHandler(
             val ok = wavRecorder.initialize()
             if (!ok) Log.w(TAG, "WavRecorder initialization failed")
         }
-        // release() 会清空 onRms，重新初始化后必须恢复。
-        wavRecorder.onRms = { rms -> handleVoiceActivity(rms) }
     }
 
     private fun cleanupEngine() {
