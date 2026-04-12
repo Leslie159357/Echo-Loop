@@ -1364,6 +1364,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Uses the app\'s AI model, works offline, requires download';
 
   @override
+  String asrModelTier(String tier) {
+    return 'Model: $tier (auto-selected for your device)';
+  }
+
+  @override
   String get localSpeechRecognition => 'Local Speech Recognition';
 
   @override

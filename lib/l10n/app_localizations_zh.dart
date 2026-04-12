@@ -1319,6 +1319,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get asrBackendOfflineDescription => '使用应用自带的 AI 模型，支持离线使用，需下载';
 
   @override
+  String asrModelTier(String tier) {
+    return '模型：$tier（根据设备性能自动选择）';
+  }
+
+  @override
   String get localSpeechRecognition => '本地语音识别';
 
   @override

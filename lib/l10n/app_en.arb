@@ -736,6 +736,12 @@
   "asrBackendPlatformDescription": "Uses the built-in system speech recognition, no download needed",
   "asrBackendOffline": "Echo Loop AI",
   "asrBackendOfflineDescription": "Uses the app's AI model, works offline, requires download",
+  "asrModelTier": "Model: {tier} (auto-selected for your device)",
+  "@asrModelTier": {
+    "placeholders": {
+      "tier": { "type": "String" }
+    }
+  },
   "localSpeechRecognition": "Local Speech Recognition",
   "speechModelSize": "Model size: ~{size}",
   "@speechModelSize": {

@@ -150,6 +150,8 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
     final modelLabel = _modelLabel(state.recommendedModel.id);
     final statusText = _modelStatusText(l10n, state);
 
+    final tierText = l10n.asrModelTier(modelLabel);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -159,7 +161,7 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          statusText.isEmpty ? modelLabel : '$modelLabel · $statusText',
+          statusText.isEmpty ? tierText : '$tierText\n$statusText',
           style: theme.textTheme.bodySmall?.copyWith(
             color: state.downloadStatus == AsrModelDownloadStatus.downloaded
                 ? Colors.green
@@ -182,10 +184,12 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
     final modelLabel = _modelLabel(state.recommendedModel.id);
     final statusText = _modelStatusText(l10n, state);
 
+    final tierText = l10n.asrModelTier(modelLabel);
+
     return ListTile(
       title: Text(l10n.localSpeechRecognition),
       subtitle: Text(
-        statusText.isEmpty ? modelLabel : '$modelLabel · $statusText',
+        statusText.isEmpty ? tierText : '$tierText\n$statusText',
         style: TextStyle(
           color: state.downloadStatus == AsrModelDownloadStatus.downloaded
               ? Colors.green

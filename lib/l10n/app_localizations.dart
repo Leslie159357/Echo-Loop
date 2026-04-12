@@ -2474,6 +2474,12 @@ abstract class AppLocalizations {
   /// **'Uses the app\'s AI model, works offline, requires download'**
   String get asrBackendOfflineDescription;
 
+  /// No description provided for @asrModelTier.
+  ///
+  /// In en, this message translates to:
+  /// **'Model: {tier} (auto-selected for your device)'**
+  String asrModelTier(String tier);
+
   /// No description provided for @localSpeechRecognition.
   ///
   /// In en, this message translates to:
