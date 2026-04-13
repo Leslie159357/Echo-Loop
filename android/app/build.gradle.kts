@@ -39,9 +39,16 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // 只打包 arm64，排除 x86_64 和 armeabi-v7a，减小 APK 约 45MB
+        // 只打包 arm64
         ndk {
             abiFilters += "arm64-v8a"
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // 强制排除非 arm64 的 so，防止 Flutter 插件绕过 abiFilters
+            excludes += listOf("lib/x86_64/**", "lib/armeabi-v7a/**", "lib/x86/**")
         }
     }
 
