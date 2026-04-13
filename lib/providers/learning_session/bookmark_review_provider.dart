@@ -528,11 +528,15 @@ class BookmarkReview extends _$BookmarkReview {
     _blindEngine.resumeInterval();
   }
 
-  /// 盲听倒计时快进。
+  /// 盲听倒计时快进（动态速度，~1.5 秒内结束）。
   void toggleCountdownFastForward() {
     if (state.isAnnotationMode) return;
     final isFF = !state.isCountdownFastForward;
-    _blindEngine.setIntervalSpeed(isFF ? kBlindFastForwardSpeed : 1.0);
+    if (isFF) {
+      _blindEngine.fastForwardInterval();
+    } else {
+      _blindEngine.setIntervalSpeed(1.0);
+    }
     if (state.isCountdownPaused) {
       _blindEngine.resumeInterval();
     }

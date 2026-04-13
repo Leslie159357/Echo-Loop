@@ -270,10 +270,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      // CountdownChip 自驱动动画，pump 一帧让 AnimationController 初始化
+      await tester.pump();
 
-      // CountdownChip 应该可见（包含秒数文本）
-      expect(find.text('5'), findsOneWidget);
+      // CountdownChip 从 total(8s) 开始倒数，初始显示 8
+      expect(find.text('8'), findsOneWidget);
     });
 
     testWidgets('WaitingForUser phase 时不显示倒计时', (tester) async {

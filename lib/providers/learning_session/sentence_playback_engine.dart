@@ -61,7 +61,6 @@ class SentencePlaybackEngine {
   /// [onPlayCountChanged] 每遍开始时回调（playCount 从 1 开始）
   /// [onPauseStarted] 遍间停顿开始时回调（传入停顿总时长）
   /// [onPauseEnded] 遍间停顿结束时回调
-  /// [onTick] 倒计时每 100ms 回调一次（传入剩余时长）
   /// [onAllPlaysCompleted] 所有遍数播完后回调
   ///
   /// 返回时表示播放完成或被中断。
@@ -73,7 +72,6 @@ class SentencePlaybackEngine {
     required void Function(int playCount) onPlayCountChanged,
     required void Function(Duration pauseDuration) onPauseStarted,
     required void Function() onPauseEnded,
-    required void Function(Duration remaining) onTick,
     required Future<void> Function() onAllPlaysCompleted,
   }) async {
     final engine = _getEngine();
@@ -101,7 +99,7 @@ class SentencePlaybackEngine {
         final pauseDur = pauseCalculator(sentence.duration);
         onPauseStarted(pauseDur);
 
-        await _countdown.start(pauseDur, onTick);
+        await _countdown.start(pauseDur);
 
         if (!engine.isActiveSession(sessionId)) return;
         onPauseEnded();
@@ -116,12 +114,11 @@ class SentencePlaybackEngine {
 
   /// 执行句间停顿
   ///
-  /// 停顿结束后调用 [onAdvance]，期间用 [onTick] 更新倒计时。
+  /// 停顿结束后调用 [onAdvance]。
   /// 停顿开始前会创建新 session，确保期间用户操作可中断。
   Future<void> autoAdvance({
     required Duration pauseDuration,
     required void Function(Duration pauseDuration) onPauseStarted,
-    required void Function(Duration remaining) onTick,
     required Future<void> Function() onAdvance,
   }) async {
     final engine = _getEngine();
@@ -130,7 +127,7 @@ class SentencePlaybackEngine {
 
     onPauseStarted(pauseDuration);
 
-    await _countdown.start(pauseDuration, onTick);
+    await _countdown.start(pauseDuration);
 
     if (!engine.isActiveSession(sessionId)) return;
     await onAdvance();

@@ -822,11 +822,19 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
               countdownWidget: state.isRetellCountdown
                   ? Consumer(
                       builder: (context, ref, _) {
-                        final s = ref.watch(retellPlayerProvider);
+                        final s = ref.watch(
+                          retellPlayerProvider.select(
+                            (s) => (
+                              total: s.pauseDuration,
+                              paused: s.isCountdownPaused,
+                              fastForward: s.isCountdownFastForward,
+                            ),
+                          ),
+                        );
                         return CountdownChip(
-                          remaining: s.pauseRemaining,
-                          total: s.pauseDuration,
-                          isPaused: s.isCountdownPaused,
+                          total: s.total,
+                          isPaused: s.paused,
+                          isFastForward: s.fastForward,
                           onPause: () => ref
                               .read(retellPlayerProvider.notifier)
                               .pauseCountdown(),

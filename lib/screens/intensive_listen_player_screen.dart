@@ -588,9 +588,9 @@ class _IntensiveListenPlayerScreenState
                                     show:
                                         s.isPauseBetweenPlays &&
                                         !s.settings.isManualMode,
-                                    remaining: s.pauseRemaining,
                                     total: s.pauseDuration,
                                     paused: s.isCountdownPaused,
+                                    fastForward: s.isCountdownFastForward,
                                   ),
                                 ),
                               );
@@ -601,9 +601,9 @@ class _IntensiveListenPlayerScreenState
                                   '${playerState.currentSentenceIndex}-'
                                   '${s.total.inMilliseconds}',
                                 ),
-                                remaining: s.remaining,
                                 total: s.total,
                                 isPaused: s.paused,
+                                isFastForward: s.fastForward,
                                 onPause: () => player.pauseCountdown(),
                                 onResume: () => player.resumeCountdown(),
                               );
@@ -679,9 +679,9 @@ class _IntensiveListenPlayerScreenState
                                 (s) => (
                                   show: _showAnnotationCountdown(s),
                                   sentenceIndex: s.currentSentenceIndex,
-                                  remaining: s.pauseRemaining,
                                   total: s.pauseDuration,
                                   paused: s.isCountdownPaused,
+                                  fastForward: s.isCountdownFastForward,
                                 ),
                               ),
                             );
@@ -700,9 +700,9 @@ class _IntensiveListenPlayerScreenState
                                   '${countdown.sentenceIndex}-'
                                   '${countdown.total.inMilliseconds}',
                                 ),
-                                remaining: countdown.remaining,
                                 total: countdown.total,
                                 isPaused: countdown.paused,
+                                isFastForward: countdown.fastForward,
                                 onPause: () => player.pauseCountdown(),
                                 onResume: () => player.resumeCountdown(),
                               ),

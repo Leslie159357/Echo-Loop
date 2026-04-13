@@ -529,11 +529,17 @@ class _BlindListenPlayerScreenState
                   child: playerState.isPauseCountdown
                       ? Consumer(
                           builder: (context, ref, _) {
-                            final s = ref.watch(blindListenPlayerProvider);
+                            final s = ref.watch(
+                              blindListenPlayerProvider.select(
+                                (s) => (
+                                  total: s.pauseDuration,
+                                  paused: s.isCountdownPaused,
+                                ),
+                              ),
+                            );
                             return CountdownChip(
-                              remaining: s.pauseRemaining,
-                              total: s.pauseDuration,
-                              isPaused: s.isCountdownPaused,
+                              total: s.total,
+                              isPaused: s.paused,
                               onPause: () => player.pauseCountdown(),
                               onResume: () => player.resumeCountdown(),
                             );

@@ -11,9 +11,6 @@ import '../learning_session/countdown_controller.dart';
 import 'blind_practice_flow_phase.dart';
 import 'blind_practice_flow_state.dart';
 
-/// 倒计时快进速度倍率
-const kBlindFastForwardSpeed = 10.0;
-
 /// 盲听流程配置
 class BlindPracticeFlowConfig {
   /// 获取指定句子的目标遍数
@@ -196,6 +193,15 @@ class BlindPracticeFlowEngine {
     _countdown.setSpeed(speed);
   }
 
+  /// 快进倒计时（动态速度，~1.5 秒内结束）
+  ///
+  /// 返回实际速度倍率，供调用方同步 UI。
+  double fastForwardInterval() {
+    if (_disposed) return 1.0;
+    if (_state.phase is! BlindWaitingInterval) return 1.0;
+    return _countdown.fastForward();
+  }
+
   Future<void> restartCurrentSentence({bool autoplay = true}) async {
     if (_disposed) return;
     final sentence = currentSentence;
@@ -350,15 +356,7 @@ class BlindPracticeFlowEngine {
     );
 
     final token = _state.flowToken;
-    await _countdown.start(total, (remaining) {
-      if (_disposed) return;
-      if (token != _state.flowToken) return;
-      final phase = _state.phase;
-      if (phase is! BlindWaitingInterval) return;
-      _updateState(
-        _state.copyWith(phase: phase.copyWith(remaining: remaining)),
-      );
-    });
+    await _countdown.start(total);
 
     if (token != _state.flowToken || _state.phase is! BlindWaitingInterval) {
       return;

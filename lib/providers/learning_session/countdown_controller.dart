@@ -3,6 +3,9 @@
 /// 支持暂停/恢复/加速，替代 Timer + Future.delayed 的简单倒计时。
 /// 倒计时结束时 [start] 返回的 Future 自动 complete。
 ///
+/// **UI 不通过此控制器获取 remaining**：[CountdownChip] 自带 AnimationController
+/// 驱动进度动画，本控制器仅负责流程计时和完成通知。
+///
 /// 使用场景：精听/跟读/复述/难句补练的句间/遍间停顿。
 library;
 
@@ -28,9 +31,6 @@ class CountdownController {
   /// 是否暂停中
   bool _paused = false;
 
-  /// 倒计时 tick 回调（每次 tick 传入剩余时间）
-  void Function(Duration remaining)? _onTick;
-
   /// 是否有活跃的倒计时
   bool get isActive => _timer != null;
 
@@ -40,18 +40,27 @@ class CountdownController {
   /// 当前速度倍率
   double get speed => _speed;
 
+  /// 当前剩余时间（供 engine 在 resume 等场景读取）
+  Duration get remaining {
+    if (!isActive) return Duration.zero;
+    final totalElapsed = _accumulated +
+        (_paused || _runStart == null
+            ? Duration.zero
+            : _scale(DateTime.now().difference(_runStart!), _speed));
+    final rem = _total - totalElapsed;
+    return rem < Duration.zero ? Duration.zero : rem;
+  }
+
   /// 启动倒计时，返回在倒计时结束或取消时 complete 的 Future
   ///
   /// [total] 倒计时总时长
-  /// [onTick] 每 100ms 回调一次，传入剩余时间
-  Future<void> start(Duration total, void Function(Duration remaining) onTick) {
+  Future<void> start(Duration total) {
     cancel();
     _total = total;
     _accumulated = Duration.zero;
     _runStart = DateTime.now();
     _speed = 1.0;
     _paused = false;
-    _onTick = onTick;
     _completer = Completer<void>();
 
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) => _tick());
@@ -83,11 +92,25 @@ class CountdownController {
     _speed = speed;
   }
 
+  /// 快进目标时长
+  static const _fastForwardTargetMs = 1500.0;
+
+  /// 快进：动态计算速度，让剩余时间在 ~1.5 秒内走完
+  ///
+  /// 返回实际设置的速度倍率，供 UI 同步动画。
+  /// 最低 2x，避免剩余时间本身就很短时无效果。
+  double fastForward() {
+    final rem = remaining;
+    final remMs = rem.inMilliseconds.toDouble();
+    final speed = (remMs / _fastForwardTargetMs).clamp(2.0, 100.0);
+    setSpeed(speed);
+    return speed;
+  }
+
   /// 取消倒计时（会 complete 返回的 Future，但不触发 onTick）
   void cancel() {
     _timer?.cancel();
     _timer = null;
-    _onTick = null;
     if (_completer != null && !_completer!.isCompleted) {
       _completer!.complete();
     }
@@ -98,27 +121,22 @@ class CountdownController {
     _accumulated = Duration.zero;
   }
 
-  /// 每 100ms 触发一次
+  /// 每 100ms 触发一次，仅用于完成检测
   void _tick() {
     if (_paused || _runStart == null) return;
 
     final currentRun = DateTime.now().difference(_runStart!);
     final scaledCurrent = _scale(currentRun, _speed);
     final totalElapsed = _accumulated + scaledCurrent;
-    final remaining = _total - totalElapsed;
 
-    if (remaining <= Duration.zero) {
+    if (totalElapsed >= _total) {
       _timer?.cancel();
       _timer = null;
-      _onTick?.call(Duration.zero);
-      _onTick = null;
       if (_completer != null && !_completer!.isCompleted) {
         _completer!.complete();
       }
       _completer = null;
-      return;
     }
-    _onTick?.call(remaining);
   }
 
   /// 保存当前运行段的已累积时间

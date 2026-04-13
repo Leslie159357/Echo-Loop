@@ -542,9 +542,9 @@ class _ListenAndRepeatPlayerScreenState
                                 return const SizedBox.shrink();
                               }
                               return CountdownChip(
-                                remaining: phase.remaining,
                                 total: phase.total,
                                 isPaused: phase.isPaused,
+                                isFastForward: phase.speed > 1.0,
                                 onPause: ctrl.pauseInterval,
                                 onResume: ctrl.resumeInterval,
                               );

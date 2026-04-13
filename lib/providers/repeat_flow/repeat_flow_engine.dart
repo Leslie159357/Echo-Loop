@@ -29,7 +29,6 @@ const kSmartPauseMaxMs = 20000;
 const kMultiplierPauseMinMs = 1000;
 
 /// 倒计时快进速度倍率
-const kFastForwardSpeed = 10.0;
 
 /// 录音最大时长 = sentenceDuration × 此倍率 + kRecordingTimeoutBase
 const kRecordingDurationMultiplier = 2.5;
@@ -375,12 +374,16 @@ class RepeatFlowEngine {
     _onReviewPlaybackFinished();
   }
 
-  /// 快进倒计时
+  /// 快进倒计时（动态速度，~1.5 秒内结束）
   void fastForwardInterval() {
-    if (_state.phase is! WaitingInterval) return;
+    final phase = _state.phase;
+    if (phase is! WaitingInterval) return;
     if (!_countdown.isActive) return;
-    _countdown.setSpeed(kFastForwardSpeed);
-    AppLogger.log(logTag, '倒计时快进 ${kFastForwardSpeed}x');
+    final speed = _countdown.fastForward();
+    _updateState(
+      _state.copyWith(phase: phase.copyWith(speed: speed)),
+    );
+    AppLogger.log(logTag, '倒计时快进 ${speed.toStringAsFixed(1)}x');
   }
 
   /// 暂停倒计时
@@ -634,10 +637,10 @@ class RepeatFlowEngine {
   /// 启动遍间倒计时
   Future<void> _startInterval({required bool resetFull}) async {
     final total = _state.intervalDuration;
-    final currentPhase = _state.phase;
-    final remaining = resetFull || currentPhase is! WaitingInterval
+    // 非重置时从 countdown controller 读取实际剩余时间
+    final remaining = resetFull || !_countdown.isActive
         ? total
-        : currentPhase.remaining;
+        : _countdown.remaining;
 
     _updateState(
       _state.copyWith(
@@ -648,20 +651,11 @@ class RepeatFlowEngine {
     if (_config.isManualMode()) return;
 
     final token = _state.flowToken;
-    await _countdown.start(remaining, (rem) {
-      _onIntervalTick(token, rem);
-    });
+    await _countdown.start(remaining);
 
     if (token == _state.flowToken && _state.phase is WaitingInterval) {
       _onIntervalFinished();
     }
-  }
-
-  void _onIntervalTick(int token, Duration remaining) {
-    if (token != _state.flowToken) return;
-    final phase = _state.phase;
-    if (phase is! WaitingInterval) return;
-    _updateState(_state.copyWith(phase: phase.copyWith(remaining: remaining)));
   }
 
   void _onIntervalFinished() {

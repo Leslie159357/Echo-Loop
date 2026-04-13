@@ -470,8 +470,8 @@ class RetellPlayer extends _$RetellPlayer {
     if (state.phase == RetellPhase.listening) {
       await _playCurrentParagraph();
     } else {
-      // 复述阶段恢复倒计时
-      _startRetellCountdown(state.pauseRemaining);
+      // 复述阶段恢复倒计时，从 controller 读取实际剩余时间
+      _startRetellCountdown(_countdown.remaining);
     }
   }
 
@@ -546,7 +546,11 @@ class RetellPlayer extends _$RetellPlayer {
   /// 如果当前暂停中，快进会同时恢复倒计时。
   void toggleCountdownFastForward() {
     final isFF = !state.isCountdownFastForward;
-    _countdown.setSpeed(isFF ? 10.0 : 1.0);
+    if (isFF) {
+      _countdown.fastForward();
+    } else {
+      _countdown.setSpeed(1.0);
+    }
     if (state.isCountdownPaused) {
       _countdown.resume();
     }
@@ -835,16 +839,12 @@ class RetellPlayer extends _$RetellPlayer {
       isWaitingForUser: false,
     );
 
-    _countdown
-        .start(duration, (remaining) {
-          state = state.copyWith(pauseRemaining: remaining);
-        })
-        .then((_) {
-          // 倒计时正常结束（非取消）时推进
-          if (state.isRetellCountdown && runId == _retellCountdownRunId) {
-            _onRetellCountdownFinished();
-          }
-        });
+    _countdown.start(duration).then((_) {
+      // 倒计时正常结束（非取消）时推进
+      if (state.isRetellCountdown && runId == _retellCountdownRunId) {
+        _onRetellCountdownFinished();
+      }
+    });
   }
 
   /// 复述倒计时结束

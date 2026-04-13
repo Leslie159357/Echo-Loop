@@ -41,21 +41,27 @@ class WaitingInterval extends RepeatFlowPhase {
   /// 是否暂停
   final bool isPaused;
 
+  /// 速度倍率（1.0=正常，10.0=快进）
+  final double speed;
+
   const WaitingInterval({
     required this.remaining,
     required this.total,
     this.isPaused = false,
+    this.speed = 1.0,
   });
 
   WaitingInterval copyWith({
     Duration? remaining,
     Duration? total,
     bool? isPaused,
+    double? speed,
   }) {
     return WaitingInterval(
       remaining: remaining ?? this.remaining,
       total: total ?? this.total,
       isPaused: isPaused ?? this.isPaused,
+      speed: speed ?? this.speed,
     );
   }
 }

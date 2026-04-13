@@ -486,7 +486,11 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       final phase = state.annotationState?.phase;
       if (phase is! WaitingAnnotationInterval) return;
       final isFF = !state.isCountdownFastForward;
-      _annotationCountdown.setSpeed(isFF ? 10.0 : 1.0);
+      if (isFF) {
+        _annotationCountdown.fastForward();
+      } else {
+        _annotationCountdown.setSpeed(1.0);
+      }
       if (phase.isPaused) {
         _annotationCountdown.resume();
       }
@@ -498,7 +502,11 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     }
 
     final isFF = !state.isCountdownFastForward;
-    _blindEngine.setIntervalSpeed(isFF ? kBlindFastForwardSpeed : 1.0);
+    if (isFF) {
+      _blindEngine.fastForwardInterval();
+    } else {
+      _blindEngine.setIntervalSpeed(1.0);
+    }
     if (state.isCountdownPaused) {
       _blindEngine.resumeInterval();
     }
@@ -793,11 +801,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       ),
     );
 
-    await _annotationCountdown.start(pauseDur, (remaining) {
-      final phase = state.annotationState?.phase;
-      if (phase is! WaitingAnnotationInterval) return;
-      _setAnnotationPhase(phase.copyWith(remaining: remaining));
-    });
+    await _annotationCountdown.start(pauseDur);
 
     if (!engine.isActiveSession(sessionId)) return;
 

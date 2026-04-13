@@ -269,7 +269,6 @@ class _BottomControls extends StatelessWidget {
             // 环形倒计时（仅在 Countdown phase 显示）
             if (showCountdown)
               CountdownChip(
-                remaining: countdownRemaining,
                 total: countdownTotal,
                 isPaused: false,
                 onPause: onCountdownTapped,

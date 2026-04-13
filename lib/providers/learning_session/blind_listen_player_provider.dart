@@ -553,15 +553,11 @@ class BlindListenPlayer extends _$BlindListenPlayer {
       isWaitingForUser: false,
     );
 
-    _countdown
-        .start(duration, (remaining) {
-          state = state.copyWith(pauseRemaining: remaining);
-        })
-        .then((_) {
-          if (state.isPauseCountdown && runId == _countdownRunId) {
-            _onPauseCountdownFinished();
-          }
-        });
+    _countdown.start(duration).then((_) {
+      if (state.isPauseCountdown && runId == _countdownRunId) {
+        _onPauseCountdownFinished();
+      }
+    });
   }
 
   /// 段间停顿结束

@@ -4,9 +4,9 @@ import 'package:fluency/widgets/common/countdown_chip.dart';
 
 void main() {
   Widget buildChip({
-    Duration remaining = const Duration(seconds: 3),
     Duration total = const Duration(seconds: 5),
     bool isPaused = false,
+    bool isFastForward = false,
     VoidCallback? onPause,
     VoidCallback? onResume,
   }) {
@@ -14,9 +14,9 @@ void main() {
       home: Scaffold(
         body: Center(
           child: CountdownChip(
-            remaining: remaining,
             total: total,
             isPaused: isPaused,
+            isFastForward: isFastForward,
             onPause: onPause ?? () {},
             onResume: onResume ?? () {},
           ),
@@ -26,13 +26,13 @@ void main() {
   }
 
   group('CountdownChip', () {
-    testWidgets('倒计时中显示秒数和暂停徽章', (tester) async {
+    testWidgets('初始状态显示总秒数和暂停徽章', (tester) async {
       await tester.pumpWidget(buildChip(
-        remaining: const Duration(seconds: 3),
         total: const Duration(seconds: 5),
       ));
 
-      expect(find.text('3'), findsOneWidget);
+      // 刚开始时显示 5 秒
+      expect(find.text('5'), findsOneWidget);
       expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
       expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     });
@@ -54,7 +54,7 @@ void main() {
         onResume: () => resumeCalled = true,
       ));
 
-      await tester.tap(find.text('3'));
+      await tester.tap(find.text('5'));
       await tester.pumpAndSettle();
 
       expect(pauseCalled, isTrue);
@@ -71,25 +71,49 @@ void main() {
         onResume: () => resumeCalled = true,
       ));
 
-      await tester.tap(find.text('3'));
+      await tester.tap(find.text('5'));
       await tester.pumpAndSettle();
 
       expect(pauseCalled, isFalse);
       expect(resumeCalled, isTrue);
     });
 
-    testWidgets('进度环正确显示（3/5 = 40%）', (tester) async {
+    testWidgets('动画推进后进度环和秒数更新', (tester) async {
       await tester.pumpWidget(buildChip(
-        remaining: const Duration(seconds: 3),
         total: const Duration(seconds: 5),
       ));
 
+      // 初始进度为 0
       final progressFinder = find.byType(CircularProgressIndicator);
       expect(progressFinder, findsOneWidget);
+      var progress = tester.widget<CircularProgressIndicator>(progressFinder);
+      expect(progress.value, closeTo(0.0, 0.01));
 
-      final progress =
-          tester.widget<CircularProgressIndicator>(progressFinder);
-      expect(progress.value, closeTo(0.4, 0.01));
+      // 推进 2 秒，进度应为 0.4
+      await tester.pump(const Duration(seconds: 2));
+      progress = tester.widget<CircularProgressIndicator>(progressFinder);
+      expect(progress.value!, closeTo(0.4, 0.05));
+
+      // 秒数应为 3
+      expect(find.text('3'), findsOneWidget);
+    });
+
+    testWidgets('暂停时动画不推进', (tester) async {
+      await tester.pumpWidget(buildChip(
+        total: const Duration(seconds: 5),
+        isPaused: true,
+      ));
+
+      final progressFinder = find.byType(CircularProgressIndicator);
+      var progress = tester.widget<CircularProgressIndicator>(progressFinder);
+      final initialValue = progress.value!;
+
+      // 推进 2 秒
+      await tester.pump(const Duration(seconds: 2));
+      progress = tester.widget<CircularProgressIndicator>(progressFinder);
+
+      // 进度不应变化
+      expect(progress.value, closeTo(initialValue, 0.01));
     });
   });
 }

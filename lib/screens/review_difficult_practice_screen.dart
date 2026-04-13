@@ -574,17 +574,17 @@ class _ReviewDifficultPracticeScreenState
                                     show:
                                         s.isPauseBetweenPlays &&
                                         !s.isManualMode,
-                                    remaining: s.pauseRemaining,
                                     total: s.pauseDuration,
                                     paused: s.isCountdownPaused,
+                                    fastForward: s.isCountdownFastForward,
                                   ),
                                 ),
                               );
                               if (!s.show) return const SizedBox.shrink();
                               return CountdownChip(
-                                remaining: s.remaining,
                                 total: s.total,
                                 isPaused: s.paused,
+                                isFastForward: s.fastForward,
                                 onPause: () => player.pauseCountdown(),
                                 onResume: () => player.resumeCountdown(),
                               );
@@ -690,9 +690,9 @@ class _ReviewDifficultPracticeScreenState
                     return const SizedBox.shrink();
                   }
                   return CountdownChip(
-                    remaining: phase.remaining,
                     total: phase.total,
                     isPaused: phase.isPaused,
+                    isFastForward: phase.speed > 1.0,
                     onPause: engine?.pauseInterval ?? noop,
                     onResume: engine?.resumeInterval ?? noop,
                   );

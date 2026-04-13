@@ -372,15 +372,7 @@ class FlashcardFlowEngine {
     );
 
     final token = _state.flowToken;
-    await _countdown.start(total, (remaining) {
-      if (_disposed || token != _state.flowToken) return;
-      if (_state.phase is! FlashcardCountdown) return;
-      _updateState(
-        _state.copyWith(
-          phase: FlashcardCountdown(remaining: remaining, total: total),
-        ),
-      );
-    });
+    await _countdown.start(total);
 
     // 倒计时自然结束
     if (_disposed || token != _state.flowToken) return;
