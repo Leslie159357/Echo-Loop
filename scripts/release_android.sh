@@ -15,34 +15,34 @@ fail() {
 
 usage() {
   cat <<'EOF'
-Usage: scripts/release_android.sh [--upload] [--skip-build] [-h|--help]
+Usage: scripts/release_android.sh [--no-upload] [--skip-build] [-h|--help]
 
-Build a release APK and optionally upload it to Cloudflare R2.
+Build a release APK and upload it to Cloudflare R2.
 
 Options:
-  --upload      Upload the APK to R2 after building.
+  --no-upload   Skip uploading the APK to R2.
   --skip-build  Skip the build step (use existing APK in build/release/).
   -h, --help    Show this help.
 
 Environment variables:
   API_BASE_URL          API base URL (default: https://www.echo-loop.top)
 
-  R2 upload (required when --upload):
+  R2 upload:
   R2_ENDPOINT           S3-compatible endpoint URL
   R2_ACCESS_KEY_ID      R2 API token access key ID
   R2_SECRET_ACCESS_KEY  R2 API token secret access key
-  R2_BUCKET             R2 bucket name
-  R2_PUBLIC_URL         Public base URL for download links
+  R2_BUCKET             R2 bucket name (default: public)
+  R2_PUBLIC_URL         Public base URL for download links (default: https://cdn.echo-loop.top)
 EOF
 }
 
 # --- 参数解析 ---
-DO_UPLOAD=false
+DO_UPLOAD=true
 SKIP_BUILD=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --upload)     DO_UPLOAD=true; shift ;;
+    --no-upload)  DO_UPLOAD=false; shift ;;
     --skip-build) SKIP_BUILD=true; shift ;;
     -h|--help)    usage; exit 0 ;;
     *)            fail "Unknown option: $1. Use -h for help." ;;
@@ -106,8 +106,8 @@ if [[ "$DO_UPLOAD" == true ]]; then
   : "${R2_ENDPOINT:?Set R2_ENDPOINT}"
   : "${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID}"
   : "${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY}"
-  : "${R2_BUCKET:?Set R2_BUCKET}"
-  : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL}"
+  R2_BUCKET="${R2_BUCKET:-public}"
+  R2_PUBLIC_URL="${R2_PUBLIC_URL:-https://cdn.echo-loop.top}"
 
   command -v aws >/dev/null 2>&1 || fail "aws CLI not found. Install it first."
 
