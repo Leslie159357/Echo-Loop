@@ -367,130 +367,231 @@ void main() {
   });
 
   group('computeRetellDynamicFallback', () {
-    // 基准：referenceDuration = 10s, speedFactor = 1.3 → adjustedDuration = 13s
+    // ── ref=10s：cap=10s, scale=0.5, speedFactor=1.1, adjusted=11s ──
 
     const ref10s = Duration(seconds: 10);
 
-    test('referenceDuration <= 0 → 返回 defaultFallback (20s)', () {
+    test('referenceDuration <= 0 → cap (clamp 到 5s)', () {
       expect(
         computeRetellDynamicFallback(
           voicedDuration: const Duration(seconds: 15),
           referenceDuration: Duration.zero,
         ),
-        const Duration(seconds: 20),
+        const Duration(seconds: 5),
       );
     });
 
-    test('matchRate < 0.8 → 返回 defaultFallback (20s)', () {
+    test('matchRate < 0.8 → cap (10s)', () {
       expect(
         computeRetellDynamicFallback(
           voicedDuration: const Duration(seconds: 15),
           referenceDuration: ref10s,
           matchRate: 0.5,
         ),
-        const Duration(seconds: 20),
+        const Duration(seconds: 10),
       );
     });
 
-    test('matchRate = null（无转录）+ ratio >= 0.95 → 3s', () {
-      // voiced = 12.35s, adjusted = 13s → ratio = 0.95
+    test('ref=10s, ratio >= 0.95 → 1500ms', () {
+      // voiced = 10.45s, adjusted = 11s → ratio = 0.95
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 12350),
+          voicedDuration: const Duration(milliseconds: 10450),
+          referenceDuration: ref10s,
+        ),
+        const Duration(milliseconds: 1500),
+      );
+    });
+
+    test('ref=10s, ratio >= 0.90 → 3s', () {
+      // voiced = 9.9s, adjusted = 11s → ratio = 0.90
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 9900),
           referenceDuration: ref10s,
         ),
         const Duration(seconds: 3),
       );
     });
 
-    test('matchRate = null + ratio >= 0.90 → 6s', () {
-      // voiced = 11.7s, adjusted = 13s → ratio = 0.90
+    test('ref=10s, ratio >= 0.85 → 5s', () {
+      // voiced = 9.35s, adjusted = 11s → ratio = 0.85
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 11700),
+          voicedDuration: const Duration(milliseconds: 9350),
           referenceDuration: ref10s,
         ),
-        const Duration(seconds: 6),
+        const Duration(seconds: 5),
       );
     });
 
-    test('matchRate = null + ratio >= 0.85 → 10s', () {
-      // voiced = 11.05s, adjusted = 13s → ratio = 0.85
+    test('ref=10s, ratio >= 0.80 → 7500ms', () {
+      // voiced = 8.8s, adjusted = 11s → ratio = 0.80
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 11050),
+          voicedDuration: const Duration(milliseconds: 8800),
+          referenceDuration: ref10s,
+        ),
+        const Duration(milliseconds: 7500),
+      );
+    });
+
+    test('ref=10s, ratio >= 0.75 → cap 10s', () {
+      // voiced = 8.25s, adjusted = 11s → ratio = 0.75
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 8250),
           referenceDuration: ref10s,
         ),
         const Duration(seconds: 10),
       );
     });
 
-    test('matchRate = null + ratio >= 0.80 → 15s', () {
-      // voiced = 10.4s, adjusted = 13s → ratio = 0.80
+    test('ref=10s, ratio < 0.75 → cap 10s', () {
+      // voiced = 7s, adjusted = 11s → ratio ≈ 0.636
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 10400),
+          voicedDuration: const Duration(seconds: 7),
           referenceDuration: ref10s,
         ),
-        const Duration(seconds: 15),
-      );
-    });
-
-    test('matchRate = null + ratio >= 0.75 → 20s', () {
-      // voiced = 9.75s, adjusted = 13s → ratio = 0.75
-      expect(
-        computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 9750),
-          referenceDuration: ref10s,
-        ),
-        const Duration(seconds: 20),
-      );
-    });
-
-    test('matchRate = null + ratio < 0.75 → defaultFallback (20s)', () {
-      // voiced = 9s, adjusted = 13s → ratio ≈ 0.692
-      expect(
-        computeRetellDynamicFallback(
-          voicedDuration: const Duration(seconds: 9),
-          referenceDuration: ref10s,
-        ),
-        const Duration(seconds: 20),
+        const Duration(seconds: 10),
       );
     });
 
     test('matchRate >= 0.8 时动态兜底生效', () {
-      // voiced = 12.35s, adjusted = 13s → ratio = 0.95, matchRate = 0.8 → 3s
+      // voiced = 10.45s, adjusted = 11s → ratio = 0.95 → 1500ms
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(milliseconds: 12350),
+          voicedDuration: const Duration(milliseconds: 10450),
           referenceDuration: ref10s,
           matchRate: 0.8,
         ),
-        const Duration(seconds: 3),
+        const Duration(milliseconds: 1500),
       );
     });
 
-    test('matchRate = 0.79 时即使 ratio 很高也返回 defaultFallback', () {
+    test('matchRate = 0.79 时即使 ratio 很高也返回 cap', () {
       expect(
         computeRetellDynamicFallback(
           voicedDuration: const Duration(seconds: 20),
           referenceDuration: ref10s,
           matchRate: 0.79,
         ),
-        const Duration(seconds: 20),
+        const Duration(seconds: 10),
       );
     });
 
-    test('speedFactor 自定义', () {
-      // ref = 10s, speedFactor = 1.0 → adjusted = 10s
-      // voiced = 10s → ratio = 1.0 → 3s
+    // ── ref=20s：cap=20s, scale=1.0, speedFactor=1.2, adjusted=24s ──
+
+    const ref20s = Duration(seconds: 20);
+
+    test('ref=20s, ratio >= 0.95 → 3s', () {
+      // voiced = 22.8s, adjusted = 24s → ratio = 0.95
       expect(
         computeRetellDynamicFallback(
-          voicedDuration: const Duration(seconds: 10),
-          referenceDuration: ref10s,
-          speedFactor: 1.0,
+          voicedDuration: const Duration(milliseconds: 22800),
+          referenceDuration: ref20s,
         ),
         const Duration(seconds: 3),
+      );
+    });
+
+    test('ref=20s, ratio >= 0.80 → 15s', () {
+      // voiced = 19.2s, adjusted = 24s → ratio = 0.80
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 19200),
+          referenceDuration: ref20s,
+        ),
+        const Duration(seconds: 15),
+      );
+    });
+
+    // ── ref=5s：cap=5s, scale=0.25, speedFactor=1.1, adjusted=5.5s ──
+
+    const ref5s = Duration(seconds: 5);
+
+    test('ref=5s, ratio >= 0.95 → 最低 1s', () {
+      // 3000×0.25=750ms → clamp 到 1s
+      // voiced = 5.225s, adjusted = 5.5s → ratio = 0.95
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 5225),
+          referenceDuration: ref5s,
+        ),
+        const Duration(seconds: 1),
+      );
+    });
+
+    test('ref=5s, ratio >= 0.90 → 1500ms', () {
+      // 6000×0.25=1500ms
+      // voiced = 4.95s, adjusted = 5.5s → ratio = 0.90
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 4950),
+          referenceDuration: ref5s,
+        ),
+        const Duration(milliseconds: 1500),
+      );
+    });
+
+    test('ref=5s, ratio < 0.75 → cap 5s', () {
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(seconds: 1),
+          referenceDuration: ref5s,
+        ),
+        const Duration(seconds: 5),
+      );
+    });
+
+    // ── ref=3s：cap=5s, scale=0.25, speedFactor=1.0, adjusted=3s ──
+
+    const ref3s = Duration(seconds: 3);
+
+    test('ref=3s, ratio >= 0.95 → 最低 1s', () {
+      // speedFactor=1.0, adjusted=3s, voiced=2.85s → ratio=0.95
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 2850),
+          referenceDuration: ref3s,
+        ),
+        const Duration(seconds: 1),
+      );
+    });
+
+    test('ref=3s, ratio < 0.75 → cap 5s', () {
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: Duration.zero,
+          referenceDuration: ref3s,
+        ),
+        const Duration(seconds: 5),
+      );
+    });
+
+    // ── ref=30s：cap=20s, scale=1.0, speedFactor=1.3, adjusted=39s ──
+
+    const ref30s = Duration(seconds: 30);
+
+    test('ref=30s, ratio >= 0.95 → 3s', () {
+      // voiced = 37.05s, adjusted = 39s → ratio = 0.95
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: const Duration(milliseconds: 37050),
+          referenceDuration: ref30s,
+        ),
+        const Duration(seconds: 3),
+      );
+    });
+
+    test('ref=30s, ratio < 0.75 → cap 20s', () {
+      expect(
+        computeRetellDynamicFallback(
+          voicedDuration: Duration.zero,
+          referenceDuration: ref30s,
+        ),
+        const Duration(seconds: 20),
       );
     });
   });

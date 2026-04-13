@@ -337,28 +337,52 @@ Duration computeDynamicFallback({
 /// 与 [computeDynamicFallback] 类似，但阈值更长，适配复述场景：
 /// 用户需要回忆内容，停顿更长属于正常行为。
 ///
-/// - [speedFactor]：语速补偿系数，默认 1.3（复述通常比原音慢 30%）。
+/// 语速补偿系数根据段落时长动态调整：
+/// - ≤3s → 1.0（短句无需补偿）
+/// - ≤10s → 1.1
+/// - ≤20s → 1.2
+/// - >20s → 1.3（长段落需要更多回忆时间）
+///
 /// - [matchRate]：文本匹配率（0-1），低于 0.8 时不缩短兜底。
 ///   传 null 表示无转录（ASR 关闭），此时仅凭有声比例计算。
 Duration computeRetellDynamicFallback({
   required Duration voicedDuration,
   required Duration referenceDuration,
   double? matchRate,
-  double speedFactor = 1.3,
-  Duration defaultFallback = const Duration(seconds: 20),
 }) {
-  if (referenceDuration <= Duration.zero) return defaultFallback;
-  if (matchRate != null && matchRate < 0.8) return defaultFallback;
+  // 动态上限：min(20s, max(5s, referenceDuration))
+  final capMs = referenceDuration.inMilliseconds.clamp(5000, 20000);
+  final scale = capMs / 20000; // 缩放因子，各阈值等比缩放
 
+  if (referenceDuration <= Duration.zero) return Duration(milliseconds: capMs);
+  if (matchRate != null && matchRate < 0.8) return Duration(milliseconds: capMs);
+
+  final refSec = referenceDuration.inMilliseconds / 1000.0;
+  final speedFactor = refSec <= 3 ? 1.0
+      : refSec <= 10 ? 1.1
+      : refSec <= 20 ? 1.2
+      : 1.3;
   final adjustedMs = referenceDuration.inMilliseconds * speedFactor;
   final ratio = voicedDuration.inMilliseconds / adjustedMs;
 
-  if (ratio >= 0.95) return const Duration(seconds: 3);
-  if (ratio >= 0.90) return const Duration(seconds: 6);
-  if (ratio >= 0.85) return const Duration(seconds: 10);
-  if (ratio >= 0.80) return const Duration(seconds: 15);
-  if (ratio >= 0.75) return const Duration(seconds: 20);
-  return defaultFallback;
+  // 基准阈值（cap=20s 时）按比例缩放：3/6/10/15/20 × scale
+  final int ms;
+  if (ratio >= 0.95) {
+    ms = (3000 * scale).round();
+  } else if (ratio >= 0.90) {
+    ms = (6000 * scale).round();
+  } else if (ratio >= 0.85) {
+    ms = (10000 * scale).round();
+  } else if (ratio >= 0.80) {
+    ms = (15000 * scale).round();
+  } else if (ratio >= 0.75) {
+    ms = capMs;
+  } else {
+    return Duration(milliseconds: capMs);
+  }
+
+  // 最低 1s，避免过短误触
+  return Duration(milliseconds: ms < 1000 ? 1000 : ms);
 }
 
 // ========== 内部工具函数 ==========

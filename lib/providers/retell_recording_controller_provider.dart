@@ -763,37 +763,30 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
         : _silenceTimeout;
 
     // 兜底阈值变化时输出日志，方便排查
+    final voicedMs = _voicedDuration.inMilliseconds;
+    final refMs = refDur?.inMilliseconds ?? 0;
     final fallbackSec = fallback.inSeconds;
     if (fallbackSec != _lastLoggedFallbackSeconds) {
       _lastLoggedFallbackSeconds = fallbackSec;
-      final ratioLog = (refDur != null && refDur > Duration.zero)
-          ? ', ratio=${(_voicedDuration.inMilliseconds / (refDur.inMilliseconds * 1.3) * 100).toStringAsFixed(0)}%'
-          : '';
       AppLogger.log(
         'RetellRec',
         '兜底阈值变更 → ${fallbackSec}s '
-            '(有声${_voicedDuration.inMilliseconds}ms, '
-            'ref=${refDur?.inMilliseconds ?? 0}ms$ratioLog)',
+            '(有声${voicedMs}ms, ref=${refMs}ms)',
       );
     }
 
     if (currentSilence >= fallback) {
-      final ratioDesc = (refDur != null && refDur > Duration.zero)
-          ? ', ratio=${(_voicedDuration.inMilliseconds / (refDur.inMilliseconds * 1.3) * 100).toStringAsFixed(0)}%'
-          : '';
       AppLogger.log(
         'RetellRec',
         '⏹ 静音兜底停止: '
             '${currentSilence.inMilliseconds}ms ≥ '
             '${fallback.inMilliseconds}ms | '
-            '(有声${_voicedDuration.inMilliseconds}ms, '
-            'ref=${refDur?.inMilliseconds ?? 0}ms$ratioDesc)',
+            '(有声${voicedMs}ms, ref=${refMs}ms)',
       );
       _stopForEvaluation(
         promptId: promptId,
         reason: '静音兜底 ${fallback.inSeconds}s '
-            '(有声${_voicedDuration.inMilliseconds}ms, '
-            'ref=${refDur?.inMilliseconds ?? 0}ms$ratioDesc)',
+            '(有声${voicedMs}ms, ref=${refMs}ms)',
       );
     }
   }
