@@ -25,6 +25,7 @@ import 'config/api_config.dart';
 import 'services/notification_tap_router_bridge.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'analytics/analytics_providers.dart';
+import 'services/user_id_service.dart';
 import 'analytics/models/event_names.dart';
 import 'firebase_options.dart';
 import 'providers/offline_asr_settings_provider.dart';
@@ -131,8 +132,11 @@ void main() async {
     );
   }
 
+  // 初始化用户 ID（SecureStorage 持久化，卸载重装可恢复）
+  final userId = await initUserIdService(prefs);
+
   // 初始化分析服务（根据 geo 选择 Firebase/友盟/Log 通道）
-  final analyticsService = await initAnalyticsService(prefs);
+  final analyticsService = await initAnalyticsService(prefs, userId: userId);
   initAnalytics(analyticsService);
 
   // 清理上次残留的录音临时文件（沙盒/tmp/ 中超过 60 秒的文件），不阻塞启动

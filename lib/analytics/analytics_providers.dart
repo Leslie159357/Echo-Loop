@@ -11,7 +11,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 import '../config/api_config.dart';
 import 'analytics_channel.dart';
@@ -40,28 +39,25 @@ final analyticsServiceProvider = Provider<AnalyticsService>((ref) {
 
 /// 初始化分析服务
 ///
-/// 1. 生成或读取匿名用户 ID
-/// 2. 获取地区（缓存 → geo API → locale fallback）
-/// 3. 选择通道并初始化
+/// [userId] 由 [initUserIdService] 提前生成，analytics 不负责 ID 管理。
+///
+/// 1. 获取地区（缓存 → geo API → locale fallback）
+/// 2. 选择通道并初始化
 ///
 /// 首次启动无缓存时调 geo API（2 秒超时），失败则 locale fallback。
-Future<AnalyticsService> initAnalyticsService(SharedPreferences prefs) async {
+Future<AnalyticsService> initAnalyticsService(
+  SharedPreferences prefs, {
+  required String userId,
+}) async {
   final consent = ConsentManager(prefs);
-
-  // 生成或读取匿名用户 ID
-  var anonymousId = prefs.getString('anonymous_id');
-  if (anonymousId == null) {
-    anonymousId = const Uuid().v4();
-    await prefs.setString('anonymous_id', anonymousId);
-  }
 
   // 获取地区并选择通道
   final isChina = await _resolveIsMainlandChina(prefs);
   final channel = _createChannel(isChina);
 
-  // 初始化通道 + 设置匿名 ID
+  // 初始化通道 + 设置用户 ID
   await channel.initialize();
-  await channel.setUserId(anonymousId);
+  await channel.setUserId(userId);
 
   // 非 Debug 模式下，根据通道选择控制 Firebase 采集开关
   // 选择友盟时关闭 Firebase 采集，避免 SDK 残留行为产生噪音
