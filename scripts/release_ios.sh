@@ -199,6 +199,7 @@ log "Building Flutter iOS IPA"
 FLUTTER_BUILD_ARGS=(
   build ipa
   "--release"
+  "--flavor=prod"
   "--build-name=$BUILD_NAME"
   "--build-number=$BUILD_NUMBER"
   "--export-options-plist=$EXPORT_OPTIONS_PATH"

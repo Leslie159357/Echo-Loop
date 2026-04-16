@@ -28,11 +28,11 @@ log "Cleaning..."
 flutter clean
 
 log "Building release app..."
-flutter build macos --release
+flutter build macos --release --flavor=prod
 
 # 找到 .app 产物
-APP_PATH="build/macos/Build/Products/Release/Echo Loop.app"
-[[ -d "$APP_PATH" ]] || APP_PATH="$(find build/macos -name '*.app' -path '*/Release/*' | head -1)"
+APP_PATH="build/macos/Build/Products/Release-prod/Echo Loop.app"
+[[ -d "$APP_PATH" ]] || APP_PATH="$(find build/macos -name '*.app' -path '*/Release*/*' | head -1)"
 [[ -d "$APP_PATH" ]] || fail ".app not found in build/macos"
 
 # 打包为 DMG（经典拖拽安装界面）
