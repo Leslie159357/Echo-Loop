@@ -235,6 +235,12 @@ EOF
 
 plutil -lint "$EXPORT_OPTIONS_PATH"
 
+log "Syncing Flutter dependencies"
+flutter pub get
+
+log "Running pod install"
+(cd ios && pod install --repo-update)
+
 log "Archiving iOS app"
 xcodebuild \
   -workspace "$WORKSPACE" \
