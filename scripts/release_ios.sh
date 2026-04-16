@@ -8,20 +8,17 @@ usage() {
   cat <<'EOF'
 Usage: scripts/release_ios.sh [--wait] [--skip-upload] [--work-dir DIR] [--build-name NAME] [--build-number NUMBER]
 
-Archive the iOS app, export or repackage an IPA, and upload it to App Store Connect.
+Build a Flutter iOS IPA and upload it to App Store Connect.
 
 Options:
   --wait         Wait for App Store Connect processing after upload.
   --skip-upload  Stop after generating the IPA.
-  --work-dir     Override the temporary output directory.
+  --work-dir     Override the temporary output directory for ExportOptions.plist and logs.
   --build-name   Override CFBundleShortVersionString for this release.
   --build-number Override CFBundleVersion for this release.
   -h, --help     Show this help.
 
 Environment overrides:
-  IOS_WORKSPACE
-  IOS_SCHEME
-  IOS_CONFIGURATION
   IOS_TEAM_ID
   IOS_BUILD_NAME
   IOS_BUILD_NUMBER
@@ -49,56 +46,10 @@ ensure_apple_toolchain_path() {
   export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 }
 
-encode_dart_define() {
-  local result=""
-  for arg in "$@"; do
-    local encoded
-    encoded="$(printf '%s' "$arg" | base64 | tr -d '\n')"
-    result="${result:+$result,}$encoded"
-  done
-  printf '%s' "$result"
-}
-
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     fail "Missing required command: $1"
   fi
-}
-
-find_latest_pipeline_dir() {
-  local tmp_root="${TMPDIR:-/tmp}"
-
-  find "$tmp_root" -maxdepth 1 -type d -name 'XcodeDistPipeline.*' -print 2>/dev/null \
-    | while IFS= read -r dir; do
-        printf '%s\t%s\n' "$(stat -f '%m' "$dir")" "$dir"
-      done \
-    | sort -nr \
-    | head -n 1 \
-    | cut -f2-
-}
-
-find_exported_ipa() {
-  find "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print | head -n 1
-}
-
-package_from_pipeline() {
-  local pipeline_dir="$1"
-  local root_path="$pipeline_dir/Root"
-  local app_path="$root_path/Payload/Runner.app"
-  local signature
-
-  [[ -d "$app_path" ]] || fail "Fallback payload not found: $app_path"
-
-  signature="$(codesign -dv --verbose=4 "$app_path" 2>&1 || true)"
-  if ! grep -Eq 'Authority=Apple Distribution' <<<"$signature"; then
-    fail "Fallback payload is not distribution-signed"
-  fi
-
-  mkdir -p "$EXPORT_DIR"
-  (
-    cd "$root_path"
-    /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_PATH"
-  )
 }
 
 WAIT_FOR_PROCESSING=0
@@ -141,10 +92,9 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-require_command xcodebuild
+require_command flutter
 require_command xcrun
 require_command plutil
-require_command codesign
 require_command security
 ensure_apple_toolchain_path
 
@@ -152,9 +102,6 @@ if [[ -x "scripts/preflight.sh" ]]; then
   scripts/preflight.sh
 fi
 
-WORKSPACE="${IOS_WORKSPACE:-ios/Runner.xcworkspace}"
-SCHEME="${IOS_SCHEME:-Runner}"
-CONFIGURATION="${IOS_CONFIGURATION:-Release}"
 TEAM_ID="${IOS_TEAM_ID:-S8S968QAV3}"
 API_BASE_URL="${API_BASE_URL:-https://www.echo-loop.top}"
 POSTHOG_API_KEY="${POSTHOG_API_KEY:-}"
@@ -162,14 +109,7 @@ POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 API_KEY_ID="${APP_STORE_API_KEY_ID:-5GB5KL75VZ}"
 API_ISSUER_ID="${APP_STORE_API_ISSUER_ID:-3ec439fe-b66c-4034-b8c2-16e133fc4d6b}"
 API_KEY_PATH="${APP_STORE_API_KEY_PATH:-$ROOT_DIR/ios/AuthKey_${API_KEY_ID}.p8}"
-# POSTHOG_API_KEY 为空时不传，让代码使用内置默认值
-if [[ -n "${POSTHOG_API_KEY:-}" ]]; then
-  DART_DEFINES_VALUE="$(encode_dart_define "API_BASE_URL=${API_BASE_URL}" "POSTHOG_API_KEY=${POSTHOG_API_KEY}" "POSTHOG_HOST=${POSTHOG_HOST}")"
-else
-  DART_DEFINES_VALUE="$(encode_dart_define "API_BASE_URL=${API_BASE_URL}" "POSTHOG_HOST=${POSTHOG_HOST}")"
-fi
 
-[[ -d "$WORKSPACE" ]] || fail "Workspace not found: $WORKSPACE"
 [[ -f "$API_KEY_PATH" ]] || fail "API key file not found: $API_KEY_PATH"
 
 VERSION_LINE="$(grep -n '^version:' pubspec.yaml || true)"
@@ -207,13 +147,10 @@ if [[ -z "$WORK_DIR" ]]; then
   WORK_DIR="/tmp/fluency-ios-release-$(date '+%Y%m%d-%H%M%S')"
 fi
 
-ARCHIVE_PATH="$WORK_DIR/Runner.xcarchive"
-EXPORT_DIR="$WORK_DIR/export"
 EXPORT_OPTIONS_PATH="$WORK_DIR/ExportOptions.plist"
-IPA_PATH="$EXPORT_DIR/Runner.ipa"
 UPLOAD_LOG="$WORK_DIR/upload.log"
 
-mkdir -p "$WORK_DIR" "$EXPORT_DIR"
+mkdir -p "$WORK_DIR"
 
 cat > "$EXPORT_OPTIONS_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -240,55 +177,42 @@ EOF
 
 plutil -lint "$EXPORT_OPTIONS_PATH"
 
-log "Syncing Flutter dependencies"
-flutter pub get
-
-log "Running pod install"
-(cd ios && pod install --repo-update)
-
-log "Archiving iOS app"
-xcodebuild \
-  -workspace "$WORKSPACE" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -destination generic/platform=iOS \
-  -archivePath "$ARCHIVE_PATH" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$API_KEY_PATH" \
-  -authenticationKeyID "$API_KEY_ID" \
-  -authenticationKeyIssuerID "$API_ISSUER_ID" \
-  DART_DEFINES="$DART_DEFINES_VALUE" \
-  FLUTTER_BUILD_NAME="$BUILD_NAME" \
-  FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
-  archive
-
-log "Exporting IPA"
-set +e
-xcodebuild \
-  -exportArchive \
-  -archivePath "$ARCHIVE_PATH" \
-  -exportPath "$EXPORT_DIR" \
-  -exportOptionsPlist "$EXPORT_OPTIONS_PATH" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$API_KEY_PATH" \
-  -authenticationKeyID "$API_KEY_ID" \
-  -authenticationKeyIssuerID "$API_ISSUER_ID" \
-  DART_DEFINES="$DART_DEFINES_VALUE" \
-  FLUTTER_BUILD_NAME="$BUILD_NAME" \
-  FLUTTER_BUILD_NUMBER="$BUILD_NUMBER"
-export_status=$?
-set -e
-
-if [[ $export_status -eq 0 ]]; then
-  exported_ipa="$(find_exported_ipa)"
-  [[ -n "$exported_ipa" ]] || fail "xcodebuild export succeeded but no IPA was found"
-  IPA_PATH="$exported_ipa"
-else
-  log "Standard export failed, trying fallback packaging from XcodeDistPipeline"
-  pipeline_dir="$(find_latest_pipeline_dir)"
-  [[ -n "$pipeline_dir" ]] || fail "No XcodeDistPipeline directory found for fallback packaging"
-  package_from_pipeline "$pipeline_dir"
+# xcodebuild 自动在 ~/.appstoreconnect/private_keys/ 查找 API key，
+# 将 key 复制到标准位置，确保 flutter build ipa 内部的 xcodebuild 能找到它。
+APPLE_KEY_DIR="$HOME/.appstoreconnect/private_keys"
+APPLE_KEY_DEST="$APPLE_KEY_DIR/AuthKey_${API_KEY_ID}.p8"
+KEY_COPIED=0
+if [[ ! -f "$APPLE_KEY_DEST" ]]; then
+  mkdir -p "$APPLE_KEY_DIR"
+  cp "$API_KEY_PATH" "$APPLE_KEY_DEST"
+  KEY_COPIED=1
 fi
+
+cleanup_key() {
+  if [[ $KEY_COPIED -eq 1 && -f "$APPLE_KEY_DEST" ]]; then
+    rm -f "$APPLE_KEY_DEST"
+  fi
+}
+trap cleanup_key EXIT
+
+log "Building Flutter iOS IPA"
+FLUTTER_BUILD_ARGS=(
+  build ipa
+  "--release"
+  "--build-name=$BUILD_NAME"
+  "--build-number=$BUILD_NUMBER"
+  "--export-options-plist=$EXPORT_OPTIONS_PATH"
+  "--dart-define=API_BASE_URL=${API_BASE_URL}"
+  "--dart-define=POSTHOG_HOST=${POSTHOG_HOST}"
+)
+if [[ -n "${POSTHOG_API_KEY:-}" ]]; then
+  FLUTTER_BUILD_ARGS+=("--dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY}")
+fi
+flutter "${FLUTTER_BUILD_ARGS[@]}"
+
+# flutter build ipa 将 IPA 输出到 build/ios/ipa/
+IPA_PATH="$(find "$ROOT_DIR/build/ios/ipa" -maxdepth 1 -name '*.ipa' | head -n 1)"
+[[ -n "$IPA_PATH" ]] || fail "flutter build ipa succeeded but no IPA found in build/ios/ipa/"
 
 log "IPA ready: $IPA_PATH"
 log "Artifacts kept in: $WORK_DIR"
