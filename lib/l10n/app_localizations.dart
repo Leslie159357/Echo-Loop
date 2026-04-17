@@ -4487,7 +4487,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideLibraryCollectionListDescription.
   ///
   /// In en, this message translates to:
-  /// **'Collections help you organize audio by topic, such as podcasts, courses, or exam materials. Open a collection to manage and study its audio.'**
+  /// **'Collections help you organize audio by topic. Tap any collection to see the audio inside.'**
   String get guideLibraryCollectionListDescription;
 
   /// No description provided for @guideLibraryCollectionMenuTitle.
@@ -4499,7 +4499,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideLibraryCollectionMenuDescription.
   ///
   /// In en, this message translates to:
-  /// **'Each collection has a menu for pinning, renaming, or deleting it.'**
+  /// **'Tap here to pin, rename, or delete this collection.'**
   String get guideLibraryCollectionMenuDescription;
 
   /// No description provided for @guideLibraryCreateCollectionTitle.
@@ -4511,7 +4511,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideLibraryCreateCollectionDescription.
   ///
   /// In en, this message translates to:
-  /// **'When you want to organize your own learning materials, use the plus button in the top-right corner to create a new collection.'**
+  /// **'Tap here to create a new collection.'**
   String get guideLibraryCreateCollectionDescription;
 
   /// No description provided for @guideCollectionAudioListTitle.
@@ -4523,43 +4523,43 @@ abstract class AppLocalizations {
   /// No description provided for @guideCollectionAudioListDescription.
   ///
   /// In en, this message translates to:
-  /// **'Audio in the current collection appears here. Open an audio item to view its learning plan.'**
+  /// **'Tap any audio to view its learning plan and current progress.'**
   String get guideCollectionAudioListDescription;
 
   /// No description provided for @guideCollectionAudioMenuTitle.
   ///
   /// In en, this message translates to:
-  /// **'Generate or manage subtitles'**
+  /// **'Manage audio'**
   String get guideCollectionAudioMenuTitle;
 
   /// No description provided for @guideCollectionAudioMenuDescription.
   ///
   /// In en, this message translates to:
-  /// **'Use the audio menu to manage subtitles. If there are no subtitles yet, you can upload a file or generate subtitles with AI transcription.'**
+  /// **'Tap here to manage this audio\'s subtitles, collection, tags, and more.'**
   String get guideCollectionAudioMenuDescription;
 
   /// No description provided for @guideCollectionUploadTitle.
   ///
   /// In en, this message translates to:
-  /// **'Upload your audio here'**
+  /// **'Upload your own audio'**
   String get guideCollectionUploadTitle;
 
   /// No description provided for @guideCollectionUploadDescription.
   ///
   /// In en, this message translates to:
-  /// **'When your own material is ready, use the plus button in the top-right corner to add audio to this collection.'**
+  /// **'Tap here to upload your own audio.'**
   String get guideCollectionUploadDescription;
 
   /// No description provided for @guidePlanAddSubtitleTitle.
   ///
   /// In en, this message translates to:
-  /// **'Add subtitles first'**
+  /// **'Add subtitles'**
   String get guidePlanAddSubtitleTitle;
 
   /// No description provided for @guidePlanAddSubtitleDescription.
   ///
   /// In en, this message translates to:
-  /// **'This audio has no subtitles yet. Add subtitles so Fluency can build a learning plan around the sentences.'**
+  /// **'This audio has no subtitles yet. Add subtitles so Echo Loop can generate a learning plan for you.'**
   String get guidePlanAddSubtitleDescription;
 
   /// No description provided for @guidePlanAiTranscriptionTitle.
@@ -4571,7 +4571,7 @@ abstract class AppLocalizations {
   /// No description provided for @guidePlanAiTranscriptionDescription.
   ///
   /// In en, this message translates to:
-  /// **'If you do not have a subtitle file, AI transcription is the fastest way to generate one.'**
+  /// **'If you do not have a subtitle file, AI transcription is the fastest way.'**
   String get guidePlanAiTranscriptionDescription;
 
   /// No description provided for @guidePlanStartTranscriptionTitle.
@@ -4589,13 +4589,13 @@ abstract class AppLocalizations {
   /// No description provided for @guidePlanFreePlayTitle.
   ///
   /// In en, this message translates to:
-  /// **'Free practice is here'**
+  /// **'Free Practice'**
   String get guidePlanFreePlayTitle;
 
   /// No description provided for @guidePlanFreePlayDescription.
   ///
   /// In en, this message translates to:
-  /// **'Use Free Practice when you want to explore or practice freely outside the plan.'**
+  /// **'A flexible, all-in-one audio player for free practice. Learn at your own pace.'**
   String get guidePlanFreePlayDescription;
 
   /// No description provided for @guidePlanStartLearningTitle.
@@ -4607,7 +4607,7 @@ abstract class AppLocalizations {
   /// No description provided for @guidePlanStartLearningDescription.
   ///
   /// In en, this message translates to:
-  /// **'If you are not sure where to begin, start here and follow the learning plan step by step.'**
+  /// **'Tap here to follow the learning plan step by step. Echo Loop will guide you and remind you to review at the right time.'**
   String get guidePlanStartLearningDescription;
 
   /// No description provided for @resetNewUserGuide.

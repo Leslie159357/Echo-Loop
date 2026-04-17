@@ -2456,8 +2456,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get guideCollectionAudioListTitle => '这里是音频列表';
 
   @override
-  String get guideCollectionAudioListDescription =>
-      '点击任意音频，可以查看它的学习计划和当前进度。';
+  String get guideCollectionAudioListDescription => '点击任意音频，可以查看它的学习计划和当前进度。';
 
   @override
   String get guideCollectionAudioMenuTitle => '管理音频';
@@ -2483,7 +2482,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get guidePlanAiTranscriptionTitle => '使用 AI 转录';
 
   @override
-  String get guidePlanAiTranscriptionDescription => '如果你手头没有字幕文件，使用 AI 转录是最快的方式。';
+  String get guidePlanAiTranscriptionDescription =>
+      '如果你手头没有字幕文件，使用 AI 转录是最快的方式。';
 
   @override
   String get guidePlanStartTranscriptionTitle => '开始转录';
