@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -10,22 +8,24 @@ import '../services/app_logger.dart';
 
 /// 单个页面级引导步骤。
 ///
-/// 当前所有步骤都是展示型：用户点 tooltip 的“下一步/完成”或点 barrier 推进。
+/// [key] 同时用于 [Showcase] widget 的 key 和 `startShowCase` 调用，
+/// 由 screen 在 state 中持有，传给对应的 [GuideTarget] 和 [GuideFlow]。
+/// 同一个 step 需要被 [GuideFlow.steps] 和 [GuideTarget] 引用**同一个实例**
+/// （或者至少是相同的 key），这样 Host 能在 `startShowCase` 时拿到对应的
+/// key，并且 showcaseview 能在 tree 里通过 key 定位到目标 widget。
 class GuideStep {
-  final String targetId;
+  final GlobalKey key;
   final String title;
   final String description;
 
   const GuideStep({
-    required this.targetId,
+    required this.key,
     required this.title,
     required this.description,
   });
 }
 
 /// 单个页面级引导 flow 的声明。
-///
-/// 一个 screen 可能存在多段互相独立的引导，每段用一个 [GuideFlow] 描述。
 class GuideFlow {
   final String flowId;
   final bool shouldRun;
@@ -40,9 +40,10 @@ class GuideFlow {
 
 /// 在 screen 内按顺序声明并启动一组页面级 flow。
 ///
-/// 所有 screen 统一使用该组件，单 flow 场景传长度为 1 的列表即可。
-/// 每次 controller 空闲时按 [flows] 顺序尝试启动：挑到第一个 shouldRun
-/// 为 true、steps 非空且未看过的 flow 展示；当前 flow 完成后再尝试下一个。
+/// 对齐 showcaseview 官方示例：flow 启动时 **一次性** 把所有 step 的 key
+/// 传给 `ShowcaseView.get().startShowCase([...])`，推进完全由 showcaseview
+/// 内部处理（next 按钮 / barrier 点击），tour 结束时通过
+/// [GuideShowcaseBus] 走回 controller 标记已看。
 class GuideFlowSequenceHost extends ConsumerStatefulWidget {
   final List<GuideFlow> flows;
   final Widget child;
@@ -75,7 +76,6 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
     });
   }
 
-  /// 响应 controller 状态变化：复位或上一个 flow 结束时尝试启动下一个。
   void _onControllerStateChanged(
     GuideControllerState? previous,
     GuideControllerState next,
@@ -83,17 +83,7 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
     if (!mounted) return;
     final resetChanged =
         previous != null && previous.resetGeneration != next.resetGeneration;
-    if (resetChanged) {
-      AppLogger.log(
-        'Guide',
-        'host reset observed from=${previous.resetGeneration} '
-            'to=${next.resetGeneration}',
-      );
-      _attemptScheduled = false;
-      _scheduleAttempt();
-      return;
-    }
-    if (!next.isActive) {
+    if (resetChanged || !next.isActive) {
       _attemptScheduled = false;
       _scheduleAttempt();
     }
@@ -103,7 +93,6 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final tickerEnabled = TickerMode.valuesOf(context).enabled;
-    // 场景：IndexedStack 中从隐藏切回可见，ticker 从禁用变为启用时重新尝试。
     if (tickerEnabled && !_lastTickerEnabled) {
       _attemptScheduled = false;
       _scheduleAttempt();
@@ -129,10 +118,7 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
   bool _flowsConfigChanged(List<GuideFlow> a, List<GuideFlow> b) {
     if (a.length != b.length) return true;
     for (var i = 0; i < a.length; i++) {
-      if (a[i].flowId != b[i].flowId ||
-          a[i].shouldRun != b[i].shouldRun ||
-          a[i].steps.map((s) => s.targetId).join('|') !=
-              b[i].steps.map((s) => s.targetId).join('|')) {
+      if (a[i].flowId != b[i].flowId || a[i].shouldRun != b[i].shouldRun) {
         return true;
       }
     }
@@ -143,65 +129,53 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
     if (_attemptScheduled ||
         widget.flows.isEmpty ||
         !TickerMode.valuesOf(context).enabled) {
-      AppLogger.log(
-        'Guide',
-        'host attempt not scheduled flows=${_flowSummary()} '
-            'alreadyScheduled=$_attemptScheduled '
-            'ticker=${TickerMode.valuesOf(context).enabled}',
-      );
       return;
     }
     _attemptScheduled = true;
-    AppLogger.log('Guide', 'host scheduleAttempt flows=${_flowSummary()}');
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _attemptScheduled = false;
-      if (!mounted) {
-        AppLogger.log('Guide', 'host attempt aborted reason=unmounted');
-        return;
-      }
-      if (!TickerMode.valuesOf(context).enabled) {
-        AppLogger.log('Guide', 'host attempt aborted reason=inactiveTicker');
-        return;
-      }
-      final showcase = _tryGetShowcase();
-      if (showcase == null) {
-        AppLogger.log('Guide', 'host attempt aborted reason=noShowCaseView');
-        return;
-      }
-      if (ref.read(guideControllerProvider).isActive) {
-        AppLogger.log('Guide', 'host attempt aborted reason=activeFlow');
-        return;
-      }
-      for (final flow in widget.flows) {
-        if (!flow.shouldRun || flow.steps.isEmpty) {
-          AppLogger.log(
-            'Guide',
-            'host attempt skip flow=${flow.flowId} '
-                'shouldRun=${flow.shouldRun} steps=${flow.steps.length}',
-          );
-          continue;
-        }
-        final started = await ref
-            .read(guideControllerProvider.notifier)
-            .startFlow(
-              flowId: flow.flowId,
-              targetIds: flow.steps.map((s) => s.targetId).toList(),
-            );
-        if (!mounted) return;
-        if (started) return;
-      }
-      AppLogger.log('Guide', 'host attempt exhausted flows=${_flowSummary()}');
+      if (!mounted) return;
+      await _tryStartNext();
     });
   }
 
-  String _flowSummary() =>
-      widget.flows.map((f) => '${f.flowId}(${f.shouldRun})').join(',');
+  Future<void> _tryStartNext() async {
+    if (!mounted) return;
+    if (!TickerMode.valuesOf(context).enabled) return;
+    final showcase = _tryGetShowcase();
+    if (showcase == null) return;
+    if (ref.read(guideControllerProvider).isActive) return;
+
+    final registry = ref.read(guideRegistryProvider);
+    for (final flow in widget.flows) {
+      if (!flow.shouldRun || flow.steps.isEmpty) continue;
+      if (await registry.isSeen(flow.flowId)) continue;
+      if (!mounted) return;
+
+      final started = await ref
+          .read(guideControllerProvider.notifier)
+          .startFlow(flow.flowId);
+      if (!mounted) return;
+      if (!started) continue;
+
+      GuideShowcaseBus.setOnEnd(() {
+        ref.read(guideControllerProvider.notifier).completeActiveFlow();
+      });
+      final keys = flow.steps.map((s) => s.key).toList();
+      AppLogger.log(
+        'Guide',
+        'host startShowCase flow=${flow.flowId} keys=${keys.length}',
+      );
+      showcase.startShowCase(keys);
+      return;
+    }
+  }
 
   @override
   Widget build(BuildContext context) => widget.child;
 }
 
-/// 获取全局 ShowcaseView；注册前（如测试环境未初始化）时返回 null。
+/// 获取全局 [ShowcaseView]；未注册（如纯 unit 测试环境）时返回 null。
 ShowcaseView? _tryGetShowcase() {
   try {
     return ShowcaseView.get();
@@ -211,9 +185,6 @@ ShowcaseView? _tryGetShowcase() {
 }
 
 /// 引导 tooltip 的视觉方案（light / dark 双主题）。
-///
-/// 风格参考 Linear / Raycast：中性无彩色表面 + 高对比主操作按钮，
-/// 不引入品牌主色，把视觉焦点留给"下一步"按钮本身的黑/白反差。
 class _GuideTooltipScheme {
   const _GuideTooltipScheme._({
     required this.surface,
@@ -261,8 +232,6 @@ class _GuideTooltipScheme {
 abstract class _GuideTooltipStyle {
   static const tooltipRadius = BorderRadius.all(Radius.circular(14));
   static const tooltipPadding = EdgeInsets.fromLTRB(18, 16, 18, 14);
-  // 与全局 Card 主题的 16px 圆角对齐，避免高亮切口在卡片四角露出白色楔形；
-  // padding 收紧到 4 让切口更贴合目标。
   static const targetPadding = EdgeInsets.all(4);
   static const targetRadius = BorderRadius.all(Radius.circular(16));
   static const actionRadius = BorderRadius.all(Radius.circular(8));
@@ -296,68 +265,24 @@ abstract class _GuideTooltipStyle {
 
 /// 可复用的 showcase target 包装器。
 ///
-/// screen 只需要用该组件包住目标控件，并传入对应 flow/target 信息。
-class GuideTarget extends ConsumerStatefulWidget {
-  final String flowId;
+/// 本身是一个无状态的薄包装：只负责把 [step.key] 设给 [Showcase] widget
+/// 并应用统一的视觉方案。Key 由 screen 侧管理，和 [GuideFlow] 里声明的
+/// key 同一实例，确保 `startShowCase([keys])` 能正确定位到目标。
+class GuideTarget extends StatelessWidget {
   final GuideStep step;
   final Widget child;
 
-  const GuideTarget({
-    super.key,
-    required this.flowId,
-    required this.step,
-    required this.child,
-  });
-
-  @override
-  ConsumerState<GuideTarget> createState() => _GuideTargetState();
-}
-
-class _GuideTargetState extends ConsumerState<GuideTarget> {
-  final GlobalKey _showcaseKey = GlobalKey();
-  ProviderSubscription<GuideControllerState>? _guideSubscription;
-  int? _startedSessionId;
-
-  @override
-  void initState() {
-    super.initState();
-    _guideSubscription = ref.listenManual<GuideControllerState>(
-      guideControllerProvider,
-      (_, next) {
-        if (_isCurrentTarget(next)) {
-          _startShowcase(next.sessionId);
-        }
-      },
-      fireImmediately: true,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant GuideTarget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final state = ref.read(guideControllerProvider);
-    if (_isCurrentTarget(state)) {
-      _startShowcase(state.sessionId);
-    }
-  }
-
-  @override
-  void dispose() {
-    _guideSubscription?.close();
-    super.dispose();
-  }
+  const GuideTarget({super.key, required this.step, required this.child});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final state = ref.watch(guideControllerProvider);
-    final isLastStep = state.isLastStep;
     final scheme = _GuideTooltipScheme.of(context);
 
     return Showcase(
-      key: _showcaseKey,
-      title: widget.step.title,
-      description: widget.step.description,
+      key: step.key,
+      title: step.title,
+      description: step.description,
 
       // 表面
       tooltipBackgroundColor: scheme.surface,
@@ -378,153 +303,24 @@ class _GuideTargetState extends ConsumerState<GuideTarget> {
       overlayColor: scheme.barrier,
       overlayOpacity: scheme.barrierOpacity,
 
-      // 动作按钮
+      // 动作按钮——默认 next 行为由 showcaseview 接管，过最后一步自动 onFinish。
       tooltipActionConfig: const TooltipActionConfig(
         alignment: MainAxisAlignment.end,
         position: TooltipActionPosition.inside,
         actionGap: 8,
         gapBetweenContentAndAction: 12,
       ),
-      tooltipActions: [_nextAction(context, l10n, isLastStep, scheme)],
-
-      onBarrierClick: _advanceFromPassiveTap,
-      onTargetClick: _ignoreTargetClick,
-      disposeOnTap: false,
-      child: Semantics(label: widget.step.title, child: widget.child),
+      tooltipActions: [
+        TooltipActionButton(
+          type: TooltipDefaultActionType.next,
+          name: l10n.guideNext,
+          backgroundColor: scheme.actionBg,
+          textStyle: _GuideTooltipStyle.action(scheme.actionText),
+          borderRadius: _GuideTooltipStyle.actionRadius,
+          padding: _GuideTooltipStyle.actionPadding,
+        ),
+      ],
+      child: Semantics(label: step.title, child: child),
     );
-  }
-
-  bool _isCurrentTarget(GuideControllerState state) {
-    return state.activeFlowId == widget.flowId &&
-        state.activeTargetId == widget.step.targetId;
-  }
-
-  void _startShowcase(int sessionId) {
-    if (_startedSessionId == sessionId) {
-      AppLogger.log(
-        'Guide',
-        'target start skipped flow=${widget.flowId} '
-            'target=${widget.step.targetId} reason=sameSession '
-            'session=$sessionId',
-      );
-      return;
-    }
-    _startedSessionId = sessionId;
-    _scheduleShowcaseStart(sessionId, 0);
-  }
-
-  void _scheduleShowcaseStart(int sessionId, int attempt) {
-    AppLogger.log(
-      'Guide',
-      'target scheduleShowcase flow=${widget.flowId} '
-          'target=${widget.step.targetId} session=$sessionId attempt=$attempt',
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        AppLogger.log(
-          'Guide',
-          'target start aborted flow=${widget.flowId} '
-              'target=${widget.step.targetId} reason=unmounted',
-        );
-        return;
-      }
-      final state = ref.read(guideControllerProvider);
-      if (!_isCurrentTarget(state)) {
-        AppLogger.log(
-          'Guide',
-          'target start aborted flow=${widget.flowId} '
-              'target=${widget.step.targetId} reason=notCurrent '
-              'activeFlow=${state.activeFlowId} '
-              'activeTarget=${state.activeTargetId}',
-        );
-        return;
-      }
-      final showcase = _tryGetShowcase();
-      if (showcase == null) {
-        _retryShowcaseStart(sessionId, attempt, 'noShowCaseView');
-        return;
-      }
-      AppLogger.log(
-        'Guide',
-        'target startShowcase flow=${widget.flowId} '
-            'target=${widget.step.targetId} session=$sessionId',
-      );
-      showcase.startShowCase([_showcaseKey]);
-    });
-  }
-
-  void _retryShowcaseStart(int sessionId, int attempt, String reason) {
-    if (attempt >= 3) {
-      AppLogger.log(
-        'Guide',
-        'target start aborted flow=${widget.flowId} '
-            'target=${widget.step.targetId} reason=$reason '
-            'session=$sessionId attempts=$attempt '
-            'fallback=completeActiveFlow',
-      );
-      // 兜底：showcase 起不来就把当前 flow 标记已看并清空 active，
-      // 避免 controller 一直卡在 active 导致后续 flow 再也无法启动。
-      final state = ref.read(guideControllerProvider);
-      if (_isCurrentTarget(state)) {
-        unawaited(
-          ref.read(guideControllerProvider.notifier).completeActiveFlow(),
-        );
-      }
-      return;
-    }
-    AppLogger.log(
-      'Guide',
-      'target start retry flow=${widget.flowId} '
-          'target=${widget.step.targetId} reason=$reason '
-          'session=$sessionId nextAttempt=${attempt + 1}',
-    );
-    Future.delayed(const Duration(milliseconds: 120), () {
-      if (!mounted) return;
-      _scheduleShowcaseStart(sessionId, attempt + 1);
-    });
-  }
-
-  TooltipActionButton _nextAction(
-    BuildContext context,
-    AppLocalizations l10n,
-    bool showDone,
-    _GuideTooltipScheme scheme,
-  ) {
-    return TooltipActionButton(
-      type: TooltipDefaultActionType.next,
-      name: showDone ? l10n.guideDone : l10n.guideNext,
-      backgroundColor: scheme.actionBg,
-      textStyle: _GuideTooltipStyle.action(scheme.actionText),
-      borderRadius: _GuideTooltipStyle.actionRadius,
-      padding: _GuideTooltipStyle.actionPadding,
-      onTap: () {
-        AppLogger.log(
-          'Guide',
-          'tooltip action flow=${widget.flowId} '
-              'target=${widget.step.targetId} showDone=$showDone',
-        );
-        _tryGetShowcase()?.dismiss();
-        unawaited(
-          ref.read(guideControllerProvider.notifier).advanceActiveFlow(),
-        );
-      },
-    );
-  }
-
-  void _ignoreTargetClick() {
-    AppLogger.log(
-      'Guide',
-      'target click ignored flow=${widget.flowId} '
-          'target=${widget.step.targetId} reason=passiveStep',
-    );
-  }
-
-  void _advanceFromPassiveTap() {
-    AppLogger.log(
-      'Guide',
-      'barrier advance flow=${widget.flowId} target=${widget.step.targetId}',
-    );
-    _tryGetShowcase()?.dismiss();
-    unawaited(ref.read(guideControllerProvider.notifier).advanceActiveFlow());
   }
 }

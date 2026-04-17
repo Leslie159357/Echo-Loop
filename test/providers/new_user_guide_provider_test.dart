@@ -35,7 +35,7 @@ void main() {
   });
 
   group('GuideController', () {
-    test('按 flow 内 step 顺序推进并只标记当前 flow seen', () async {
+    test('startFlow 成功后 activeFlowId 置为目标 flow', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final registry = GuideRegistry(prefs: prefs);
@@ -45,30 +45,16 @@ void main() {
       addTearDown(container.dispose);
 
       final controller = container.read(guideControllerProvider.notifier);
-      final started = await controller.startFlow(
-        flowId: 'learning_plan_no_transcript',
-        targetIds: const ['add_subtitle', 'ai_transcription'],
-      );
+      final started = await controller.startFlow('learning_plan_no_transcript');
 
       expect(started, isTrue);
       expect(
-        container.read(guideControllerProvider).activeTargetId,
-        'add_subtitle',
+        container.read(guideControllerProvider).activeFlowId,
+        'learning_plan_no_transcript',
       );
-
-      await controller.advanceActiveFlow();
-      expect(
-        container.read(guideControllerProvider).activeTargetId,
-        'ai_transcription',
-      );
-
-      await controller.advanceActiveFlow();
-      expect(container.read(guideControllerProvider).isActive, isFalse);
-      expect(await registry.isSeen('learning_plan_no_transcript'), isTrue);
-      expect(await registry.isSeen('learning_plan_with_transcript'), isFalse);
     });
 
-    test('中途 completeActiveFlow 标记已看并清空（兜底路径依赖）', () async {
+    test('completeActiveFlow 标记已看并清空 active', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final registry = GuideRegistry(prefs: prefs);
@@ -78,16 +64,9 @@ void main() {
       addTearDown(container.dispose);
 
       final controller = container.read(guideControllerProvider.notifier);
-      await controller.startFlow(
-        flowId: 'stuck_flow',
-        targetIds: const ['step1', 'step2', 'step3'],
-      );
-      expect(
-        container.read(guideControllerProvider).activeTargetId,
-        'step1',
-      );
+      await controller.startFlow('stuck_flow');
+      expect(container.read(guideControllerProvider).isActive, isTrue);
 
-      // 在第一步就 complete（模拟 target 起不来的兜底场景）
       await controller.completeActiveFlow();
 
       expect(container.read(guideControllerProvider).isActive, isFalse);
@@ -105,10 +84,50 @@ void main() {
 
       final started = await container
           .read(guideControllerProvider.notifier)
-          .startFlow(flowId: 'library', targetIds: const ['create']);
+          .startFlow('library');
 
       expect(started, isFalse);
       expect(container.read(guideControllerProvider).isActive, isFalse);
+    });
+
+    test('resetFlows 清 seen 并递增 resetGeneration', () async {
+      SharedPreferences.setMockInitialValues({
+        'guide_v1_flow_a_seen': true,
+        'guide_v1_flow_b_seen': true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final registry = GuideRegistry(prefs: prefs);
+      final container = ProviderContainer(
+        overrides: [guideRegistryProvider.overrideWithValue(registry)],
+      );
+      addTearDown(container.dispose);
+
+      final controller = container.read(guideControllerProvider.notifier);
+      final beforeGen = container
+          .read(guideControllerProvider)
+          .resetGeneration;
+
+      await controller.resetFlows(['flow_a', 'flow_b']);
+
+      expect(await registry.isSeen('flow_a'), isFalse);
+      expect(await registry.isSeen('flow_b'), isFalse);
+      expect(
+        container.read(guideControllerProvider).resetGeneration,
+        beforeGen + 1,
+      );
+    });
+  });
+
+  group('GuideShowcaseBus', () {
+    test('setOnEnd + fireEnd 触发一次后自动清空', () {
+      var count = 0;
+      GuideShowcaseBus.setOnEnd(() => count++);
+      GuideShowcaseBus.fireEnd();
+      expect(count, 1);
+
+      // 第二次 fireEnd 不应再调——callback 已清
+      GuideShowcaseBus.fireEnd();
+      expect(count, 1);
     });
   });
 }

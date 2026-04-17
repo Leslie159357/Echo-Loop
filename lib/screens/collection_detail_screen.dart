@@ -17,19 +17,28 @@ import '../widgets/guide_flow.dart';
 import '../widgets/manage_subtitles_sheet.dart';
 
 /// 合集详情页面 - 展示合集中的音频，支持上传音频
-class CollectionDetailScreen extends ConsumerWidget {
+class CollectionDetailScreen extends ConsumerStatefulWidget {
   final String collectionId;
 
   const CollectionDetailScreen({super.key, required this.collectionId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CollectionDetailScreen> createState() =>
+      _CollectionDetailScreenState();
+}
+
+class _CollectionDetailScreenState
+    extends ConsumerState<CollectionDetailScreen> {
+  final _keyUpload = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final collectionState = ref.watch(collectionListProvider);
     ref.watch(audioLibraryProvider); // watch to rebuild when library changes
 
     final collection = collectionState.rawCollections
-        .where((c) => c.id == collectionId)
+        .where((c) => c.id == widget.collectionId)
         .firstOrNull;
     if (collection == null) {
       return Scaffold(
@@ -39,7 +48,7 @@ class CollectionDetailScreen extends ConsumerWidget {
     }
 
     // 获取合集中的音频项（从 junction 表缓存中读取）
-    final audioIds = collectionState.getAudioIds(collectionId);
+    final audioIds = collectionState.getAudioIds(widget.collectionId);
     final audioItems = audioIds
         .map((id) => ref.read(audioLibraryProvider.notifier).getItemById(id))
         .whereType<AudioItem>()
@@ -47,18 +56,18 @@ class CollectionDetailScreen extends ConsumerWidget {
 
     final hasAudioItems = audioItems.isNotEmpty;
 
+    final stepUpload = GuideStep(
+      key: _keyUpload,
+      title: l10n.guideCollectionUploadTitle,
+      description: l10n.guideCollectionUploadDescription,
+    );
+
     return GuideFlowSequenceHost(
       flows: [
         GuideFlow(
           flowId: GuideFlowIds.collectionDetailUpload,
           shouldRun: true,
-          steps: [
-            GuideStep(
-              targetId: GuideTargetIds.uploadAudio,
-              title: l10n.guideCollectionUploadTitle,
-              description: l10n.guideCollectionUploadDescription,
-            ),
-          ],
+          steps: [stepUpload],
         ),
       ],
       child: Scaffold(
@@ -68,12 +77,7 @@ class CollectionDetailScreen extends ConsumerWidget {
             // 排序按钮（复用公开的 AudioSortButton）
             const AudioSortButton(),
             GuideTarget(
-              flowId: GuideFlowIds.collectionDetailUpload,
-              step: GuideStep(
-                targetId: GuideTargetIds.uploadAudio,
-                title: l10n.guideCollectionUploadTitle,
-                description: l10n.guideCollectionUploadDescription,
-              ),
+              step: stepUpload,
               child: IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () => _showAddAudioDialog(context, collection),
@@ -83,7 +87,7 @@ class CollectionDetailScreen extends ConsumerWidget {
         ),
         body: AudioListView(
           items: audioItems,
-          collectionId: collectionId,
+          collectionId: widget.collectionId,
           guideFirstAudioMenu: hasAudioItems,
           guideLeadingItems: hasAudioItems,
           emptyState: _CollectionEmptyState(

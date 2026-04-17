@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/collection.dart';
 import '../providers/collection_provider.dart';
-import '../providers/new_user_guide_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
@@ -120,12 +119,18 @@ class CollectionEmptyState extends StatelessWidget {
 /// 合集网格视图
 class CollectionGridView extends StatelessWidget {
   final List<Collection> collections;
-  final bool guideLeadingItems;
+
+  /// 首张卡片高亮 step（非 null 时包裹成 GuideTarget）。
+  final GuideStep? firstItemStep;
+
+  /// 首张卡片菜单高亮 step。
+  final GuideStep? firstMenuStep;
 
   const CollectionGridView({
     super.key,
     required this.collections,
-    this.guideLeadingItems = false,
+    this.firstItemStep,
+    this.firstMenuStep,
   });
 
   @override
@@ -140,10 +145,11 @@ class CollectionGridView extends StatelessWidget {
       ),
       itemCount: collections.length,
       itemBuilder: (context, index) {
+        final isFirst = index == 0;
         return _CollectionGridTile(
           collection: collections[index],
-          isGuideMenuTarget: index == 0,
-          isGuideItemTarget: guideLeadingItems && index == 0,
+          itemStep: isFirst ? firstItemStep : null,
+          menuStep: isFirst ? firstMenuStep : null,
         );
       },
     );
@@ -153,12 +159,14 @@ class CollectionGridView extends StatelessWidget {
 /// 合集列表视图
 class CollectionListView extends StatelessWidget {
   final List<Collection> collections;
-  final bool guideLeadingItems;
+  final GuideStep? firstItemStep;
+  final GuideStep? firstMenuStep;
 
   const CollectionListView({
     super.key,
     required this.collections,
-    this.guideLeadingItems = false,
+    this.firstItemStep,
+    this.firstMenuStep,
   });
 
   @override
@@ -167,10 +175,11 @@ class CollectionListView extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       itemCount: collections.length,
       itemBuilder: (context, index) {
+        final isFirst = index == 0;
         return _CollectionListTile(
           collection: collections[index],
-          isGuideMenuTarget: index == 0,
-          isGuideItemTarget: guideLeadingItems && index == 0,
+          itemStep: isFirst ? firstItemStep : null,
+          menuStep: isFirst ? firstMenuStep : null,
         );
       },
     );
@@ -211,13 +220,13 @@ void showCreateCollectionDialog(BuildContext context) {
 /// 文件夹网格卡片
 class _CollectionGridTile extends ConsumerWidget {
   final Collection collection;
-  final bool isGuideMenuTarget;
-  final bool isGuideItemTarget;
+  final GuideStep? itemStep;
+  final GuideStep? menuStep;
 
   const _CollectionGridTile({
     required this.collection,
-    required this.isGuideMenuTarget,
-    required this.isGuideItemTarget,
+    this.itemStep,
+    this.menuStep,
   });
 
   static const Key _kGridMenuHitAreaKey = Key('collection_grid_menu_hit_area');
@@ -243,8 +252,8 @@ class _CollectionGridTile extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  _wrapCollectionMenuGuideTarget(
-                    context,
+                  _wrapWithGuideTarget(
+                    menuStep,
                     SizedBox(
                       width: 36,
                       height: 32,
@@ -309,7 +318,6 @@ class _CollectionGridTile extends ConsumerWidget {
                         },
                       ),
                     ),
-                    enabled: isGuideMenuTarget,
                   ),
                 ],
               ),
@@ -343,11 +351,7 @@ class _CollectionGridTile extends ConsumerWidget {
         ),
       ),
     );
-    return _wrapCollectionItemGuideTarget(
-      context,
-      card,
-      enabled: isGuideItemTarget,
-    );
+    return _wrapWithGuideTarget(itemStep, card);
   }
 
   void _openCollection(BuildContext context) {
@@ -379,13 +383,13 @@ Widget _buildCollectionPinIcon({required bool isPinned}) {
 /// 列表项
 class _CollectionListTile extends ConsumerWidget {
   final Collection collection;
-  final bool isGuideMenuTarget;
-  final bool isGuideItemTarget;
+  final GuideStep? itemStep;
+  final GuideStep? menuStep;
 
   const _CollectionListTile({
     required this.collection,
-    required this.isGuideMenuTarget,
-    required this.isGuideItemTarget,
+    this.itemStep,
+    this.menuStep,
   });
 
   static const Key _kListMenuHitAreaKey = Key('collection_list_menu_hit_area');
@@ -444,8 +448,8 @@ class _CollectionListTile extends ConsumerWidget {
                   ),
                 ),
               ),
-              _wrapCollectionMenuGuideTarget(
-                context,
+              _wrapWithGuideTarget(
+                menuStep,
                 SizedBox(
                   width: _kTrailingMenuWidth,
                   child: PopupMenuButton<String>(
@@ -500,18 +504,13 @@ class _CollectionListTile extends ConsumerWidget {
                     },
                   ),
                 ),
-                enabled: isGuideMenuTarget,
               ),
             ],
           ),
         ),
       ),
     );
-    return _wrapCollectionItemGuideTarget(
-      context,
-      card,
-      enabled: isGuideItemTarget,
-    );
+    return _wrapWithGuideTarget(itemStep, card);
   }
 
   String _formatDate(DateTime date) {
@@ -523,46 +522,10 @@ class _CollectionListTile extends ConsumerWidget {
   }
 }
 
-/// 将合集卡片包装为"合集列表"引导目标（首张卡片）。
-///
-/// 网格视图和列表视图共用，[enabled] 为 false 时直接返回 child 不包裹。
-Widget _wrapCollectionItemGuideTarget(
-  BuildContext context,
-  Widget child, {
-  required bool enabled,
-}) {
-  if (!enabled) return child;
-  final l10n = AppLocalizations.of(context)!;
-  return GuideTarget(
-    flowId: GuideFlowIds.libraryCollectionList,
-    step: GuideStep(
-      targetId: GuideTargetIds.collectionList,
-      title: l10n.guideLibraryCollectionListTitle,
-      description: l10n.guideLibraryCollectionListDescription,
-    ),
-    child: child,
-  );
-}
-
-/// 将合集卡片菜单按钮包装为"合集菜单"引导目标（首张卡片的菜单）。
-///
-/// 网格视图和列表视图共用，[enabled] 为 false 时直接返回 child 不包裹。
-Widget _wrapCollectionMenuGuideTarget(
-  BuildContext context,
-  Widget child, {
-  required bool enabled,
-}) {
-  if (!enabled) return child;
-  final l10n = AppLocalizations.of(context)!;
-  return GuideTarget(
-    flowId: GuideFlowIds.libraryCollectionList,
-    step: GuideStep(
-      targetId: GuideTargetIds.collectionMenu,
-      title: l10n.guideLibraryCollectionMenuTitle,
-      description: l10n.guideLibraryCollectionMenuDescription,
-    ),
-    child: child,
-  );
+/// 可选包装成 GuideTarget：step 为 null 时直接返回 child。
+Widget _wrapWithGuideTarget(GuideStep? step, Widget child) {
+  if (step == null) return child;
+  return GuideTarget(step: step, child: child);
 }
 
 // ===== 公共辅助方法 =====

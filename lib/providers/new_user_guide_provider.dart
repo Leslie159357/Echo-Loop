@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -5,50 +6,15 @@ import '../services/app_logger.dart';
 
 /// 页面级引导流程的运行状态。
 ///
-/// 这里只保存当前正在展示的 flow 和 step，不保存跨页面业务流程。
+/// 只记录当前正在展示的 flow id，step 推进完全交给 showcaseview 驱动。
 /// 每个 flow 是否已看过由 [GuideRegistry] 单独持久化。
 class GuideControllerState {
   final String? activeFlowId;
-  final List<String> targetIds;
-  final int activeIndex;
-  final int sessionId;
   final int resetGeneration;
 
-  const GuideControllerState({
-    this.activeFlowId,
-    this.targetIds = const [],
-    this.activeIndex = 0,
-    this.sessionId = 0,
-    this.resetGeneration = 0,
-  });
+  const GuideControllerState({this.activeFlowId, this.resetGeneration = 0});
 
   bool get isActive => activeFlowId != null;
-
-  String? get activeTargetId {
-    if (!isActive || activeIndex < 0 || activeIndex >= targetIds.length) {
-      return null;
-    }
-    return targetIds[activeIndex];
-  }
-
-  bool get isLastStep => activeIndex >= targetIds.length - 1;
-
-  GuideControllerState copyWith({
-    String? activeFlowId,
-    List<String>? targetIds,
-    int? activeIndex,
-    int? sessionId,
-    int? resetGeneration,
-    bool clearActiveFlow = false,
-  }) {
-    return GuideControllerState(
-      activeFlowId: clearActiveFlow ? null : activeFlowId ?? this.activeFlowId,
-      targetIds: targetIds ?? this.targetIds,
-      activeIndex: activeIndex ?? this.activeIndex,
-      sessionId: sessionId ?? this.sessionId,
-      resetGeneration: resetGeneration ?? this.resetGeneration,
-    );
-  }
 }
 
 /// 引导持久化注册表。
@@ -123,21 +89,6 @@ abstract final class GuideFlowIds {
   static const all = [...active, ...legacy];
 }
 
-/// 当前版本的新用户引导 target id。
-abstract final class GuideTargetIds {
-  static const collectionList = 'collection_list';
-  static const collectionMenu = 'collection_menu';
-  static const createCollection = 'create_collection';
-  static const audioList = 'audio_list';
-  static const audioMenu = 'audio_menu';
-  static const uploadAudio = 'upload_audio';
-  static const addSubtitle = 'add_subtitle';
-  static const aiTranscription = 'ai_transcription';
-  static const startTranscription = 'start_transcription';
-  static const freePlay = 'free_play';
-  static const startLearning = 'start_learning';
-}
-
 final guideControllerProvider =
     NotifierProvider<GuideController, GuideControllerState>(
       GuideController.new,
@@ -145,20 +96,18 @@ final guideControllerProvider =
 
 /// 页面级引导控制器。
 ///
-/// 负责同一时刻只运行一个 flow，并按 flow 内的 target 顺序推进。
-/// 是否展示由各 screen 自己决定，控制器不维护跨 screen 的全局 onboarding。
+/// 只负责"当前哪个 flow 在跑 + 已看持久化"。
+/// 步骤推进由 showcaseview 自己驱动（startShowCase 传入 key 列表，
+/// 用户点 tooltip 的 next/barrier 由 showcaseview 内部 advance）。
+/// 整段 flow 结束时通过 [GuideShowcaseBus] 回调触发 [completeActiveFlow]。
 class GuideController extends Notifier<GuideControllerState> {
   @override
   GuideControllerState build() => const GuideControllerState();
 
-  Future<bool> startFlow({
-    required String flowId,
-    required List<String> targetIds,
-  }) async {
-    if (targetIds.isEmpty) {
-      AppLogger.log('Guide', 'start skipped flow=$flowId reason=emptyTargets');
-      return false;
-    }
+  /// 若 [flowId] 尚未 seen 且当前无活动 flow，则切到 active。
+  ///
+  /// 返回值：true 表示占用成功可以启动 showcase；false 表示跳过。
+  Future<bool> startFlow(String flowId) async {
     if (state.isActive) {
       final sameFlow = state.activeFlowId == flowId;
       AppLogger.log(
@@ -168,65 +117,29 @@ class GuideController extends Notifier<GuideControllerState> {
       );
       return sameFlow;
     }
-
     final registry = ref.read(guideRegistryProvider);
     if (await registry.isSeen(flowId)) {
       AppLogger.log('Guide', 'start skipped flow=$flowId reason=seen');
       return false;
     }
-
     state = GuideControllerState(
       activeFlowId: flowId,
-      targetIds: List.unmodifiable(targetIds),
-      sessionId: state.sessionId + 1,
       resetGeneration: state.resetGeneration,
     );
-    AppLogger.log(
-      'Guide',
-      'start flow=$flowId targets=${targetIds.join(",")} '
-          'session=${state.sessionId}',
-    );
+    AppLogger.log('Guide', 'start flow=$flowId');
     return true;
   }
 
-  Future<void> advanceActiveFlow() async {
-    if (!state.isActive) {
-      AppLogger.log('Guide', 'advance ignored reason=noActiveFlow');
-      return;
-    }
-    if (state.isLastStep) {
-      await completeActiveFlow();
-      return;
-    }
-    final previousTarget = state.activeTargetId;
-    state = state.copyWith(
-      activeIndex: state.activeIndex + 1,
-      sessionId: state.sessionId + 1,
-    );
-    AppLogger.log(
-      'Guide',
-      'advance flow=${state.activeFlowId} from=$previousTarget '
-          'to=${state.activeTargetId} index=${state.activeIndex} '
-          'session=${state.sessionId}',
-    );
-  }
-
+  /// 当前活动 flow 结束：markSeen 并清空 active。
   Future<void> completeActiveFlow() async {
     final flowId = state.activeFlowId;
     if (flowId == null) {
       AppLogger.log('Guide', 'complete ignored reason=noActiveFlow');
       return;
     }
-    final targetId = state.activeTargetId;
     await ref.read(guideRegistryProvider).markSeen(flowId);
-    state = GuideControllerState(
-      sessionId: state.sessionId + 1,
-      resetGeneration: state.resetGeneration,
-    );
-    AppLogger.log(
-      'Guide',
-      'complete flow=$flowId target=$targetId session=${state.sessionId}',
-    );
+    state = GuideControllerState(resetGeneration: state.resetGeneration);
+    AppLogger.log('Guide', 'complete flow=$flowId');
   }
 
   Future<void> resetFlows(List<String> flowIds) async {
@@ -234,16 +147,33 @@ class GuideController extends Notifier<GuideControllerState> {
     for (final flowId in flowIds) {
       await registry.reset(flowId);
     }
-
-    state = GuideControllerState(
-      sessionId: state.sessionId + 1,
-      resetGeneration: state.resetGeneration + 1,
-    );
+    state = GuideControllerState(resetGeneration: state.resetGeneration + 1);
     AppLogger.log(
       'Guide',
       'resetFlows flows=${flowIds.join(",")} '
-          'clearedActive=true '
           'resetGeneration=${state.resetGeneration}',
     );
+  }
+}
+
+/// 把 showcaseview 全局 `onFinish` / `onDismiss` 桥接到我们的 controller。
+///
+/// [ShowcaseView.register] 的回调只能在 app 启动时设置一次且不可变，
+/// 所以用一个静态 bus：Host 启动 flow 前注册 callback，整段 showcase 结束
+/// 后触发，由 callback 调 [GuideController.completeActiveFlow]。
+abstract final class GuideShowcaseBus {
+  static VoidCallback? _onEnd;
+
+  /// 由 Host 在启动 showcase 前调用，设置 flow 结束后要跑的回调。
+  static void setOnEnd(VoidCallback? cb) {
+    _onEnd = cb;
+  }
+
+  /// 由 `ShowcaseView.register` 的 `onFinish` / `onDismiss` 触发。
+  /// 触发一次后自动清空，避免重复调用。
+  static void fireEnd() {
+    final cb = _onEnd;
+    _onEnd = null;
+    cb?.call();
   }
 }

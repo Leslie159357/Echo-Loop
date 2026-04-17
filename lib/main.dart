@@ -28,6 +28,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'analytics/analytics_providers.dart';
 import 'services/user_id_service.dart';
 import 'firebase_options.dart';
+import 'providers/new_user_guide_provider.dart';
 import 'providers/offline_asr_settings_provider.dart';
 import 'services/asr/asr_model_manager.dart';
 import 'services/asr/offline_asr_engine.dart';
@@ -201,7 +202,13 @@ class _FluencyAppState extends ConsumerState<FluencyApp> {
     super.initState();
 
     // 新手引导 showcase 控制器全局注册（替代旧的 ShowCaseWidget InheritedWidget）。
-    _showcase = ShowcaseView.register(enableAutoScroll: true);
+    // 整段 tour 走完或被 dismiss 时，通过 GuideShowcaseBus 触发 controller 的
+    // completeActiveFlow 标记已看并清空 active。
+    _showcase = ShowcaseView.register(
+      enableAutoScroll: true,
+      onFinish: GuideShowcaseBus.fireEnd,
+      onDismiss: (_) => GuideShowcaseBus.fireEnd(),
+    );
 
     // 预加载词典（触发下载或打开本地词典）
     ref.read(dictionaryProvider);

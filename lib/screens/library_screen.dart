@@ -30,44 +30,48 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   LibraryViewType _currentView = LibraryViewType.collections;
 
+  // Guide steps 的 GlobalKey 在 state 层持有，保证整个 screen 生命周期内稳定。
+  // 同一个 step 会同时被 GuideFlow.steps 和对应的 GuideTarget 引用。
+  final _keyCollectionList = GlobalKey();
+  final _keyCollectionMenu = GlobalKey();
+  final _keyCreateCollection = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final collectionState = ref.watch(collectionListProvider);
-    final shouldRunGuide =
+    final shouldRunCollectionGuide =
         _currentView == LibraryViewType.collections &&
         !collectionState.isLoading;
     final hasCollections = collectionState.collections.isNotEmpty;
+
+    final stepCollectionList = GuideStep(
+      key: _keyCollectionList,
+      title: l10n.guideLibraryCollectionListTitle,
+      description: l10n.guideLibraryCollectionListDescription,
+    );
+    final stepCollectionMenu = GuideStep(
+      key: _keyCollectionMenu,
+      title: l10n.guideLibraryCollectionMenuTitle,
+      description: l10n.guideLibraryCollectionMenuDescription,
+    );
+    final stepCreateCollection = GuideStep(
+      key: _keyCreateCollection,
+      title: l10n.guideLibraryCreateCollectionTitle,
+      description: l10n.guideLibraryCreateCollectionDescription,
+    );
 
     return GuideFlowSequenceHost(
       flows: [
         GuideFlow(
           flowId: GuideFlowIds.libraryCollectionList,
-          shouldRun: shouldRunGuide && hasCollections,
-          steps: [
-            GuideStep(
-              targetId: GuideTargetIds.collectionList,
-              title: l10n.guideLibraryCollectionListTitle,
-              description: l10n.guideLibraryCollectionListDescription,
-            ),
-            if (hasCollections)
-              GuideStep(
-                targetId: GuideTargetIds.collectionMenu,
-                title: l10n.guideLibraryCollectionMenuTitle,
-                description: l10n.guideLibraryCollectionMenuDescription,
-              ),
-          ],
+          shouldRun: shouldRunCollectionGuide && hasCollections,
+          steps: [stepCollectionList, if (hasCollections) stepCollectionMenu],
         ),
         GuideFlow(
           flowId: GuideFlowIds.libraryCreateCollection,
-          shouldRun: shouldRunGuide,
-          steps: [
-            GuideStep(
-              targetId: GuideTargetIds.createCollection,
-              title: l10n.guideLibraryCreateCollectionTitle,
-              description: l10n.guideLibraryCreateCollectionDescription,
-            ),
-          ],
+          shouldRun: shouldRunCollectionGuide,
+          steps: [stepCreateCollection],
         ),
       ],
       child: Scaffold(
@@ -95,12 +99,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
-          actions: _buildActions(l10n),
+          actions: _buildActions(l10n, stepCreateCollection),
         ),
         body: IndexedStack(
           index: _currentView.index,
           children: [
-            _CollectionListBody(),
+            _CollectionListBody(
+              listStep: stepCollectionList,
+              menuStep: stepCollectionMenu,
+            ),
             AudioListView(
               guideFirstAudioMenu: true,
               guideLeadingItems: true,
@@ -113,7 +120,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   /// 根据当前视图构建 AppBar actions
-  List<Widget> _buildActions(AppLocalizations l10n) {
+  List<Widget> _buildActions(AppLocalizations l10n, GuideStep createStep) {
     if (_currentView == LibraryViewType.collections) {
       return [
         // 合集排序
@@ -134,12 +141,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ),
         // 创建合集
         GuideTarget(
-          flowId: GuideFlowIds.libraryCreateCollection,
-          step: GuideStep(
-            targetId: GuideTargetIds.createCollection,
-            title: l10n.guideLibraryCreateCollectionTitle,
-            description: l10n.guideLibraryCreateCollectionDescription,
-          ),
+          step: createStep,
           child: IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => showCreateCollectionDialog(context),
@@ -212,7 +214,10 @@ Future<bool> _showSubtitlePrompt(
 
 /// 合集列表视图体（不含 Scaffold/AppBar）
 class _CollectionListBody extends ConsumerWidget {
-  const _CollectionListBody();
+  final GuideStep listStep;
+  final GuideStep menuStep;
+
+  const _CollectionListBody({required this.listStep, required this.menuStep});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -228,12 +233,14 @@ class _CollectionListBody extends ConsumerWidget {
     if (collectionState.viewMode == CollectionViewMode.grid) {
       return CollectionGridView(
         collections: collections,
-        guideLeadingItems: true,
+        firstItemStep: listStep,
+        firstMenuStep: menuStep,
       );
     }
     return CollectionListView(
       collections: collections,
-      guideLeadingItems: true,
+      firstItemStep: listStep,
+      firstMenuStep: menuStep,
     );
   }
 }

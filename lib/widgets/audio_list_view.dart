@@ -42,12 +42,7 @@ List<AudioItem> sortAudioItems(List<AudioItem> items, AudioSortType sortType) {
 }
 
 /// 音频列表视图 — 资源库全局列表和合集详情页共用
-///
-/// [items] 为 null 时从 audioLibraryProvider 读取全局音频列表；
-/// 非 null 时使用传入的列表（合集场景）。
-/// [collectionId] 传递给 AudioListTile 以区分上下文。
-/// [emptyState] 自定义空状态组件。
-class AudioListView extends ConsumerWidget {
+class AudioListView extends ConsumerStatefulWidget {
   /// 外部传入的音频列表（合集场景），为 null 时从 provider 读取
   final List<AudioItem>? items;
 
@@ -77,12 +72,23 @@ class AudioListView extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AudioListView> createState() => _AudioListViewState();
+}
+
+class _AudioListViewState extends ConsumerState<AudioListView> {
+  // Guide step keys 在 state 层持有，避免 rebuild 时重建导致 showcaseview
+  // 拿到过期的 key。
+  final _keyAudioList = GlobalKey();
+  final _keyAudioMenu = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     // 数据来源：外部传入 or provider
     final List<AudioItem> audioItems =
-        items ?? ref.watch(audioLibraryProvider.select((s) => s.audioItems));
+        widget.items ??
+        ref.watch(audioLibraryProvider.select((s) => s.audioItems));
 
     final settings = ref.watch(audioListSettingsProvider);
 
@@ -90,19 +96,34 @@ class AudioListView extends ConsumerWidget {
     final sortedItems = _sortItems(audioItems, settings.sortType);
 
     if (sortedItems.isEmpty) {
-      return emptyState ?? _DefaultEmptyState(l10n: l10n);
+      return widget.emptyState ?? _DefaultEmptyState(l10n: l10n);
     }
+
+    final showItemGuide = widget.guideEnabled && widget.guideLeadingItems;
+    final showMenuGuide = widget.guideEnabled && widget.guideFirstAudioMenu;
+
+    final stepAudioList = GuideStep(
+      key: _keyAudioList,
+      title: l10n.guideCollectionAudioListTitle,
+      description: l10n.guideCollectionAudioListDescription,
+    );
+    final stepAudioMenu = GuideStep(
+      key: _keyAudioMenu,
+      title: l10n.guideCollectionAudioMenuTitle,
+      description: l10n.guideCollectionAudioMenuDescription,
+    );
 
     final listView = ListView.builder(
       padding: const EdgeInsets.all(8),
       itemCount: sortedItems.length,
       itemBuilder: (context, index) {
         final item = sortedItems[index];
+        final isFirst = index == 0;
         final tile = AudioListTile(
           audioItem: item,
-          collectionId: collectionId,
-          isGuideMenuTarget: guideEnabled && guideFirstAudioMenu && index == 0,
-          isGuideItemTarget: guideEnabled && guideLeadingItems && index == 0,
+          collectionId: widget.collectionId,
+          itemStep: (isFirst && showItemGuide) ? stepAudioList : null,
+          menuStep: (isFirst && showMenuGuide) ? stepAudioMenu : null,
           onManageCollections: () =>
               _showManageCollectionsSheet(context, item.id),
           onManageTags: () => _showManageTagsSheet(context, item.id),
@@ -111,25 +132,17 @@ class AudioListView extends ConsumerWidget {
         return tile;
       },
     );
-    if (!guideEnabled || (!guideLeadingItems && !guideFirstAudioMenu)) {
-      return listView;
-    }
+
+    if (!showItemGuide && !showMenuGuide) return listView;
+
     return GuideFlowSequenceHost(
       flows: [
         GuideFlow(
           flowId: GuideFlowIds.collectionDetailAudioList,
           shouldRun: true,
           steps: [
-            GuideStep(
-              targetId: GuideTargetIds.audioList,
-              title: l10n.guideCollectionAudioListTitle,
-              description: l10n.guideCollectionAudioListDescription,
-            ),
-            GuideStep(
-              targetId: GuideTargetIds.audioMenu,
-              title: l10n.guideCollectionAudioMenuTitle,
-              description: l10n.guideCollectionAudioMenuDescription,
-            ),
+            if (showItemGuide) stepAudioList,
+            if (showMenuGuide) stepAudioMenu,
           ],
         ),
       ],

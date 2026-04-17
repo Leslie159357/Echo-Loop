@@ -44,6 +44,10 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 是否刚打开弹窗（用于首帧跳过残留终态的渲染）
   bool _initialClear = true;
 
+  // Guide step keys
+  final _keyAiTranscription = GlobalKey();
+  final _keyStartTranscription = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -200,23 +204,24 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         GuideFlow(
           flowId: GuideFlowIds.subtitleSheetTranscription,
           shouldRun: true,
-          steps: [
-            GuideStep(
-              targetId: GuideTargetIds.aiTranscription,
-              title: l10n.guidePlanAiTranscriptionTitle,
-              description: l10n.guidePlanAiTranscriptionDescription,
-            ),
-            GuideStep(
-              targetId: GuideTargetIds.startTranscription,
-              title: l10n.guidePlanStartTranscriptionTitle,
-              description: l10n.guidePlanStartTranscriptionDescription,
-            ),
-          ],
+          steps: [_stepAiTranscription(l10n), _stepStartTranscription(l10n)],
         ),
       ],
       child: content,
     );
   }
+
+  GuideStep _stepAiTranscription(AppLocalizations l10n) => GuideStep(
+    key: _keyAiTranscription,
+    title: l10n.guidePlanAiTranscriptionTitle,
+    description: l10n.guidePlanAiTranscriptionDescription,
+  );
+
+  GuideStep _stepStartTranscription(AppLocalizations l10n) => GuideStep(
+    key: _keyStartTranscription,
+    title: l10n.guidePlanStartTranscriptionTitle,
+    description: l10n.guidePlanStartTranscriptionDescription,
+  );
 
   /// 构建进度视图（带圆角背景卡片 + 圆形图标容器）
   Widget _buildProgressView(
@@ -441,12 +446,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
           ),
           const SizedBox(height: AppSpacing.s),
           GuideTarget(
-            flowId: GuideFlowIds.subtitleSheetTranscription,
-            step: GuideStep(
-              targetId: GuideTargetIds.aiTranscription,
-              title: l10n.guidePlanAiTranscriptionTitle,
-              description: l10n.guidePlanAiTranscriptionDescription,
-            ),
+            step: _stepAiTranscription(l10n),
             child: _buildOptionTile(
               theme: theme,
               icon: Icons.auto_awesome_outlined,
@@ -665,15 +665,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       child: Text(label),
     );
 
-    return GuideTarget(
-      flowId: GuideFlowIds.subtitleSheetTranscription,
-      step: GuideStep(
-        targetId: GuideTargetIds.startTranscription,
-        title: l10n.guidePlanStartTranscriptionTitle,
-        description: l10n.guidePlanStartTranscriptionDescription,
-      ),
-      child: button,
-    );
+    return GuideTarget(step: _stepStartTranscription(l10n), child: button);
   }
 
   /// 处理操作按钮点击

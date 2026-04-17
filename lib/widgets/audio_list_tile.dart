@@ -14,7 +14,6 @@ import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
-import '../providers/new_user_guide_provider.dart';
 import '../providers/tag_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/review/review_briefing_sheet.dart';
@@ -60,11 +59,11 @@ class AudioListTile extends ConsumerWidget {
   /// 删除音频回调
   final VoidCallback? onDelete;
 
-  /// 是否将当前音频菜单作为合集详情引导 target。
-  final bool isGuideMenuTarget;
+  /// 当前音频卡片作为列表区域引导 target 时的 step（由外层注入）。
+  final GuideStep? itemStep;
 
-  /// 是否将当前音频卡片作为列表区域引导 target。
-  final bool isGuideItemTarget;
+  /// 当前音频菜单作为引导 target 时的 step（由外层注入）。
+  final GuideStep? menuStep;
 
   const AudioListTile({
     super.key,
@@ -73,8 +72,8 @@ class AudioListTile extends ConsumerWidget {
     this.onManageCollections,
     this.onManageTags,
     this.onDelete,
-    this.isGuideMenuTarget = false,
-    this.isGuideItemTarget = false,
+    this.itemStep,
+    this.menuStep,
   });
 
   /// 是否在合集上下文中
@@ -181,16 +180,8 @@ class AudioListTile extends ConsumerWidget {
             ),
           ),
         );
-        final guidedCard = isGuideItemTarget
-            ? GuideTarget(
-                flowId: GuideFlowIds.collectionDetailAudioList,
-                step: GuideStep(
-                  targetId: GuideTargetIds.audioList,
-                  title: l10n.guideCollectionAudioListTitle,
-                  description: l10n.guideCollectionAudioListDescription,
-                ),
-                child: card,
-              )
+        final guidedCard = itemStep != null
+            ? GuideTarget(step: itemStep!, child: card)
             : card;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -376,16 +367,8 @@ class AudioListTile extends ConsumerWidget {
       width: _kTrailingButtonSize,
       child: _buildPopupMenu(context, ref, l10n, theme),
     );
-    if (!isGuideMenuTarget) return menu;
-    return GuideTarget(
-      flowId: GuideFlowIds.collectionDetailAudioList,
-      step: GuideStep(
-        targetId: GuideTargetIds.audioMenu,
-        title: l10n.guideCollectionAudioMenuTitle,
-        description: l10n.guideCollectionAudioMenuDescription,
-      ),
-      child: menu,
-    );
+    if (menuStep == null) return menu;
+    return GuideTarget(step: menuStep!, child: menu);
   }
 
   /// 构建菜单按钮图标

@@ -89,6 +89,11 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   /// 各复习轮次的展开状态（key 为复习大阶段）
   final Map<LearningStage, bool> _reviewRoundExpandedMap = {};
 
+  // Guide step keys
+  final _keyFreePlay = GlobalKey();
+  final _keyStartLearning = GlobalKey();
+  final _keyAddSubtitle = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -741,32 +746,44 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
     final hasTranscript = audioItem.hasTranscript;
     final isLockedReview = progress?.isReviewLockedAt(now) ?? false;
-    final guideFlowId = hasTranscript
-        ? GuideFlowIds.learningPlanWithTranscript
-        : GuideFlowIds.learningPlanNoTranscript;
-    final guideSteps = hasTranscript
-        ? _buildWithTranscriptGuideSteps(l10n)
-        : _buildNoTranscriptGuideSteps(l10n);
+
+    final stepFreePlay = GuideStep(
+      key: _keyFreePlay,
+      title: l10n.guidePlanFreePlayTitle,
+      description: l10n.guidePlanFreePlayDescription,
+    );
+    final stepStartLearning = GuideStep(
+      key: _keyStartLearning,
+      title: l10n.guidePlanStartLearningTitle,
+      description: l10n.guidePlanStartLearningDescription,
+    );
+    final stepAddSubtitle = GuideStep(
+      key: _keyAddSubtitle,
+      title: l10n.guidePlanAddSubtitleTitle,
+      description: l10n.guidePlanAddSubtitleDescription,
+    );
+
+    final flows = <GuideFlow>[
+      GuideFlow(
+        flowId: GuideFlowIds.learningPlanWithTranscript,
+        shouldRun: hasTranscript,
+        steps: [stepFreePlay, stepStartLearning],
+      ),
+      GuideFlow(
+        flowId: GuideFlowIds.learningPlanNoTranscript,
+        shouldRun: !hasTranscript,
+        steps: [stepAddSubtitle],
+      ),
+    ];
 
     return GuideFlowSequenceHost(
-      flows: [
-        GuideFlow(
-          flowId: guideFlowId,
-          shouldRun: guideSteps.isNotEmpty,
-          steps: guideSteps,
-        ),
-      ],
+      flows: flows,
       child: Scaffold(
         appBar: AppBar(
           title: Text(audioItem.name),
           actions: [
             GuideTarget(
-              flowId: GuideFlowIds.learningPlanWithTranscript,
-              step: GuideStep(
-                targetId: GuideTargetIds.freePlay,
-                title: l10n.guidePlanFreePlayTitle,
-                description: l10n.guidePlanFreePlayDescription,
-              ),
+              step: stepFreePlay,
               child: TextButton.icon(
                 onPressed: () {
                   if (widget.collectionId != null) {
@@ -800,7 +817,11 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
                   ),
                   if (!hasTranscript) ...[
                     const SizedBox(height: AppSpacing.s),
-                    _NoTranscriptBanner(l10n: l10n, audioItem: audioItem),
+                    _NoTranscriptBanner(
+                      l10n: l10n,
+                      audioItem: audioItem,
+                      addSubtitleStep: stepAddSubtitle,
+                    ),
                   ],
                   const SizedBox(height: AppSpacing.l),
                   _FirstStudySection(
@@ -847,7 +868,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
             _BottomButton(
               l10n: l10n,
               progress: progress,
-              enableGuide: hasTranscript,
+              startLearningStep: hasTranscript ? stepStartLearning : null,
               onPressed: hasTranscript && !isLockedReview
                   ? () => _handleStartLearning(context, progress)
                   : null,
@@ -856,31 +877,6 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         ),
       ),
     );
-  }
-
-  List<GuideStep> _buildNoTranscriptGuideSteps(AppLocalizations l10n) {
-    return [
-      GuideStep(
-        targetId: GuideTargetIds.addSubtitle,
-        title: l10n.guidePlanAddSubtitleTitle,
-        description: l10n.guidePlanAddSubtitleDescription,
-      ),
-    ];
-  }
-
-  List<GuideStep> _buildWithTranscriptGuideSteps(AppLocalizations l10n) {
-    return [
-      GuideStep(
-        targetId: GuideTargetIds.freePlay,
-        title: l10n.guidePlanFreePlayTitle,
-        description: l10n.guidePlanFreePlayDescription,
-      ),
-      GuideStep(
-        targetId: GuideTargetIds.startLearning,
-        title: l10n.guidePlanStartLearningTitle,
-        description: l10n.guidePlanStartLearningDescription,
-      ),
-    ];
   }
 
   /// 构建复习阶段列表（review0 ~ review28，共 7 个）
@@ -2378,8 +2374,13 @@ class _InfoChip extends StatelessWidget {
 class _NoTranscriptBanner extends StatelessWidget {
   final AppLocalizations l10n;
   final AudioItem audioItem;
+  final GuideStep addSubtitleStep;
 
-  const _NoTranscriptBanner({required this.l10n, required this.audioItem});
+  const _NoTranscriptBanner({
+    required this.l10n,
+    required this.audioItem,
+    required this.addSubtitleStep,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2405,12 +2406,7 @@ class _NoTranscriptBanner extends StatelessWidget {
               ),
             ),
             GuideTarget(
-              flowId: GuideFlowIds.learningPlanNoTranscript,
-              step: GuideStep(
-                targetId: GuideTargetIds.addSubtitle,
-                title: l10n.guidePlanAddSubtitleTitle,
-                description: l10n.guidePlanAddSubtitleDescription,
-              ),
+              step: addSubtitleStep,
               child: TextButton(
                 onPressed: () => _showManageSubtitlesSheet(context),
                 child: Text(l10n.addSubtitle),
@@ -2437,13 +2433,13 @@ class _BottomButton extends StatelessWidget {
   final AppLocalizations l10n;
   final LearningProgress? progress;
   final VoidCallback? onPressed;
-  final bool enableGuide;
+  final GuideStep? startLearningStep;
 
   const _BottomButton({
     required this.l10n,
     this.progress,
     required this.onPressed,
-    this.enableGuide = false,
+    this.startLearningStep,
   });
 
   @override
@@ -2453,16 +2449,8 @@ class _BottomButton extends StatelessWidget {
         : l10n.startLearning;
 
     final button = FilledButton(onPressed: onPressed, child: Text(buttonText));
-    final guidedButton = enableGuide
-        ? GuideTarget(
-            flowId: GuideFlowIds.learningPlanWithTranscript,
-            step: GuideStep(
-              targetId: GuideTargetIds.startLearning,
-              title: l10n.guidePlanStartLearningTitle,
-              description: l10n.guidePlanStartLearningDescription,
-            ),
-            child: button,
-          )
+    final guidedButton = startLearningStep != null
+        ? GuideTarget(step: startLearningStep!, child: button)
         : button;
 
     return Container(
