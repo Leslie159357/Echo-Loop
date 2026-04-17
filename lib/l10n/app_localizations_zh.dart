@@ -2438,54 +2438,52 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get guideLibraryCollectionListDescription =>
-      '合集用来按主题整理音频，比如播客、课程或考试材料。你可以从这里进入某个合集继续管理和学习。';
+      '合集用于按主题整理音频。点击任意合集，可以查看其中包含的音频。';
 
   @override
   String get guideLibraryCollectionMenuTitle => '管理合集';
 
   @override
-  String get guideLibraryCollectionMenuDescription => '每个合集都有菜单，可以置顶、重命名或删除合集。';
+  String get guideLibraryCollectionMenuDescription => '点击这里，可以置顶、重命名或删除合集。';
 
   @override
   String get guideLibraryCreateCollectionTitle => '创建自己的合集';
 
   @override
-  String get guideLibraryCreateCollectionDescription =>
-      '想整理自己的学习材料时，可以从右上角加号创建新合集。';
+  String get guideLibraryCreateCollectionDescription => '点击这里，可以创建新的合集。';
 
   @override
   String get guideCollectionAudioListTitle => '这里是音频列表';
 
   @override
   String get guideCollectionAudioListDescription =>
-      '当前合集里的音频会显示在这里。点击音频可以进入学习计划。';
+      '点击任意音频，可以查看它的学习计划和当前进度。';
 
   @override
-  String get guideCollectionAudioMenuTitle => '生成或管理字幕';
+  String get guideCollectionAudioMenuTitle => '管理音频';
 
   @override
   String get guideCollectionAudioMenuDescription =>
-      '音频菜单里可以管理字幕。没有字幕时，可以从这里上传字幕或使用 AI 转录生成字幕。';
+      '点击这里，可以管理该音频的字幕、所属合集、标签等信息。';
 
   @override
-  String get guideCollectionUploadTitle => '在这里上传音频';
+  String get guideCollectionUploadTitle => '上传自己的音频';
 
   @override
-  String get guideCollectionUploadDescription =>
-      '准备好自己的材料后，可以从右上角加号把音频添加到当前合集。';
+  String get guideCollectionUploadDescription => '点击这里，可以上传你自己的音频。';
 
   @override
-  String get guidePlanAddSubtitleTitle => '先添加字幕';
+  String get guidePlanAddSubtitleTitle => '添加字幕';
 
   @override
   String get guidePlanAddSubtitleDescription =>
-      '这个音频还没有字幕。添加字幕后，Fluency 才能按句子生成学习计划。';
+      '该音频目前还没有字幕。添加字幕后，Echo Loop 才能为你生成学习计划。';
 
   @override
   String get guidePlanAiTranscriptionTitle => '使用 AI 转录';
 
   @override
-  String get guidePlanAiTranscriptionDescription => '如果手头没有字幕文件，用 AI 转录最快。';
+  String get guidePlanAiTranscriptionDescription => '如果你手头没有字幕文件，使用 AI 转录是最快的方式。';
 
   @override
   String get guidePlanStartTranscriptionTitle => '开始转录';
@@ -2494,16 +2492,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get guidePlanStartTranscriptionDescription => '点击这里，让 AI 为这段音频生成字幕。';
 
   @override
-  String get guidePlanFreePlayTitle => '自由练习在这里';
+  String get guidePlanFreePlayTitle => '自由练习';
 
   @override
-  String get guidePlanFreePlayDescription => '想先自由探索或单独练习时，可以从这里进入自由练习。';
+  String get guidePlanFreePlayDescription =>
+      '这是一个全能的、灵活的音频播放器，适合自由练习，你可以按照自己的节奏学习。';
 
   @override
   String get guidePlanStartLearningTitle => '按计划学习';
 
   @override
-  String get guidePlanStartLearningDescription => '如果不知道从哪里开始，点击这里按学习计划一步步来。';
+  String get guidePlanStartLearningDescription =>
+      '点击这里即可按照学习计划逐步学习。Echo Loop 会自动引导你学习，并及时提醒你复习。';
 
   @override
   String get resetNewUserGuide => '重置新手引导';

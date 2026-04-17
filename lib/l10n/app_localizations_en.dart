@@ -2512,56 +2512,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideLibraryCollectionListDescription =>
-      'Collections help you organize audio by topic, such as podcasts, courses, or exam materials. Open a collection to manage and study its audio.';
+      'Collections help you organize audio by topic. Tap any collection to see the audio inside.';
 
   @override
   String get guideLibraryCollectionMenuTitle => 'Manage a collection';
 
   @override
   String get guideLibraryCollectionMenuDescription =>
-      'Each collection has a menu for pinning, renaming, or deleting it.';
+      'Tap here to pin, rename, or delete this collection.';
 
   @override
   String get guideLibraryCreateCollectionTitle => 'Create your own collections';
 
   @override
   String get guideLibraryCreateCollectionDescription =>
-      'When you want to organize your own learning materials, use the plus button in the top-right corner to create a new collection.';
+      'Tap here to create a new collection.';
 
   @override
   String get guideCollectionAudioListTitle => 'This is the audio list';
 
   @override
   String get guideCollectionAudioListDescription =>
-      'Audio in the current collection appears here. Open an audio item to view its learning plan.';
+      'Tap any audio to view its learning plan and current progress.';
 
   @override
-  String get guideCollectionAudioMenuTitle => 'Generate or manage subtitles';
+  String get guideCollectionAudioMenuTitle => 'Manage audio';
 
   @override
   String get guideCollectionAudioMenuDescription =>
-      'Use the audio menu to manage subtitles. If there are no subtitles yet, you can upload a file or generate subtitles with AI transcription.';
+      'Tap here to manage this audio\'s subtitles, collection, tags, and more.';
 
   @override
-  String get guideCollectionUploadTitle => 'Upload your audio here';
+  String get guideCollectionUploadTitle => 'Upload your own audio';
 
   @override
   String get guideCollectionUploadDescription =>
-      'When your own material is ready, use the plus button in the top-right corner to add audio to this collection.';
+      'Tap here to upload your own audio.';
 
   @override
-  String get guidePlanAddSubtitleTitle => 'Add subtitles first';
+  String get guidePlanAddSubtitleTitle => 'Add subtitles';
 
   @override
   String get guidePlanAddSubtitleDescription =>
-      'This audio has no subtitles yet. Add subtitles so Fluency can build a learning plan around the sentences.';
+      'This audio has no subtitles yet. Add subtitles so Echo Loop can generate a learning plan for you.';
 
   @override
   String get guidePlanAiTranscriptionTitle => 'Use AI transcription';
 
   @override
   String get guidePlanAiTranscriptionDescription =>
-      'If you do not have a subtitle file, AI transcription is the fastest way to generate one.';
+      'If you do not have a subtitle file, AI transcription is the fastest way.';
 
   @override
   String get guidePlanStartTranscriptionTitle => 'Start transcription';
@@ -2571,18 +2571,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Tap here to let AI generate subtitles for this audio.';
 
   @override
-  String get guidePlanFreePlayTitle => 'Free practice is here';
+  String get guidePlanFreePlayTitle => 'Free Practice';
 
   @override
   String get guidePlanFreePlayDescription =>
-      'Use Free Practice when you want to explore or practice freely outside the plan.';
+      'A flexible, all-in-one audio player for free practice. Learn at your own pace.';
 
   @override
   String get guidePlanStartLearningTitle => 'Follow the plan';
 
   @override
   String get guidePlanStartLearningDescription =>
-      'If you are not sure where to begin, start here and follow the learning plan step by step.';
+      'Tap here to follow the learning plan step by step. Echo Loop will guide you and remind you to review at the right time.';
 
   @override
   String get resetNewUserGuide => 'Reset New User Guide';
