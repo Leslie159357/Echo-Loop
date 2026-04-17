@@ -71,6 +71,23 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
     }
+
+    // 与 iOS 的 dev / prod scheme 保持一致：
+    // dev  -> app.echoloop.dev  / "Echo Loop Dev"
+    // prod -> app.echoloop      / "Echo Loop"
+    // google-services.json 需同时包含这两个 package_name 的 client 条目。
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Echo Loop Dev")
+        }
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "Echo Loop")
+        }
+    }
 }
 
 flutter {
