@@ -639,7 +639,7 @@
   "transcriptionErrorFileTooLarge": "文件过大（最大 {maxMb}MB）",
   "transcriptionErrorTooLong": "音频过长（最长 {maxMin} 分钟）",
   "deleteSubtitleConfirm": "确定删除字幕？",
-  "deleteSubtitleWarning": "删除字幕将同时删除该音频的所有收藏句子。",
+  "deleteSubtitleWarning": "删除字幕将同时清空该音频的所有收藏句子和学习进度。",
   "languageAutoDetect": "自动检测",
   "mixedLanguageNotSupported": "暂不支持混合语言音频",
   "selectLanguage": "选择语言",

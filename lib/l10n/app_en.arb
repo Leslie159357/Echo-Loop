@@ -827,7 +827,7 @@
     "placeholders": { "maxMin": { "type": "int" } }
   },
   "deleteSubtitleConfirm": "Are you sure you want to delete the subtitle?",
-  "deleteSubtitleWarning": "Deleting the subtitle will also remove all bookmarked sentences for this audio.",
+  "deleteSubtitleWarning": "Deleting the subtitle will also clear all bookmarked sentences and learning progress for this audio.",
   "languageAutoDetect": "Auto Detect",
   "mixedLanguageNotSupported": "Mixed language audio is not supported yet",
   "selectLanguage": "Select Language",

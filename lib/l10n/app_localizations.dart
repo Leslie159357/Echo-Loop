@@ -2003,7 +2003,7 @@ abstract class AppLocalizations {
   /// No description provided for @listenAndRepeatBriefingTip.
   ///
   /// In en, this message translates to:
-  /// **'Listen to each sentence, then repeat it aloud during the pause.'**
+  /// **'Listen first, then repeat during the pause.'**
   String get listenAndRepeatBriefingTip;
 
   /// No description provided for @listenAndRepeatBriefingDifficultCount.
@@ -2795,7 +2795,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteSubtitleWarning.
   ///
   /// In en, this message translates to:
-  /// **'Deleting the subtitle will also remove all bookmarked sentences for this audio.'**
+  /// **'Deleting the subtitle will also clear all bookmarked sentences and learning progress for this audio.'**
   String get deleteSubtitleWarning;
 
   /// No description provided for @languageAutoDetect.
@@ -4667,7 +4667,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideFavoritesSentencesReviewDescription.
   ///
   /// In en, this message translates to:
-  /// **'Tap here to review every saved sentence at once. Echo Loop will order them for you.'**
+  /// **'Tap here to review every saved sentence at once.'**
   String get guideFavoritesSentencesReviewDescription;
 
   /// No description provided for @guideFavoritesVocabularyListTitle.

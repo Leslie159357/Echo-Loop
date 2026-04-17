@@ -10,6 +10,7 @@ import '../analytics/models/event_names.dart';
 import '../models/audio_item.dart';
 import '../database/providers.dart';
 import '../providers/audio_library_provider.dart';
+import '../providers/learning_progress_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/transcription_task_provider.dart';
@@ -881,7 +882,14 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     // 5. 删除该音频的所有收藏句子
     await ref.read(bookmarkDaoProvider).removeAllForAudio(audioItem.id);
 
-    // 6. 清除 listeningPracticeProvider 中缓存的句子数据
+    // 6. 重置该音频的学习进度
+    // 学习进度基于句子索引/段落索引，字幕删除后这些索引失去参照；
+    // 若不重置，重新导入字幕时旧断点会指向错位的句子。
+    await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .deleteProgress(audioItem.id);
+
+    // 7. 清除 listeningPracticeProvider 中缓存的句子数据
     final practiceState = ref.read(listeningPracticeProvider);
     if (practiceState.currentAudioItem?.id == audioItem.id) {
       ref

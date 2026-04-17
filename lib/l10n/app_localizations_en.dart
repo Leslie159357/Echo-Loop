@@ -1547,7 +1547,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteSubtitleWarning =>
-      'Deleting the subtitle will also remove all bookmarked sentences for this audio.';
+      'Deleting the subtitle will also clear all bookmarked sentences and learning progress for this audio.';
 
   @override
   String get languageAutoDetect => 'Auto Detect';

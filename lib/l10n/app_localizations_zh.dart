@@ -1495,7 +1495,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deleteSubtitleConfirm => '确定删除字幕？';
 
   @override
-  String get deleteSubtitleWarning => '删除字幕将同时删除该音频的所有收藏句子。';
+  String get deleteSubtitleWarning => '删除字幕将同时清空该音频的所有收藏句子和学习进度。';
 
   @override
   String get languageAutoDetect => '自动检测';
@@ -2537,8 +2537,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get guideFavoritesSentencesReviewTitle => '复习收藏句子';
 
   @override
-  String get guideFavoritesSentencesReviewDescription =>
-      '点击这里，一键复习所有收藏的句子。';
+  String get guideFavoritesSentencesReviewDescription => '点击这里，一键复习所有收藏的句子。';
 
   @override
   String get guideFavoritesVocabularyListTitle => '收藏的词汇';
