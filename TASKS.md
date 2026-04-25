@@ -74,6 +74,13 @@
 
   **完成时间**: 2026-04-24
 
+- [x] Android 端原生音频解码桥（`AndroidAudioDecodeHandler`）：复用 `top.echo-loop/audio_decode` MethodChannel，使用 `MediaExtractor` + `MediaCodec` 解码，最近邻重采样到 1000 Hz 单声道 Float32，与 iOS / macOS 协议和算法完全一致
+- [x] `MainActivity.configureFlutterEngine` 注册 handler，`cleanUpFlutterEngine` 释放
+- [x] `PlatformNativeAudioDecoder.isSupported` 加入 `Platform.isAndroid`，无需改 Dart 算法即可在三端启用自动校准
+- [x] 新增 JVM 单测 `PcmDownsamplerTest`：覆盖最近邻重采样、跨 chunk 等价性、双声道与四声道平均、低频正弦波形保留、`reconfigureIfNeeded` 中途换采样率、Float32 LE 编码、空 chunk
+
+  **完成时间**: 2026-04-25
+
 ---
 
 ## 已完成：页面级新用户引导（showcaseview）

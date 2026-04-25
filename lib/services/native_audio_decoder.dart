@@ -1,8 +1,8 @@
 /// 原生音频解码桥接。
 ///
 /// 为字幕自动校准提供平台侧解码后的单声道 PCM 数据。
-/// 当前仅 iOS / macOS 支持，其他平台返回 null 或抛出受控异常，
-/// 由上层决定是否降级回退。
+/// 当前支持 iOS / macOS / Android（均走 `top.echo-loop/audio_decode` MethodChannel），
+/// 其他平台返回 null 或抛出受控异常，由上层决定是否降级回退。
 library;
 
 import 'dart:io';
@@ -75,7 +75,11 @@ class NativeAudioDecoderException implements Exception {
   String toString() => 'NativeAudioDecoderException($code, $message)';
 }
 
-/// 通过 MethodChannel 调用 Apple 原生音频解码。
+/// 通过 MethodChannel 调用原生音频解码。
+///
+/// iOS / macOS 使用 AVFoundation，Android 使用 MediaExtractor + MediaCodec，
+/// 均实现同一协议：`decode({audioPath}) -> {sampleRate, pcmBytes}`，其中
+/// `pcmBytes` 为归一化 Float32 little-endian 单声道 PCM，采样率 1000 Hz。
 class PlatformNativeAudioDecoder implements NativeAudioDecoder {
   const PlatformNativeAudioDecoder();
 
@@ -84,7 +88,8 @@ class PlatformNativeAudioDecoder implements NativeAudioDecoder {
   );
 
   @override
-  bool get isSupported => !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+  bool get isSupported =>
+      !kIsWeb && (Platform.isIOS || Platform.isMacOS || Platform.isAndroid);
 
   @override
   Future<DecodedAudioData?> decode(String audioPath) async {
