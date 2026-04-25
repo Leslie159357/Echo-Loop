@@ -31,12 +31,11 @@ abstract final class OnboardingExamType {
   static const gaokao = 'gaokao';
   static const cet = 'cet';
   static const tem = 'tem';
-  static const kaoyan = 'kaoyan';
   static const ielts = 'ielts';
   static const toefl = 'toefl';
   static const other = 'other';
 
-  static const all = [gaokao, cet, tem, kaoyan, ielts, toefl, other];
+  static const all = [gaokao, cet, tem, ielts, toefl, other];
 }
 
 /// 每日学习时长编码（Q2）

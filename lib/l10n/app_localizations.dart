@@ -4994,12 +4994,6 @@ abstract class AppLocalizations {
   /// **'TEM-4 / TEM-8'**
   String get onboardingExamTem;
 
-  /// No description provided for @onboardingExamKaoyan.
-  ///
-  /// In en, this message translates to:
-  /// **'Kaoyan'**
-  String get onboardingExamKaoyan;
-
   /// No description provided for @onboardingExamIelts.
   ///
   /// In en, this message translates to:
@@ -5057,13 +5051,13 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingSummaryHeadline.
   ///
   /// In en, this message translates to:
-  /// **'Mastering English\nisn\'t about learning more,\nit\'s about practicing deeper.'**
+  /// **'Improving listening & speaking\nisn\'t about hearing more,\nit\'s about practicing deeper.'**
   String get onboardingSummaryHeadline;
 
   /// No description provided for @onboardingSummaryPoint1.
   ///
   /// In en, this message translates to:
-  /// **'Drill on real audio that matches your level'**
+  /// **'Drill on audio that matches your level'**
   String get onboardingSummaryPoint1;
 
   /// No description provided for @onboardingSummaryPoint2.
@@ -5075,13 +5069,13 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingSummaryPoint3.
   ///
   /// In en, this message translates to:
-  /// **'Build input and intuition through extensive listening and shadowing'**
+  /// **'Build input and intuition through intensive listening and shadowing'**
   String get onboardingSummaryPoint3;
 
   /// No description provided for @onboardingSummaryPoint4.
   ///
   /// In en, this message translates to:
-  /// **'Retell to turn comprehension into spoken fluency'**
+  /// **'Practice speaking through retelling, turning comprehension into output'**
   String get onboardingSummaryPoint4;
 
   /// No description provided for @onboardingStart.
@@ -5093,7 +5087,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingQ1Prompt.
   ///
   /// In en, this message translates to:
-  /// **'What\'s your main goal for learning English?'**
+  /// **'What\'s your main goal for English listening & speaking practice?'**
   String get onboardingQ1Prompt;
 
   /// No description provided for @onboardingQ1OptionExam.
@@ -5123,7 +5117,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingQ1OptionContent.
   ///
   /// In en, this message translates to:
-  /// **'Videos & Podcasts'**
+  /// **'Understanding videos & podcasts'**
   String get onboardingQ1OptionContent;
 
   /// No description provided for @onboardingQ1OptionOther.

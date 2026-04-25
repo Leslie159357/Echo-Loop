@@ -2810,9 +2810,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingExamTem => 'TEM-4 / TEM-8';
 
   @override
-  String get onboardingExamKaoyan => 'Kaoyan';
-
-  @override
   String get onboardingExamIelts => 'IELTS';
 
   @override
@@ -2844,11 +2841,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingSummaryHeadline =>
-      'Mastering English\nisn\'t about learning more,\nit\'s about practicing deeper.';
+      'Improving listening & speaking\nisn\'t about hearing more,\nit\'s about practicing deeper.';
 
   @override
   String get onboardingSummaryPoint1 =>
-      'Drill on real audio that matches your level';
+      'Drill on audio that matches your level';
 
   @override
   String get onboardingSummaryPoint2 =>
@@ -2856,18 +2853,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingSummaryPoint3 =>
-      'Build input and intuition through extensive listening and shadowing';
+      'Build input and intuition through intensive listening and shadowing';
 
   @override
   String get onboardingSummaryPoint4 =>
-      'Retell to turn comprehension into spoken fluency';
+      'Practice speaking through retelling, turning comprehension into output';
 
   @override
   String get onboardingStart => 'Start learning';
 
   @override
   String get onboardingQ1Prompt =>
-      'What\'s your main goal for learning English?';
+      'What\'s your main goal for English listening & speaking practice?';
 
   @override
   String get onboardingQ1OptionExam => 'For an exam';
@@ -2882,7 +2879,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingQ1OptionTravel => 'Travel abroad';
 
   @override
-  String get onboardingQ1OptionContent => 'Videos & Podcasts';
+  String get onboardingQ1OptionContent => 'Understanding videos & podcasts';
 
   @override
   String get onboardingQ1OptionOther => 'Other';

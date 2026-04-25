@@ -2717,9 +2717,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingExamTem => '专四专八';
 
   @override
-  String get onboardingExamKaoyan => '考研英语';
-
-  @override
   String get onboardingExamIelts => '雅思 IELTS';
 
   @override
@@ -2749,25 +2746,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingSummaryEyebrow => '你知道么？';
 
   @override
-  String get onboardingSummaryHeadline => '学好英语，\n关键不在学得更多，\n而在练得更透';
+  String get onboardingSummaryHeadline => '提升英语听说，\n关键不在听得更多，\n而在练得更透';
 
   @override
-  String get onboardingSummaryPoint1 => '选择适合你水平的真实音频反复训练';
+  String get onboardingSummaryPoint1 => '选择适合你水平的音频反复练习';
 
   @override
   String get onboardingSummaryPoint2 => '按意群理解内容，在语境中掌握词汇';
 
   @override
-  String get onboardingSummaryPoint3 => '通过大量听力和跟读积累输入与语感';
+  String get onboardingSummaryPoint3 => '通过大量精听和跟读积累输入与语感';
 
   @override
-  String get onboardingSummaryPoint4 => '通过复述练习表达，把听懂变成会说';
+  String get onboardingSummaryPoint4 => '通过复述练习口语，把听懂变成会说';
 
   @override
   String get onboardingStart => '开始学习';
 
   @override
-  String get onboardingQ1Prompt => '你学英语的主要目标是什么？';
+  String get onboardingQ1Prompt => '你练习英语听说的主要目标是什么？';
 
   @override
   String get onboardingQ1OptionExam => '应对考试';
@@ -2782,7 +2779,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingQ1OptionTravel => '出国旅行';
 
   @override
-  String get onboardingQ1OptionContent => '影视播客';
+  String get onboardingQ1OptionContent => '听懂影视播客';
 
   @override
   String get onboardingQ1OptionOther => '其他';

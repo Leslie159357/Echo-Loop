@@ -65,7 +65,7 @@ void main() {
     await tester.pumpWidget(_wrap(prefs: prefs));
     await tester.pumpAndSettle();
 
-    expect(find.text('你学英语的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
 
     // 选"工作沟通" → 等待自动前进
     await tester.tap(find.text('工作沟通'));
@@ -80,9 +80,9 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
 
     // summary 页：headline + 4 要点 + 开始学习 按钮，仍未提交
-    expect(find.textContaining('学好英语'), findsOneWidget);
-    expect(find.text('选择适合你水平的真实音频反复训练'), findsOneWidget);
-    expect(find.text('通过复述练习表达，把听懂变成会说'), findsOneWidget);
+    expect(find.textContaining('提升英语听说'), findsOneWidget);
+    expect(find.text('选择适合你水平的音频反复练习'), findsOneWidget);
+    expect(find.text('通过复述练习口语，把听懂变成会说'), findsOneWidget);
     expect(find.text('开始学习'), findsOneWidget);
     expect(OnboardingSurveyStorage(prefs).isCompleted, isFalse);
     expect(find.text('STUDY_PLACEHOLDER'), findsNothing);
@@ -155,12 +155,12 @@ void main() {
     expect(answers?.dailyMinutes, equals(OnboardingDailyMinutes.m10));
   });
 
-  testWidgets('影视播客分支：选影视播客 → 自动跳时长 → summary → 开始学习', (tester) async {
+  testWidgets('影视播客分支：选听懂影视播客 → 自动跳时长 → summary → 开始学习', (tester) async {
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(_wrap(prefs: prefs));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('影视播客'));
+    await tester.tap(find.text('听懂影视播客'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
     expect(find.text('你计划每天练习多久？'), findsOneWidget);
@@ -215,7 +215,7 @@ void main() {
     await tester.tap(find.text('上一步'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
-    expect(find.text('你学英语的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
   });
 
   testWidgets('物理返回键被 PopScope 拦截', (tester) async {
@@ -231,7 +231,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('你学英语的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
   });
 
   testWidgets('无跳过按钮渲染', (tester) async {

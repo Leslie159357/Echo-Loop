@@ -321,9 +321,13 @@ class _OnboardingSurveyScreenState
                         ),
                       ),
                       const SizedBox(height: 12),
+                      // 字号刻意稍小：英文长句（如 "Improving listening & speaking"）
+                      // 在 headlineSmall(24sp) 下会自动折行让 "speaking" 单独一行；
+                      // 21sp 下中英文三行手动断行均能稳定一行展示。
                       Text(
                         l10n.onboardingSummaryHeadline,
-                        style: textTheme.headlineSmall?.copyWith(
+                        style: textTheme.titleLarge?.copyWith(
+                          fontSize: 21,
                           fontWeight: FontWeight.w700,
                           height: 1.5,
                           color: colorScheme.onSurface,
@@ -415,7 +419,7 @@ class _OnboardingSurveyScreenState
   Widget _buildExamTypeStep(AppLocalizations l10n, OnboardingAnswers answers) {
     final selected = answers.examType;
     // 中文用户保留全部考试；其它语言用户只展示国际通用考试 + Other，
-    // 因为中高考 / 四六级 / 专四专八 / 考研都是中国国内考试。
+    // 因为中高考 / 四六级 / 专四专八 都是中国国内考试。
     final isChinese = Localizations.localeOf(context).languageCode == 'zh';
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -438,11 +442,6 @@ class _OnboardingSurveyScreenState
             label: l10n.onboardingExamTem,
             selected: selected == OnboardingExamType.tem,
             onTap: () => _selectExamType(OnboardingExamType.tem),
-          ),
-          SurveyChoiceTile(
-            label: l10n.onboardingExamKaoyan,
-            selected: selected == OnboardingExamType.kaoyan,
-            onTap: () => _selectExamType(OnboardingExamType.kaoyan),
           ),
         ],
         SurveyChoiceTile(
