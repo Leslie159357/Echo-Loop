@@ -251,25 +251,11 @@ class _CollectionListTile extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    collection.name,
-                                    style: theme.textTheme.titleMedium,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (collection.isOfficial) ...[
-                                  const SizedBox(width: 6),
-                                  const OfficialBadge(),
-                                ],
-                                if (collection.isDeprecated) ...[
-                                  const SizedBox(width: 4),
-                                  const OfficialDeprecatedBadge(),
-                                ],
-                              ],
+                            Text(
+                              collection.name,
+                              style: theme.textTheme.titleMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -344,24 +330,45 @@ class _CollectionListTile extends ConsumerWidget {
   /// 左侧 leading（尺寸 / 样式与 Discover 卡片完全一致）：
   /// - 官方合集且有 coverUrl：网络封面图（BoxFit.contain）
   /// - 其它情况：渐变背景 + 合集名首字母
+  ///
+  /// 官方合集会在右上角叠加 [OfficialCornerBadge] 角标（已下架则换成灰色 block 角标）。
   Widget _buildLeadingIcon(ThemeData theme) {
     const size = 56.0;
     final coverUrl = collection.coverUrl;
-    if (collection.isOfficial && coverUrl != null && coverUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          imageUrl: coverUrl,
-          cacheManager: AppNetworkImageCache.instance,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          placeholder: (_, __) => _letterPlaceholder(theme, size),
-          errorWidget: (_, __, ___) => _letterPlaceholder(theme, size),
-        ),
-      );
-    }
-    return _letterPlaceholder(theme, size);
+    final Widget icon =
+        (collection.isOfficial && coverUrl != null && coverUrl.isNotEmpty)
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: CachedNetworkImage(
+              imageUrl: coverUrl,
+              cacheManager: AppNetworkImageCache.instance,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+              placeholder: (_, __) => _letterPlaceholder(theme, size),
+              errorWidget: (_, __, ___) => _letterPlaceholder(theme, size),
+            ),
+          )
+        : _letterPlaceholder(theme, size);
+
+    if (!collection.isOfficial) return icon;
+
+    // Stack 不裁剪溢出，让角标向外偏移 4px，营造贴在图标外缘的"app 角标"观感
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          icon,
+          Positioned(
+            top: -4,
+            right: -4,
+            child: OfficialCornerBadge(isDeprecated: collection.isDeprecated),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 渐变背景 + 合集名首字母占位（与官方合集卡片 `_coverPlaceholder` 同款）。

@@ -26,6 +26,10 @@ class AppTheme {
   /// 语义色：置顶图钉
   static const Color pinColor = Color(0xFFE53935);
 
+  /// 语义色：官方合集角标（深橙金色，对应"认证/精选"的通用视觉）
+  /// 选 Material Orange 800：白字对比足够，区别于品牌蓝、不会与封面同色系混淆
+  static const Color officialBadgeColor = Color(0xFFEF6C00);
+
   /// 亮色主题
   static ThemeData light() {
     final colorScheme = ColorScheme.fromSeed(

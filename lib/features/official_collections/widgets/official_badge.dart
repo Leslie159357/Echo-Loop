@@ -1,63 +1,58 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../../theme/app_theme.dart';
 
-/// 官方合集标识芯片：`verified` 图标 + "官方"小标签，tonal 灰底。
+/// 官方合集角标：贴在合集封面角上的文字小标签（"精选" / "已下架"）。
 ///
-/// 视觉轻量，不与其他彩色 badge（pin 红、学习进度紫）冲突。
-class OfficialBadge extends StatelessWidget {
-  const OfficialBadge({super.key});
+/// 设计目标：用最小占位直接传达语义，无需用户解读图标。
+/// - 正常状态：金色圆角胶囊 + 白色"精选"文字
+/// - 已下架状态：灰色圆角胶囊 + 白色"已下架"文字
+///
+/// 同时保留 Semantics + Tooltip 以兼容无障碍读屏。
+class OfficialCornerBadge extends StatelessWidget {
+  /// 是否处于已下架状态。
+  final bool isDeprecated;
+
+  const OfficialCornerBadge({super.key, this.isDeprecated = false});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.verified_outlined,
-            size: 12,
-            color: theme.colorScheme.onSecondaryContainer,
+    final label = isDeprecated
+        ? l10n.officialDeprecatedBadge
+        : l10n.officialBadge;
+    final bgColor = isDeprecated
+        ? theme.colorScheme.outline
+        : AppTheme.officialBadgeColor;
+    return Semantics(
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(6),
+            // 不加描边：深色背景 + 白字本身已有强对比；白边在小尺寸上反而显朦胧
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 2,
+                offset: Offset(0, 1),
+              ),
+            ],
           ),
-          const SizedBox(width: 3),
-          Text(
-            l10n.officialBadge,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSecondaryContainer,
-              fontWeight: FontWeight.w600,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              height: 1.2,
+              letterSpacing: 0.3,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 已下架标识芯片（灰色），叠加在 [OfficialBadge] 旁边。
-class OfficialDeprecatedBadge extends StatelessWidget {
-  const OfficialDeprecatedBadge({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        l10n.officialDeprecatedBadge,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
