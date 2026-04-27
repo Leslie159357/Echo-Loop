@@ -1509,5 +1509,22 @@
   "onboardingPermissionsHint": "To ensure the best experience, we'll request these permissions",
   "onboardingPermissionsNotification": "Notifications",
   "onboardingPermissionsMicrophone": "Microphone",
-  "onboardingPermissionsSpeech": "Speech recognition"
+  "onboardingPermissionsSpeech": "Speech recognition",
+  "playbackSection": "Playback",
+  "playbackSettings": "Playback Settings",
+  "skipSilenceTitle": "Auto-skip Silence",
+  "skipSilenceDescription": "Skip long silent gaps between sentences",
+  "silenceThreshold": "Silence Threshold",
+  "silenceThresholdValue": "{seconds}s",
+  "@silenceThresholdValue": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "silenceSkipped": "Skipped {seconds}s of silence",
+  "@silenceSkipped": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  }
 }

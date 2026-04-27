@@ -13,6 +13,13 @@ const _timeMachineDateTimeKey = 'developer_time_machine_at_ms';
 const _legacyUnlockAllReviewsKey = 'unlock_all_reviews';
 const _demoModeKey = 'demo_mode';
 const _subtitleAutoAlignEnabledKey = 'developer_subtitle_auto_align_enabled';
+const _skipSilenceEnabledKey = 'skip_silence_enabled';
+const _silenceThresholdSecondsKey = 'silence_threshold_seconds';
+
+/// 静音阈值合法范围（秒）
+const silenceThresholdMinSeconds = 1;
+const silenceThresholdMaxSeconds = 10;
+const silenceThresholdDefaultSeconds = 2;
 
 /// 支持的母语列表（BCP 47 代码 → 本地名称）
 ///
@@ -89,6 +96,17 @@ class AppSettingsState {
   /// 直接使用后端返回的句边界。仅开发者选项可见，不暴露给普通用户。
   final bool subtitleAutoAlignEnabled;
 
+  /// 自动跳过静音段开关（默认关闭）。
+  ///
+  /// 开启后，盲听 / 复述等段落级播放会按字幕时间戳自动跳过较长的静音段，
+  /// 避免考试音频中长时间留白破坏体验。
+  final bool skipSilenceEnabled;
+
+  /// 静音阈值（秒）。仅当 [skipSilenceEnabled] 为 true 时生效。
+  ///
+  /// 字幕间隔 ≥ 该阈值才会被识别为"静音段"并跳过。默认 2 秒。
+  final int silenceThresholdSeconds;
+
   const AppSettingsState({
     this.themeMode = ThemeMode.system,
     this.locale,
@@ -97,6 +115,8 @@ class AppSettingsState {
     this.isDemoMode = false,
     this.isDemoModeLoading = false,
     this.subtitleAutoAlignEnabled = true,
+    this.skipSilenceEnabled = false,
+    this.silenceThresholdSeconds = silenceThresholdDefaultSeconds,
   });
 
   AppSettingsState copyWith({
@@ -109,6 +129,8 @@ class AppSettingsState {
     bool? isDemoMode,
     bool? isDemoModeLoading,
     bool? subtitleAutoAlignEnabled,
+    bool? skipSilenceEnabled,
+    int? silenceThresholdSeconds,
   }) {
     return AppSettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -121,6 +143,9 @@ class AppSettingsState {
       isDemoModeLoading: isDemoModeLoading ?? this.isDemoModeLoading,
       subtitleAutoAlignEnabled:
           subtitleAutoAlignEnabled ?? this.subtitleAutoAlignEnabled,
+      skipSilenceEnabled: skipSilenceEnabled ?? this.skipSilenceEnabled,
+      silenceThresholdSeconds:
+          silenceThresholdSeconds ?? this.silenceThresholdSeconds,
     );
   }
 }
@@ -179,6 +204,13 @@ class AppSettings extends _$AppSettings {
     final isDemoMode = prefs.getBool(_demoModeKey) ?? false;
     final subtitleAutoAlignEnabled =
         prefs.getBool(_subtitleAutoAlignEnabledKey) ?? true;
+    final skipSilenceEnabled = prefs.getBool(_skipSilenceEnabledKey) ?? false;
+    final storedThreshold = prefs.getInt(_silenceThresholdSecondsKey);
+    final silenceThresholdSeconds =
+        (storedThreshold ?? silenceThresholdDefaultSeconds).clamp(
+          silenceThresholdMinSeconds,
+          silenceThresholdMaxSeconds,
+        );
 
     state = state.copyWith(
       themeMode: themeMode,
@@ -188,6 +220,8 @@ class AppSettings extends _$AppSettings {
       timeMachineDateTime: timeMachineDateTime,
       isDemoMode: isDemoMode,
       subtitleAutoAlignEnabled: subtitleAutoAlignEnabled,
+      skipSilenceEnabled: skipSilenceEnabled,
+      silenceThresholdSeconds: silenceThresholdSeconds,
     );
   }
 
@@ -302,5 +336,25 @@ class AppSettings extends _$AppSettings {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_subtitleAutoAlignEnabledKey, enabled);
+  }
+
+  /// 设置静音跳过开关（默认开启）。
+  Future<void> setSkipSilenceEnabled(bool enabled) async {
+    state = state.copyWith(skipSilenceEnabled: enabled);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_skipSilenceEnabledKey, enabled);
+  }
+
+  /// 设置静音阈值（秒）。范围 [silenceThresholdMinSeconds, silenceThresholdMaxSeconds]。
+  Future<void> setSilenceThresholdSeconds(int seconds) async {
+    final clamped = seconds.clamp(
+      silenceThresholdMinSeconds,
+      silenceThresholdMaxSeconds,
+    );
+    state = state.copyWith(silenceThresholdSeconds: clamped);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_silenceThresholdSecondsKey, clamped);
   }
 }

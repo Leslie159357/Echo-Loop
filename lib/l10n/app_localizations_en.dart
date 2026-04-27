@@ -2914,4 +2914,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingPermissionsSpeech => 'Speech recognition';
+
+  @override
+  String get playbackSection => 'Playback';
+
+  @override
+  String get skipSilenceTitle => 'Auto-skip Silence';
+
+  @override
+  String get skipSilenceDescription =>
+      'Skip long silent gaps between sentences';
+
+  @override
+  String get silenceThreshold => 'Silence Threshold';
+
+  @override
+  String silenceThresholdValue(int seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String silenceSkipped(int seconds) {
+    return 'Skipped ${seconds}s of silence';
+  }
 }

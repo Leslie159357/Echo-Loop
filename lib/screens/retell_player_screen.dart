@@ -73,6 +73,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
 
   ProviderSubscription<RetellPlayerState>? _playerSubscription;
   ProviderSubscription<RetellRecordingState>? _recordingSubscription;
+  StreamSubscription<Duration>? _silenceSkipSub;
 
   @override
   void initState() {
@@ -85,6 +86,10 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       retellRecordingControllerProvider,
       _onRetellRecordingStateChanged,
     );
+    _silenceSkipSub = ref
+        .read(retellPlayerProvider.notifier)
+        .silenceSkipEventStream
+        .listen(_showSilenceSkippedSnackBar);
     _latestPlayerState = ref.read(retellPlayerProvider);
     _latestRecordingState = ref.read(retellRecordingControllerProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -106,7 +111,22 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   void dispose() {
     _playerSubscription?.close();
     _recordingSubscription?.close();
+    _silenceSkipSub?.cancel();
     super.dispose();
+  }
+
+  /// 弹出"已自动跳过 Xs 静音"提示
+  void _showSilenceSkippedSnackBar(Duration gap) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.silenceSkipped(gap.inSeconds)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   void _onRetellPlayerStateChanged(

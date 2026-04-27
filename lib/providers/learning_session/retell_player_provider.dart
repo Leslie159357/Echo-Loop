@@ -20,6 +20,7 @@ import '../../models/sentence.dart';
 import '../../models/study_stage.dart';
 import '../../services/app_logger.dart';
 import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/silence_skip_detector.dart';
 import '../../services/study_event_recorder.dart';
 import '../../utils/keyword_extraction.dart';
 import '../../utils/word_counter.dart';
@@ -27,6 +28,7 @@ import '../audio_engine/audio_engine_provider.dart';
 import '../listening_practice/bookmark_manager.dart';
 import '../learned_vocabulary_tracker_provider.dart';
 import '../retell_recording_controller_provider.dart';
+import '../settings_provider.dart';
 import 'countdown_controller.dart';
 import '../learning_progress_provider.dart';
 import 'learning_session_provider.dart';
@@ -192,6 +194,16 @@ class RetellPlayer extends _$RetellPlayer {
   /// 当前段落播完后进入等待态
   bool _waitAfterCurrentParagraph = false;
 
+  /// 上次跳过的静音段去重 key
+  int? _lastSkippedSilenceKey;
+
+  /// 静音跳过事件流（gap 时长），UI 侧订阅以弹 snackbar
+  final StreamController<Duration> _silenceSkipEvents =
+      StreamController<Duration>.broadcast();
+
+  /// 静音跳过事件流（gap 时长），UI 侧订阅以弹 snackbar
+  Stream<Duration> get silenceSkipEventStream => _silenceSkipEvents.stream;
+
   @override
   RetellPlayerState build() {
     LearnedVocabularyTracker? vocabTracker;
@@ -213,6 +225,7 @@ class RetellPlayer extends _$RetellPlayer {
       lifecycleListener.dispose();
       _positionSub?.cancel();
       _invalidateRetellCountdown();
+      _silenceSkipEvents.close();
     });
 
     // 监听录音评估完成，上报 recording_complete 事件
@@ -784,6 +797,7 @@ class RetellPlayer extends _$RetellPlayer {
   /// 订阅 position stream，二分查找定位当前句子
   void _startPositionTracking(List<Sentence> sentences) {
     _positionSub?.cancel();
+    _lastSkippedSilenceKey = null; // 新段落，清空去重指针
     final engine = ref.read(audioEngineProvider.notifier);
 
     _positionSub = engine.absolutePositionStream.listen((position) {
@@ -794,7 +808,40 @@ class RetellPlayer extends _$RetellPlayer {
       if (idx != state.playingSentenceIndex && idx >= 0) {
         state = state.copyWith(playingSentenceIndex: idx);
       }
+      _maybeSkipSilence(sentences, position, idx);
     });
+  }
+
+  /// 静音跳过判定（开关开启时生效）。
+  ///
+  /// 仅在 listening 阶段触发；段落 clip 范围 = [first.start, last.end]，
+  /// 因此 detector 的末尾分支永远不会命中——这里只会在中间 gap 触发。
+  void _maybeSkipSilence(
+    List<Sentence> sentences,
+    Duration position,
+    int idx,
+  ) {
+    final settings = ref.read(appSettingsProvider);
+    if (!settings.skipSilenceEnabled) return;
+
+    final result = SilenceSkipDetector.detect(
+      position: position,
+      sentences: sentences,
+      currentIdx: idx,
+      thresholdSeconds: settings.silenceThresholdSeconds,
+      playbackEnd: sentences.last.endTime,
+    );
+    if (result == null) return;
+    if (_lastSkippedSilenceKey == result.dedupKey) return;
+
+    _lastSkippedSilenceKey = result.dedupKey;
+    unawaited(
+      ref.read(audioEngineProvider.notifier).seekToAbsolute(result.skipTo),
+    );
+
+    if (result.gapDuration.inSeconds > 5) {
+      _silenceSkipEvents.add(result.gapDuration);
+    }
   }
 
   /// 二分查找当前播放位置对应的句子索引

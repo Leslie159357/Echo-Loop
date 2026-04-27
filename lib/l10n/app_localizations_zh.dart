@@ -2813,4 +2813,26 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingPermissionsSpeech => '语音识别';
+
+  @override
+  String get playbackSection => '播放';
+
+  @override
+  String get skipSilenceTitle => '自动跳过静音';
+
+  @override
+  String get skipSilenceDescription => '跳过句子之间较长的静音部分';
+
+  @override
+  String get silenceThreshold => '静音阈值';
+
+  @override
+  String silenceThresholdValue(int seconds) {
+    return '$seconds 秒';
+  }
+
+  @override
+  String silenceSkipped(int seconds) {
+    return '检测到 ${seconds}s 静音，已自动跳过';
+  }
 }

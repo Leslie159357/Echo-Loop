@@ -1143,5 +1143,22 @@
   "onboardingPermissionsHint": "为了保证体验我们将请求以下权限",
   "onboardingPermissionsNotification": "系统通知",
   "onboardingPermissionsMicrophone": "录音",
-  "onboardingPermissionsSpeech": "语音识别"
+  "onboardingPermissionsSpeech": "语音识别",
+  "playbackSection": "播放",
+  "playbackSettings": "播放设置",
+  "skipSilenceTitle": "自动跳过静音",
+  "skipSilenceDescription": "跳过句子之间较长的静音部分",
+  "silenceThreshold": "静音阈值",
+  "silenceThresholdValue": "{seconds} 秒",
+  "@silenceThresholdValue": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "silenceSkipped": "检测到 {seconds}s 静音，已自动跳过",
+  "@silenceSkipped": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  }
 }

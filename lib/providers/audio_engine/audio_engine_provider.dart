@@ -130,6 +130,16 @@ class AudioEngine extends _$AudioEngine {
 
   Future<void> seek(Duration pos) async => await _audioPlayer.seek(pos);
 
+  /// 按绝对音频时间跳转，自动转换为当前 clip 的相对位置。
+  ///
+  /// just_audio 的 `seek` 在 `setClip` 之后以 clip 起点为 0 计算，
+  /// 直接传绝对时间会跳到 `clipStart + absolute`，常常越过 clip 末尾
+  /// 触发误 `completed`。本方法消除了调用方关心 clip 边界的必要。
+  Future<void> seekToAbsolute(Duration absolute) async {
+    final relative = absolute - state.clipStart;
+    await _audioPlayer.seek(relative.isNegative ? Duration.zero : relative);
+  }
+
   Future<void> setSpeed(double speed) async =>
       await _audioPlayer.setSpeed(speed);
 

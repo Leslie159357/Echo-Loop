@@ -40,6 +40,7 @@ import '../theme/app_theme.dart';
 import 'asr_settings_screen.dart';
 import 'asr_test_screen.dart';
 import 'log_viewer_screen.dart';
+import 'playback_settings_screen.dart';
 import 'preferences_viewer_screen.dart';
 import 'storage_browser_screen.dart';
 import 'reminder_settings_screen.dart';
@@ -92,6 +93,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: AppSpacing.m),
           _buildReminderSection(context, ref, l10n),
+          const SizedBox(height: AppSpacing.m),
+          _buildPlaybackSection(context, l10n),
           if (ref.watch(showOfflineAsrSectionProvider)) ...[
             const SizedBox(height: AppSpacing.m),
             _buildAiSection(context, ref, l10n),
@@ -174,6 +177,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const ReminderSettingsScreen(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 构建播放设置入口
+  Widget _buildPlaybackSection(BuildContext context, AppLocalizations l10n) {
+    return _buildSection(
+      context,
+      title: l10n.playbackSection,
+      children: [
+        ListTile(
+          leading: _emojiIcon('🎵'),
+          title: Text(l10n.playbackSettings),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const PlaybackSettingsScreen(),
             ),
           ),
         ),

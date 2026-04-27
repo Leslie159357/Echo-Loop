@@ -20,11 +20,13 @@ import '../../models/blind_listen_settings.dart';
 import '../../models/sentence.dart';
 import '../../models/study_stage.dart';
 import '../../services/learned_vocabulary_tracker.dart';
+import '../../services/silence_skip_detector.dart';
 import '../../services/study_event_recorder.dart';
 import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
+import '../settings_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
 
@@ -169,6 +171,16 @@ class BlindListenPlayer extends _$BlindListenPlayer {
   /// 当前段落播完后进入等待态
   bool _waitAfterCurrentParagraph = false;
 
+  /// 上次跳过的静音段去重 key（避免位置流抖动重复触发同一个 gap）
+  int? _lastSkippedSilenceKey;
+
+  /// 静音跳过事件流，UI 侧订阅以弹 snackbar
+  final StreamController<Duration> _silenceSkipEvents =
+      StreamController<Duration>.broadcast();
+
+  /// 静音跳过事件流（gap 时长），UI 侧订阅以弹 snackbar
+  Stream<Duration> get silenceSkipEventStream => _silenceSkipEvents.stream;
+
   @override
   BlindListenPlayerState build() {
     LearnedVocabularyTracker? vocabTracker;
@@ -190,6 +202,7 @@ class BlindListenPlayer extends _$BlindListenPlayer {
       lifecycleListener.dispose();
       _positionSub?.cancel();
       _invalidateCountdown();
+      _silenceSkipEvents.close();
     });
     return const BlindListenPlayerState();
   }
@@ -531,6 +544,7 @@ class BlindListenPlayer extends _$BlindListenPlayer {
   /// 订阅 position stream，二分查找定位当前句子
   void _startPositionTracking(List<Sentence> sentences) {
     _positionSub?.cancel();
+    _lastSkippedSilenceKey = null; // 新段落，清空去重指针
     final engine = ref.read(audioEngineProvider.notifier);
 
     _positionSub = engine.absolutePositionStream.listen((position) {
@@ -540,7 +554,41 @@ class BlindListenPlayer extends _$BlindListenPlayer {
       if (idx != state.playingSentenceIndex && idx >= 0) {
         state = state.copyWith(playingSentenceIndex: idx);
       }
+      _maybeSkipSilence(sentences, position, idx);
     });
+  }
+
+  /// 静音跳过判定（开关开启时生效）。
+  ///
+  /// 段落 clip 范围 = [first.start, last.end]，因此 detector 的末尾分支
+  /// 在盲听场景永远不会命中——这里只会在中间 gap 触发。
+  void _maybeSkipSilence(
+    List<Sentence> sentences,
+    Duration position,
+    int idx,
+  ) {
+    final settings = ref.read(appSettingsProvider);
+    if (!settings.skipSilenceEnabled) return;
+
+    final result = SilenceSkipDetector.detect(
+      position: position,
+      sentences: sentences,
+      currentIdx: idx,
+      thresholdSeconds: settings.silenceThresholdSeconds,
+      playbackEnd: sentences.last.endTime,
+    );
+    if (result == null) return;
+    if (_lastSkippedSilenceKey == result.dedupKey) return;
+
+    _lastSkippedSilenceKey = result.dedupKey;
+    unawaited(
+      ref.read(audioEngineProvider.notifier).seekToAbsolute(result.skipTo),
+    );
+
+    // 仅在静音段较长（> 5s）时才弹 snackbar，避免短跳过频繁打扰
+    if (result.gapDuration.inSeconds > 5) {
+      _silenceSkipEvents.add(result.gapDuration);
+    }
   }
 
   /// 二分查找当前播放位置对应的句子索引

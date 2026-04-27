@@ -61,6 +61,7 @@ class _BlindListenPlayerScreenState
   /// 是否正在显示完成弹窗，防止重复弹窗
   bool _isShowingDialog = false;
   ProviderSubscription<BlindListenPlayerState>? _playerSubscription;
+  StreamSubscription<Duration>? _silenceSkipSub;
 
   @override
   void initState() {
@@ -77,6 +78,10 @@ class _BlindListenPlayerScreenState
         }
       },
     );
+    _silenceSkipSub = ref
+        .read(blindListenPlayerProvider.notifier)
+        .silenceSkipEventStream
+        .listen(_showSilenceSkippedSnackBar);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppLogger.log('BlindListenScreen', '首帧后启动播放');
       ref.read(blindListenPlayerProvider.notifier).startPlaying();
@@ -86,7 +91,22 @@ class _BlindListenPlayerScreenState
   @override
   void dispose() {
     _playerSubscription?.close();
+    _silenceSkipSub?.cancel();
     super.dispose();
+  }
+
+  /// 弹出"已自动跳过 Xs 静音"提示
+  void _showSilenceSkippedSnackBar(Duration gap) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.silenceSkipped(gap.inSeconds)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   // ========== 完成处理 ==========

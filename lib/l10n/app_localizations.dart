@@ -5185,6 +5185,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Speech recognition'**
   String get onboardingPermissionsSpeech;
+
+  /// No description provided for @playbackSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback'**
+  String get playbackSection;
+
+  /// No description provided for @skipSilenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-skip Silence'**
+  String get skipSilenceTitle;
+
+  /// No description provided for @skipSilenceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip long silent gaps between sentences'**
+  String get skipSilenceDescription;
+
+  /// No description provided for @silenceThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Silence Threshold'**
+  String get silenceThreshold;
+
+  /// No description provided for @silenceThresholdValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String silenceThresholdValue(int seconds);
+
+  /// No description provided for @silenceSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped {seconds}s of silence'**
+  String silenceSkipped(int seconds);
 }
 
 class _AppLocalizationsDelegate
