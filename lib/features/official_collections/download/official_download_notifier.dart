@@ -16,6 +16,7 @@ import '../../../providers/learning_progress_provider.dart';
 import '../../../providers/listening_practice/listening_practice_provider.dart';
 import '../../../services/app_logger.dart';
 import '../../../utils/app_data_dir.dart';
+import '../../../utils/transcript_stats.dart';
 import '../data/official_collection_api.dart';
 import 'download_progress.dart';
 
@@ -150,6 +151,7 @@ class OfficialDownload extends _$OfficialDownload {
     );
 
     final wordsJson = encodeWordTimestamps(content.wordTimestamps);
+    final stats = await getTranscriptStats(relativeTranscriptPath);
     await (database.update(
       database.audioItems,
     )..where((t) => t.id.equals(audioItem.id))).write(
@@ -157,12 +159,16 @@ class OfficialDownload extends _$OfficialDownload {
         transcriptPath: Value(relativeTranscriptPath),
         wordTimestampsJson: Value(wordsJson),
         transcriptSource: const Value(1),
+        sentenceCount: Value(stats.$1),
+        wordCount: Value(stats.$2),
         updatedAt: Value(DateTime.now()),
       ),
     );
     AppLogger.log(
       'OfficialSubtitle',
-      'db updated audioItemId=${audioItem.id} wordsJsonBytes=${wordsJson.length}',
+      'db updated audioItemId=${audioItem.id} '
+          'wordsJsonBytes=${wordsJson.length} '
+          'sentences=${stats.$1} words=${stats.$2}',
     );
 
     await ref.read(bookmarkDaoProvider).removeAllForAudio(audioItem.id);
@@ -286,6 +292,12 @@ class OfficialDownload extends _$OfficialDownload {
 
       final wordsJson = encodeWordTimestamps(content.wordTimestamps);
 
+      // 字幕统计（句数/词数）随下载一起入库，否则学习计划页要等下次启动
+      // backfillTranscriptStats 才能补上。
+      // 不在此处插入 sessionId 检查：原代码约定文件落盘 + DB write 是原子块，
+      // 中途 return 会留下 DB 缺 audioPath 的孤儿文件。
+      final stats = await getTranscriptStats(relativeTranscriptPath);
+
       // 4) 写 DB —— audioPath / transcriptPath 是「下载是否就绪」的单一真实来源，
       //    必须在文件落盘之后写入。
       final database = ref.read(appDatabaseProvider);
@@ -297,6 +309,8 @@ class OfficialDownload extends _$OfficialDownload {
           transcriptPath: Value(relativeTranscriptPath),
           wordTimestampsJson: Value(wordsJson),
           transcriptSource: const Value(1),
+          sentenceCount: Value(stats.$1),
+          wordCount: Value(stats.$2),
           updatedAt: Value(DateTime.now()),
         ),
       );

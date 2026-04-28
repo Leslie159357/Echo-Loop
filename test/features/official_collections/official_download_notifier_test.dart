@@ -231,6 +231,9 @@ void main() {
     final row = await db.audioItemDao.getById('a1');
     expect(row?.transcriptPath, 'transcripts/official_x.srt');
     expect(row?.wordTimestampsJson, contains('"word":"new"'));
+    // 字幕统计随更新一起入库，避免学习计划页只显示时长
+    expect(row?.sentenceCount, 1);
+    expect(row?.wordCount, 2);
 
     final progress = await db.learningProgressDao.getByAudioId('a1');
     expect(progress, isNull);
