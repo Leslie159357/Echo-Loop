@@ -7,17 +7,13 @@ import '../../../analytics/models/event_names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../providers/collection_provider.dart';
 
-/// 合集列表顶部固定的「发现官方合集」入口条。
+/// 合集列表顶部固定的「发现精选合集」入口条。
 ///
-/// 不滚动、永远可见，点击进入 `/discover`。文案两态：
-/// - A：当前已加入的官方合集 < 3 个 → 引导探索
-/// - B：>= 3 → 切换到「看看新上架」复访文案
+/// 不滚动、永远可见，点击进入 `/discover`。文案固定为「发现精选合集 / 托福·雅思·专四专八·VOA…」，
+/// 副标题直接列出代表性合集类型，便于用户一眼看出"里面是什么"。
 class DiscoverEntryBanner extends ConsumerWidget {
   /// 点击回调；默认 `context.push('/discover')`。测试可注入 mock。
   final VoidCallback? onTap;
-
-  /// 文案切换阈值：已加入官方合集数 < 此值 → A 态；>= 此值 → B 态
-  static const _thresholdB = 3;
 
   const DiscoverEntryBanner({super.key, this.onTap});
 
@@ -26,16 +22,8 @@ class DiscoverEntryBanner extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final enrolledOfficialCount = ref.watch(collectionListProvider.select((s) {
-      return s.collections.where((c) => c.isOfficial && !c.isDeprecated).length;
-    }));
-
-    final isStateB = enrolledOfficialCount >= _thresholdB;
-    final title =
-        isStateB ? l10n.discoverEntryTitleB : l10n.discoverEntryTitleA;
-    final subtitle = isStateB
-        ? l10n.discoverEntrySubtitleB
-        : l10n.discoverEntrySubtitleA;
+    final title = l10n.discoverEntryTitleA;
+    final subtitle = l10n.discoverEntrySubtitleA;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -46,6 +34,13 @@ class DiscoverEntryBanner extends ConsumerWidget {
           child: InkWell(
             onTap: onTap ??
                 () {
+                  // 仅 onTap 时点查一次 enrolled 数量，作为 analytics 维度上报，
+                  // 不再驱动文案切换，所以不进入 watch 路径。
+                  final enrolledOfficialCount = ref
+                      .read(collectionListProvider)
+                      .collections
+                      .where((c) => c.isOfficial && !c.isDeprecated)
+                      .length;
                   ref.read(analyticsServiceProvider).track(
                     Events.discoverEntryTapped,
                     {EventParams.enrolledCount: enrolledOfficialCount},

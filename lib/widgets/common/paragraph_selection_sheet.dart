@@ -10,6 +10,7 @@ import '../../models/blind_listen_settings.dart';
 import '../../models/sentence.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/paragraph_grouping.dart';
+import '../review/review_briefing_sheet.dart' show formatEstimatedDuration;
 
 /// 目标段落时长选项（秒）
 /// 0 = 逐句，-1 = 不分段（全文一段）
@@ -24,7 +25,9 @@ const paragraphDurationOptions = [0, 10, 20, 30, 45, 60, 90, -1];
 /// [defaultSeconds] 默认段落时长（秒）
 /// [showPauseMultiplier] 是否显示段间停顿行
 /// [stageLabel] 标题下方显示的阶段名（如"第三轮复习"），可选
-/// [estimatedDurationText] 说明下方显示的预估时长文本，可选
+/// [estimatedDurationText] 说明下方显示的预估时长文本，可选（静态文案，不随选项变化）
+/// [estimateDurationBuilder] 动态预估时长 builder，根据当前选中的段落时长 + 停顿倍数实时计算；
+///   优先级高于 [estimatedDurationText]，二者同时传入时取 builder
 /// [onStartPractice] 回调，传递 (目标时长, 停顿倍数)
 Future<void> showParagraphSelectionSheet({
   required BuildContext context,
@@ -37,6 +40,8 @@ Future<void> showParagraphSelectionSheet({
   List<double>? pauseMultiplierOptions,
   String? stageLabel,
   String? estimatedDurationText,
+  Duration Function(int targetSeconds, double pauseMultiplier)?
+      estimateDurationBuilder,
   required void Function(Duration targetDuration, double pauseMultiplier)
       onStartPractice,
 }) {
@@ -56,6 +61,7 @@ Future<void> showParagraphSelectionSheet({
       pauseMultiplierOptions: pauseMultiplierOptions,
       stageLabel: stageLabel,
       estimatedDurationText: estimatedDurationText,
+      estimateDurationBuilder: estimateDurationBuilder,
       onStartPractice: onStartPractice,
     ),
   );
@@ -71,6 +77,8 @@ class _ParagraphSelectionSheet extends StatefulWidget {
   final List<double>? pauseMultiplierOptions;
   final String? stageLabel;
   final String? estimatedDurationText;
+  final Duration Function(int targetSeconds, double pauseMultiplier)?
+      estimateDurationBuilder;
   final void Function(Duration targetDuration, double pauseMultiplier)
       onStartPractice;
 
@@ -84,6 +92,7 @@ class _ParagraphSelectionSheet extends StatefulWidget {
     this.pauseMultiplierOptions,
     this.stageLabel,
     this.estimatedDurationText,
+    this.estimateDurationBuilder,
     required this.onStartPractice,
   });
 
@@ -171,26 +180,40 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
             ),
 
             // 预估时长（可选，如"预计 3 分钟"）
-            if (widget.estimatedDurationText != null) ...[
-              const SizedBox(height: AppSpacing.s),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.timer_outlined,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    widget.estimatedDurationText!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+            // 优先用 builder 动态计算（随段长/停顿倍数实时刷新），否则回退到静态文案
+            Builder(builder: (_) {
+              final dynamicText = widget.estimateDurationBuilder != null
+                  ? formatEstimatedDuration(
+                      l10n,
+                      widget.estimateDurationBuilder!(
+                        _targetSeconds,
+                        _pauseMultiplier,
+                      ),
+                    )
+                  : null;
+              final text = dynamicText ?? widget.estimatedDurationText;
+              if (text == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.s),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 16,
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 4),
+                    Text(
+                      text,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
 
             const SizedBox(height: AppSpacing.l),
 

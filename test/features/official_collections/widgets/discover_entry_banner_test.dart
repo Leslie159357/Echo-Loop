@@ -1,7 +1,7 @@
-import 'package:fluency/features/official_collections/widgets/discover_entry_banner.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/models/collection.dart';
-import 'package:fluency/providers/collection_provider.dart';
+import 'package:echo_loop/features/official_collections/widgets/discover_entry_banner.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/collection.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,35 +45,27 @@ Widget _host({
 }
 
 void main() {
-  testWidgets('态 A：官方合集数 < 3 → 显示「发现官方合集」', (tester) async {
+  testWidgets('入口卡片：固定显示「发现精选合集 / 托福·雅思·…」', (tester) async {
     await tester.pumpWidget(_host(collections: const []));
     await tester.pumpAndSettle();
 
-    expect(find.text('发现官方合集'), findsOneWidget);
-    expect(find.text('精选英语内容，一键加入'), findsOneWidget);
+    expect(find.text('发现精选合集'), findsOneWidget);
+    expect(find.text('托福 · 雅思 · 专四专八 · VOA…'), findsOneWidget);
+    // 旧 B 态文案不应再出现
     expect(find.text('看看新上架'), findsNothing);
   });
 
-  testWidgets('态 A：加入 2 个官方合集仍在 A 态', (tester) async {
-    await tester.pumpWidget(_host(collections: [
-      _officialCollection(1),
-      _officialCollection(2),
-    ]));
-    await tester.pumpAndSettle();
-    expect(find.text('发现官方合集'), findsOneWidget);
-  });
-
-  testWidgets('态 B：加入 3 个官方合集 → 切换为「看看新上架」', (tester) async {
+  testWidgets('入口卡片：已加入若干官方合集后文案不切换', (tester) async {
     await tester.pumpWidget(_host(collections: [
       _officialCollection(1),
       _officialCollection(2),
       _officialCollection(3),
+      _officialCollection(4),
     ]));
     await tester.pumpAndSettle();
 
-    expect(find.text('看看新上架'), findsOneWidget);
-    expect(find.text('官方合集持续更新'), findsOneWidget);
-    expect(find.text('发现官方合集'), findsNothing);
+    expect(find.text('发现精选合集'), findsOneWidget);
+    expect(find.text('看看新上架'), findsNothing);
   });
 
   testWidgets('点击整卡触发 onTap', (tester) async {

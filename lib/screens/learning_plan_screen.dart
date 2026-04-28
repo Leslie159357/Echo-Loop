@@ -19,6 +19,7 @@ import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/listen_and_repeat/listen_and_repeat_controller.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/new_user_guide_provider.dart';
+import '../providers/settings_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../services/subtitle_parser.dart';
@@ -26,8 +27,10 @@ import '../theme/app_theme.dart';
 import '../models/blind_listen_settings.dart';
 import '../models/intensive_listen_settings.dart' show PauseMode;
 import '../models/retell_settings.dart';
+import '../utils/blind_listen_duration_estimator.dart';
 import '../utils/keyword_extraction.dart';
 import '../utils/paragraph_grouping.dart';
+import '../utils/retell_duration_estimator.dart';
 import '../widgets/blind_listen_paragraph_sheet.dart';
 import '../widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart';
@@ -228,8 +231,13 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   Duration? _estimateReviewDuration(SubStageType subStage) {
     switch (subStage) {
       case SubStageType.blindListen:
-        // 盲听 = 音频时长
-        return ref.read(audioEngineProvider).totalDuration;
+        // 盲听 = 跳过静音开启时按字幕有效时长，否则按音频总时长
+        return estimateBlindListenSessionDuration(
+          sentences: ref.read(listeningPracticeProvider).sentences,
+          fullAudioDuration: ref.read(audioEngineProvider).totalDuration,
+          skipSilenceEnabled:
+              ref.read(appSettingsProvider).skipSilenceEnabled,
+        );
       case SubStageType.reviewDifficultPractice:
         // 难句补练 = 难句总时长 × 2（盲听 + 跟读）
         final lpState = ref.read(listeningPracticeProvider);
@@ -239,9 +247,15 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         if (difficultDuration == Duration.zero) return null;
         return difficultDuration * 2;
       case SubStageType.reviewRetellSummary:
-        // 全文复述 = 音频时长 × 4（听 + 停顿复述）
-        final totalDuration = ref.read(audioEngineProvider).totalDuration;
-        return totalDuration != null ? totalDuration * 4 : null;
+        // 全文复述 = 真实播放（字幕 wall-clock）+ smart 停顿
+        // 全文作为单段，pauseMultiplier=-1 走 smart 模式
+        final sentences = ref.read(listeningPracticeProvider).sentences;
+        if (sentences.isEmpty) return null;
+        return estimateRetellSessionDuration(
+          sentences: sentences,
+          targetSeconds: -1,
+          pauseMultiplier: -1,
+        );
       default:
         return null;
     }
@@ -414,21 +428,16 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         .progressMap[widget.audioItemId]
         ?.currentStage;
 
-    // 复习阶段显示阶段名和预估时长
+    // 复习阶段显示阶段名；预估时长由 briefing sheet 内部按真实公式动态计算
     final l10n = AppLocalizations.of(context)!;
     final isReview =
         currentStage != null && currentStage != LearningStage.firstLearn;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
-    final retellEstimate = totalDuration != null ? totalDuration * 3 : null;
 
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(currentStage),
       stageLabel: isReview ? reviewStageLabel(l10n, currentStage) : null,
-      estimatedDurationText: retellEstimate != null
-          ? formatEstimatedDuration(l10n, retellEstimate)
-          : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
@@ -482,13 +491,17 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     if (sentences.isEmpty) return;
 
     final l10n = AppLocalizations.of(context)!;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
+    final estimatedDuration = estimateBlindListenSessionDuration(
+      sentences: sentences,
+      fullAudioDuration: ref.read(audioEngineProvider).totalDuration,
+      skipSilenceEnabled: ref.read(appSettingsProvider).skipSilenceEnabled,
+    );
 
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
-      estimatedDurationText: totalDuration != null
-          ? formatEstimatedDuration(l10n, totalDuration)
+      estimatedDurationText: estimatedDuration != null
+          ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
@@ -675,16 +688,10 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       return;
     }
 
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
-    final retellEstimate = totalDuration != null ? totalDuration * 3 : null;
-
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(LearningStage.firstLearn),
-      estimatedDurationText: retellEstimate != null
-          ? formatEstimatedDuration(l10n, retellEstimate)
-          : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
@@ -1489,13 +1496,17 @@ class _FirstStudySection extends ConsumerWidget {
     if (sentences.isEmpty) return;
 
     final l10n = AppLocalizations.of(context)!;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
+    final estimatedDuration = estimateBlindListenSessionDuration(
+      sentences: sentences,
+      fullAudioDuration: ref.read(audioEngineProvider).totalDuration,
+      skipSilenceEnabled: ref.read(appSettingsProvider).skipSilenceEnabled,
+    );
 
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
-      estimatedDurationText: totalDuration != null
-          ? formatEstimatedDuration(l10n, totalDuration)
+      estimatedDurationText: estimatedDuration != null
+          ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
@@ -1593,17 +1604,10 @@ class _FirstStudySection extends ConsumerWidget {
     final lpState = ref.read(listeningPracticeProvider);
     if (lpState.sentences.isEmpty) return;
 
-    final l10n = AppLocalizations.of(context)!;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
-    final retellEstimate = totalDuration != null ? totalDuration * 3 : null;
-
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(LearningStage.firstLearn),
-      estimatedDurationText: retellEstimate != null
-          ? formatEstimatedDuration(l10n, retellEstimate)
-          : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
@@ -2016,13 +2020,17 @@ class _ReviewRoundSection extends ConsumerWidget {
     if (sentences.isEmpty) return;
 
     final l10n = AppLocalizations.of(context)!;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
+    final estimatedDuration = estimateBlindListenSessionDuration(
+      sentences: sentences,
+      fullAudioDuration: ref.read(audioEngineProvider).totalDuration,
+      skipSilenceEnabled: ref.read(appSettingsProvider).skipSilenceEnabled,
+    );
 
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
-      estimatedDurationText: totalDuration != null
-          ? formatEstimatedDuration(l10n, totalDuration)
+      estimatedDurationText: estimatedDuration != null
+          ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
@@ -2112,18 +2120,11 @@ class _ReviewRoundSection extends ConsumerWidget {
       return;
     }
 
-    // 段落复述：弹出简报面板让用户选择段落时长
-    final l10n = AppLocalizations.of(context)!;
-    final totalDuration = ref.read(audioEngineProvider).totalDuration;
-    final retellEstimate = totalDuration != null ? totalDuration * 3 : null;
-
+    // 段落复述：弹出简报面板让用户选择段落时长（预估时长由 sheet 内部按真实公式动态计算）
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(review.stage),
-      estimatedDurationText: retellEstimate != null
-          ? formatEstimatedDuration(l10n, retellEstimate)
-          : null,
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
