@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/models/intensive_listen_settings.dart';
-import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/widgets/intensive_listen/intensive_listen_settings_sheet.dart';
-import 'package:fluency/theme/app_theme.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart';
+import 'package:echo_loop/providers/learning_session/intensive_listen_player_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/widgets/intensive_listen/intensive_listen_settings_sheet.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 
 import '../helpers/mock_providers.dart';
 

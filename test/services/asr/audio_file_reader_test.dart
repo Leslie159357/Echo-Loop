@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/services/asr/audio_file_reader.dart';
+import 'package:echo_loop/services/asr/audio_file_reader.dart';
 
 void main() {
   group('readAudioFile', () {

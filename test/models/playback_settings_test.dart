@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/playback_settings.dart';
+import 'package:echo_loop/models/playback_settings.dart';
 
 void main() {
   group('PlaybackSettings', () {

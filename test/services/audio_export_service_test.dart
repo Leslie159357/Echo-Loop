@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/services/audio_export_service.dart';
+import 'package:echo_loop/services/audio_export_service.dart';
 
 void main() {
   late AudioExportService service;

@@ -4,12 +4,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fluency/features/onboarding_survey/data/onboarding_survey_storage.dart';
-import 'package:fluency/features/onboarding_survey/models/onboarding_question.dart';
-import 'package:fluency/features/onboarding_survey/providers/onboarding_survey_provider.dart';
-import 'package:fluency/features/onboarding_survey/screens/onboarding_survey_screen.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/router/app_router.dart';
+import 'package:echo_loop/features/onboarding_survey/data/onboarding_survey_storage.dart';
+import 'package:echo_loop/features/onboarding_survey/models/onboarding_question.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/onboarding_survey/screens/onboarding_survey_screen.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/router/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../helpers/mock_providers.dart';

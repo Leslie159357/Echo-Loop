@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/models/speech_practice_models.dart';
-import 'package:fluency/models/study_stage.dart';
-import 'package:fluency/providers/retell_recording_controller_provider.dart';
-import 'package:fluency/services/speech_practice_platform.dart';
-import 'package:fluency/services/study_event_recorder.dart';
-import 'package:fluency/services/study_time_service.dart';
+import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/models/study_stage.dart';
+import 'package:echo_loop/providers/retell_recording_controller_provider.dart';
+import 'package:echo_loop/services/speech_practice_platform.dart';
+import 'package:echo_loop/services/study_event_recorder.dart';
+import 'package:echo_loop/services/study_time_service.dart';
 
 class _FakeSpeechPracticeBackend implements SpeechPracticeBackend {
   final _controller = StreamController<SpeechPracticeEvent>.broadcast();

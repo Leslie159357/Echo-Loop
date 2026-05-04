@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/widgets/dialogs/step_complete_dialog.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/widgets/dialogs/step_complete_dialog.dart';
 
 import '../helpers/test_app.dart';
 

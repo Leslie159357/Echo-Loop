@@ -4,19 +4,22 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# 加载公共构建号函数
+source scripts/lib/build_number.sh
+
 usage() {
   cat <<'EOF'
-Usage: scripts/release_ios.sh [--wait] [--skip-upload] [--work-dir DIR] [--build-name NAME] [--build-number NUMBER]
+Usage: scripts/release_ios.sh [--upload] [--wait] [--work-dir DIR] [--build-name NAME] [--build-number NUMBER]
 
-Build a Flutter iOS IPA and upload it to App Store Connect.
+Build a Flutter iOS IPA and optionally upload it to App Store Connect.
 
 Options:
-  --wait         Wait for App Store Connect processing after upload.
-  --skip-upload  Stop after generating the IPA.
-  --work-dir     Override the temporary output directory for ExportOptions.plist and logs.
-  --build-name   Override CFBundleShortVersionString for this release.
-  --build-number Override CFBundleVersion for this release.
-  -h, --help     Show this help.
+  --upload        Upload IPA to App Store Connect (default: skip upload).
+  --wait          Wait for App Store Connect processing after upload.
+  --work-dir      Override the temporary output directory for ExportOptions.plist and logs.
+  --build-name    Override CFBundleShortVersionString for this release.
+  --build-number  Override CFBundleVersion for this release.
+  -h, --help      Show this help.
 
 Environment overrides:
   IOS_TEAM_ID
@@ -53,18 +56,18 @@ require_command() {
 }
 
 WAIT_FOR_PROCESSING=0
-SKIP_UPLOAD=0
+SKIP_UPLOAD=1
 WORK_DIR=""
 BUILD_NAME="${IOS_BUILD_NAME:-}"
 BUILD_NUMBER="${IOS_BUILD_NUMBER:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --upload)
+      SKIP_UPLOAD=0
+      ;;
     --wait)
       WAIT_FOR_PROCESSING=1
-      ;;
-    --skip-upload)
-      SKIP_UPLOAD=1
       ;;
     --work-dir)
       shift
@@ -117,27 +120,18 @@ if [[ -n "$VERSION_LINE" ]]; then
   log "pubspec version: ${VERSION_LINE#*:}"
 fi
 
-RAW_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' || true)"
+# 计算构建号（参数优先 > 环境变量 > 自动计算）
 if [[ -z "$BUILD_NAME" ]]; then
-  if [[ "$RAW_VERSION" == *"+"* ]]; then
-    BUILD_NAME="${RAW_VERSION%%+*}"
-  elif [[ -n "$RAW_VERSION" ]]; then
-    BUILD_NAME="$RAW_VERSION"
-  fi
+  BUILD_NAME="$(get_build_name)" || fail "Unable to determine build name from pubspec.yaml"
 fi
 
 if [[ -z "$BUILD_NUMBER" ]]; then
-  if [[ "$RAW_VERSION" == *"+"* ]]; then
-    BUILD_NUMBER="${RAW_VERSION##*+}"
-  else
-    BUILD_NUMBER="$(date '+%Y%m%d%H%M')"
-  fi
+  calculate_build_number "$BUILD_NAME"
+  # BUILD_NUMBER 为空时表示第一次构建，Flutter 默认为 0
 fi
 
-[[ -n "$BUILD_NAME" ]] || fail "Unable to determine build name"
-[[ -n "$BUILD_NUMBER" ]] || fail "Unable to determine build number"
 log "Using build name: $BUILD_NAME"
-log "Using build number: $BUILD_NUMBER"
+log "Using build number: ${BUILD_NUMBER:-0} (default)"
 log "Using API base URL: $API_BASE_URL"
 
 log "Checking available code signing identities"
@@ -201,11 +195,14 @@ FLUTTER_BUILD_ARGS=(
   "--release"
   "--flavor=prod"
   "--build-name=$BUILD_NAME"
-  "--build-number=$BUILD_NUMBER"
   "--export-options-plist=$EXPORT_OPTIONS_PATH"
   "--dart-define=API_BASE_URL=${API_BASE_URL}"
   "--dart-define=POSTHOG_HOST=${POSTHOG_HOST}"
 )
+# 仅当有构建号时才传 --build-number
+if [[ -n "${BUILD_NUMBER:-}" ]]; then
+  FLUTTER_BUILD_ARGS+=("--build-number=$BUILD_NUMBER")
+fi
 if [[ -n "${POSTHOG_API_KEY:-}" ]]; then
   FLUTTER_BUILD_ARGS+=("--dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY}")
 fi
@@ -226,7 +223,7 @@ cp "$IPA_PATH" "$RELEASE_DIR/$IPA_NAME"
 log "Copied to: build/release/$IPA_NAME"
 
 if [[ $SKIP_UPLOAD -eq 1 ]]; then
-  log "Skipping upload as requested"
+  log "IPA ready (upload skipped). Use --upload to upload to App Store Connect."
   exit 0
 fi
 

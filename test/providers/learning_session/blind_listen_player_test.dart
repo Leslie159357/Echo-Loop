@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/blind_listen_settings.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/models/blind_listen_settings.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 
 void main() {
   group('BlindListenPlayerState', () {

@@ -4,12 +4,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/collection_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/study_task_provider.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/study_task_provider.dart';
 
 /// 创建内存数据库用于测试
 AppDatabase _createTestDatabase() {

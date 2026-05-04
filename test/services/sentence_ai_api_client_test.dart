@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fluency/services/sentence_ai_api_client.dart';
+import 'package:echo_loop/services/sentence_ai_api_client.dart';
 
 class MockDio extends Mock implements Dio {}
 

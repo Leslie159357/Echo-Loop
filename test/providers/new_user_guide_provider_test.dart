@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/providers/new_user_guide_provider.dart';
+import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

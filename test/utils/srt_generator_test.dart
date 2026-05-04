@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/services/subtitle_parser.dart';
-import 'package:fluency/utils/srt_generator.dart';
+import 'package:echo_loop/services/subtitle_parser.dart';
+import 'package:echo_loop/utils/srt_generator.dart';
 
 void main() {
   group('generateSrtContent', () {

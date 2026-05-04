@@ -4,7 +4,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/sense_group_result.dart';
+import 'package:echo_loop/models/sense_group_result.dart';
 
 void main() {
   group('SenseGroup', () {

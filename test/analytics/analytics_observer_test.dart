@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/analytics/analytics_observer.dart';
-import 'package:fluency/analytics/analytics_service.dart';
-import 'package:fluency/analytics/analytics_channel.dart';
-import 'package:fluency/analytics/consent_manager.dart';
-import 'package:fluency/analytics/models/event_names.dart';
+import 'package:echo_loop/analytics/analytics_observer.dart';
+import 'package:echo_loop/analytics/analytics_service.dart';
+import 'package:echo_loop/analytics/analytics_channel.dart';
+import 'package:echo_loop/analytics/consent_manager.dart';
+import 'package:echo_loop/analytics/models/event_names.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 记录所有事件的测试通道

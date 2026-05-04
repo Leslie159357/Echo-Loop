@@ -1,9 +1,9 @@
 // 环形学习进度图标测试
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/widgets/learning_progress_icon.dart';
-import 'package:fluency/models/learning_progress.dart';
-import 'package:fluency/database/enums.dart';
+import 'package:echo_loop/widgets/learning_progress_icon.dart';
+import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/database/enums.dart';
 
 void main() {
   Widget createTestWidget(LearningProgress? progress) {

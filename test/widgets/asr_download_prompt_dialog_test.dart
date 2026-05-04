@@ -3,12 +3,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/providers/offline_asr_settings_provider.dart';
-import 'package:fluency/services/asr/asr_model_manager.dart';
-import 'package:fluency/services/asr/offline_asr_engine.dart';
-import 'package:fluency/widgets/asr_download_prompt_dialog.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
+import 'package:echo_loop/services/asr/asr_model_manager.dart';
+import 'package:echo_loop/services/asr/offline_asr_engine.dart';
+import 'package:echo_loop/widgets/asr_download_prompt_dialog.dart';
 
 class _TestOfflineAsrSettingsNotifier extends OfflineAsrSettingsNotifier {
   _TestOfflineAsrSettingsNotifier(this._initialState);

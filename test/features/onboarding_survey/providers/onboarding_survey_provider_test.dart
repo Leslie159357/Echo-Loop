@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/features/onboarding_survey/data/onboarding_survey_storage.dart';
-import 'package:fluency/features/onboarding_survey/models/onboarding_answers.dart';
-import 'package:fluency/features/onboarding_survey/models/onboarding_question.dart';
-import 'package:fluency/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/onboarding_survey/data/onboarding_survey_storage.dart';
+import 'package:echo_loop/features/onboarding_survey/models/onboarding_answers.dart';
+import 'package:echo_loop/features/onboarding_survey/models/onboarding_question.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 ProviderContainer _makeContainer({

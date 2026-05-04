@@ -14,17 +14,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:fluency/database/daos/bookmark_dao.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/models/audio_engine_state.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/speech/speech_recording_controller.dart';
-import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_controller.dart';
-import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_phase.dart';
-import 'package:fluency/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
-import 'package:fluency/providers/repeat_flow/repeat_flow_engine.dart';
+import 'package:echo_loop/database/daos/bookmark_dao.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/models/audio_engine_state.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/speech/speech_recording_controller.dart';
+import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_controller.dart';
+import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_phase.dart';
+import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
+import 'package:echo_loop/providers/repeat_flow/repeat_flow_engine.dart';
 
 import '../../helpers/mock_providers.dart';
 

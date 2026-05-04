@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/retell_settings.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/widgets/common/masked_sentence_tile.dart';
+import 'package:echo_loop/models/retell_settings.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/widgets/common/masked_sentence_tile.dart';
 
 import '../helpers/test_app.dart';
 

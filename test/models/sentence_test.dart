@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/sentence.dart';
+import 'package:echo_loop/models/sentence.dart';
 
 void main() {
   group('Sentence', () {

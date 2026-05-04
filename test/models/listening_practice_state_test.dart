@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/audio_item.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/models/playback_settings.dart';
-import 'package:fluency/models/listening_practice_state.dart';
+import 'package:echo_loop/models/audio_item.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/models/playback_settings.dart';
+import 'package:echo_loop/models/listening_practice_state.dart';
 
 void main() {
   group('ListeningPracticeState', () {

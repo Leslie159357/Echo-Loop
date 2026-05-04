@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/reminder_settings.dart';
+import 'package:echo_loop/models/reminder_settings.dart';
 
 void main() {
   group('ReminderSettings', () {

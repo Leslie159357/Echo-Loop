@@ -1,10 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/retell_settings.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/utils/keyword_extraction.dart';
-import 'package:fluency/utils/stopwords.dart';
+import 'package:echo_loop/models/retell_settings.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/utils/keyword_extraction.dart';
+import 'package:echo_loop/utils/stopwords.dart';
 
 /// 辅助函数：创建带指定文本的句子列表
 List<Sentence> _makeSentences(List<String> texts) {

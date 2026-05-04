@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/utils/audio_fingerprint.dart';
+import 'package:echo_loop/utils/audio_fingerprint.dart';
 
 void main() {
   group('computeAudioSha256', () {

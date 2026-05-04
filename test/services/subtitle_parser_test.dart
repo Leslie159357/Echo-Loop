@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/services/subtitle_parser.dart';
+import 'package:echo_loop/services/subtitle_parser.dart';
 
 void main() {
   group('SubtitleParser.formatDuration', () {

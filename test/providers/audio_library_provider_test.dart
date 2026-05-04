@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fluency/models/audio_item.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
+import 'package:echo_loop/models/audio_item.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
 
 import '../helpers/mock_providers.dart';
 

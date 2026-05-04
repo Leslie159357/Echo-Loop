@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/services/study_time_service.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/services/study_time_service.dart';
 
 AppDatabase _createTestDb() {
   return AppDatabase(

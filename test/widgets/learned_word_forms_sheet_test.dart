@@ -4,11 +4,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/theme/app_theme.dart';
-import 'package:fluency/widgets/study/learned_word_forms_sheet.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/widgets/study/learned_word_forms_sheet.dart';
 
 AppDatabase _createTestDb() {
   return AppDatabase(

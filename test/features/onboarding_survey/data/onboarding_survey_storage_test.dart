@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/features/onboarding_survey/data/onboarding_survey_storage.dart';
-import 'package:fluency/features/onboarding_survey/models/onboarding_answers.dart';
-import 'package:fluency/features/onboarding_survey/models/onboarding_question.dart';
+import 'package:echo_loop/features/onboarding_survey/data/onboarding_survey_storage.dart';
+import 'package:echo_loop/features/onboarding_survey/models/onboarding_answers.dart';
+import 'package:echo_loop/features/onboarding_survey/models/onboarding_question.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Unit 测试 SP 读写、完成判定锚点、答案校验。

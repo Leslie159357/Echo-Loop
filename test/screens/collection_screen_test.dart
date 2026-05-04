@@ -3,12 +3,12 @@
 // 测试资源库页面的合集视图渲染和交互。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/screens/library_screen.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/collection_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/screens/library_screen.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';

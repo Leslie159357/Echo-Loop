@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/app_update_info.dart';
-import 'package:fluency/providers/app_update_provider.dart';
-import 'package:fluency/utils/version_compare.dart';
+import 'package:echo_loop/models/app_update_info.dart';
+import 'package:echo_loop/providers/app_update_provider.dart';
+import 'package:echo_loop/utils/version_compare.dart';
 
 void main() {
   group('AppUpdate._determineUpdateType', () {

@@ -2,8 +2,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/analytics/permission_snapshot.dart';
-import 'package:fluency/services/network_permission_trigger.dart';
+import 'package:echo_loop/analytics/permission_snapshot.dart';
+import 'package:echo_loop/services/network_permission_trigger.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

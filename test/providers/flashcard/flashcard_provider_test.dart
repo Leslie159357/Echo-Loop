@@ -5,10 +5,10 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/providers/flashcard/flashcard_provider.dart';
-import 'package:fluency/models/flashcard_item.dart';
-import 'package:fluency/models/flashcard_settings.dart';
-import 'package:fluency/database/app_database.dart' show SavedWord;
+import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
+import 'package:echo_loop/models/flashcard_item.dart';
+import 'package:echo_loop/models/flashcard_settings.dart';
+import 'package:echo_loop/database/app_database.dart' show SavedWord;
 
 // ========== 测试数据工厂 ==========
 

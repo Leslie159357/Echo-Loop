@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/services/asr/offline_asr_engine.dart';
-import 'package:fluency/services/asr/sherpa_onnx_engine.dart';
+import 'package:echo_loop/services/asr/offline_asr_engine.dart';
+import 'package:echo_loop/services/asr/sherpa_onnx_engine.dart';
 
 void main() {
   group('SherpaOnnxEngine', () {

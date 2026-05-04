@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/sentence_ai_result.dart';
+import 'package:echo_loop/models/sentence_ai_result.dart';
 
 void main() {
   group('SentenceTranslation', () {

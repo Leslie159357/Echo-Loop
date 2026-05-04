@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
-import 'package:fluency/database/app_database.dart';
+import 'package:echo_loop/database/app_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 // ignore: depend_on_referenced_packages
@@ -13,9 +13,9 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/services/backup/backup_manifest.dart';
-import 'package:fluency/services/backup/backup_service.dart';
-import 'package:fluency/utils/app_data_dir.dart';
+import 'package:echo_loop/services/backup/backup_manifest.dart';
+import 'package:echo_loop/services/backup/backup_service.dart';
+import 'package:echo_loop/utils/app_data_dir.dart';
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {

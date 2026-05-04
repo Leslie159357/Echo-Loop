@@ -1,18 +1,18 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:fluency/features/official_collections/data/official_catalog_service.dart';
-import 'package:fluency/features/official_collections/models/catalog.dart';
-import 'package:fluency/features/official_collections/screens/official_collection_detail_screen.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/collection_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
-import 'package:fluency/providers/learning_session/learning_session_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/tag_provider.dart';
+import 'package:echo_loop/features/official_collections/data/official_catalog_service.dart';
+import 'package:echo_loop/features/official_collections/models/catalog.dart';
+import 'package:echo_loop/features/official_collections/screens/official_collection_detail_screen.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/tag_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

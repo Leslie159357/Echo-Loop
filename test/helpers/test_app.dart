@@ -9,17 +9,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/collection_provider.dart';
-import 'package:fluency/providers/tag_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/learning_session/learning_session_provider.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
-import 'package:fluency/theme/app_theme.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/tag_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 
 import 'mock_providers.dart';
 

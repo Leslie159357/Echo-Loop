@@ -4,9 +4,9 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/providers/listening_practice/bookmark_manager.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/providers/listening_practice/bookmark_manager.dart';
 
 /// 创建内存数据库用于测试
 AppDatabase _createTestDb() {

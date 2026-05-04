@@ -10,9 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/providers/new_user_guide_provider.dart';
-import 'package:fluency/widgets/guide_flow.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/providers/new_user_guide_provider.dart';
+import 'package:echo_loop/widgets/guide_flow.dart';
 
 /// Helper：包一个完整的 MaterialApp + ProviderScope，支持注入覆盖。
 Widget _wrap({required Widget child, required ProviderContainer container}) {

@@ -7,9 +7,9 @@ library;
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/providers/flashcard/flashcard_flow_engine.dart';
-import 'package:fluency/providers/flashcard/flashcard_flow_phase.dart';
-import 'package:fluency/providers/flashcard/flashcard_flow_state.dart';
+import 'package:echo_loop/providers/flashcard/flashcard_flow_engine.dart';
+import 'package:echo_loop/providers/flashcard/flashcard_flow_phase.dart';
+import 'package:echo_loop/providers/flashcard/flashcard_flow_state.dart';
 
 // ========== 测试辅助 ==========
 

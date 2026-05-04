@@ -4,9 +4,9 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/migration/sp_to_drift_migration.dart';
-import 'package:fluency/models/sentence.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/migration/sp_to_drift_migration.dart';
+import 'package:echo_loop/models/sentence.dart';
 
 /// 创建内存数据库用于测试（启用外键约束）
 AppDatabase createTestDatabase() {

@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/sense_group_result.dart';
-import 'package:fluency/models/sentence_ai_result.dart';
-import 'package:fluency/utils/sense_group_timing.dart';
-import 'package:fluency/widgets/practice/sense_group_text.dart';
-import 'package:fluency/widgets/practice/sentence_annotation_card.dart';
+import 'package:echo_loop/models/sense_group_result.dart';
+import 'package:echo_loop/models/sentence_ai_result.dart';
+import 'package:echo_loop/utils/sense_group_timing.dart';
+import 'package:echo_loop/widgets/practice/sense_group_text.dart';
+import 'package:echo_loop/widgets/practice/sentence_annotation_card.dart';
 
 import '../helpers/test_app.dart';
 

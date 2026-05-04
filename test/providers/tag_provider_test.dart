@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/providers/tag_provider.dart';
-import 'package:fluency/models/tag.dart';
+import 'package:echo_loop/providers/tag_provider.dart';
+import 'package:echo_loop/models/tag.dart';
 
 void main() {
   group('TagState', () {

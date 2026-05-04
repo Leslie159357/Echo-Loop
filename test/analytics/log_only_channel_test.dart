@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/analytics/channels/log_only_channel.dart';
-import 'package:fluency/services/app_logger.dart';
+import 'package:echo_loop/analytics/channels/log_only_channel.dart';
+import 'package:echo_loop/services/app_logger.dart';
 
 void main() {
   group('LogOnlyChannel', () {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/widgets/player_hotkey_scope.dart';
+import 'package:echo_loop/widgets/player_hotkey_scope.dart';
 
 void main() {
   group('LearningHotkeyScope', () {

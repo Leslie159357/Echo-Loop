@@ -5,22 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/models/learning_progress.dart';
-import 'package:fluency/providers/learning_session/learning_session_provider.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
-import 'package:fluency/providers/learning_session/intensive_listen_player_provider.dart';
-import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
-import 'package:fluency/providers/learning_session/retell_player_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/daily_study_time_provider.dart';
-import 'package:fluency/models/playback_settings.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/database/daos/bookmark_dao.dart';
-import 'package:fluency/database/app_database.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/providers/learning_session/intensive_listen_player_provider.dart';
+import 'package:echo_loop/providers/learning_session/review_difficult_practice_provider.dart';
+import 'package:echo_loop/providers/learning_session/retell_player_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/daily_study_time_provider.dart';
+import 'package:echo_loop/models/playback_settings.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/database/daos/bookmark_dao.dart';
+import 'package:echo_loop/database/app_database.dart';
 
 import '../../helpers/mock_providers.dart';
 

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/models/learning_progress.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/models/learning_progress.dart';
 
 void main() {
   final now = DateTime(2026, 2, 21);

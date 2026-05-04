@@ -1,14 +1,14 @@
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/app_database.dart' as db;
-import 'package:fluency/database/daos/learning_progress_dao.dart';
-import 'package:fluency/database/daos/stage_completion_dao.dart';
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/models/learning_progress.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/time_provider.dart';
+import 'package:echo_loop/database/app_database.dart' as db;
+import 'package:echo_loop/database/daos/learning_progress_dao.dart';
+import 'package:echo_loop/database/daos/stage_completion_dao.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/time_provider.dart';
 import 'package:mocktail/mocktail.dart';
 import '../helpers/mock_providers.dart';
 

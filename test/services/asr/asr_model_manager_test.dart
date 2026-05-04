@@ -5,7 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:fluency/services/asr/asr_model_manager.dart';
+import 'package:echo_loop/services/asr/asr_model_manager.dart';
 
 class _TestAsrModelManager extends AsrModelManager {
   _TestAsrModelManager(

@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/models/blind_listen_settings.dart';
-import 'package:fluency/models/intensive_listen_settings.dart'
+import 'package:echo_loop/models/blind_listen_settings.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
-import 'package:fluency/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
 import '../helpers/mock_providers.dart';
 
 /// 测试用 AudioEngine：支持 session 管理和模拟播放

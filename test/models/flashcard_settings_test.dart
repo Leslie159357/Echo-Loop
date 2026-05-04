@@ -4,8 +4,8 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/flashcard_settings.dart';
-import 'package:fluency/models/intensive_listen_settings.dart'
+import 'package:echo_loop/models/flashcard_settings.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
 
 void main() {

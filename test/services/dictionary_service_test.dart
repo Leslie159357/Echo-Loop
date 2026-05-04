@@ -4,7 +4,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/services/dictionary_service.dart';
+import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 /// 创建内存数据库并插入测试数据

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/audio_item.dart';
+import 'package:echo_loop/models/audio_item.dart';
 
 void main() {
   group('AudioItem', () {

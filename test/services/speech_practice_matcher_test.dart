@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/speech_practice_models.dart';
-import 'package:fluency/services/speech_practice_matcher.dart';
+import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/services/speech_practice_matcher.dart';
 
 void main() {
   group('SpeechTranscriptMatcher', () {

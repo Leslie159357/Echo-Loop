@@ -9,19 +9,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/providers.dart';
-import 'package:fluency/features/onboarding_survey/providers/onboarding_survey_provider.dart';
-import 'package:fluency/main.dart';
-import 'package:fluency/providers/new_user_guide_provider.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/collection_provider.dart';
-import 'package:fluency/providers/tag_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/package_info_provider.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/main.dart';
+import 'package:echo_loop/providers/new_user_guide_provider.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/tag_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/package_info_provider.dart';
 
 import 'helpers/mock_providers.dart';
 

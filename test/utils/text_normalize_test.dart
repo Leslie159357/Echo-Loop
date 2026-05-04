@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/utils/text_normalize.dart';
+import 'package:echo_loop/utils/text_normalize.dart';
 
 void main() {
   group('normalizeForCache', () {

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/services/temp_cleanup_service.dart';
+import 'package:echo_loop/services/temp_cleanup_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

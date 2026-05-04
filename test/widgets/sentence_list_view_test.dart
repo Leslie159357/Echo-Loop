@@ -7,9 +7,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fluency/widgets/sentence_list_view.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/l10n/app_localizations.dart';
+import 'package:echo_loop/widgets/sentence_list_view.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
 
 import '../helpers/mock_providers.dart';
 

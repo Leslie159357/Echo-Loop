@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:fluency/features/official_collections/data/official_catalog_service.dart';
+import 'package:echo_loop/features/official_collections/data/official_catalog_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fixtures/catalog_fixtures.dart';

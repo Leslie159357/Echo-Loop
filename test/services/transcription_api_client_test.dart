@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fluency/services/transcription_api_client.dart';
+import 'package:echo_loop/services/transcription_api_client.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

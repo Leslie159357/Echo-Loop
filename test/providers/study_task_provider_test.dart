@@ -1,12 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/models/audio_item.dart';
-import 'package:fluency/models/learning_progress.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/study_task_provider.dart';
-import 'package:fluency/providers/time_provider.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/models/audio_item.dart';
+import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/study_task_provider.dart';
+import 'package:echo_loop/providers/time_provider.dart';
 
 import '../helpers/mock_providers.dart';
 

@@ -9,14 +9,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:fluency/models/audio_item.dart';
-import 'package:fluency/models/word_timestamp.dart';
-import 'package:fluency/providers/audio_library_provider.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/transcription_task_provider.dart';
-import 'package:fluency/services/subtitle_auto_align_service.dart';
-import 'package:fluency/services/transcription_api_client.dart';
-import 'package:fluency/utils/srt_generator.dart';
+import 'package:echo_loop/models/audio_item.dart';
+import 'package:echo_loop/models/word_timestamp.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/transcription_task_provider.dart';
+import 'package:echo_loop/services/subtitle_auto_align_service.dart';
+import 'package:echo_loop/services/transcription_api_client.dart';
+import 'package:echo_loop/utils/srt_generator.dart';
 
 import '../helpers/mock_providers.dart';
 

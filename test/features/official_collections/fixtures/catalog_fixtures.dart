@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Value;
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/features/official_collections/models/catalog.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/features/official_collections/models/catalog.dart';
 
 /// 构造 [CatalogAudio] 便于注入。
 CatalogAudio makeCatalogAudio({

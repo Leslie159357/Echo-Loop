@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
-import 'package:fluency/models/sentence_ai_result.dart';
-import 'package:fluency/providers/sentence_ai_provider.dart';
-import 'package:fluency/services/sentence_ai_api_client.dart';
-import 'package:fluency/utils/text_normalize.dart';
+import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
+import 'package:echo_loop/models/sentence_ai_result.dart';
+import 'package:echo_loop/providers/sentence_ai_provider.dart';
+import 'package:echo_loop/services/sentence_ai_api_client.dart';
+import 'package:echo_loop/utils/text_normalize.dart';
 
 class MockCacheDao extends Mock implements SentenceAiCacheDao {}
 

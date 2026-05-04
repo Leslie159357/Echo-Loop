@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/models/app_update_info.dart';
-import 'package:fluency/widgets/app_update_dialog.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/app_update_info.dart';
+import 'package:echo_loop/widgets/app_update_dialog.dart';
 
 void main() {
   const info = AppUpdateInfo(

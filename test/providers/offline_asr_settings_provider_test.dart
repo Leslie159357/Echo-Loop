@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/providers/offline_asr_settings_provider.dart';
-import 'package:fluency/services/asr/asr_model_manager.dart';
-import 'package:fluency/services/asr/offline_asr_engine.dart';
+import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
+import 'package:echo_loop/services/asr/asr_model_manager.dart';
+import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 
 class _FakeAsrModelManager extends AsrModelManager {
   _FakeAsrModelManager({

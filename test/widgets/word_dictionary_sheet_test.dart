@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/services/dictionary_service.dart';
-import 'package:fluency/theme/app_theme.dart';
-import 'package:fluency/widgets/intensive_listen/word_dictionary_sheet.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/services/dictionary_service.dart';
+import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/widgets/intensive_listen/word_dictionary_sheet.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 /// 创建测试用内存词典数据库

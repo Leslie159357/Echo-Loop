@@ -5,10 +5,10 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:fluency/data/demo_content.dart';
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/services/demo_data_seeder.dart';
-import 'package:fluency/utils/app_data_dir.dart';
+import 'package:echo_loop/data/demo_content.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/services/demo_data_seeder.dart';
+import 'package:echo_loop/utils/app_data_dir.dart';
 
 /// 创建内存数据库用于测试
 AppDatabase _createTestDatabase() {

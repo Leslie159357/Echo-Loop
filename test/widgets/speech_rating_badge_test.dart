@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/models/speech_practice_models.dart';
-import 'package:fluency/services/audio_playback_service.dart';
-import 'package:fluency/theme/app_theme.dart';
-import 'package:fluency/widgets/common/speech_rating_badge.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/services/audio_playback_service.dart';
+import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/widgets/common/speech_rating_badge.dart';
 
 class _FakeAudioPlaybackService extends AudioPlaybackService {
   Completer<void>? _playCompleter;

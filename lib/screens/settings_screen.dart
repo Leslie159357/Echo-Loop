@@ -330,7 +330,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     WidgetRef ref,
     AppLocalizations l10n,
   ) {
-    final version = ref.watch(packageInfoProvider).version;
+    final packageInfo = ref.watch(packageInfoProvider);
+    final version = packageInfo.version;
+    final buildNumber = packageInfo.buildNumber;
+    // 构建号 > 0 时显示 +N，否则只显示版本号
+    final versionDisplay = buildNumber.isNotEmpty && buildNumber != '0'
+        ? '$version+$buildNumber'
+        : version;
     final updateState = ref.watch(appUpdateProvider);
     final isChecking = updateState is AppUpdateChecking;
 
@@ -385,7 +391,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Center(
               child: Text(
-                kReleaseMode ? 'Version $version' : 'Version $version (Debug)',
+                kReleaseMode
+                    ? 'Version $versionDisplay'
+                    : 'Version $versionDisplay (Debug)',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

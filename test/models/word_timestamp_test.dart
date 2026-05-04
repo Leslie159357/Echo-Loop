@@ -4,7 +4,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/word_timestamp.dart';
+import 'package:echo_loop/models/word_timestamp.dart';
 
 void main() {
   group('WordTimestamp', () {

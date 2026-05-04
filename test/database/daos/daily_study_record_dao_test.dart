@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/daos/daily_study_record_dao.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/daos/daily_study_record_dao.dart';
 
 AppDatabase _createTestDb() {
   return AppDatabase(

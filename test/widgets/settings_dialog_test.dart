@@ -6,11 +6,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fluency/widgets/settings_dialog.dart';
-import 'package:fluency/models/playback_settings.dart';
-import 'package:fluency/providers/settings_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/widgets/settings_dialog.dart';
+import 'package:echo_loop/models/playback_settings.dart';
+import 'package:echo_loop/providers/settings_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';

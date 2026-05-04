@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/app_update_info.dart';
+import 'package:echo_loop/models/app_update_info.dart';
 
 void main() {
   group('AppUpdateInfo.fromJson', () {

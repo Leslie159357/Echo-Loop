@@ -5,9 +5,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-import 'package:fluency/services/notification_tap_router_bridge.dart';
-import 'package:fluency/services/review_reminder_service.dart';
-import 'package:fluency/services/review_reminder_time_calculator.dart';
+import 'package:echo_loop/services/notification_tap_router_bridge.dart';
+import 'package:echo_loop/services/review_reminder_service.dart';
+import 'package:echo_loop/services/review_reminder_time_calculator.dart';
 
 // --- Mocks ---
 

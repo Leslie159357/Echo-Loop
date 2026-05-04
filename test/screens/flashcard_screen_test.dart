@@ -8,14 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/screens/flashcard_screen.dart';
-import 'package:fluency/providers/flashcard/flashcard_provider.dart';
-import 'package:fluency/providers/flashcard/flashcard_flow_phase.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/models/flashcard_item.dart';
-import 'package:fluency/database/app_database.dart' show SavedWord;
-import 'package:fluency/theme/app_theme.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/screens/flashcard_screen.dart';
+import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
+import 'package:echo_loop/providers/flashcard/flashcard_flow_phase.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/models/flashcard_item.dart';
+import 'package:echo_loop/database/app_database.dart' show SavedWord;
+import 'package:echo_loop/theme/app_theme.dart';
 
 import '../helpers/mock_providers.dart';
 

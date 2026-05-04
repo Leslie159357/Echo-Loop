@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fluency/analytics/analytics_channel.dart';
-import 'package:fluency/analytics/analytics_service.dart';
-import 'package:fluency/analytics/consent_manager.dart';
-import 'package:fluency/analytics/models/event_names.dart';
-import 'package:fluency/analytics/permission_snapshot.dart';
+import 'package:echo_loop/analytics/analytics_channel.dart';
+import 'package:echo_loop/analytics/analytics_service.dart';
+import 'package:echo_loop/analytics/consent_manager.dart';
+import 'package:echo_loop/analytics/models/event_names.dart';
+import 'package:echo_loop/analytics/permission_snapshot.dart';
 
 /// 不出错的伪 probe：返回固定值。
 class _FakeProbe implements PermissionProbe {

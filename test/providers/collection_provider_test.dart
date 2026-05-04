@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/collection.dart';
-import 'package:fluency/providers/collection_provider.dart';
+import 'package:echo_loop/models/collection.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
 
 void main() {
   group('CollectionState', () {

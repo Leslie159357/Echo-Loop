@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/features/official_collections/data/official_catalog_service.dart';
-import 'package:fluency/features/official_collections/data/official_collection_repository.dart';
-import 'package:fluency/features/official_collections/models/catalog.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/features/official_collections/data/official_catalog_service.dart';
+import 'package:echo_loop/features/official_collections/data/official_collection_repository.dart';
+import 'package:echo_loop/features/official_collections/models/catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fixtures/catalog_fixtures.dart';

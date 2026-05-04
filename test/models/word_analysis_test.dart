@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/word_analysis.dart';
+import 'package:echo_loop/models/word_analysis.dart';
 
 void main() {
   group('WordAnalysis', () {

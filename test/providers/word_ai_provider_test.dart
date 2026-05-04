@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:fluency/database/daos/sentence_ai_cache_dao.dart';
-import 'package:fluency/models/word_analysis.dart';
-import 'package:fluency/providers/word_ai_provider.dart';
-import 'package:fluency/services/sentence_ai_api_client.dart';
+import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
+import 'package:echo_loop/models/word_analysis.dart';
+import 'package:echo_loop/providers/word_ai_provider.dart';
+import 'package:echo_loop/services/sentence_ai_api_client.dart';
 
 class MockCacheDao extends Mock implements SentenceAiCacheDao {}
 

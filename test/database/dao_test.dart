@@ -2,8 +2,8 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fluency/database/app_database.dart';
-import 'package:fluency/database/daos/bookmark_dao.dart';
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/daos/bookmark_dao.dart';
 
 /// 创建内存数据库用于测试（启用外键约束）
 AppDatabase createTestDatabase() {

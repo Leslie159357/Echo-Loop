@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/models/sentence.dart';
-import 'package:fluency/providers/listening_practice/bookmark_manager.dart';
+import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/providers/listening_practice/bookmark_manager.dart';
 
 void main() {
   group('BookmarkManager', () {

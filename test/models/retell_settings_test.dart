@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluency/database/enums.dart';
-import 'package:fluency/models/intensive_listen_settings.dart';
-import 'package:fluency/models/retell_settings.dart';
-import 'package:fluency/widgets/retell/retell_briefing_sheet.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart';
+import 'package:echo_loop/models/retell_settings.dart';
+import 'package:echo_loop/widgets/retell/retell_briefing_sheet.dart';
 
 void main() {
   group('retellDefaultSeconds', () {

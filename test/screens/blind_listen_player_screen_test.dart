@@ -7,18 +7,18 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/models/blind_listen_settings.dart';
-import 'package:fluency/models/intensive_listen_settings.dart'
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/blind_listen_settings.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/providers/learning_progress_provider.dart';
-import 'package:fluency/providers/learning_session/blind_listen_player_provider.dart';
-import 'package:fluency/providers/learning_session/learning_session_provider.dart';
-import 'package:fluency/providers/listening_practice/listening_practice_provider.dart';
-import 'package:fluency/screens/blind_listen_player_screen.dart';
-import 'package:fluency/theme/app_theme.dart';
-import 'package:fluency/widgets/common/playback_controls.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
+import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/screens/blind_listen_player_screen.dart';
+import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/widgets/common/playback_controls.dart';
 
 import '../helpers/mock_providers.dart';
 

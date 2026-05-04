@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:fluency/l10n/app_localizations.dart';
-import 'package:fluency/widgets/difficult_practice/difficult_practice_settings_sheet.dart';
-import 'package:fluency/providers/learning_session/review_difficult_practice_provider.dart';
-import 'package:fluency/providers/audio_engine/audio_engine_provider.dart';
-import 'package:fluency/models/difficult_practice_settings.dart';
-import 'package:fluency/models/intensive_listen_settings.dart';
-import 'package:fluency/theme/app_theme.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/widgets/difficult_practice/difficult_practice_settings_sheet.dart';
+import 'package:echo_loop/providers/learning_session/review_difficult_practice_provider.dart';
+import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/models/difficult_practice_settings.dart';
+import 'package:echo_loop/models/intensive_listen_settings.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 
 import '../helpers/mock_providers.dart';
 
