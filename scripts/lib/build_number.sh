@@ -5,7 +5,7 @@
 #       calculate_build_number "1.0.8"
 #
 # 输出变量：
-#   BUILD_NUMBER  - 构建号（数字，首次构建为 0）
+#   BUILD_NUMBER  - 构建号（数字，首次构建为 1）
 #   TAG_NAME      - 要创建的 tag 名
 #   SKIP_TAG_CREATION - 是否跳过 tag 创建（当前 commit 已有同版本 tag）
 
@@ -43,12 +43,13 @@ calculate_build_number() {
   local MAX_BUILD="$(git tag -l "v${BUILD_NAME}+*" | grep -Eo '[+][0-9]+$' | grep -Eo '[0-9]+' | sort -n | tail -1 || true)"
 
   # 3. 计算新构建号和 tag 名（统一格式：v版本号+构建号）
+  # 构建号从 1 开始（Android versionCode 必须是正整数）
   if [[ -n "$MAX_BUILD" ]]; then
     # 有 +N tag，构建号递增
     BUILD_NUMBER=$((MAX_BUILD + 1))
   else
     # 无任何同版本 tag，第一次构建
-    BUILD_NUMBER="0"
+    BUILD_NUMBER="1"
   fi
   TAG_NAME="v${BUILD_NAME}+${BUILD_NUMBER}"
 
@@ -70,10 +71,10 @@ create_build_tag() {
 # 从 tag 提取版本号和构建号
 parse_tag() {
   local TAG="$1"
-  # v1.0.8 或 v1.0.8+2 → 提取 1.0.8 和构建号
+  # v1.0.8+1 → 提取 1.0.8 和构建号
   local build_name="${TAG#v}"
   build_name="${build_name%+*}"
-  local build_number="0"  # 默认为 0（对应无 +N 的 tag）
+  local build_number="1"  # 默认为 1（对应无 +N 的旧 tag）
   if [[ "$TAG" =~ [+][0-9]+$ ]]; then
     build_number="${BASH_REMATCH[0]#+}"
   fi

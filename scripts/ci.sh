@@ -73,7 +73,7 @@ BUILD_NAME="$(get_build_name)" || fail "Failed to get build name"
 calculate_build_number "$BUILD_NAME"
 
 log "Build name: $BUILD_NAME"
-log "Build number: ${BUILD_NUMBER:-0} (default)"
+log "Build number: ${BUILD_NUMBER:-1}"
 log "Tag to create: $TAG_NAME"
 log "Platforms: ${PLATFORMS[*]}"
 

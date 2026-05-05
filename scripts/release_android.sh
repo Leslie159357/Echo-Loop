@@ -110,7 +110,7 @@ APK_NAME="Echo-Loop-${VERSION}-${ARCH}.apk"
 APK_PATH="build/release/$APK_NAME"
 
 log "Version: $VERSION"
-log "Build number: ${BUILD_NUMBER:-0}"
+log "Build number: ${BUILD_NUMBER:-1}"
 log "Architecture: $ARCH"
 log "Flavor: $FLAVOR"
 log "API base URL: $API_BASE_URL"

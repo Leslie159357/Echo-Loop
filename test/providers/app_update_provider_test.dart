@@ -117,25 +117,25 @@ void main() {
       );
     });
 
-    test('本地 1.0.9+0 等于远程 1.0.9，无需更新', () {
+    test('本地 1.0.9+1 等于远程 1.0.9+1，无需更新', () {
       const info = AppUpdateInfo(
-        latestVersion: '1.0.9',
+        latestVersion: '1.0.9+1',
         minimumVersion: '1.0.0',
       );
       expect(
-        AppUpdate.determineUpdateType('1.0.9+0', info),
+        AppUpdate.determineUpdateType('1.0.9+1', info),
         AppUpdateType.none,
       );
     });
 
-    test('buildNumber 为空时默认 +0，与远程 1.0.9 相等', () {
+    test('buildNumber 为空时默认 +1', () {
       const info = AppUpdateInfo(
-        latestVersion: '1.0.9',
+        latestVersion: '1.0.9+1',
         minimumVersion: '1.0.0',
       );
-      // 空 buildNumber 时 localVersion 会是 "1.0.9+0"
+      // 空 buildNumber 时 localVersion 会是 "1.0.9+1"
       expect(
-        AppUpdate.determineUpdateType('1.0.9+0', info),
+        AppUpdate.determineUpdateType('1.0.9+1', info),
         AppUpdateType.none,
       );
     });

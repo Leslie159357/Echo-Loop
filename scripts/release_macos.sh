@@ -68,7 +68,7 @@ VERSION="${BUILD_NAME}+${BUILD_NUMBER}"
 APP_NAME="Echo-Loop-${VERSION}-macos"
 
 log "Version: $VERSION"
-log "Build number: ${BUILD_NUMBER:-0}"
+log "Build number: ${BUILD_NUMBER:-1}"
 log "Output: build/release/$APP_NAME.dmg"
 
 # 清理并构建

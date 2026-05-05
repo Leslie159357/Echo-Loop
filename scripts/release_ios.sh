@@ -139,7 +139,7 @@ if [[ -z "$BUILD_NAME" || -z "$BUILD_NUMBER" ]]; then
 fi
 
 log "Using build name: $BUILD_NAME"
-log "Using build number: ${BUILD_NUMBER:-0}"
+log "Using build number: ${BUILD_NUMBER:-1}"
 log "Using API base URL: $API_BASE_URL"
 
 log "Checking available code signing identities"
