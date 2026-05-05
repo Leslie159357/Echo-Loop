@@ -127,5 +127,17 @@ void main() {
         AppUpdateType.none,
       );
     });
+
+    test('buildNumber 为空时默认 +0，与远程 1.0.9 相等', () {
+      const info = AppUpdateInfo(
+        latestVersion: '1.0.9',
+        minimumVersion: '1.0.0',
+      );
+      // 空 buildNumber 时 localVersion 会是 "1.0.9+0"
+      expect(
+        AppUpdate.determineUpdateType('1.0.9+0', info),
+        AppUpdateType.none,
+      );
+    });
   });
 }

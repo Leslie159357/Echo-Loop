@@ -333,11 +333,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final packageInfo = ref.watch(packageInfoProvider);
     final version = packageInfo.version;
     final buildNumber = packageInfo.buildNumber;
-    // 仅当 buildNumber 是纯数字时显示 +N（避免 "1.0.9+1.0.9" 这种错误格式）
+    // 仅当 buildNumber 是纯数字时显示 +N（空时默认 +0）
     final buildNumberInt = int.tryParse(buildNumber);
-    final versionDisplay = buildNumberInt != null
-        ? '$version+$buildNumber'
-        : version;
+    final effectiveBuildNumber = buildNumberInt?.toString() ?? '0';
+    final versionDisplay = '$version+$effectiveBuildNumber';
     final updateState = ref.watch(appUpdateProvider);
     final isChecking = updateState is AppUpdateChecking;
 
