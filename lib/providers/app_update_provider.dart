@@ -116,9 +116,9 @@ class AppUpdate extends _$AppUpdate {
 
     final packageInfo = ref.read(packageInfoProvider);
     final buildNumber = packageInfo.buildNumber;
-    // 仅当 buildNumber 是纯数字且 > 0 时组合为完整版本号（避免 "1.0.9+1.0.9"）
+    // 仅当 buildNumber 是纯数字时组合为完整版本号（避免 "1.0.9+1.0.9"）
     final buildNumberInt = int.tryParse(buildNumber);
-    final localVersion = buildNumberInt != null && buildNumberInt > 0
+    final localVersion = buildNumberInt != null
         ? '${packageInfo.version}+$buildNumber'
         : packageInfo.version;
     final updateType = determineUpdateType(localVersion, info);
