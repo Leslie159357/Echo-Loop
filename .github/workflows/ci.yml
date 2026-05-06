@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run analyze
+        run: flutter analyze
+
+  test:
+    runs-on: ubuntu-latest
+    needs: analyze
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+  build:
+    needs: [analyze, test]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+        include:
+          - platform: ios
+            runner: macos-latest
+          - platform: android
+            runner: ubuntu-latest
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Cache CocoaPods
+        if: matrix.platform == 'ios'
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Install CocoaPods
+        if: matrix.platform == 'ios'
+        run: cd ios && pod install
+
+      - name: Build iOS (no codesign)
+        if: matrix.platform == 'ios'
+        run: |
+          flutter build ios --release --no-codesign --flavor=prod \
+            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }} \
+            --dart-define=POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
+
+      - name: Setup Java
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Android APK
+        if: matrix.platform == 'android'
+        run: |
+          flutter clean
+          flutter build apk --release --flavor=prod \
+            --target-platform android-arm64 \
+            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }} \
+            --dart-define=POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
