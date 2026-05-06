@@ -20,7 +20,7 @@ void main() {
     testWidgets('未学习 → 显示 audio icon + 灰色圆形背景', (tester) async {
       await tester.pumpWidget(createTestWidget(null));
 
-      expect(find.byIcon(Icons.audiotrack), findsOneWidget);
+      expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
       // Container with circle shape
       final container = tester.widget<Container>(
         find.byType(Container).first,

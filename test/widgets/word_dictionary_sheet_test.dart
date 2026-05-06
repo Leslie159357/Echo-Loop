@@ -14,6 +14,8 @@ import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/intensive_listen/word_dictionary_sheet.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../helpers/mock_providers.dart';
+
 /// 创建测试用内存词典数据库
 Database _createTestDb() {
   final db = sqlite3.openInMemory();
@@ -39,7 +41,7 @@ Database _createTestDb() {
 /// 构建打开弹窗的测试页面
 Widget _buildTestPage(String word, {String? sentenceText}) {
   return ProviderScope(
-    overrides: const [],
+    overrides: [analyticsOverride(), dictionaryOverride()],
     child: MaterialApp(
       locale: const Locale('en'),
       supportedLocales: const [Locale('en'), Locale('zh')],

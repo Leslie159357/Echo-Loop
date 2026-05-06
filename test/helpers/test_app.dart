@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
@@ -36,6 +37,7 @@ Widget createTestApp(
 }) {
   // 默认 overrides：所有 Provider 使用测试替身
   final defaultOverrides = <Override>[
+    analyticsOverride(),
     appSettingsProvider.overrideWith(
       () => TestAppSettings(
         AppSettingsState(themeMode: themeMode, locale: locale),
@@ -55,17 +57,24 @@ Widget createTestApp(
 
   return ProviderScope(
     overrides: overrides ?? defaultOverrides,
-    child: MaterialApp(
-      locale: locale,
-      supportedLocales: const [Locale('en'), Locale('zh')],
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      theme: AppTheme.light(),
-      home: Scaffold(body: child),
+    child: Builder(
+      builder: (context) {
+        // 注册 ShowcaseView 控制器（测试环境）
+        // ignore: unused_local_variable
+        final showcase = ShowcaseView.register();
+        return MaterialApp(
+          locale: locale,
+          supportedLocales: const [Locale('en'), Locale('zh')],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light(),
+          home: Scaffold(body: child),
+        );
+      },
     ),
   );
 }
@@ -79,6 +88,7 @@ Widget createTestScreen(
   Locale locale = const Locale('en'),
 }) {
   final defaultOverrides = <Override>[
+    analyticsOverride(),
     appSettingsProvider.overrideWith(
       () => TestAppSettings(AppSettingsState(locale: locale)),
     ),
@@ -93,17 +103,24 @@ Widget createTestScreen(
 
   return ProviderScope(
     overrides: overrides ?? defaultOverrides,
-    child: MaterialApp.router(
-      locale: locale,
-      supportedLocales: const [Locale('en'), Locale('zh')],
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      theme: AppTheme.light(),
-      routerConfig: router,
+    child: Builder(
+      builder: (context) {
+        // 注册 ShowcaseView 控制器（测试环境）
+        // ignore: unused_local_variable
+        final showcase = ShowcaseView.register();
+        return MaterialApp.router(
+          locale: locale,
+          supportedLocales: const [Locale('en'), Locale('zh')],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light(),
+          routerConfig: router,
+        );
+      },
     ),
   );
 }

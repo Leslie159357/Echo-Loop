@@ -10,6 +10,8 @@ import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/study/learned_word_forms_sheet.dart';
 
+import '../helpers/mock_providers.dart';
+
 AppDatabase _createTestDb() {
   return AppDatabase(
     NativeDatabase.memory(
@@ -20,7 +22,10 @@ AppDatabase _createTestDb() {
 
 Widget _buildTestApp(AppDatabase db) {
   return ProviderScope(
-    overrides: [appDatabaseProvider.overrideWithValue(db)],
+    overrides: [
+      analyticsOverride(),
+      appDatabaseProvider.overrideWithValue(db),
+    ],
     child: MaterialApp(
       supportedLocales: const [Locale('en'), Locale('zh')],
       localizationsDelegates: const [

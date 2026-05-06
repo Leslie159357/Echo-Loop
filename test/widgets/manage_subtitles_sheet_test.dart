@@ -39,6 +39,7 @@ void main() {
           ),
         ),
         overrides: [
+          analyticsOverride(),
           appSettingsProvider.overrideWith(
             () => TestAppSettings(const AppSettingsState(locale: Locale('en'))),
           ),

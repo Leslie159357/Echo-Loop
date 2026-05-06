@@ -10,6 +10,8 @@ import 'package:echo_loop/services/asr/asr_model_manager.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 import 'package:echo_loop/widgets/asr_download_prompt_dialog.dart';
 
+import '../helpers/mock_providers.dart';
+
 class _TestOfflineAsrSettingsNotifier extends OfflineAsrSettingsNotifier {
   _TestOfflineAsrSettingsNotifier(this._initialState);
 
@@ -83,6 +85,7 @@ void main() {
   Widget createTestWidget({required _TestOfflineAsrSettingsNotifier notifier}) {
     return ProviderScope(
       overrides: [
+        analyticsOverride(),
         offlineAsrSettingsProvider.overrideWith(() => notifier),
       ],
       child: MaterialApp(

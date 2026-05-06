@@ -49,6 +49,7 @@ import 'package:echo_loop/services/study_time_service.dart';
 import 'package:echo_loop/models/blind_listen_settings.dart';
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/providers/app_update_provider.dart';
+import 'package:echo_loop/providers/dictionary_provider.dart';
 
 // ========== 测试数据工厂 ==========
 
@@ -174,6 +175,43 @@ Override analyticsOverride() {
   return analyticsServiceProvider.overrideWithValue(
     createTestAnalyticsServiceSync(),
   );
+}
+
+/// 返回 dictionaryProvider 的 override，状态为已下载
+///
+/// 用于测试需要查询词典的 Widget（如 WordDictionarySheet）。
+Override dictionaryOverride({
+  DictionaryStatus status = DictionaryStatus.downloaded,
+  String nativeLanguage = 'zh',
+}) {
+  return dictionaryProvider.overrideWith(
+    () => TestDictionary(
+      DictionaryState(
+        status: status,
+        nativeLanguage: nativeLanguage,
+      ),
+    ),
+  );
+}
+
+/// 测试用 Dictionary — 不执行下载/打开数据库
+class TestDictionary extends Dictionary {
+  final DictionaryState _initialState;
+
+  TestDictionary([
+    this._initialState = const DictionaryState(
+      status: DictionaryStatus.notDownloaded,
+      nativeLanguage: 'zh',
+    ),
+  ]);
+
+  @override
+  DictionaryState build() => _initialState;
+
+  @override
+  Future<void> retryDownload() async {
+    // 测试中不执行下载
+  }
 }
 
 // ========== 测试 Notifier ==========

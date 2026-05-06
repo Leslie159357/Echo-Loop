@@ -8,6 +8,8 @@ import 'package:echo_loop/providers/speech/speech_recording_controller.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 import 'package:echo_loop/services/speech_practice_platform.dart';
 
+import '../../helpers/mock_providers.dart';
+
 const _testAsrModel = AsrModelInfo(
   id: 'test-model',
   displayName: 'Test Model',
@@ -252,6 +254,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -285,6 +288,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -332,6 +336,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -377,6 +382,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -420,6 +426,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -464,6 +471,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -516,6 +524,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -556,6 +565,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -595,6 +605,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -635,6 +646,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -677,6 +689,7 @@ void main() {
       final backend = _FakeSpeechPracticeBackend(autoEmitFinal: false);
       final container = ProviderContainer(
         overrides: [
+          analyticsOverride(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
