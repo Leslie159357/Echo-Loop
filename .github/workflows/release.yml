@@ -262,25 +262,45 @@ jobs:
             --build-number="$BUILD_NUMBER" \
             "${DART_DEFINES[@]}"
 
-      - name: Archive iOS app with manual signing
+      - name: Patch Runner pbxproj for manual signing
         if: matrix.platform == 'ios'
         env:
-          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
           IOS_PROVISIONING_PROFILE_NAME: ${{ vars.IOS_PROVISIONING_PROFILE_NAME }}
         run: |
+          # 只修改 Runner.xcodeproj/project.pbxproj（不动 Pods.xcodeproj）。
+          # xcodebuild 命令行 args 是全局的会污染 Pods，所以签名配置写进 Runner pbxproj 自身。
+          # 仅在 CI 上下文修改，不提交。
+          python3 <<'PYEOF'
+          import os
+          path = "ios/Runner.xcodeproj/project.pbxproj"
+          profile = os.environ["IOS_PROVISIONING_PROFILE_NAME"]
+          with open(path) as f:
+              content = f.read()
+          replacement = (
+              f'CODE_SIGN_STYLE = Manual;\n'
+              f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile}";\n'
+              f'\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";'
+          )
+          new_content = content.replace("CODE_SIGN_STYLE = Automatic;", replacement)
+          changes = new_content.count('CODE_SIGN_STYLE = Manual')
+          with open(path, "w") as f:
+              f.write(new_content)
+          print(f"Patched {changes} CODE_SIGN_STYLE entries")
+          assert changes > 0, "No CODE_SIGN_STYLE = Automatic found in pbxproj"
+          PYEOF
+
+      - name: Archive iOS app
+        if: matrix.platform == 'ios'
+        run: |
           export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-          # xcodebuild 命令行参数会覆盖 pbxproj 里的 CODE_SIGN_STYLE = Automatic
+          # 签名配置已写进 Runner pbxproj，命令行不传签名 args 避免污染 Pods
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme prod \
             -configuration Release-prod \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$IOS_PROVISIONING_PROFILE_NAME" \
-            CODE_SIGN_IDENTITY="Apple Distribution"
+            archive
 
       - name: Export IPA from archive
         if: matrix.platform == 'ios'
