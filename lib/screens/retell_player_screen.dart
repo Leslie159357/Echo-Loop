@@ -188,12 +188,10 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     // 评估完成（有 ASR: processing→idle，无 ASR: recording→idle）
     if (prev?.phase != RetellRecordingPhase.idle &&
         next.phase == RetellRecordingPhase.idle) {
-      final currentPlayerState = ref.read(retellPlayerProvider);
-      if (!currentPlayerState.userOverrodeDisplayMode) {
-        ref
-            .read(retellPlayerProvider.notifier)
-            .setDisplayModeWithoutOverride(RetellDisplayMode.showAll);
-      }
+      // 复述完成后一律显示全部字幕（不影响用户在复述过程中的设置）
+      ref
+          .read(retellPlayerProvider.notifier)
+          .setDisplayModeWithoutOverride(RetellDisplayMode.showAll);
 
       final latestState = ref.read(retellPlayerProvider);
       if (latestState.phase == RetellPhase.retelling &&
