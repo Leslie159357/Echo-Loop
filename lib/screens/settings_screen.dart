@@ -16,7 +16,6 @@ import '../providers/backup_provider.dart';
 import '../providers/developer_options_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
 import '../providers/package_info_provider.dart';
-import '../providers/learning_settings_provider.dart';
 import '../providers/reminder_settings_provider.dart';
 import '../providers/sentence_ai_provider.dart';
 import '../providers/settings_provider.dart';
@@ -94,15 +93,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.m),
-          _buildReminderSection(context, ref, l10n),
-          const SizedBox(height: AppSpacing.m),
-          _buildPlaybackSection(context, l10n),
-          const SizedBox(height: AppSpacing.m),
-          _buildLearningSection(context, ref, l10n),
-          if (ref.watch(showOfflineAsrSectionProvider)) ...[
-            const SizedBox(height: AppSpacing.m),
-            _buildAiSection(context, ref, l10n),
-          ],
+          _buildStudySection(context, ref, l10n),
           const SizedBox(height: AppSpacing.m),
           _buildStorageSection(context, ref, l10n),
           const SizedBox(height: AppSpacing.m),
@@ -150,18 +141,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 构建提醒设置入口
-  Widget _buildReminderSection(
+  /// 构建「学习」分组：提醒、播放、学习、语音识别四个入口合并到同一张卡片中。
+  Widget _buildStudySection(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
   ) {
-    final settings = ref.watch(reminderSettingsNotifierProvider);
+    final reminderSettings = ref.watch(reminderSettingsNotifierProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final showAsr = ref.watch(showOfflineAsrSectionProvider);
 
     return _buildSection(
       context,
-      title: l10n.reminderSectionTitle,
+      title: l10n.learningSection,
       children: [
         ListTile(
           leading: _emojiIcon('🔔'),
@@ -169,9 +161,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (settings.savedReviewReminderEnabled)
+              if (reminderSettings.savedReviewReminderEnabled)
                 Text(
-                  settings.formattedTime,
+                  reminderSettings.formattedTime,
                   style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
               const SizedBox(width: AppSpacing.xs),
@@ -184,42 +176,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  /// 构建播放设置入口
-  Widget _buildPlaybackSection(BuildContext context, AppLocalizations l10n) {
-    return _buildSection(
-      context,
-      title: l10n.playbackSection,
-      children: [
         ListTile(
-          leading: _emojiIcon('🎵'),
-          title: Text(l10n.playbackSettings),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const PlaybackSettingsScreen(),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 构建学习设置入口
-  Widget _buildLearningSection(
-    BuildContext context,
-    WidgetRef ref,
-    AppLocalizations l10n,
-  ) {
-    return _buildSection(
-      context,
-      title: l10n.learningSection,
-      children: [
-        ListTile(
-          leading: _emojiIcon('🎯'),
+          leading: _emojiIcon('📚'),
           title: Text(l10n.learningSettings),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
@@ -228,39 +186,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  /// 构建 AI section（Android 稳定显示，避免入口因环境判定波动而消失）。
-  Widget _buildAiSection(
-    BuildContext context,
-    WidgetRef ref,
-    AppLocalizations l10n,
-  ) {
-    final asrState = ref.watch(offlineAsrSettingsProvider);
-
-    final statusText = asrState.enabled
-        ? l10n.speechRecognitionEnabled
-        : l10n.speechRecognitionDisabled;
-
-    return _buildSection(
-      context,
-      title: l10n.aiSectionTitle,
-      children: [
-        ListTile(
-          leading: _emojiIcon('🎙️'),
-          title: Text(l10n.speechRecognition),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(statusText, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right),
-            ],
+        if (showAsr)
+          ListTile(
+            leading: _emojiIcon('🎙️'),
+            title: Text(l10n.speechRecognition),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ref.watch(offlineAsrSettingsProvider).enabled
+                      ? l10n.speechRecognitionEnabled
+                      : l10n.speechRecognitionDisabled,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AsrSettingsScreen(),
+              ),
+            ),
           ),
+        ListTile(
+          leading: _emojiIcon('▶️'),
+          title: Text(l10n.playbackSettings),
+          trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const AsrSettingsScreen()),
+            MaterialPageRoute<void>(
+              builder: (_) => const PlaybackSettingsScreen(),
+            ),
           ),
         ),
       ],

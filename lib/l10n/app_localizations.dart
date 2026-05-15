@@ -341,7 +341,7 @@ abstract class AppLocalizations {
   /// No description provided for @themeMode.
   ///
   /// In en, this message translates to:
-  /// **'Theme Mode'**
+  /// **'Theme'**
   String get themeMode;
 
   /// No description provided for @themeModeSystem.
@@ -365,7 +365,7 @@ abstract class AppLocalizations {
   /// No description provided for @language.
   ///
   /// In en, this message translates to:
-  /// **'App Language'**
+  /// **'Interface Language'**
   String get language;
 
   /// No description provided for @languageDescription.
@@ -3611,7 +3611,7 @@ abstract class AppLocalizations {
   /// No description provided for @storage.
   ///
   /// In en, this message translates to:
-  /// **'Storage'**
+  /// **'Other'**
   String get storage;
 
   /// No description provided for @clearCache.
@@ -4007,7 +4007,7 @@ abstract class AppLocalizations {
   /// No description provided for @reminderSettings.
   ///
   /// In en, this message translates to:
-  /// **'Reminder Settings'**
+  /// **'Review Reminder'**
   String get reminderSettings;
 
   /// No description provided for @savedReviewReminderSection.
@@ -5189,7 +5189,7 @@ abstract class AppLocalizations {
   /// No description provided for @learningSettings.
   ///
   /// In en, this message translates to:
-  /// **'Learning settings'**
+  /// **'Study Plan'**
   String get learningSettings;
 
   /// No description provided for @speakingPracticeSection.

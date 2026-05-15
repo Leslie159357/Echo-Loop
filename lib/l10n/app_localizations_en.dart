@@ -131,7 +131,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearance => 'Appearance';
 
   @override
-  String get themeMode => 'Theme Mode';
+  String get themeMode => 'Theme';
 
   @override
   String get themeModeSystem => 'Follow System';
@@ -143,7 +143,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeModeDark => 'Dark Mode';
 
   @override
-  String get language => 'App Language';
+  String get language => 'Interface Language';
 
   @override
   String get languageDescription => 'Language used for the app interface';
@@ -2019,7 +2019,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wordAiWordFamily => 'Word Family';
 
   @override
-  String get storage => 'Storage';
+  String get storage => 'Other';
 
   @override
   String get clearCache => 'Clear Cache';
@@ -2240,7 +2240,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reminderSectionTitle => 'Reminders';
 
   @override
-  String get reminderSettings => 'Reminder Settings';
+  String get reminderSettings => 'Review Reminder';
 
   @override
   String get savedReviewReminderSection => 'Saved Review Reminder';
@@ -2916,7 +2916,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get learningSection => 'Learning';
 
   @override
-  String get learningSettings => 'Learning settings';
+  String get learningSettings => 'Study Plan';
 
   @override
   String get speakingPracticeSection => 'Speaking practice';

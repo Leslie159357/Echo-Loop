@@ -131,7 +131,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appearance => '外观';
 
   @override
-  String get themeMode => '主题模式';
+  String get themeMode => '主题';
 
   @override
   String get themeModeSystem => '跟随系统';
@@ -143,7 +143,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get themeModeDark => '深色模式';
 
   @override
-  String get language => '应用语言';
+  String get language => '界面语言';
 
   @override
   String get languageDescription => '应用界面使用的语言';
@@ -1959,7 +1959,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wordAiWordFamily => '词族扩展';
 
   @override
-  String get storage => '存储';
+  String get storage => '其它';
 
   @override
   String get clearCache => '清除缓存';
@@ -2175,7 +2175,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reminderSectionTitle => '提醒';
 
   @override
-  String get reminderSettings => '提醒设置';
+  String get reminderSettings => '复习提醒';
 
   @override
   String get savedReviewReminderSection => '收藏复习提醒';
@@ -2815,7 +2815,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get learningSection => '学习';
 
   @override
-  String get learningSettings => '学习设置';
+  String get learningSettings => '学习计划';
 
   @override
   String get speakingPracticeSection => '口语练习';
