@@ -227,12 +227,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                       ),
                     ),
 
-                  // Completed (默认折叠)
-                  if (completedAudios.isNotEmpty) ...[
-                    _CompletedSection(completedAudios: completedAudios),
-                    const SizedBox(height: AppSpacing.m),
-                  ],
-
                   // 最近完成（过去24小时，默认折叠）
                   ...recentCompletionsAsync.whenOrNull(
                         data: (completions) => completions.isNotEmpty
@@ -247,6 +241,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                             : null,
                       ) ??
                       [],
+
+                  // Completed (默认折叠) — 放在最下面
+                  if (completedAudios.isNotEmpty) ...[
+                    _CompletedSection(completedAudios: completedAudios),
+                    const SizedBox(height: AppSpacing.m),
+                  ],
                 ],
               ),
       ),
