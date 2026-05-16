@@ -64,7 +64,7 @@ class ListenAndRepeatPlayerScreen extends ConsumerStatefulWidget {
 
 class _ListenAndRepeatPlayerScreenState
     extends ConsumerState<ListenAndRepeatPlayerScreen>
-    with WakelockMixin, WidgetsBindingObserver {
+    with WakelockMixin {
   /// 是否正在退出页面，防止退出过程中 listener 触发弹窗
   bool _isExiting = false;
 
@@ -77,7 +77,6 @@ class _ListenAndRepeatPlayerScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ok = await ensureSpeechReadyForRecording(context, ref);
@@ -102,7 +101,6 @@ class _ListenAndRepeatPlayerScreenState
   void dispose() {
     _settingsSubscription?.close();
     _controllerSubscription?.close();
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -129,16 +127,6 @@ class _ListenAndRepeatPlayerScreenState
           .read(listenAndRepeatControllerProvider.notifier)
           .applySettingsChange(),
     );
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      ref
-          .read(listenAndRepeatControllerProvider.notifier)
-          .enterWaitingForUser();
-    }
   }
 
   /// 处理退出（close 按钮 / 系统返回）
