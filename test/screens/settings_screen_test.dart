@@ -72,7 +72,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Theme Mode'), findsOneWidget);
+        expect(find.text('Theme'), findsOneWidget);
         // 默认 system 模式（主题和语言都显示"Follow System"）
         expect(find.text('Follow System'), findsAtLeast(1));
       });
@@ -83,7 +83,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('App Language'), findsOneWidget);
+        expect(find.text('Interface Language'), findsOneWidget);
         // 默认跟随系统
         expect(find.text('Follow System'), findsAtLeast(1));
       });
@@ -110,7 +110,7 @@ void main() {
         expect(find.text('Appearance'), findsOneWidget);
       });
 
-      testWidgets('AI section 仅由 Android 入口开关控制', (tester) async {
+      testWidgets('Speech Recognition 入口仅在开关启用时显示', (tester) async {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
@@ -119,7 +119,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('AI'), findsOneWidget);
+        expect(find.text('Learning'), findsOneWidget);
         expect(find.text('Speech Recognition'), findsOneWidget);
       });
 
@@ -184,7 +184,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击主题设置项
-        await tester.tap(find.text('Theme Mode'));
+        await tester.tap(find.text('Theme'));
         await tester.pumpAndSettle();
 
         // 应弹出对话框，显示三个选项
@@ -201,7 +201,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 打开主题选择对话框
-        await tester.tap(find.text('Theme Mode'));
+        await tester.tap(find.text('Theme'));
         await tester.pumpAndSettle();
 
         // 选择 Dark Mode
@@ -219,7 +219,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击语言设置项
-        await tester.tap(find.text('App Language'));
+        await tester.tap(find.text('Interface Language'));
         await tester.pumpAndSettle();
 
         // 应弹出对话框，显示三个选项
