@@ -298,27 +298,44 @@ class AudioListTile extends ConsumerWidget {
             ],
           ),
         // 学习进度 badge
+        // 暂停态优先级最高：替换轮次 chip 为「已暂停」灰色 chip。
         if (progress != null && progress.isStarted)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: progress.isCompleted
-                  ? theme.colorScheme.tertiaryContainer
-                  : theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              progress.isCompleted
-                  ? l10n.learningCompleted
-                  : reviewStageLabel(l10n, progress.currentStage),
-              style: theme.textTheme.labelSmall?.copyWith(
+          if (progress.isPaused)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                l10n.pausedChipLabel,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
                 color: progress.isCompleted
-                    ? theme.colorScheme.onTertiaryContainer
-                    : theme.colorScheme.onPrimaryContainer,
-                fontSize: 10,
+                    ? theme.colorScheme.tertiaryContainer
+                    : theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                progress.isCompleted
+                    ? l10n.learningCompleted
+                    : reviewStageLabel(l10n, progress.currentStage),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: progress.isCompleted
+                      ? theme.colorScheme.onTertiaryContainer
+                      : theme.colorScheme.onPrimaryContainer,
+                  fontSize: 10,
+                ),
               ),
             ),
-          ),
         // 合集标签 chips（仅全局上下文显示）
         ...collectionNames.map(
           (name) => Container(
@@ -412,11 +429,13 @@ class AudioListTile extends ConsumerWidget {
     AppLocalizations l10n,
     ThemeData theme,
   ) {
-    final hasProgress = ref.read(
+    final progressForMenu = ref.read(
       learningProgressNotifierProvider.select(
-        (s) => s.progressMap[audioItem.id]?.isStarted ?? false,
+        (s) => s.progressMap[audioItem.id],
       ),
     );
+    final hasProgress = progressForMenu?.isStarted ?? false;
+    final isPausedForMenu = progressForMenu?.isPaused ?? false;
 
     // 官方合集音频：name / 字幕 / 合集归属 / 文件本体都由后端决定并在 sync 时回写，
     // 因此隐藏 rename / manageSubtitles / manage / export / delete 这几项写操作，
@@ -485,7 +504,20 @@ class AudioListTile extends ConsumerWidget {
                 l10n.exportAudio,
               ),
             ),
-          // 仅在有学习进度时显示重置选项
+          // 仅在已开始学习时显示「暂停 / 恢复」与「重置」
+          if (hasProgress)
+            PopupMenuItem(
+              value: 'togglePause',
+              child: _buildMenuItemRow(
+                Icon(
+                  isPausedForMenu
+                      ? Icons.play_arrow_rounded
+                      : Icons.pause_rounded,
+                  size: 20,
+                ),
+                isPausedForMenu ? l10n.resumeLearning : l10n.pauseLearning,
+              ),
+            ),
           if (hasProgress)
             PopupMenuItem(
               value: 'resetProgress',
@@ -522,6 +554,8 @@ class AudioListTile extends ConsumerWidget {
             onManageTags?.call();
           } else if (value == 'export') {
             _handleExport(context, ref);
+          } else if (value == 'togglePause') {
+            _handleTogglePause(context, ref, isPausedForMenu);
           } else if (value == 'resetProgress') {
             _showResetProgressDialog(context, ref);
           } else if (value == 'delete') {
@@ -721,6 +755,44 @@ class AudioListTile extends ConsumerWidget {
       isScrollControlled: true,
       builder: (_) => ManageSubtitlesSheet(audioItem: audioItem),
     );
+  }
+
+  /// 切换暂停学习状态：
+  /// - 暂停（false→true）：弹确认弹窗，用户确认后写库 + 调度跳过该音频
+  /// - 恢复（true→false）：直接生效，无弹窗（非破坏性，可再次暂停）
+  Future<void> _handleTogglePause(
+    BuildContext context,
+    WidgetRef ref,
+    bool isPaused,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final notifier = ref.read(learningProgressNotifierProvider.notifier);
+
+    if (isPaused) {
+      await notifier.resumeProgress(audioItem.id);
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.pauseLearningConfirmTitle),
+        content: Text(l10n.pauseLearningConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.pauseLearning),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await notifier.pauseProgress(audioItem.id);
+    }
   }
 
   /// 重置学习进度确认对话框

@@ -391,7 +391,7 @@ class _TaskCard extends ConsumerWidget {
         .watch(learningProgressNotifierProvider)
         .progressMap;
     final progress = progressMap[task.audioId];
-    final plan = ref.watch(learningPlanProvider);
+    final plan = ref.watch(learningPlanForAudioProvider(task.audioId));
     final completedKeys = ref
         .watch(learningProgressNotifierProvider)
         .completionsFor(task.audioId);

@@ -100,6 +100,23 @@ class LearningProgresses extends Table {
   TextColumn get skippedSubStages =>
       text().withDefault(const Constant(''))();
 
+  /// 是否暂停学习（true 表示该音频不参与复习调度，可由用户随时恢复）
+  BoolColumn get isPaused => boolean().withDefault(const Constant(false))();
+
+  /// 首轮复习（review0）计划版本
+  ///
+  /// 1 = 旧版（难句补练 + 段落复述）
+  /// 2 = 新版（难句补练 + 全文盲听）
+  ///
+  /// 写入时机：新建 progress 时按当前代码默认 2；v33→v34 迁移把所有
+  /// `currentStage` 已进入 review1+ 的行回填为 1（这些用户已经按旧 plan
+  /// 完成 review0，保留历史 UI）。
+  ///
+  /// 真实子步骤列表由 `LearningPlan.standard(review0PlanVersion: ...)` 派生，
+  /// `LearningStage.review0.allSubStages` 仅作为 v1 ∪ v2 的展示并集。
+  IntColumn get review0PlanVersion =>
+      integer().withDefault(const Constant(2))();
+
   @override
   Set<Column> get primaryKey => {audioItemId};
 }

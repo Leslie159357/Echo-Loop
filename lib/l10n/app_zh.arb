@@ -870,6 +870,12 @@
   "resetLearningProgressConfirmMessage": "将清除「{name}」的所有学习进度，此操作不可撤销。",
   "resetLearningProgressDone": "学习进度已重置",
 
+  "pauseLearning": "暂停学习",
+  "resumeLearning": "恢复学习",
+  "pausedChipLabel": "已暂停",
+  "pauseLearningConfirmTitle": "暂停学习？",
+  "pauseLearningConfirmMessage": "该音频将停止复习调度，可随时恢复学习。",
+
   "reviewReminderBody": "{audioName} · 第{round}轮复习时间到了",
   "@reviewReminderBody": {
     "placeholders": {

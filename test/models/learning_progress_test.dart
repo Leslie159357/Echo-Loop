@@ -15,12 +15,16 @@ void main() {
   Set<String> keys(List<(LearningStage, SubStageType)> items) =>
       items.map((p) => '${p.$1.key}:${p.$2.key}').toSet();
 
-  /// 「过去阶段所有子步骤都做过」的便捷集合（含 retell）
+  /// 「过去阶段所有 plan 内子步骤都做过」的便捷集合（默认 v2 plan）。
+  ///
+  /// 注意：用 plan.subStagesFor 而非 stage.allSubStages，因为后者包含 v1 ∪ v2
+  /// 的展示并集；用 plan 反映「真实学习过」的子步骤集合。
   Set<String> doneUpTo(LearningStage stage) {
+    final plan = LearningPlan.standard();
     final set = <String>{};
     for (final s in LearningStage.values) {
       if (s.index >= stage.index) break;
-      for (final sub in s.allSubStages) {
+      for (final sub in plan.subStagesFor(s)) {
         set.add('${s.key}:${sub.key}');
       }
     }
@@ -283,8 +287,29 @@ void main() {
     });
 
     test('totalSubStages 动态计算正确', () {
-      // firstLearn: 4 + review0:2 + review1/2/4/7/14: 5*3 + review28:3 = 24
-      expect(LearningProgress.totalSubStages, 24);
+      // firstLearn:4 + review0:3 (v1 ∪ v2 并集) + review1/2/4/7/14: 5*3 + review28:3 = 25
+      expect(LearningProgress.totalSubStages, 25);
+    });
+
+    test('isPaused 默认 false', () {
+      final progress = LearningProgress(audioItemId: 'a1', updatedAt: now);
+      expect(progress.isPaused, false);
+    });
+
+    test('copyWith 可切换 isPaused 而不影响其他字段', () {
+      final progress = LearningProgress(
+        audioItemId: 'a1',
+        currentStage: LearningStage.review2,
+        currentSubStage: SubStageType.reviewDifficultPractice,
+        updatedAt: now,
+      );
+      final paused = progress.copyWith(isPaused: true);
+      final resumed = paused.copyWith(isPaused: false);
+
+      expect(paused.isPaused, true);
+      expect(paused.currentStage, LearningStage.review2);
+      expect(resumed.isPaused, false);
+      expect(resumed.currentStage, LearningStage.review2);
     });
   });
 
@@ -573,7 +598,8 @@ void main() {
   group('LearningStage', () {
     test('subStageCount 正确', () {
       expect(LearningStage.firstLearn.subStageCount, 4);
-      expect(LearningStage.review0.subStageCount, 2);
+      // review0 返回 v1 ∪ v2 并集 3 项；真实 plan 由 LearningPlan 按版本派生为 2 项。
+      expect(LearningStage.review0.subStageCount, 3);
       expect(LearningStage.review1.subStageCount, 3);
       expect(LearningStage.review28.subStageCount, 3);
       expect(LearningStage.completed.subStageCount, 0);
@@ -608,8 +634,10 @@ void main() {
         SubStageType.listenAndRepeat,
         SubStageType.retell,
       ]);
+      // v1 ∪ v2 并集（真实 plan 由 LearningPlan 按 review0PlanVersion 派生）
       expect(LearningStage.review0.allSubStages, [
         SubStageType.reviewDifficultPractice,
+        SubStageType.blindListen,
         SubStageType.reviewRetellParagraph,
       ]);
       expect(LearningStage.review1.allSubStages, [

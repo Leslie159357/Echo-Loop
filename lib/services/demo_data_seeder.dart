@@ -81,6 +81,20 @@ class DemoDataSeeder {
             ? now.subtract(Duration(days: audio.lastStageCompletedDaysAgo!))
             : null;
 
+        // 已完成 review0 的 demo 音频走旧 plan（review0 = 难句补练 + 段落复述）
+        // 让 stage_completions 里的 review0:reviewRetellParagraph 历史与 plan 对齐。
+        const review0CompletedStages = {
+          'review1',
+          'review2',
+          'review4',
+          'review7',
+          'review14',
+          'review28',
+          'completed',
+        };
+        final review0PlanVersion =
+            review0CompletedStages.contains(audio.currentStage) ? 1 : 2;
+
         await db.into(db.learningProgresses).insert(
           LearningProgressesCompanion.insert(
             audioItemId: audio.id,
@@ -97,6 +111,7 @@ class DemoDataSeeder {
             ),
             shadowingSentenceIndex: Value(audio.shadowingSentenceIndex),
             updatedAt: now,
+            review0PlanVersion: Value(review0PlanVersion),
           ),
         );
       }

@@ -128,6 +128,13 @@ enum LearningStage {
   /// 注意：实际学习流以 [LearningPlan] 为单一事实来源，UI/推进/reconcile
   /// 都应读 `plan.subStagesFor(stage)` 而非本 getter。仅 `LearningPlan`
   /// 构造、自由练习入口等"需要全量信息"的场景读 [allSubStages]。
+  ///
+  /// 对于 review0，[allSubStages] 返回 v1 ∪ v2 的展示并集
+  /// （`reviewDifficultPractice` + `blindListen` + `reviewRetellParagraph`），
+  /// 真实 plan 由 `LearningPlan.standard(review0PlanVersion: ...)` 派生。
+  /// 学习计划页迭代 [allSubStages] 时配合三态过滤 `inPlan || done || skipped`
+  /// 自然剔除非当前变体的项；旧 review0 已完成的 `reviewRetellParagraph`
+  /// 仍可作为历史项保留显示。
   List<SubStageType> get allSubStages => switch (this) {
     firstLearn => [
       SubStageType.blindListen,
@@ -137,6 +144,7 @@ enum LearningStage {
     ],
     review0 => [
       SubStageType.reviewDifficultPractice,
+      SubStageType.blindListen,
       SubStageType.reviewRetellParagraph,
     ],
     review28 => [

@@ -81,7 +81,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 当前 schema 版本（静态访问，用于导入前版本检查）
-  static const currentSchemaVersion = 32;
+  static const currentSchemaVersion = 34;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -433,6 +433,39 @@ class AppDatabase extends _$AppDatabase {
             'skipped_sub_stages',
             "TEXT NOT NULL DEFAULT ''",
           );
+        }
+        // v32→v33：learning_progresses 新增 is_paused 列
+        // true 表示该音频不参与复习调度，可由用户随时恢复。
+        if (from < 33) {
+          await _addColumnIfNotExists(
+            'learning_progresses',
+            'is_paused',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
+        // v33→v34：learning_progresses 新增 review0_plan_version 列
+        // 1 = 旧版（难句补练 + 段落复述），2 = 新版（难句补练 + 全文盲听）。
+        // 默认 2；把 currentStage 已进入 review1+ 的行回填为 1，
+        // 保留这些用户的 review0 历史 UI 与旧 plan 一致。
+        if (from < 34) {
+          await _addColumnIfNotExists(
+            'learning_progresses',
+            'review0_plan_version',
+            'INTEGER NOT NULL DEFAULT 2',
+          );
+          // 仅在表存在时回填（v28 fixture 直跳的路径下 _addColumnIfNotExists
+          // 会因为 learning_progresses 缺表跳过，UPDATE 也必须同样守卫）。
+          final exists = await customSelect(
+            "SELECT COUNT(*) AS cnt FROM sqlite_master "
+            "WHERE type='table' AND name = 'learning_progresses'",
+          ).getSingle();
+          if ((exists.data['cnt'] as int) > 0) {
+            await customStatement(
+              "UPDATE learning_progresses SET review0_plan_version = 1 "
+              "WHERE current_stage IN ('review1','review2','review4',"
+              "'review7','review14','review28','completed')",
+            );
+          }
         }
       },
     );

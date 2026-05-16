@@ -3478,6 +3478,32 @@ class $LearningProgressesTable extends LearningProgresses
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _isPausedMeta = const VerificationMeta(
+    'isPaused',
+  );
+  @override
+  late final GeneratedColumn<bool> isPaused = GeneratedColumn<bool>(
+    'is_paused',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_paused" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _review0PlanVersionMeta =
+      const VerificationMeta('review0PlanVersion');
+  @override
+  late final GeneratedColumn<int> review0PlanVersion = GeneratedColumn<int>(
+    'review0_plan_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     audioItemId,
@@ -3507,6 +3533,8 @@ class $LearningProgressesTable extends LearningProgresses
     freePlayBreakpointSavedAt,
     updatedAt,
     skippedSubStages,
+    isPaused,
+    review0PlanVersion,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3761,6 +3789,21 @@ class $LearningProgressesTable extends LearningProgresses
         ),
       );
     }
+    if (data.containsKey('is_paused')) {
+      context.handle(
+        _isPausedMeta,
+        isPaused.isAcceptableOrUnknown(data['is_paused']!, _isPausedMeta),
+      );
+    }
+    if (data.containsKey('review0_plan_version')) {
+      context.handle(
+        _review0PlanVersionMeta,
+        review0PlanVersion.isAcceptableOrUnknown(
+          data['review0_plan_version']!,
+          _review0PlanVersionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3878,6 +3921,14 @@ class $LearningProgressesTable extends LearningProgresses
         DriftSqlType.string,
         data['${effectivePrefix}skipped_sub_stages'],
       )!,
+      isPaused: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_paused'],
+      )!,
+      review0PlanVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}review0_plan_version'],
+      )!,
     );
   }
 
@@ -3974,6 +4025,22 @@ class LearningProgressesData extends DataClass
   /// 不变量：与 `stage_completions` 中该音频的 (stage, subStage) 集合**互斥**——
   /// 写 completion 时清除此集合中对应 key；写 skip 时若已 completed 则早返回。
   final String skippedSubStages;
+
+  /// 是否暂停学习（true 表示该音频不参与复习调度，可由用户随时恢复）
+  final bool isPaused;
+
+  /// 首轮复习（review0）计划版本
+  ///
+  /// 1 = 旧版（难句补练 + 段落复述）
+  /// 2 = 新版（难句补练 + 全文盲听）
+  ///
+  /// 写入时机：新建 progress 时按当前代码默认 2；v33→v34 迁移把所有
+  /// `currentStage` 已进入 review1+ 的行回填为 1（这些用户已经按旧 plan
+  /// 完成 review0，保留历史 UI）。
+  ///
+  /// 真实子步骤列表由 `LearningPlan.standard(review0PlanVersion: ...)` 派生，
+  /// `LearningStage.review0.allSubStages` 仅作为 v1 ∪ v2 的展示并集。
+  final int review0PlanVersion;
   const LearningProgressesData({
     required this.audioItemId,
     required this.currentStage,
@@ -4002,6 +4069,8 @@ class LearningProgressesData extends DataClass
     this.freePlayBreakpointSavedAt,
     required this.updatedAt,
     required this.skippedSubStages,
+    required this.isPaused,
+    required this.review0PlanVersion,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4099,6 +4168,8 @@ class LearningProgressesData extends DataClass
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['skipped_sub_stages'] = Variable<String>(skippedSubStages);
+    map['is_paused'] = Variable<bool>(isPaused);
+    map['review0_plan_version'] = Variable<int>(review0PlanVersion);
     return map;
   }
 
@@ -4180,6 +4251,8 @@ class LearningProgressesData extends DataClass
           : Value(freePlayBreakpointSavedAt),
       updatedAt: Value(updatedAt),
       skippedSubStages: Value(skippedSubStages),
+      isPaused: Value(isPaused),
+      review0PlanVersion: Value(review0PlanVersion),
     );
   }
 
@@ -4254,6 +4327,8 @@ class LearningProgressesData extends DataClass
       ),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       skippedSubStages: serializer.fromJson<String>(json['skippedSubStages']),
+      isPaused: serializer.fromJson<bool>(json['isPaused']),
+      review0PlanVersion: serializer.fromJson<int>(json['review0PlanVersion']),
     );
   }
   @override
@@ -4317,6 +4392,8 @@ class LearningProgressesData extends DataClass
       ),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'skippedSubStages': serializer.toJson<String>(skippedSubStages),
+      'isPaused': serializer.toJson<bool>(isPaused),
+      'review0PlanVersion': serializer.toJson<int>(review0PlanVersion),
     };
   }
 
@@ -4348,6 +4425,8 @@ class LearningProgressesData extends DataClass
     Value<DateTime?> freePlayBreakpointSavedAt = const Value.absent(),
     DateTime? updatedAt,
     String? skippedSubStages,
+    bool? isPaused,
+    int? review0PlanVersion,
   }) => LearningProgressesData(
     audioItemId: audioItemId ?? this.audioItemId,
     currentStage: currentStage ?? this.currentStage,
@@ -4416,6 +4495,8 @@ class LearningProgressesData extends DataClass
         : this.freePlayBreakpointSavedAt,
     updatedAt: updatedAt ?? this.updatedAt,
     skippedSubStages: skippedSubStages ?? this.skippedSubStages,
+    isPaused: isPaused ?? this.isPaused,
+    review0PlanVersion: review0PlanVersion ?? this.review0PlanVersion,
   );
   LearningProgressesData copyWithCompanion(LearningProgressesCompanion data) {
     return LearningProgressesData(
@@ -4503,6 +4584,10 @@ class LearningProgressesData extends DataClass
       skippedSubStages: data.skippedSubStages.present
           ? data.skippedSubStages.value
           : this.skippedSubStages,
+      isPaused: data.isPaused.present ? data.isPaused.value : this.isPaused,
+      review0PlanVersion: data.review0PlanVersion.present
+          ? data.review0PlanVersion.value
+          : this.review0PlanVersion,
     );
   }
 
@@ -4553,7 +4638,9 @@ class LearningProgressesData extends DataClass
           )
           ..write('freePlayBreakpointSavedAt: $freePlayBreakpointSavedAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('skippedSubStages: $skippedSubStages')
+          ..write('skippedSubStages: $skippedSubStages, ')
+          ..write('isPaused: $isPaused, ')
+          ..write('review0PlanVersion: $review0PlanVersion')
           ..write(')'))
         .toString();
   }
@@ -4587,6 +4674,8 @@ class LearningProgressesData extends DataClass
     freePlayBreakpointSavedAt,
     updatedAt,
     skippedSubStages,
+    isPaused,
+    review0PlanVersion,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -4627,7 +4716,9 @@ class LearningProgressesData extends DataClass
               this.newLearningBreakpointSavedAt &&
           other.freePlayBreakpointSavedAt == this.freePlayBreakpointSavedAt &&
           other.updatedAt == this.updatedAt &&
-          other.skippedSubStages == this.skippedSubStages);
+          other.skippedSubStages == this.skippedSubStages &&
+          other.isPaused == this.isPaused &&
+          other.review0PlanVersion == this.review0PlanVersion);
 }
 
 class LearningProgressesCompanion
@@ -4659,6 +4750,8 @@ class LearningProgressesCompanion
   final Value<DateTime?> freePlayBreakpointSavedAt;
   final Value<DateTime> updatedAt;
   final Value<String> skippedSubStages;
+  final Value<bool> isPaused;
+  final Value<int> review0PlanVersion;
   final Value<int> rowid;
   const LearningProgressesCompanion({
     this.audioItemId = const Value.absent(),
@@ -4688,6 +4781,8 @@ class LearningProgressesCompanion
     this.freePlayBreakpointSavedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.skippedSubStages = const Value.absent(),
+    this.isPaused = const Value.absent(),
+    this.review0PlanVersion = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LearningProgressesCompanion.insert({
@@ -4718,6 +4813,8 @@ class LearningProgressesCompanion
     this.freePlayBreakpointSavedAt = const Value.absent(),
     required DateTime updatedAt,
     this.skippedSubStages = const Value.absent(),
+    this.isPaused = const Value.absent(),
+    this.review0PlanVersion = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : audioItemId = Value(audioItemId),
        updatedAt = Value(updatedAt);
@@ -4749,6 +4846,8 @@ class LearningProgressesCompanion
     Expression<DateTime>? freePlayBreakpointSavedAt,
     Expression<DateTime>? updatedAt,
     Expression<String>? skippedSubStages,
+    Expression<bool>? isPaused,
+    Expression<int>? review0PlanVersion,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4802,6 +4901,9 @@ class LearningProgressesCompanion
         'free_play_breakpoint_saved_at': freePlayBreakpointSavedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (skippedSubStages != null) 'skipped_sub_stages': skippedSubStages,
+      if (isPaused != null) 'is_paused': isPaused,
+      if (review0PlanVersion != null)
+        'review0_plan_version': review0PlanVersion,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4834,6 +4936,8 @@ class LearningProgressesCompanion
     Value<DateTime?>? freePlayBreakpointSavedAt,
     Value<DateTime>? updatedAt,
     Value<String>? skippedSubStages,
+    Value<bool>? isPaused,
+    Value<int>? review0PlanVersion,
     Value<int>? rowid,
   }) {
     return LearningProgressesCompanion(
@@ -4882,6 +4986,8 @@ class LearningProgressesCompanion
           freePlayBreakpointSavedAt ?? this.freePlayBreakpointSavedAt,
       updatedAt: updatedAt ?? this.updatedAt,
       skippedSubStages: skippedSubStages ?? this.skippedSubStages,
+      isPaused: isPaused ?? this.isPaused,
+      review0PlanVersion: review0PlanVersion ?? this.review0PlanVersion,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5006,6 +5112,12 @@ class LearningProgressesCompanion
     if (skippedSubStages.present) {
       map['skipped_sub_stages'] = Variable<String>(skippedSubStages.value);
     }
+    if (isPaused.present) {
+      map['is_paused'] = Variable<bool>(isPaused.value);
+    }
+    if (review0PlanVersion.present) {
+      map['review0_plan_version'] = Variable<int>(review0PlanVersion.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5060,6 +5172,8 @@ class LearningProgressesCompanion
           ..write('freePlayBreakpointSavedAt: $freePlayBreakpointSavedAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('skippedSubStages: $skippedSubStages, ')
+          ..write('isPaused: $isPaused, ')
+          ..write('review0PlanVersion: $review0PlanVersion, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -12918,6 +13032,8 @@ typedef $$LearningProgressesTableCreateCompanionBuilder =
       Value<DateTime?> freePlayBreakpointSavedAt,
       required DateTime updatedAt,
       Value<String> skippedSubStages,
+      Value<bool> isPaused,
+      Value<int> review0PlanVersion,
       Value<int> rowid,
     });
 typedef $$LearningProgressesTableUpdateCompanionBuilder =
@@ -12949,6 +13065,8 @@ typedef $$LearningProgressesTableUpdateCompanionBuilder =
       Value<DateTime?> freePlayBreakpointSavedAt,
       Value<DateTime> updatedAt,
       Value<String> skippedSubStages,
+      Value<bool> isPaused,
+      Value<int> review0PlanVersion,
       Value<int> rowid,
     });
 
@@ -13131,6 +13249,16 @@ class $$LearningProgressesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get isPaused => $composableBuilder(
+    column: $table.isPaused,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get review0PlanVersion => $composableBuilder(
+    column: $table.review0PlanVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$AudioItemsTableFilterComposer get audioItemId {
     final $$AudioItemsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -13295,6 +13423,16 @@ class $$LearningProgressesTableOrderingComposer
 
   ColumnOrderings<String> get skippedSubStages => $composableBuilder(
     column: $table.skippedSubStages,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPaused => $composableBuilder(
+    column: $table.isPaused,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get review0PlanVersion => $composableBuilder(
+    column: $table.review0PlanVersion,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13463,6 +13601,14 @@ class $$LearningProgressesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get isPaused =>
+      $composableBuilder(column: $table.isPaused, builder: (column) => column);
+
+  GeneratedColumn<int> get review0PlanVersion => $composableBuilder(
+    column: $table.review0PlanVersion,
+    builder: (column) => column,
+  );
+
   $$AudioItemsTableAnnotationComposer get audioItemId {
     final $$AudioItemsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -13555,6 +13701,8 @@ class $$LearningProgressesTableTableManager
                     const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String> skippedSubStages = const Value.absent(),
+                Value<bool> isPaused = const Value.absent(),
+                Value<int> review0PlanVersion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LearningProgressesCompanion(
                 audioItemId: audioItemId,
@@ -13587,6 +13735,8 @@ class $$LearningProgressesTableTableManager
                 freePlayBreakpointSavedAt: freePlayBreakpointSavedAt,
                 updatedAt: updatedAt,
                 skippedSubStages: skippedSubStages,
+                isPaused: isPaused,
+                review0PlanVersion: review0PlanVersion,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13626,6 +13776,8 @@ class $$LearningProgressesTableTableManager
                     const Value.absent(),
                 required DateTime updatedAt,
                 Value<String> skippedSubStages = const Value.absent(),
+                Value<bool> isPaused = const Value.absent(),
+                Value<int> review0PlanVersion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LearningProgressesCompanion.insert(
                 audioItemId: audioItemId,
@@ -13658,6 +13810,8 @@ class $$LearningProgressesTableTableManager
                 freePlayBreakpointSavedAt: freePlayBreakpointSavedAt,
                 updatedAt: updatedAt,
                 skippedSubStages: skippedSubStages,
+                isPaused: isPaused,
+                review0PlanVersion: review0PlanVersion,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

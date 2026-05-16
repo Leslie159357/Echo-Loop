@@ -2172,6 +2172,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetLearningProgressDone => 'Learning progress has been reset';
 
   @override
+  String get pauseLearning => 'Pause Learning';
+
+  @override
+  String get resumeLearning => 'Resume Learning';
+
+  @override
+  String get pausedChipLabel => 'Paused';
+
+  @override
+  String get pauseLearningConfirmTitle => 'Pause Learning?';
+
+  @override
+  String get pauseLearningConfirmMessage =>
+      'Review scheduling for this audio will stop. You can resume anytime.';
+
+  @override
   String reviewReminderBody(String audioName, int round) {
     return '$audioName · Review round $round is ready';
   }

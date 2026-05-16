@@ -92,6 +92,18 @@ class LearningProgress {
   /// 则早返回（参见 [LearningProgressNotifier.skipCurrentSubStage]）。
   final Set<String> skippedSubStageKeys;
 
+  /// 是否暂停学习。true 时该音频不参与复习调度，可由用户随时恢复。
+  /// 进度数据完整保留，恢复时按 [nextReviewAt] 原地继续。
+  final bool isPaused;
+
+  /// 首轮复习（review0）计划版本：1 = 旧版（难句补练 + 段落复述），
+  /// 2 = 新版（难句补练 + 全文盲听）。
+  ///
+  /// 新建 progress 默认 2；DB 迁移把 `currentStage` 已进入 review1+
+  /// 的行回填为 1，保留这些用户的 review0 历史 UI 与旧 plan 一致。
+  /// 真实子步骤列表由 `LearningPlan.standard(review0PlanVersion: ...)` 派生。
+  final int review0PlanVersion;
+
   const LearningProgress({
     required this.audioItemId,
     this.currentStage = LearningStage.firstLearn,
@@ -120,6 +132,8 @@ class LearningProgress {
     this.freePlayBreakpointSavedAt,
     required this.updatedAt,
     this.skippedSubStageKeys = const {},
+    this.isPaused = false,
+    this.review0PlanVersion = 2,
   });
 
   /// 所有阶段的总子步骤数（动态计算）
@@ -335,6 +349,8 @@ class LearningProgress {
     bool clearDifficultPracticeSentenceIndex = false,
     bool clearRetellParagraphIndex = false,
     Set<String>? skippedSubStageKeys,
+    bool? isPaused,
+    int? review0PlanVersion,
   }) {
     return LearningProgress(
       audioItemId: audioItemId ?? this.audioItemId,
@@ -399,6 +415,8 @@ class LearningProgress {
           : (freePlayBreakpointSavedAt ?? this.freePlayBreakpointSavedAt),
       updatedAt: updatedAt ?? this.updatedAt,
       skippedSubStageKeys: skippedSubStageKeys ?? this.skippedSubStageKeys,
+      isPaused: isPaused ?? this.isPaused,
+      review0PlanVersion: review0PlanVersion ?? this.review0PlanVersion,
     );
   }
 }

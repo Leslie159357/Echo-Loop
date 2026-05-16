@@ -1173,6 +1173,12 @@
   },
   "resetLearningProgressDone": "Learning progress has been reset",
 
+  "pauseLearning": "Pause Learning",
+  "resumeLearning": "Resume Learning",
+  "pausedChipLabel": "Paused",
+  "pauseLearningConfirmTitle": "Pause Learning?",
+  "pauseLearningConfirmMessage": "Review scheduling for this audio will stop. You can resume anytime.",
+
   "reviewReminderBody": "{audioName} · Review round {round} is ready",
   "@reviewReminderBody": {
     "placeholders": {

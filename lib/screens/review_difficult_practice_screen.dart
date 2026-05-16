@@ -220,7 +220,7 @@ class _ReviewDifficultPracticeScreenState
   })
   _getStepContext() {
     final l10n = AppLocalizations.of(context)!;
-    final plan = ref.read(learningPlanProvider);
+    final plan = ref.read(learningPlanForAudioProvider(widget.audioItemId));
     final progress = ref
         .read(learningProgressNotifierProvider)
         .progressMap[widget.audioItemId];

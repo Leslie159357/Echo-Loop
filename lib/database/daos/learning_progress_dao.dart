@@ -36,4 +36,18 @@ class LearningProgressDao extends DatabaseAccessor<AppDatabase>
       learningProgresses,
     )..where((t) => t.audioItemId.equals(audioItemId))).go();
   }
+
+  /// 更新指定音频的暂停状态。
+  ///
+  /// 仅在该音频存在 learning_progresses 行时生效（更新 0 行不会创建新行）。
+  Future<int> setPaused(String audioItemId, bool paused) {
+    return (update(
+      learningProgresses,
+    )..where((t) => t.audioItemId.equals(audioItemId))).write(
+      LearningProgressesCompanion(
+        isPaused: Value(paused),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
 }

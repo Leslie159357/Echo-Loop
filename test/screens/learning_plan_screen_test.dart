@@ -358,6 +358,69 @@ void main() {
       expect(continueButton.onPressed, isNull);
     });
 
+    testWidgets('进行中（未暂停）时底部同时显示"暂停学习"和"继续学习"两个按钮', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.listenAndRepeat,
+            updatedAt: DateTime(2026, 5, 1),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Continue Learning'), findsOneWidget);
+      expect(find.text('Pause Learning'), findsOneWidget);
+    });
+
+    testWidgets('暂停态时底部只显示"恢复学习"，不显示"继续学习"或"暂停学习"', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.listenAndRepeat,
+            updatedAt: DateTime(2026, 5, 1),
+            isPaused: true,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      // 文案合并「Paused · Resume Learning」，仅一个按钮
+      expect(find.textContaining('Resume Learning'), findsOneWidget);
+      expect(find.textContaining('Paused'), findsOneWidget);
+      expect(find.text('Continue Learning'), findsNothing);
+      expect(find.text('Pause Learning'), findsNothing);
+    });
+
+    testWidgets('点击底部"暂停学习"弹出确认弹窗', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.listenAndRepeat,
+            updatedAt: DateTime(2026, 5, 1),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Pause Learning'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pause Learning?'), findsOneWidget);
+    });
+
     testWidgets('复习边界时刻到底后底部继续学习按钮可用', (tester) async {
       final now = DateTime(2026, 2, 25, 12, 0);
       final progressState = LearningProgressState(

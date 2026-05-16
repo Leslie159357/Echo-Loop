@@ -52,9 +52,10 @@ void main() {
       ]);
     });
 
-    test('review0 2 个子步骤', () {
+    test('review0 包含 v1 ∪ v2 的并集 3 项（真实 plan 由 LearningPlan 按版本派生）', () {
       expect(LearningStage.review0.allSubStages, [
         SubStageType.reviewDifficultPractice,
+        SubStageType.blindListen,
         SubStageType.reviewRetellParagraph,
       ]);
     });

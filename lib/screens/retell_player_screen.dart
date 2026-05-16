@@ -531,7 +531,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   /// 获取当前步骤的上下文信息（按 plan 派生）
   ({int stepIndex, int totalSteps, String stageName}) _getStepContext() {
     final l10n = AppLocalizations.of(context)!;
-    final plan = ref.read(learningPlanProvider);
+    final plan = ref.read(learningPlanForAudioProvider(widget.audioItemId));
     final progress = ref
         .read(learningProgressNotifierProvider)
         .progressMap[widget.audioItemId];

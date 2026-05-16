@@ -43,7 +43,10 @@ class LearningProgressIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final plan = ref.watch(learningPlanProvider);
+    // progress 缺失时（音频未开始）按全局默认 plan；有 progress 则按 audio 派生。
+    final plan = progress == null
+        ? ref.watch(learningPlanProvider)
+        : ref.watch(learningPlanForAudioProvider(progress!.audioItemId));
     final completedKeys = progress == null
         ? const <String>{}
         : ref
@@ -86,6 +89,31 @@ class LearningProgressIcon extends ConsumerWidget {
               ),
             ),
             Icon(Icons.check, size: iconSize, color: completedColor),
+          ],
+        ),
+      );
+    }
+
+    // 暂停态：保留进度比例，但环和图标整体灰化，与「已暂停」chip 视觉一致。
+    if (progress!.isPaused) {
+      final mutedColor = theme.colorScheme.onSurfaceVariant;
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: size,
+              height: size,
+              child: CircularProgressIndicator(
+                value: progress!.progressPercent(plan, completedKeys),
+                strokeWidth: strokeWidth,
+                color: mutedColor,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              ),
+            ),
+            Icon(Icons.pause_rounded, size: iconSize, color: mutedColor),
           ],
         ),
       );

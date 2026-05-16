@@ -705,6 +705,24 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
+  Future<void> pauseProgress(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(isPaused: true);
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
+  Future<void> resumeProgress(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null) return;
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(isPaused: false);
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
   Future<void> saveBlindListenParagraphIndex(
     String audioItemId,
     int? paragraphIndex, {

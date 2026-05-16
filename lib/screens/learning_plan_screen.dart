@@ -345,8 +345,8 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.reviewDifficultPracticeNone)));
-      // 根据新的 currentSubStage 导航到对应复述入口
-      _navigateToReviewRetellFromPlan(context);
+      // 推进后根据新位置自动进入下一子步骤（复述 / v2 review0 的全文盲听）
+      _navigateToNextReviewSubStageFromPlan(context);
       return;
     }
 
@@ -365,18 +365,31 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     );
   }
 
-  /// 从计划页导航到复习复述（跳过难句补练后使用）
-  void _navigateToReviewRetellFromPlan(BuildContext context) {
+  /// 自动完成难句补练后，按新的 `currentSubStage` 自动进入下一个子步骤。
+  ///
+  /// 处理：
+  /// - v1 review0：reviewRetellParagraph → 段落复述
+  /// - v2 review0：blindListen → 复习盲听
+  /// - 中间轮 review1~14：blindListen / reviewRetellParagraph
+  /// - 末轮 review28：blindListen / reviewRetellSummary
+  /// - 跨阶段推进到 completed / firstLearn 等其它情况：不导航，回到计划页。
+  void _navigateToNextReviewSubStageFromPlan(BuildContext context) {
     final progress = ref
         .read(learningProgressNotifierProvider)
         .progressMap[widget.audioItemId];
     if (progress == null) return;
+    if (!progress.isInReviewStage) return;
 
-    final nextSubStage = progress.currentSubStage;
-    if (nextSubStage == SubStageType.reviewRetellParagraph) {
-      _startReviewRetell(context, isSummary: false);
-    } else if (nextSubStage == SubStageType.reviewRetellSummary) {
-      _startReviewRetell(context, isSummary: true);
+    switch (progress.currentSubStage) {
+      case SubStageType.blindListen:
+        _startReviewBlindListen(context, stage: progress.currentStage);
+      case SubStageType.reviewRetellParagraph:
+        _startReviewRetell(context, isSummary: false);
+      case SubStageType.reviewRetellSummary:
+        _startReviewRetell(context, isSummary: true);
+      default:
+        // 推进后罕见落到难句补练等情况，回到计划页让用户重新选择
+        break;
     }
   }
 
@@ -883,6 +896,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
             _BottomButton(
               l10n: l10n,
               progress: progress,
+              audioItemId: widget.audioItemId,
               startLearningStep: hasTranscript ? stepStartLearning : null,
               onPressed: hasTranscript && !isLockedReview
                   ? () => _handleStartLearning(context, progress)
@@ -974,7 +988,10 @@ class _ProgressCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final plan = ref.watch(learningPlanProvider);
+    // 没有 audioItem 时（理论不出现，因 progress 同源）退化到全局默认 plan。
+    final plan = audioItem == null
+        ? ref.watch(learningPlanProvider)
+        : ref.watch(learningPlanForAudioProvider(audioItem!.id));
     final completedKeys = audioItem == null
         ? const <String>{}
         : ref.watch(learningProgressNotifierProvider).completionsFor(audioItem!.id);
@@ -1253,7 +1270,7 @@ class _FirstStudySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final plan = ref.watch(learningPlanProvider);
+    final plan = ref.watch(learningPlanForAudioProvider(audioItemId));
     final completedKeys = ref
         .watch(learningProgressNotifierProvider)
         .completionsFor(audioItemId);
@@ -2221,12 +2238,13 @@ class _ReviewRoundSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final plan = ref.watch(learningPlanProvider);
+    final plan = ref.watch(learningPlanForAudioProvider(audioItemId));
     final completedKeys = ref
         .watch(learningProgressNotifierProvider)
         .completionsFor(audioItemId);
-    // iterate 全量；plan 静态后 inPlan 永远 true；三态判定：
-    // completed / userSkipped / planned 都显示，其它跳过。
+    // iterate 全量；plan 按 audio.review0PlanVersion 派生（v1 含段落复述、
+    // v2 含全文盲听）；三态判定：completed / userSkipped / planned 都显示，
+    // 其它跳过。
     final subStages = review.stage.allSubStages.where((s) {
       final inPlan = plan.includes(review.stage, s);
       final isDone = completedKeys.contains('${review.stage.key}:${s.key}');
@@ -2517,33 +2535,59 @@ class _NoTranscriptBanner extends StatelessWidget {
   }
 }
 
-/// 底部固定按钮 — 根据进度显示不同文案
+/// 底部固定按钮 — 根据进度显示不同形态：
 ///
-/// [onPressed] 为 null 时按钮禁用（例如无字幕时）。
-class _BottomButton extends StatelessWidget {
+/// - 未开始：单按钮「开始学习」（[onPressed] 为 null 时禁用）。
+/// - 进行中（未暂停）：Row[Expanded 1:暂停学习 | Expanded 2:继续学习]，比例 1:2。
+/// - 进行中（已暂停）：单按钮「恢复学习」，点击直接恢复（不弹窗），随后 UI 自动
+///   回到 Row 形态。
+class _BottomButton extends ConsumerWidget {
   final AppLocalizations l10n;
   final LearningProgress? progress;
+  final String audioItemId;
   final VoidCallback? onPressed;
   final GuideStep? startLearningStep;
 
   const _BottomButton({
     required this.l10n,
+    required this.audioItemId,
     this.progress,
     required this.onPressed,
     this.startLearningStep,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final buttonText = (progress != null && progress!.isStarted)
-        ? l10n.continueLearning
-        : l10n.startLearning;
+  Future<void> _confirmAndPause(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.pauseLearningConfirmTitle),
+        content: Text(l10n.pauseLearningConfirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.pauseLearning),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .pauseProgress(audioItemId);
+    }
+  }
 
-    final button = FilledButton(onPressed: onPressed, child: Text(buttonText));
-    final guidedButton = startLearningStep != null
-        ? GuideTarget(step: startLearningStep!, child: button)
-        : button;
+  Future<void> _resume(WidgetRef ref) {
+    return ref
+        .read(learningProgressNotifierProvider.notifier)
+        .resumeProgress(audioItemId);
+  }
 
+  Widget _wrap(BuildContext context, Widget body) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.m),
       decoration: BoxDecoration(
@@ -2556,11 +2600,85 @@ class _BottomButton extends StatelessWidget {
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(width: double.infinity, child: guidedButton),
-      ),
+      child: SafeArea(top: false, child: body),
     );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasProgress = progress?.isStarted ?? false;
+    final isPaused = progress?.isPaused ?? false;
+
+    // 暂停态：单按钮，文案合并「已暂停 · 恢复学习」，点击直接恢复。
+    // 用 tonal 灰底突出当前是暂停态，与正常态的主色「继续学习」区分。
+    if (hasProgress && isPaused) {
+      final theme = Theme.of(context);
+      return _wrap(
+        context,
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonal(
+            onPressed: () => _resume(ref),
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              foregroundColor: theme.colorScheme.onSurfaceVariant,
+            ),
+            child: Text(
+              '${l10n.pausedChipLabel} · ${l10n.resumeLearning}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 进行中（未暂停）：Row[暂停 | 继续] 1:2
+    if (hasProgress) {
+      final continueButton = FilledButton(
+        onPressed: onPressed,
+        child: Text(l10n.continueLearning),
+      );
+      final guidedContinue = startLearningStep != null
+          ? GuideTarget(step: startLearningStep!, child: continueButton)
+          : continueButton;
+      return _wrap(
+        context,
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: FilledButton.tonal(
+                onPressed: () => _confirmAndPause(context, ref),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                child: Text(
+                  l10n.pauseLearning,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.m),
+            Expanded(flex: 2, child: guidedContinue),
+          ],
+        ),
+      );
+    }
+
+    // 未开始：单按钮「开始学习」
+    final startButton = FilledButton(
+      onPressed: onPressed,
+      child: Text(l10n.startLearning),
+    );
+    final guidedStart = startLearningStep != null
+        ? GuideTarget(step: startLearningStep!, child: startButton)
+        : startButton;
+    return _wrap(context, SizedBox(width: double.infinity, child: guidedStart));
   }
 }
 

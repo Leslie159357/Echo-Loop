@@ -2108,6 +2108,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get resetLearningProgressDone => '学习进度已重置';
 
   @override
+  String get pauseLearning => '暂停学习';
+
+  @override
+  String get resumeLearning => '恢复学习';
+
+  @override
+  String get pausedChipLabel => '已暂停';
+
+  @override
+  String get pauseLearningConfirmTitle => '暂停学习？';
+
+  @override
+  String get pauseLearningConfirmMessage => '该音频将停止复习调度，可随时恢复学习。';
+
+  @override
   String reviewReminderBody(String audioName, int round) {
     return '$audioName · 第$round轮复习时间到了';
   }

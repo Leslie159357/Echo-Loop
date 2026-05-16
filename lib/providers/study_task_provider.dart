@@ -157,6 +157,11 @@ StudyTask? _buildTaskForAudio({
     return null;
   }
 
+  // 暂停学习的音频不参与调度，恢复后按 nextReviewAt 原地继续。
+  if (progress.isPaused) {
+    return null;
+  }
+
   if (progress.currentStage == LearningStage.firstLearn) {
     return StudyTask(
       audioId: audioId,

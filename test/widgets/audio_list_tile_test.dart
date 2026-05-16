@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/models/learning_progress.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
@@ -219,6 +221,100 @@ void main() {
       expect(find.text('上次'), findsNothing);
       expect(find.byIcon(Icons.push_pin_outlined), findsNothing);
       expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+    });
+  });
+
+  group('AudioListTile 暂停学习菜单', () {
+    final baseItem = createTestAudioItem(id: 'pause-1', name: 'Pause Audio');
+
+    LearningProgress makeProgress({required bool isPaused}) {
+      return LearningProgress(
+        audioItemId: baseItem.id,
+        currentStage: LearningStage.review2,
+        currentSubStage: SubStageType.blindListen,
+        lastStageCompletedAt: DateTime(2026, 5, 1),
+        updatedAt: DateTime(2026, 5, 1),
+        isPaused: isPaused,
+      );
+    }
+
+    Widget buildWithProgress(LearningProgress progress) {
+      return createTestApp(
+        Center(
+          child: SizedBox(width: 360, child: const _AudioListTileWrapper()),
+        ),
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [baseItem])),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(
+                progressMap: {progress.audioItemId: progress},
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    testWidgets('未暂停时菜单显示 Pause Learning，点击弹出确认弹窗', (tester) async {
+      await tester.pumpWidget(buildWithProgress(makeProgress(isPaused: false)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pause Learning'), findsOneWidget);
+      expect(find.text('Resume Learning'), findsNothing);
+
+      await tester.tap(find.text('Pause Learning'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pause Learning?'), findsOneWidget);
+      expect(
+        find.textContaining('Review scheduling for this audio will stop'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('暂停态下菜单显示 Resume Learning，且卡片显示 Paused chip', (tester) async {
+      await tester.pumpWidget(buildWithProgress(makeProgress(isPaused: true)));
+      await tester.pumpAndSettle();
+
+      // 卡片上的轮次 chip 被替换为「Paused」
+      expect(find.text('Paused'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Resume Learning'), findsOneWidget);
+      expect(find.text('Pause Learning'), findsNothing);
+    });
+
+    testWidgets('未开始学习的音频不显示暂停菜单项', (tester) async {
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 360, child: const _AudioListTileWrapper()),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [baseItem])),
+            ),
+            learningProgressNotifierProvider.overrideWith(
+              () => TestLearningProgressNotifier(),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pause Learning'), findsNothing);
+      expect(find.text('Resume Learning'), findsNothing);
     });
   });
 }

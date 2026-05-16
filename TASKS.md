@@ -1,7 +1,99 @@
 # Echo Loop 任务清单
 
 > 最后更新：2026-05-16
-> 当前焦点：复述跳过机制重构（自动跳过 + 手动跳过单一机制）
+> 当前焦点：首轮复习改版（段落复述 → 全文盲听，向前兼容）
+
+## 已完成：首轮复习改版 — 难句补练 + 全文盲听（向前兼容）
+
+把首轮复习（review0）的子步骤从「难句补练 + 段落复述」改为「难句补练 + 全文盲听」。约束：
+- 全新音频 / 还在 firstLearn → 新版生效
+- 卡在 review0 中途（做了难句补练但还没做段落复述）→ 切到新版，未做的段落复述不再要求
+- 已完成 review0（review1+）→ 保留旧版 UI，历史不受影响
+
+### 数据层
+- [x] `lib/database/tables/learning_progresses.dart` 新增 `review0PlanVersion: int default 2`
+- [x] `lib/database/app_database.dart` schema 33→34 + 迁移：currentStage IN review1..completed 回填 1；customStatement UPDATE 加 table-exists 守卫（兼容 v28 fixture 直跳路径）
+- [x] `lib/models/learning_progress.dart` 新增 `review0PlanVersion` 字段 + copyWith
+- [x] DAO mapper `_fromDbRow` / `_persistProgress` 序列化
+
+### Model 层
+- [x] `lib/models/learning_plan.dart` `standard({int review0PlanVersion = 2})` 工厂：v1 → 旧版子步骤、v2 → 新版子步骤；其它阶段直接读 stage.allSubStages
+- [x] `lib/database/enums.dart` `review0.allSubStages` 改为 v1 ∪ v2 并集 `[reviewDifficultPractice, blindListen, reviewRetellParagraph]`，注释说明真实 plan 由 LearningPlan 派生
+
+### Provider 层
+- [x] `lib/providers/learning_plan_provider.dart` 新增 `learningPlanForAudioProvider(audioItemId)` family：watch progressMap，按 progress.review0PlanVersion 返回对应 plan；保留全局 `learningPlanProvider`（默认 v2，给无 audioId 场景兜底）
+- [x] notifier 内部用私有 `_planFor(progress)` 派生 plan，避免 notifier→family→notifier 循环依赖
+- [x] `_reconcileStaleSubStage`：loadAll 后扫描 currentSubStage 不在 plan 内的进度，自动修正到 plan 内首个未完成项；plan 全部已完成则触发跨阶段推进
+
+### Call site 迁移（12 处）
+- [x] 5 个 player screen（intensive / retell / blind / repeat / review_difficult）`_getStepContext` 改用 family
+- [x] `learning_plan_screen.dart` 3 处（_ProgressCard / _FirstStudySection / _ReviewRoundSection）改用 family（_ProgressCard 在 audioItem null 时退化到全局 plan）
+- [x] `study_screen.dart` 用 task.audioId
+- [x] `learning_progress_icon.dart` progress 缺失时退化到全局 plan
+- [x] `learning_progress_provider.dart` 内 `completeCurrentSubStage` / `_doSkipCore` / `_reconcileStaleSubStage` 用 `_planFor`
+
+### Demo / 测试 fixture
+- [x] `lib/services/demo_data_seeder.dart` 已完成 review0 的 demo audio（currentStage 在 review1+）显式 set `review0PlanVersion = 1`
+
+### 测试
+- [x] `test/database/v33_to_v34_migration_test.dart` 5 类 fixture（firstLearn / review0 / review1 / review28 / completed）验证回填规则
+- [x] `test/database/enums_test.dart` review0.allSubStages 期望改为并集 3 项
+- [x] `test/models/learning_plan_test.dart` 重写：v2 默认 / v1 / 非 review0 阶段一致
+- [x] `test/models/learning_progress_test.dart` `doneUpTo` helper 改用 plan.subStagesFor；totalSubStages 25；review0.subStageCount 3
+- [x] `test/providers/learning_progress_provider_test.dart` v1 autoSkip 老用例保留；新增 v2 autoSkip 用例（完成难句补练后停在全文盲听）；新增 reconcileStaleSubStage 5 个用例（v2 卡 reviewRetellParagraph 修正 / v2 plan 内首项无修正 / v1 reviewRetellParagraph 不修正 / v2 plan 全完成跨阶段 / completed 跳过）
+
+### 验证
+- flutter analyze 0 error
+- 2079 个 unit/widget 测试全过
+
+  **完成时间**: 2026-05-16
+
+---
+
+## 已完成：音频暂停学习 / 恢复学习
+
+允许已开始学习的音频「暂停」——停止参与复习调度，但学习进度数据完整保留；用户可随时从同一菜单入口恢复。设计要点：暂停弹确认弹窗、恢复直接生效、卡片轮次 chip 与左侧进度图标同步切换为灰色暂停态。
+
+### 数据层
+- [x] `lib/database/tables/learning_progresses.dart` 加 `BoolColumn isPaused` 默认 false
+- [x] `lib/database/app_database.dart` schema 32→33 + onUpgrade `_addColumnIfNotExists('learning_progresses', 'is_paused', 'INTEGER NOT NULL DEFAULT 0')`
+- [x] `lib/database/daos/learning_progress_dao.dart` 加 `setPaused(audioItemId, paused)`
+- [x] `lib/models/learning_progress.dart` 加 `bool isPaused` 字段 + copyWith
+- [x] `lib/providers/learning_progress_provider.dart` mapper 双向同步 isPaused
+
+### Provider 层
+- [x] 新增 `pauseProgress` / `resumeProgress` + 内部 `_setPaused`（幂等：状态相同不写库；audioItemId 不存在安全返回）
+
+### 调度过滤
+- [x] `lib/providers/study_task_provider.dart` `_buildTaskForAudio` 早返回 null 跳过 paused
+- [x] `lib/router/main_shell.dart` per-audio review reminder 同步时跳过 paused
+
+### UI 层
+- [x] `lib/widgets/audio_list_tile.dart` 菜单加「暂停学习 / 恢复学习」项（与 resetProgress 同条件 `hasProgress`）
+- [x] 暂停弹 `AlertDialog` 二次确认；恢复直接调 notifier
+- [x] 卡片 chip 暂停态替换为灰色「已暂停」chip
+- [x] `lib/widgets/learning_progress_icon.dart` 暂停态环+中心图标整体灰化 + 图标改为 `Icons.pause_rounded`
+- [x] `lib/screens/learning_plan_screen.dart` 底部按钮三态：未开始单按钮「开始学习」；进行中 `Row[暂停学习 灰底 | 继续学习 主蓝]` 1:2；已暂停单按钮灰底「已暂停 · 恢复学习」（点击直接恢复）
+
+### i18n
+- [x] `app_en.arb` / `app_zh.arb` 新增 `pauseLearning` / `resumeLearning` / `pausedChipLabel` / `pauseLearningConfirmTitle` / `pauseLearningConfirmMessage`
+
+### 测试
+- [x] `test/models/learning_progress_test.dart` isPaused 默认值 + copyWith
+- [x] `test/providers/learning_progress_provider_test.dart` pause/resume/幂等/不存在 4 个用例
+- [x] `test/providers/study_task_provider_test.dart` 暂停音频不进入任务列表
+- [x] `test/database/v32_to_v33_migration_test.dart` 迁移加列 + 默认 false
+- [x] `test/widgets/audio_list_tile_test.dart` 菜单文案切换 + 确认弹窗 + Paused chip + 未开始时不显示
+- [x] `test/widgets/learning_progress_icon_test.dart` 暂停态显示 pause icon + 灰色环
+- [x] `test/helpers/mock_providers.dart` TestLearningProgressNotifier 补 pause/resume
+
+### 验证
+- flutter analyze 0 error（只剩 pre-existing info/warning）
+- 全量 2065 unit/widget 测试通过
+
+  **完成时间**: 2026-05-16
+
+---
 
 ## 已完成：复述功能重构 — 移除引导弹窗 + 自动跳过单一机制 + 简报手动跳过
 

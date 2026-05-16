@@ -298,6 +298,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     for (final entry in progressMap.entries) {
       final progress = entry.value;
       if (!progress.isInReviewStage) continue;
+      if (progress.isPaused) continue;
       final reviewAt = progress.nextReviewAt;
       if (reviewAt == null || !reviewAt.isAfter(now)) continue;
 

@@ -515,9 +515,14 @@ EchoLoopApp (main.dart)
 3. **难句跟读** — 有字幕跟读难句，遍数根据难度调整（2-5 遍）
 4. **段落复述** — 提供关键意群提示，用自己的话复述段落
 
-### 复习流程（review0-review28）
+### 复习流程
 
-1. 全文盲听 → 2. 跟读 → 3. 段落复述
+各轮次子步骤略有差异（详见 `LearningStage.allSubStages` + `LearningPlan.standard`）：
+
+- **review0 首轮复习**（默认新版 v2）：难句补练 → 全文盲听。
+  - v1（迁移前已完成 review0 的旧音频）：难句补练 → 段落复述。
+- **review1 / review2 / review4 / review7 / review14**：全文盲听 → 难句补练 → 段落复述。
+- **review28 末轮**：全文盲听 → 难句补练 → 全文复述。
 
 ### 收藏体系
 

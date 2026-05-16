@@ -83,5 +83,27 @@ void main() {
       expect(indicator.value, 1.0);
       expect(indicator.color, LearningProgressIcon.completedColor);
     });
+
+    testWidgets('暂停态 → 显示 pause icon + 灰色环（保留进度比例）', (tester) async {
+      final progress = LearningProgress(
+        audioItemId: 'test-1',
+        currentStage: LearningStage.review2,
+        currentSubStage: SubStageType.blindListen,
+        updatedAt: DateTime(2026, 5, 1),
+        isPaused: true,
+      );
+
+      await tester.pumpWidget(createTestWidget(progress));
+
+      expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.graphic_eq), findsNothing);
+      expect(find.byIcon(Icons.check), findsNothing);
+
+      final indicator = tester.widget<CircularProgressIndicator>(
+        find.byType(CircularProgressIndicator),
+      );
+      expect(indicator.color, isNot(LearningProgressIcon.completedColor));
+      expect(indicator.value, isNotNull);
+    });
   });
 }

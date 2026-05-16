@@ -3878,6 +3878,36 @@ abstract class AppLocalizations {
   /// **'Learning progress has been reset'**
   String get resetLearningProgressDone;
 
+  /// No description provided for @pauseLearning.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause Learning'**
+  String get pauseLearning;
+
+  /// No description provided for @resumeLearning.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume Learning'**
+  String get resumeLearning;
+
+  /// No description provided for @pausedChipLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get pausedChipLabel;
+
+  /// No description provided for @pauseLearningConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause Learning?'**
+  String get pauseLearningConfirmTitle;
+
+  /// No description provided for @pauseLearningConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Review scheduling for this audio will stop. You can resume anytime.'**
+  String get pauseLearningConfirmMessage;
+
   /// No description provided for @reviewReminderBody.
   ///
   /// In en, this message translates to:

@@ -714,6 +714,73 @@ void main() {
       expect(tasks[0].overdueDuration, const Duration(hours: 1));
       expect(tasks[1].isOverdue, false);
     });
+
+    test('暂停学习的音频不进入任务列表', () {
+      final now = DateTime(2026, 5, 16, 12, 0);
+      final audioItems = [
+        AudioItem(
+          id: 'paused-review',
+          name: 'Paused Review',
+          audioPath: 'audios/p.mp3',
+          addedDate: now,
+        ),
+        AudioItem(
+          id: 'paused-first',
+          name: 'Paused First',
+          audioPath: 'audios/q.mp3',
+          addedDate: now,
+        ),
+        AudioItem(
+          id: 'active-review',
+          name: 'Active Review',
+          audioPath: 'audios/r.mp3',
+          addedDate: now,
+        ),
+      ];
+
+      final progressMap = {
+        'paused-review': LearningProgress(
+          audioItemId: 'paused-review',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 2)),
+          updatedAt: now,
+          isPaused: true,
+        ),
+        'paused-first': LearningProgress(
+          audioItemId: 'paused-first',
+          currentStage: LearningStage.firstLearn,
+          currentSubStage: SubStageType.listenAndRepeat,
+          updatedAt: now,
+          isPaused: true,
+        ),
+        'active-review': LearningProgress(
+          audioItemId: 'active-review',
+          currentStage: LearningStage.review1,
+          currentSubStage: SubStageType.blindListen,
+          lastStageCompletedAt: now.subtract(const Duration(days: 2)),
+          updatedAt: now,
+        ),
+      };
+
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: audioItems)),
+          ),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(
+              LearningProgressState(progressMap: progressMap),
+            ),
+          ),
+          nowProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final tasks = container.read(studyTaskProvider);
+      expect(tasks.map((t) => t.audioId).toList(), ['active-review']);
+    });
   });
 
   group('pendingStudyTaskCountProvider', () {

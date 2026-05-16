@@ -16,11 +16,29 @@ class LearningPlan {
 
   const LearningPlan(this._stages);
 
-  /// 标准计划：每个大阶段使用 `stage.allSubStages` 全量。
-  factory LearningPlan.standard() {
+  /// 标准计划。
+  ///
+  /// [review0PlanVersion]：1 = 旧版「难句补练 + 段落复述」，
+  /// 2 = 新版「难句补练 + 全文盲听」。默认 2。
+  ///
+  /// 其它阶段直接读 `stage.allSubStages`；只有 review0 因变体需要显式派生。
+  /// `LearningStage.review0.allSubStages` 是 v1 ∪ v2 的展示并集，
+  /// 不能直接当 plan，必须经过此处按版本筛选。
+  factory LearningPlan.standard({int review0PlanVersion = 2}) {
+    final review0Subs = review0PlanVersion == 1
+        ? const [
+            SubStageType.reviewDifficultPractice,
+            SubStageType.reviewRetellParagraph,
+          ]
+        : const [
+            SubStageType.reviewDifficultPractice,
+            SubStageType.blindListen,
+          ];
     return LearningPlan({
       for (final stage in LearningStage.values)
-        stage: List<SubStageType>.unmodifiable(stage.allSubStages),
+        stage: stage == LearningStage.review0
+            ? List<SubStageType>.unmodifiable(review0Subs)
+            : List<SubStageType>.unmodifiable(stage.allSubStages),
     });
   }
 
