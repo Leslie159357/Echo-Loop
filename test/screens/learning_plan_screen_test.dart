@@ -33,6 +33,7 @@ void main() {
       // 在 widget dispose 后还 pending，导致测试报 Timer 错误）
       'guide_v1_learning_plan_no_transcript_seen': true,
       'guide_v1_learning_plan_with_transcript_seen': true,
+      'guide_v1_learning_plan_pause_learning_seen': true,
     });
     prefs = await SharedPreferences.getInstance();
   });
