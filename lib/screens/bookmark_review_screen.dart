@@ -195,6 +195,11 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
           s.isManualMode,
           s.settings,
           s.repeatFlowState?.phase.runtimeType,
+          // 倒计时暂停状态独立监听，否则点暂停时 phase.runtimeType 不变，
+          // 页面不 rebuild，快进按钮等依赖 isPaused 的渲染会停留在旧值。
+          s.repeatFlowState?.phase is WaitingInterval
+              ? (s.repeatFlowState!.phase as WaitingInterval).isPaused
+              : false,
           s.repeatFlowState?.repeatIndex,
           s.repeatFlowState?.isReviewPlaybackActive,
           s.repeatFlowState?.recordingScore,
