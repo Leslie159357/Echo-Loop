@@ -449,6 +449,36 @@ void main() {
     });
   });
 
+  group('replayCurrentSentence', () {
+    test('手动重播递增 repeatIndex（按一次算一遍）', () async {
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 3),
+        config: _testConfig(),
+      );
+      await controller.startPlaying();
+
+      // 自动模式下 startPlaying → PlayingPrompt → 即时完成 → Recording
+      expect(readState().repeatIndex, 0);
+
+      await controller.replayCurrentSentence();
+
+      // 第一次重播：repeatIndex 从 0 变 1，原句重新播放后进入 Recording
+      expect(readState().repeatIndex, 1);
+      expect(readState().phase, isA<Recording>());
+
+      await controller.replayCurrentSentence();
+
+      // 第二次重播：repeatIndex 继续 +1
+      expect(readState().repeatIndex, 2);
+
+      await controller.replayCurrentSentence();
+
+      // 允许 overshoot：4/3
+      expect(readState().repeatIndex, 3);
+      expect(readState().totalRepeats, 3);
+    });
+  });
+
   group('便捷 getter', () {
     test('isFirstSentence / isLastSentence', () async {
       await controller.prepareSession(

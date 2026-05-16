@@ -405,12 +405,15 @@ class RepeatFlowEngine {
   }
 
   /// 重播当前句子
+  ///
+  /// 用户主动按"再来一遍"，`repeatIndex` 同步 +1（不封顶，允许 4/3 这种 overshoot 显示）。
   Future<void> replayCurrentSentence() async {
     _waitAfterCurrentPrompt = false;
     _stopActiveResources();
     callbacks.clearRecording();
     _updateState(
       _state.copyWith(
+        repeatIndex: _state.repeatIndex + 1,
         recordingPath: null,
         recordingScore: null,
         isReviewPlaybackActive: false,
