@@ -1458,12 +1458,13 @@ class TestRetellPlayer extends RetellPlayer {
 
   @override
   void initialize(
-    List<List<Sentence>> paragraphs,
-    Map<int, Set<int>> keywordsMap, {
+    List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
+    KeywordRatio? autoRatio,
   }) {
     _testParagraphs = paragraphs;
-    _testKeywords = keywordsMap;
+    // 测试桩：保持 keywordsMap 为空映射（之前由调用方传入，现 stub 不需要真实关键词）
+    _testKeywords = const {};
     var safeIndex = 0;
     if (startSentenceIndex != null && paragraphs.isNotEmpty) {
       for (var i = 0; i < paragraphs.length; i++) {
@@ -1473,9 +1474,13 @@ class TestRetellPlayer extends RetellPlayer {
         }
       }
     }
+    final initialSettings = autoRatio == null
+        ? const RetellSettings()
+        : const RetellSettings().copyWith(keywordRatio: autoRatio);
     state = RetellPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
+      settings: initialSettings,
     );
   }
 

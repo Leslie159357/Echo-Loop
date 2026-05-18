@@ -28,9 +28,7 @@ import '../services/subtitle_parser.dart';
 import '../theme/app_theme.dart';
 import '../models/blind_listen_settings.dart';
 import '../models/intensive_listen_settings.dart' show PauseMode;
-import '../models/retell_settings.dart';
 import '../utils/blind_listen_duration_estimator.dart';
-import '../utils/keyword_extraction.dart';
 import '../utils/paragraph_grouping.dart';
 import '../utils/retell_duration_estimator.dart';
 import '../widgets/blind_listen_paragraph_sheet.dart';
@@ -423,14 +421,9 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
     if (isSummary) {
       // reviewRetellSummary：全文作为单个段落，无需选择时长
-      final keywordsMap = extractKeywords(
-        lpState.sentences,
-        ratio: KeywordRatio.oneThird,
-      );
       await ref.read(learningSessionProvider.notifier).enterRetellMode(
         widget.audioItemId,
         [lpState.sentences],
-        keywordsMap,
       );
       if (!context.mounted) return;
       context.push(
@@ -460,13 +453,9 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
           lpState.sentences,
           targetDuration,
         );
-        final keywordsMap = extractKeywords(
-          lpState.sentences,
-          ratio: KeywordRatio.oneThird,
-        );
         await ref
             .read(learningSessionProvider.notifier)
-            .enterRetellMode(widget.audioItemId, paragraphs, keywordsMap);
+            .enterRetellMode(widget.audioItemId, paragraphs);
         _applyRetellPauseMultiplier(pauseMultiplier);
         if (!context.mounted) return;
         context.push(
@@ -711,23 +700,24 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       return;
     }
 
+    final stageForDefault = ref
+            .read(learningProgressNotifierProvider)
+            .progressMap[widget.audioItemId]
+            ?.currentStage ??
+        LearningStage.firstLearn;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(LearningStage.firstLearn),
+      defaultSeconds: retellDefaultSeconds(stageForDefault),
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
           targetDuration,
         );
-        final keywordsMap = extractKeywords(
-          lpState.sentences,
-          ratio: KeywordRatio.oneThird,
-        );
 
         await ref
             .read(learningSessionProvider.notifier)
-            .enterRetellMode(widget.audioItemId, paragraphs, keywordsMap);
+            .enterRetellMode(widget.audioItemId, paragraphs);
         _applyRetellPauseMultiplier(pauseMultiplier);
         if (!context.mounted) return;
         context.push(
@@ -1680,18 +1670,21 @@ class _FirstStudySection extends ConsumerWidget {
     final lpState = ref.read(listeningPracticeProvider);
     if (lpState.sentences.isEmpty) return;
 
+    // 段落时长 default 按用户**当前**学习阶段算（review28 用户能驾驭长段），
+    // 与 catchUpStage（始终 firstLearn，因为这是 firstLearn 子步骤的补练）解耦。
+    final stageForDefault = ref
+            .read(learningProgressNotifierProvider)
+            .progressMap[audioItemId]
+            ?.currentStage ??
+        LearningStage.firstLearn;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(LearningStage.firstLearn),
+      defaultSeconds: retellDefaultSeconds(stageForDefault),
       onStartPractice: (targetDuration, pauseMultiplier) async {
         final paragraphs = groupSentencesIntoParagraphs(
           lpState.sentences,
           targetDuration,
-        );
-        final keywordsMap = extractKeywords(
-          lpState.sentences,
-          ratio: KeywordRatio.oneThird,
         );
 
         await ref
@@ -1699,7 +1692,6 @@ class _FirstStudySection extends ConsumerWidget {
             .enterRetellMode(
               audioItemId,
               paragraphs,
-              keywordsMap,
               isFreePlay: true,
               catchUpStage: LearningStage.firstLearn,
               catchUpSubStage: SubStageType.retell,
@@ -2200,16 +2192,11 @@ class _ReviewRoundSection extends ConsumerWidget {
 
     if (isSummary) {
       // 全文复述：全文作为单个段落，无需选择时长
-      final keywordsMap = extractKeywords(
-        lpState.sentences,
-        ratio: KeywordRatio.oneThird,
-      );
       await ref
           .read(learningSessionProvider.notifier)
           .enterRetellMode(
             audioItemId,
             [lpState.sentences],
-            keywordsMap,
             isFreePlay: true,
             catchUpStage: review.stage,
             catchUpSubStage: catchUpSub,
@@ -2230,16 +2217,11 @@ class _ReviewRoundSection extends ConsumerWidget {
           lpState.sentences,
           targetDuration,
         );
-        final keywordsMap = extractKeywords(
-          lpState.sentences,
-          ratio: KeywordRatio.oneThird,
-        );
         await ref
             .read(learningSessionProvider.notifier)
             .enterRetellMode(
               audioItemId,
               paragraphs,
-              keywordsMap,
               isFreePlay: true,
               catchUpStage: review.stage,
               catchUpSubStage: catchUpSub,

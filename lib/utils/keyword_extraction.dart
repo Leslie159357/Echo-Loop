@@ -15,7 +15,7 @@ final _wordSplitPattern = RegExp(r'\s+');
 /// 从句子列表中提取关键词
 ///
 /// [sentences] 句子列表
-/// [ratio] 关键词比例（默认 1/3）
+/// [ratio] 关键词比例（默认 medium，40%）
 /// [random] 可选随机数生成器（便于测试）
 ///
 /// 返回 `Map<int, Set<int>>`，键为 [Sentence.index]（全局索引），
@@ -25,7 +25,7 @@ final _wordSplitPattern = RegExp(r'\s+');
 /// 从非停用词候选中随机选取。
 Map<int, Set<int>> extractKeywords(
   List<Sentence> sentences, {
-  KeywordRatio ratio = KeywordRatio.oneThird,
+  KeywordRatio ratio = KeywordRatio.medium,
   Random? random,
 }) {
   final rng = random ?? Random();

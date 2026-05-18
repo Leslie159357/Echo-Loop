@@ -160,13 +160,24 @@ class _RetellSettingsSheet extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.s),
-              _buildChipGrid(
-                items: KeywordRatio.values,
-                labelBuilder: (r) => '${r.numerator}/${r.denominator}',
-                selected: (r) => settings.keywordRatio == r,
-                onSelected: (r) => ref
-                    .read(retellPlayerProvider.notifier)
-                    .updateSettings(settings.copyWith(keywordRatio: r)),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<KeywordRatio>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final r in KeywordRatio.values)
+                      ButtonSegment(
+                        value: r,
+                        label: Text('${r.percent}%'),
+                      ),
+                  ],
+                  selected: {settings.keywordRatio},
+                  onSelectionChanged: (selected) => ref
+                      .read(retellPlayerProvider.notifier)
+                      .updateSettings(
+                        settings.copyWith(keywordRatio: selected.first),
+                      ),
+                ),
               ),
             ],
           ],

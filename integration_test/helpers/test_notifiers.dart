@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:echo_loop/analytics/analytics_channel.dart';
@@ -16,7 +17,15 @@ import 'package:echo_loop/analytics/analytics_service.dart';
 import 'package:echo_loop/analytics/consent_manager.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
-import 'package:echo_loop/providers/offline_asr_settings_provider.dart' show showOfflineAsrSectionProvider;
+import 'package:echo_loop/providers/offline_asr_settings_provider.dart'
+    show
+        showOfflineAsrSectionProvider,
+        offlineAsrSettingsProvider,
+        OfflineAsrSettingsNotifier,
+        OfflineAsrSettingsState,
+        AsrBackend;
+import 'package:echo_loop/services/asr/offline_asr_engine.dart'
+    show AsrModelInfo, AsrModelType;
 import 'package:echo_loop/main.dart';
 import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,7 +41,10 @@ import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/database/app_database.dart'
     show Bookmark, BookmarksCompanion, SavedWord;
+import 'package:echo_loop/database/daos/audio_item_dao.dart';
 import 'package:echo_loop/database/daos/bookmark_dao.dart';
+import 'package:echo_loop/database/daos/stage_completion_dao.dart'
+    show StageCompletionDao, RecentCompletion;
 import 'package:echo_loop/database/daos/saved_word_dao.dart';
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/providers/review_reminder_provider.dart';
@@ -58,6 +70,10 @@ import 'package:echo_loop/services/speech_practice_platform.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/providers/daily_study_time_provider.dart';
 import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/providers/study_stats_provider.dart';
+import 'package:echo_loop/services/study_time_service.dart'
+    show StudyTimeService, DailyStageStudyRecordData, DailyTotalData;
+import 'package:echo_loop/models/study_stage.dart' show StudyStage;
 import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
 import 'package:echo_loop/providers/flashcard/flashcard_flow_phase.dart';
 import 'package:echo_loop/models/flashcard_item.dart';
@@ -73,6 +89,157 @@ class TestSavedWordList extends SavedWordList {
 class TestDailyStudyTime extends DailyStudyTime {
   @override
   Future<int> build() async => 0;
+}
+
+/// 集成测试用的 bounded pumpAndSettle 替身
+///
+/// 真实 pumpAndSettle 在 LiveTest 下默认 10min 超时；测试中 Riverpod async
+/// provider / Showcase 等可能持续 schedule 帧导致 settle 不收敛。
+/// 这里限定到 5 秒并吞掉 TimeoutException，避免单个测试卡 10 分钟。
+Future<void> safeSettle(
+  WidgetTester tester, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  try {
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      timeout,
+    );
+  } catch (_) {/* settle 超时容忍 */}
+}
+
+/// 无操作 AudioItemDao — 所有查询返回 null/空
+class TestAudioItemDao implements AudioItemDao {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => Future<dynamic>.value();
+}
+
+/// 无操作 StageCompletionDao — 所有查询返回空/即时完成
+class TestStageCompletionDao implements StageCompletionDao {
+  @override
+  Future<List<RecentCompletion>> getRecentCompletions(DateTime since) async =>
+      [];
+
+  @override
+  Future<Map<String, Set<String>>> getCompletionKeysByAudio() async => {};
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => Future<void>.value();
+}
+
+/// 无操作 StudyTimeService — 所有写入静默忽略，查询返回零值（避免触发 DB）
+class TestStudyTimeService implements StudyTimeService {
+  @override
+  Future<int> getStudyTime(DateTime date) async => 0;
+  @override
+  Future<int> getTodayStudyTime() async => 0;
+  @override
+  Future<void> addStudyTime(
+    int seconds, {
+    DateTime? date,
+    StudyStage? stage,
+  }) async {}
+  @override
+  Future<int> getStudyStreak({DateTime? now}) async => 0;
+  @override
+  Future<List<int>> getWeeklyStudyTimes({DateTime? now}) async =>
+      List.filled(7, 0);
+  @override
+  Future<int> getWeekTotalStudyTime({DateTime? now}) async => 0;
+  @override
+  Future<int> getInputWords(DateTime date) async => 0;
+  @override
+  Future<int> getTodayInputWords() async => 0;
+  @override
+  Future<void> addInputWords(int count, {DateTime? date}) async {}
+  @override
+  Future<int> getOutputWords(DateTime date) async => 0;
+  @override
+  Future<int> getTodayOutputWords() async => 0;
+  @override
+  Future<void> addOutputWords(int count, {DateTime? date}) async {}
+  @override
+  Future<int> getInputTime(DateTime date) async => 0;
+  @override
+  Future<int> getTodayInputTime() async => 0;
+  @override
+  Future<void> addInputTime(
+    int seconds, {
+    DateTime? date,
+    StudyStage? stage,
+  }) async {}
+  @override
+  Future<List<int>> getWeeklyInputTimes({DateTime? now}) async =>
+      List.filled(7, 0);
+  @override
+  Future<int> getOutputTime(DateTime date) async => 0;
+  @override
+  Future<int> getTodayOutputTime() async => 0;
+  @override
+  Future<void> addOutputTime(
+    int seconds, {
+    DateTime? date,
+    StudyStage? stage,
+  }) async {}
+  @override
+  Future<List<int>> getWeeklyOutputTimes({DateTime? now}) async =>
+      List.filled(7, 0);
+  @override
+  Future<List<DailyStageStudyRecordData>> getStageBreakdown(
+    DateTime date,
+  ) async => [];
+  @override
+  Future<DailyTotalData?> getDayTotal(DateTime date) async => null;
+}
+
+/// 测试用 OfflineAsrSettings — 不执行模型下载/平台调用
+///
+/// 默认关闭（enabled=false），避免触达 ASR 引擎相关副作用；
+/// 需要走录音流程的测试通过单独 override 打开。
+class TestOfflineAsrSettings extends OfflineAsrSettingsNotifier {
+  @override
+  OfflineAsrSettingsState build() => const OfflineAsrSettingsState(
+        enabled: false,
+        backend: AsrBackend.platform,
+        engineReady: false,
+        recommendedModel: AsrModelInfo(
+          id: 'test-model',
+          displayName: 'Test Model',
+          type: AsrModelType.moonshine,
+        ),
+      );
+
+  @override
+  Future<void> enable() async {
+    state = state.copyWith(enabled: true);
+  }
+
+  @override
+  Future<void> disable() async {
+    state = state.copyWith(enabled: false);
+  }
+
+  @override
+  Future<void> retryDownload() async {}
+
+  @override
+  Future<void> loadEngine() async {
+    state = state.copyWith(engineReady: true);
+  }
+}
+
+/// 测试用 StudyStatsNotifier — 返回固定空数据，避免触发 DB
+///
+/// AppLifecycleState.resumed 会调 [_MainShellState._refreshStudyData]，
+/// 真实 Notifier 在 _load() 中读 [studyTimeServiceProvider] → DAO → AppDatabase。
+/// 集成测试未初始化真实 DB，触发 LateInitializationError。
+class TestStudyStatsNotifier extends StudyStatsNotifier {
+  @override
+  Future<StudyStats> build() async => const StudyStats();
+
+  @override
+  Future<void> refresh() async {}
 }
 
 /// Mock SentenceAiCacheDao（集成测试用）
@@ -564,7 +731,18 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
 
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap[audioItemId] = updated;
-    state = state.copyWith(progressMap: newMap);
+    // 同步写入 stage_completions 内存集合，让学习计划页的「完成态」
+    // 判定能识别刚完成的 sub_stage（V2.1 后 UI 完成态查 completions 历史）。
+    final newCompletions = Map<String, Set<String>>.from(
+      state.completionsByAudio,
+    );
+    final keys = Set<String>.from(newCompletions[audioItemId] ?? const {});
+    keys.add('${stage.key}:${progress.currentSubStage.key}');
+    newCompletions[audioItemId] = keys;
+    state = state.copyWith(
+      progressMap: newMap,
+      completionsByAudio: newCompletions,
+    );
   }
 
   @override
@@ -753,11 +931,46 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
     state = state.copyWith(progressMap: newMap);
   }
 
+  @override
+  Future<void> pauseProgress(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null || progress.isPaused) return;
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      isPaused: true,
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
+  Future<void> resumeProgress(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null || !progress.isPaused) return;
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      isPaused: false,
+      updatedAt: DateTime.now(),
+    );
+    state = state.copyWith(progressMap: newMap);
+  }
+
   /// 直接设置进度（测试辅助方法）
   void setProgress(LearningProgress progress) {
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap[progress.audioItemId] = progress;
     state = state.copyWith(progressMap: newMap);
+  }
+
+  /// 直接设置某音频的 stage_completions 完成集合（测试辅助方法）
+  ///
+  /// V2.1 起 UI 的「完成态」判定改为读 stage_completions 历史。
+  /// 测试需要显式播下完成 key（格式 `'stage.key:subStage.key'`）才能让
+  /// 学习计划页对应步骤显示绿色 √ 标记。
+  void setCompletionKeys(String audioItemId, Set<String> keys) {
+    final newMap = Map<String, Set<String>>.from(state.completionsByAudio);
+    newMap[audioItemId] = keys;
+    state = state.copyWith(completionsByAudio: newMap);
   }
 }
 
@@ -863,8 +1076,7 @@ class TestLearningSession extends LearningSession {
   @override
   Future<void> enterRetellMode(
     String audioItemId,
-    List<List<Sentence>> paragraphs,
-    Map<int, Set<int>> keywordsMap, {
+    List<List<Sentence>> paragraphs, {
     bool isFreePlay = false,
     LearningStage? catchUpStage,
     SubStageType? catchUpSubStage,
@@ -1094,6 +1306,14 @@ class TestIntensiveListenPlayer extends IntensiveListenPlayer {
     state = const IntensiveListenState();
   }
 
+  /// 盲听模式下用户接管流程的 no-op override（真实实现会访问未初始化的
+  /// `_blindEngine`，集成测试不需要走这条 flow engine 链路）。
+  @override
+  void enterWaitingForUserInBlindMode() {
+    if (state.annotationState != null) return;
+    state = state.copyWith(isPlaying: false);
+  }
+
   /// 直接设置 state（测试辅助方法）
   void setState(IntensiveListenState newState) {
     state = newState;
@@ -1135,12 +1355,12 @@ class TestRetellPlayer extends RetellPlayer {
 
   @override
   void initialize(
-    List<List<Sentence>> paragraphs,
-    Map<int, Set<int>> keywordsMap, {
+    List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
+    KeywordRatio? autoRatio,
   }) {
     _testParagraphs = paragraphs;
-    _testKeywords = keywordsMap;
+    _testKeywords = const {};
     var safeIndex = 0;
     if (startSentenceIndex != null && paragraphs.isNotEmpty) {
       for (var i = 0; i < paragraphs.length; i++) {
@@ -1150,9 +1370,13 @@ class TestRetellPlayer extends RetellPlayer {
         }
       }
     }
+    final initialSettings = autoRatio == null
+        ? const RetellSettings()
+        : const RetellSettings().copyWith(keywordRatio: autoRatio);
     state = RetellPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
+      settings: initialSettings,
     );
   }
 
@@ -1722,7 +1946,12 @@ SharedPreferences? _testPrefsCache;
 
 /// 初始化测试用 AnalyticsService（须在 createTestApp 前调用一次）
 Future<void> initTestAnalytics() async {
-  SharedPreferences.setMockInitialValues({});
+  // 把所有引导 flow 预置为「已看」，避免 Showcase 在测试中弹出遮挡按钮 +
+  // 残留 Timer 导致 widget dispose 后 pending 报错。
+  final guideSeen = <String, Object>{
+    for (final flowId in GuideFlowIds.all) 'guide_v1_${flowId}_seen': true,
+  };
+  SharedPreferences.setMockInitialValues(guideSeen);
   final prefs = await SharedPreferences.getInstance();
   _testPrefsCache = prefs;
   final service = AnalyticsService(
@@ -1782,6 +2011,7 @@ Widget createTestApp() {
       ...learningSettingsTestOverrides(),
       // 集成测试默认隐藏 AI section，避免 ASR Provider 未注入触发 UnimplementedError
       showOfflineAsrSectionProvider.overrideWithValue(false),
+      offlineAsrSettingsProvider.overrideWith(() => TestOfflineAsrSettings()),
       appSettingsProvider.overrideWith(() => TestAppSettings()),
       audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
       collectionListProvider.overrideWith(() => TestCollectionList()),
@@ -1801,6 +2031,8 @@ Widget createTestApp() {
         () => TestReviewDifficultPractice(),
       ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
+      stageCompletionDaoProvider.overrideWithValue(TestStageCompletionDao()),
+      audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
       sentenceAiNotifierProvider.overrideWithValue(
         SentenceAiNotifier(
@@ -1809,6 +2041,8 @@ Widget createTestApp() {
         ),
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
+      studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
+      studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
       flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
       speechPracticeBackendProvider.overrideWithValue(
@@ -1850,6 +2084,7 @@ Widget createTestAppWithAudio({
       ...learningSettingsTestOverrides(),
       // 集成测试默认隐藏 AI section，避免 ASR Provider 未注入触发 UnimplementedError
       showOfflineAsrSectionProvider.overrideWithValue(false),
+      offlineAsrSettingsProvider.overrideWith(() => TestOfflineAsrSettings()),
       appSettingsProvider.overrideWith(() => TestAppSettings()),
       audioLibraryProvider.overrideWith(() {
         final notifier = TestAudioLibrary();
@@ -1875,6 +2110,8 @@ Widget createTestAppWithAudio({
         () => TestReviewDifficultPractice(),
       ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
+      stageCompletionDaoProvider.overrideWithValue(TestStageCompletionDao()),
+      audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
       sentenceAiNotifierProvider.overrideWithValue(
         SentenceAiNotifier(
@@ -1883,6 +2120,8 @@ Widget createTestAppWithAudio({
         ),
       ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
+      studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
+      studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
       flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
       speechPracticeBackendProvider.overrideWithValue(
@@ -1954,6 +2193,29 @@ class _AudioPreloadWrapperState extends ConsumerState<_AudioPreloadWrapper> {
         ref.read(learningProgressNotifierProvider.notifier)
             as TestLearningProgressNotifier;
     progressNotifier.setProgress(widget.progress);
+
+    // 按 (currentStage, currentSubStage) 推导已完成的 sub_stage key 集合：
+    // 当前 stage 内 currentSubStage 之前的子步骤 + 所有先前 stage 全部 sub_stages。
+    // V2.1 后 UI 完成态判定改为读 stage_completions，测试需要显式播下；
+    // 否则学习计划页所有步骤都显示「未完成」，与历史隐式行为不一致。
+    final progress = widget.progress;
+    final completed = <String>{};
+    for (final stage in LearningStage.values) {
+      if (stage.index < progress.currentStage.index) {
+        for (final sub in stage.allSubStages) {
+          completed.add('${stage.key}:${sub.key}');
+        }
+      } else if (stage.index == progress.currentStage.index) {
+        final subs = stage.allSubStages;
+        final idx = subs.indexOf(progress.currentSubStage);
+        if (idx > 0) {
+          for (var i = 0; i < idx; i++) {
+            completed.add('${stage.key}:${subs[i].key}');
+          }
+        }
+      }
+    }
+    progressNotifier.setCompletionKeys(progress.audioItemId, completed);
 
     // 预置句子数据
     final practice =

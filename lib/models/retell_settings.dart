@@ -4,6 +4,7 @@
 /// 仅在会话内生效，不持久化。
 library;
 
+import '../database/enums.dart';
 import 'intensive_listen_settings.dart';
 import 'rating_thresholds.dart';
 
@@ -21,32 +22,92 @@ enum KeywordMethod {
   ai,
 }
 
-/// 可见词比例
+/// 可见词比例（按难度档位）
 ///
-/// 控制可见词占总词数的比例。
+/// 5 档与音频难度 [DifficultyLevel] 一一对应：
+/// 越难的音频显示越多可见词作为提示。
 enum KeywordRatio {
-  /// 1/2
-  half(1, 2),
+  /// 15%（对应"很轻松"难度）
+  veryEasy(15),
 
-  /// 1/3
-  oneThird(1, 3),
+  /// 25%（对应"偏轻松"难度）
+  easy(25),
 
-  /// 1/5
-  oneFifth(1, 5),
+  /// 40%（对应"还可以"难度）
+  medium(40),
 
-  /// 1/10
-  oneTenth(1, 10);
+  /// 60%（对应"偏难"难度）
+  hard(60),
 
-  /// 分子
-  final int numerator;
+  /// 80%（对应"很难"难度）
+  veryHard(80);
 
-  /// 分母
-  final int denominator;
+  /// 百分比（0–100）
+  final int percent;
 
-  const KeywordRatio(this.numerator, this.denominator);
+  const KeywordRatio(this.percent);
 
-  /// 比例值
-  double get value => numerator / denominator;
+  /// 比例值（0.0–1.0），供 keyword 提取算法直接乘
+  double get value => percent / 100.0;
+
+  /// 按音频难度自动映射档位（不考虑学习阶段，作为基线档位）
+  ///
+  /// veryEasy→15%, easy→25%, medium→40%, hard→60%, veryHard→80%。
+  static KeywordRatio forDifficulty(DifficultyLevel level) => switch (level) {
+    DifficultyLevel.veryEasy => KeywordRatio.veryEasy,
+    DifficultyLevel.easy => KeywordRatio.easy,
+    DifficultyLevel.medium => KeywordRatio.medium,
+    DifficultyLevel.hard => KeywordRatio.hard,
+    DifficultyLevel.veryHard => KeywordRatio.veryHard,
+  };
+
+  /// stage 在学习时间轴上的位置（0=firstLearn，8=completed）
+  ///
+  /// 用于按"高/中/低"三段式曲线推算可见词比例的下降时机。
+  static int _stagePosition(LearningStage stage) => switch (stage) {
+    LearningStage.firstLearn => 0,
+    LearningStage.review0 => 1,
+    LearningStage.review1 => 2,
+    LearningStage.review2 => 3,
+    LearningStage.review4 => 4,
+    LearningStage.review7 => 5,
+    LearningStage.review14 => 6,
+    LearningStage.review28 => 7,
+    LearningStage.completed => 8,
+  };
+
+  /// 按音频难度 + 学习阶段联合映射档位
+  ///
+  /// 三段式曲线：每个难度都按"起点→中段→终点"逐档下降。
+  /// - 起点：min(基线 +2 档, 80%)，首次学习提示最多
+  /// - 终点：min(基线, 40%)；medium/hard/veryHard 都收敛到 40%，
+  ///   veryEasy/easy 收敛到自己的基线（15% / 25%）
+  /// - 中段：起点 -1 档
+  /// - 难度高于 medium 时，曲线整体后移（hard 后移 1 stage，veryHard 后移 2）：
+  ///   越难的音频越晚降到 40%
+  ///
+  /// 完整映射表见 retell 设计文档；medium 列：firstLearn=80%, review2=60%,
+  /// review7=40%。
+  static KeywordRatio forDifficultyAndStage(
+    DifficultyLevel difficulty,
+    LearningStage stage,
+  ) {
+    final mediumIndex = KeywordRatio.medium.index;
+    final maxIndex = KeywordRatio.values.length - 1;
+    final baseIndex = forDifficulty(difficulty).index;
+    final endIndex = baseIndex < mediumIndex ? baseIndex : mediumIndex;
+    final startIndex = (endIndex + 2).clamp(0, maxIndex);
+    final shift = baseIndex > mediumIndex ? baseIndex - mediumIndex : 0;
+    final adjustedStagePos = _stagePosition(stage) - shift;
+    // medium 曲线：stage<2 起点，2≤stage<5 中段，stage≥5 终点
+    final descent = adjustedStagePos < 2
+        ? 0
+        : adjustedStagePos < 5
+        ? 1
+        : 2;
+    final descentClamped = descent.clamp(0, startIndex - endIndex);
+    return KeywordRatio.values[startIndex - descentClamped];
+  }
 }
 
 /// 复述文本显示模式
@@ -110,7 +171,7 @@ class RetellSettings {
     this.fixedPauseSeconds = 30,
     this.pauseMultiplier = 0.5,
     this.keywordMethod = KeywordMethod.random,
-    this.keywordRatio = KeywordRatio.oneThird,
+    this.keywordRatio = KeywordRatio.medium,
     this.controlMode = ShadowingControlMode.auto,
   });
 

@@ -695,7 +695,7 @@ void main() {
 
       await container
           .read(learningSessionProvider.notifier)
-          .enterRetellMode('audio-1', paragraphs, const {});
+          .enterRetellMode('audio-1', paragraphs);
 
       final playerState = container.read(retellPlayerProvider);
       expect(playerState.currentParagraphIndex, 0);
@@ -723,7 +723,7 @@ void main() {
 
       await container
           .read(learningSessionProvider.notifier)
-          .enterRetellMode('audio-1', paragraphs, const {}, isFreePlay: true);
+          .enterRetellMode('audio-1', paragraphs, isFreePlay: true);
 
       final playerState = container.read(retellPlayerProvider);
       expect(playerState.currentParagraphIndex, 1);

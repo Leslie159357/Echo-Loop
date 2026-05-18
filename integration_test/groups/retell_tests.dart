@@ -176,7 +176,7 @@ void retellTests() {
     Future<void> openSettingsSheet(WidgetTester tester) async {
       final button = tester.widget<IconButton>(appBarTuneButton());
       button.onPressed?.call();
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
     }
 
     testWidgets('复述页面基本 UI', (tester) async {
@@ -268,7 +268,7 @@ void retellTests() {
       // listening 阶段即可切换显示模式（无需等到 retelling）
       // 点击"全部显示"
       await tester.tap(find.text('Show All'));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
       expect(
         container.read(retellPlayerProvider).displayMode,
         RetellDisplayMode.showAll,
@@ -276,7 +276,7 @@ void retellTests() {
 
       // 点击"全部隐藏"
       await tester.tap(find.text('Hide All'));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
       expect(
         container.read(retellPlayerProvider).displayMode,
         RetellDisplayMode.hideAll,
@@ -303,11 +303,11 @@ void retellTests() {
         currentParagraphIndex: player.state.totalParagraphs - 1,
         isPlaying: false,
       ));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 最后一段时，下一步按钮图标变为 check_circle_rounded
       await tester.tap(find.byIcon(Icons.check_circle_rounded));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 验证完成对话框弹出
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
@@ -340,15 +340,15 @@ void retellTests() {
         currentParagraphIndex: player.state.totalParagraphs - 1,
         isPlaying: false,
       ));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
       // 最后一段时，下一步按钮图标变为 check_circle_rounded
       await tester.tap(find.byIcon(Icons.check_circle_rounded));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 复述是末步骤，完成对话框显示"完成首次学习"
       // 点击"完成首次学习"按钮
       await tester.tap(find.text('Complete Initial Learning'));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 对话框关闭，页面已退出（完成首次学习后返回计划页）
       expect(find.byType(RetellPlayerScreen), findsNothing);
@@ -367,21 +367,21 @@ void retellTests() {
 
       // 导航到第 2 段
       await tester.tap(find.byIcon(Icons.skip_next_rounded));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 验证当前在第 2 段
       expect(find.textContaining('2/3'), findsWidgets);
 
       // 点击关闭按钮触发退出
       await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 验证确认对话框弹出
       expect(find.text('Exit Retelling?'), findsOneWidget);
 
       // 点击确认退出
       await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       // 验证复述页面已退出
       expect(find.byType(RetellPlayerScreen), findsNothing);
@@ -442,20 +442,20 @@ void retellTests() {
 
       // 默认 random → 比例区域可见
       expect(find.text('Visible ratio'), findsOneWidget);
-      expect(find.text('1/3'), findsOneWidget);
-      expect(find.text('1/2'), findsOneWidget);
+      expect(find.text('40%'), findsOneWidget);
+      expect(find.text('25%'), findsOneWidget);
 
-      // 点击 1/2 比例
-      await tester.tap(find.text('1/2'));
-      await tester.pumpAndSettle();
+      // 点击 25% 比例
+      await tester.tap(find.text('25%'));
+      await safeSettle(tester);
 
       final container = getContainer(tester);
       final settings = container.read(retellPlayerProvider).settings;
-      expect(settings.keywordRatio, equals(KeywordRatio.half));
+      expect(settings.keywordRatio, equals(KeywordRatio.easy));
 
       // 切换到"关闭" → 比例区域消失
       await tester.tap(find.text('Off'));
-      await tester.pumpAndSettle();
+      await safeSettle(tester);
 
       expect(
         container.read(retellPlayerProvider).settings.keywordMethod,

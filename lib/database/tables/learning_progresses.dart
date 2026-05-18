@@ -19,7 +19,11 @@ class LearningProgresses extends Table {
   TextColumn get currentSubStage =>
       text().withDefault(const Constant('blindListen'))();
 
-  /// 难度等级（0=easy, 1=medium, 2=hard）
+  /// 难度等级（5 档：0=veryEasy, 1=easy, 2=medium, 3=hard, 4=veryHard）
+  ///
+  /// DB 列 default 为历史值 1；新建 LearningProgress 行的代码层（ensureProgress）
+  /// 会显式写入 2 (medium)，所以该 default 实际不会生效，但出于谨慎不在此处变更，
+  /// 避免触发 drift schema 重新校验。
   IntColumn get difficulty => integer().withDefault(const Constant(1))();
 
   /// 首次学习完成时间（复习间隔计算基准，首次学习完成前为 null）

@@ -285,17 +285,18 @@ class RetellPlayer extends _$RetellPlayer {
   /// 初始化复述播放器
   ///
   /// [paragraphs] DP 分段结果
-  /// [keywordsMap] 关键词提取结果
   /// [startSentenceIndex] 断点续学句子索引（段落第一句的全局索引）
+  /// [autoRatio] 按音频难度映射出的可见词比例档位；为 null 时使用 [RetellSettings] 默认值
+  ///
+  /// 关键词由内部根据 [autoRatio] 或当前 settings 自动生成，无需外部传入。
   void initialize(
-    List<List<Sentence>> paragraphs,
-    Map<int, Set<int>> keywordsMap, {
+    List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
+    KeywordRatio? autoRatio,
   }) {
     _cleanup();
     _paragraphs = paragraphs;
     _allSentences = paragraphs.expand((p) => p).toList();
-    _keywordsMap = keywordsMap;
 
     // 根据句子索引查找对应段落
     var safeIndex = 0;
@@ -308,10 +309,23 @@ class RetellPlayer extends _$RetellPlayer {
       }
     }
 
+    final initialSettings = autoRatio == null
+        ? const RetellSettings()
+        : const RetellSettings().copyWith(keywordRatio: autoRatio);
     state = RetellPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
+      settings: initialSettings,
     );
+
+    // 按 settings.keywordRatio 生成关键词映射
+    regenerateKeywords();
+    if (autoRatio != null) {
+      AppLogger.log(
+        'RetellPlayer',
+        'auto keywordRatio=${autoRatio.name} (${autoRatio.percent}%)',
+      );
+    }
     ref.read(analyticsServiceProvider).track(Events.retellStart, {
       ...ref.audioEventParams(ref.read(learningSessionProvider).audioItemId),
       EventParams.totalParagraphs: paragraphs.length,

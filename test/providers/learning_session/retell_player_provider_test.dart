@@ -286,7 +286,7 @@ void main() {
       notifier.initialize([
         [sentences[0]],
         [sentences[1]],
-      ], const {});
+      ]);
 
       final pending = notifier.goToNextParagraph();
       await Future<void>.delayed(Duration.zero);
@@ -323,7 +323,7 @@ void main() {
             endTime: const Duration(seconds: 3),
           ),
         ],
-      ], const {});
+      ]);
 
       final pending = delayedNotifier.startPlaying();
       delayedNotifier.enterWaitingForUser(afterCurrentParagraph: true);
@@ -380,7 +380,7 @@ void main() {
             endTime: const Duration(seconds: 3),
           ),
         ],
-      ], const {});
+      ]);
 
       await saveNotifier.startPlaying();
       await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -431,7 +431,7 @@ void main() {
             endTime: const Duration(seconds: 3),
           ),
         ],
-      ], const {});
+      ]);
 
       await saveNotifier.startPlaying();
       await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -491,7 +491,6 @@ void main() {
             ),
           ],
         ],
-        const {},
         startSentenceIndex: 1,
       );
       await countdownNotifier.startPlaying();
@@ -556,7 +555,7 @@ void main() {
             endTime: const Duration(seconds: 3),
           ),
         ],
-      ], const {});
+      ]);
 
       // 开始播放（playRangeOnce 立即完成 → 自动进入 retelling phase）
       await testNotifier.startPlaying();
@@ -635,7 +634,7 @@ void main() {
             endTime: const Duration(seconds: 3),
           ),
         ],
-      ], const {});
+      ]);
 
       // 开始播放 → 自动进入 retelling phase
       await testNotifier.startPlaying();
@@ -706,7 +705,7 @@ void main() {
             endTime: const Duration(seconds: 9),
           ),
         ],
-      ], const {});
+      ]);
 
       await countdownNotifier.startPlaying();
       await Future<void>.delayed(const Duration(milliseconds: 20));

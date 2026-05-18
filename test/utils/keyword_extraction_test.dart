@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/models/retell_settings.dart';
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/utils/keyword_extraction.dart';
@@ -89,48 +90,59 @@ void main() {
       ]);
 
       // 总词数 22，全部 > 2 字符且非停用词
-      test('1/2 比例选出约 50% 关键词', () {
+      test('veryEasy 15% 选出约 15% 关键词', () {
         final result = extractKeywords(
           sentences,
-          ratio: KeywordRatio.half,
+          ratio: KeywordRatio.veryEasy,
           random: Random(42),
         );
         final count = _totalKeywords(result);
-        // 22 * 0.5 = 11
-        expect(count, inInclusiveRange(8, 14));
+        // 22 * 0.15 ≈ 3 (每句最少 1 个保底，3 句故 ≥3)
+        expect(count, inInclusiveRange(3, 6));
       });
 
-      test('1/3 比例选出约 33% 关键词', () {
+      test('easy 25% 选出约 25% 关键词', () {
         final result = extractKeywords(
           sentences,
-          ratio: KeywordRatio.oneThird,
+          ratio: KeywordRatio.easy,
           random: Random(42),
         );
         final count = _totalKeywords(result);
-        // 22 * 0.333 ≈ 7
-        expect(count, inInclusiveRange(5, 10));
+        // 22 * 0.25 ≈ 5–6
+        expect(count, inInclusiveRange(3, 8));
       });
 
-      test('1/5 比例选出约 20% 关键词', () {
+      test('medium 40% 选出约 40% 关键词', () {
         final result = extractKeywords(
           sentences,
-          ratio: KeywordRatio.oneFifth,
+          ratio: KeywordRatio.medium,
           random: Random(42),
         );
         final count = _totalKeywords(result);
-        // 22 * 0.2 ≈ 4
-        expect(count, inInclusiveRange(3, 7));
+        // 22 * 0.4 ≈ 9
+        expect(count, inInclusiveRange(6, 12));
       });
 
-      test('1/10 比例选出约 10% 关键词', () {
+      test('hard 60% 选出约 60% 关键词', () {
         final result = extractKeywords(
           sentences,
-          ratio: KeywordRatio.oneTenth,
+          ratio: KeywordRatio.hard,
           random: Random(42),
         );
         final count = _totalKeywords(result);
-        // 22 * 0.1 ≈ 2
-        expect(count, inInclusiveRange(1, 5));
+        // 22 * 0.6 ≈ 13
+        expect(count, inInclusiveRange(10, 16));
+      });
+
+      test('veryHard 80% 选出约 80% 关键词', () {
+        final result = extractKeywords(
+          sentences,
+          ratio: KeywordRatio.veryHard,
+          random: Random(42),
+        );
+        final count = _totalKeywords(result);
+        // 22 * 0.8 ≈ 18
+        expect(count, inInclusiveRange(14, 20));
       });
     });
 
@@ -142,7 +154,7 @@ void main() {
         for (var seed = 0; seed < 100; seed++) {
           final result = extractKeywords(
             sentences,
-            ratio: KeywordRatio.half,
+            ratio: KeywordRatio.hard,
             random: Random(seed),
           );
           if (result.containsKey(0)) {
@@ -169,7 +181,7 @@ void main() {
         for (var seed = 0; seed < 50; seed++) {
           final result = extractKeywords(
             sentences,
-            ratio: KeywordRatio.half,
+            ratio: KeywordRatio.hard,
             random: Random(seed),
           );
           if (result.containsKey(0)) {
@@ -192,10 +204,10 @@ void main() {
         ]);
         final result = extractKeywords(
           sentences,
-          ratio: KeywordRatio.half,
+          ratio: KeywordRatio.veryHard,
           random: Random(42),
         );
-        // 总词数 11，ratio 1/2 → targetCount = round(11 * 0.5) = 6
+        // 总词数 11，ratio 80% → targetCount = round(11 * 0.8) = 9
         // 候选词恰好 6 个，clamp 上限 6 → 选 6 个
         final count = _totalKeywords(result);
         expect(count, inInclusiveRange(5, 6));
@@ -229,5 +241,115 @@ void main() {
     test('空字符串返回空列表', () {
       expect(tokenize(''), isEmpty);
     });
+  });
+
+  group('KeywordRatio.forDifficulty', () {
+    test('5 档难度一一映射到 5 档比例', () {
+      expect(
+        KeywordRatio.forDifficulty(DifficultyLevel.veryEasy),
+        KeywordRatio.veryEasy,
+      );
+      expect(
+        KeywordRatio.forDifficulty(DifficultyLevel.easy),
+        KeywordRatio.easy,
+      );
+      expect(
+        KeywordRatio.forDifficulty(DifficultyLevel.medium),
+        KeywordRatio.medium,
+      );
+      expect(
+        KeywordRatio.forDifficulty(DifficultyLevel.hard),
+        KeywordRatio.hard,
+      );
+      expect(
+        KeywordRatio.forDifficulty(DifficultyLevel.veryHard),
+        KeywordRatio.veryHard,
+      );
+    });
+
+    test('percent 与 value 一致', () {
+      expect(KeywordRatio.veryEasy.percent, 15);
+      expect(KeywordRatio.veryEasy.value, closeTo(0.15, 1e-9));
+      expect(KeywordRatio.easy.percent, 25);
+      expect(KeywordRatio.medium.percent, 40);
+      expect(KeywordRatio.hard.percent, 60);
+      expect(KeywordRatio.veryHard.percent, 80);
+      expect(KeywordRatio.veryHard.value, closeTo(0.80, 1e-9));
+    });
+  });
+
+  group('KeywordRatio.forDifficultyAndStage', () {
+    /// 期望表（5 难度 × 9 stage）。
+    final expected = <DifficultyLevel, Map<LearningStage, KeywordRatio>>{
+      DifficultyLevel.veryEasy: {
+        LearningStage.firstLearn: KeywordRatio.medium,    // 40%
+        LearningStage.review0: KeywordRatio.medium,
+        LearningStage.review1: KeywordRatio.easy,         // 25%
+        LearningStage.review2: KeywordRatio.easy,
+        LearningStage.review4: KeywordRatio.easy,
+        LearningStage.review7: KeywordRatio.veryEasy,     // 15%
+        LearningStage.review14: KeywordRatio.veryEasy,
+        LearningStage.review28: KeywordRatio.veryEasy,
+        LearningStage.completed: KeywordRatio.veryEasy,
+      },
+      DifficultyLevel.easy: {
+        LearningStage.firstLearn: KeywordRatio.hard,      // 60%
+        LearningStage.review0: KeywordRatio.hard,
+        LearningStage.review1: KeywordRatio.medium,       // 40%
+        LearningStage.review2: KeywordRatio.medium,
+        LearningStage.review4: KeywordRatio.medium,
+        LearningStage.review7: KeywordRatio.easy,         // 25%
+        LearningStage.review14: KeywordRatio.easy,
+        LearningStage.review28: KeywordRatio.easy,
+        LearningStage.completed: KeywordRatio.easy,
+      },
+      DifficultyLevel.medium: {
+        LearningStage.firstLearn: KeywordRatio.veryHard,  // 80%
+        LearningStage.review0: KeywordRatio.veryHard,
+        LearningStage.review1: KeywordRatio.hard,         // 60%
+        LearningStage.review2: KeywordRatio.hard,
+        LearningStage.review4: KeywordRatio.hard,
+        LearningStage.review7: KeywordRatio.medium,       // 40%
+        LearningStage.review14: KeywordRatio.medium,
+        LearningStage.review28: KeywordRatio.medium,
+        LearningStage.completed: KeywordRatio.medium,
+      },
+      DifficultyLevel.hard: {
+        // hard 比 medium 后移 1 stage 进入下一档
+        LearningStage.firstLearn: KeywordRatio.veryHard,  // 80%
+        LearningStage.review0: KeywordRatio.veryHard,
+        LearningStage.review1: KeywordRatio.veryHard,
+        LearningStage.review2: KeywordRatio.hard,         // 60%
+        LearningStage.review4: KeywordRatio.hard,
+        LearningStage.review7: KeywordRatio.hard,
+        LearningStage.review14: KeywordRatio.medium,      // 40%
+        LearningStage.review28: KeywordRatio.medium,
+        LearningStage.completed: KeywordRatio.medium,
+      },
+      DifficultyLevel.veryHard: {
+        // veryHard 比 medium 后移 2 stage
+        LearningStage.firstLearn: KeywordRatio.veryHard,  // 80%
+        LearningStage.review0: KeywordRatio.veryHard,
+        LearningStage.review1: KeywordRatio.veryHard,
+        LearningStage.review2: KeywordRatio.veryHard,
+        LearningStage.review4: KeywordRatio.hard,         // 60%
+        LearningStage.review7: KeywordRatio.hard,
+        LearningStage.review14: KeywordRatio.hard,
+        LearningStage.review28: KeywordRatio.medium,      // 40%
+        LearningStage.completed: KeywordRatio.medium,
+      },
+    };
+
+    for (final difficulty in DifficultyLevel.values) {
+      for (final stage in LearningStage.values) {
+        test('${difficulty.name} @ ${stage.name}', () {
+          expect(
+            KeywordRatio.forDifficultyAndStage(difficulty, stage),
+            expected[difficulty]![stage],
+            reason: '${difficulty.name} @ ${stage.name}',
+          );
+        });
+      }
+    }
   });
 }

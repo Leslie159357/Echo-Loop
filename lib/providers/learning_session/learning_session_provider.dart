@@ -16,6 +16,7 @@ import '../../analytics/models/event_names.dart';
 import '../../database/enums.dart';
 import '../../models/blind_listen_settings.dart';
 import '../../models/playback_settings.dart';
+import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
 import '../../database/providers.dart';
 import '../../models/study_stage.dart';
@@ -566,11 +567,12 @@ class LearningSession extends _$LearningSession {
   ///
   /// 1. 保存当前用户播放设置
   /// 2. 暂停 LP 的 stream 监听
-  /// 3. 初始化 RetellPlayer（段落分组 + 关键词映射 + 断点索引）
+  /// 3. 初始化 RetellPlayer（段落分组 + 按音频难度自动算可见词比例 + 断点索引）
+  ///
+  /// 可见词比例由 `progress.difficulty` 映射，无需调用方传入。
   Future<void> enterRetellMode(
     String audioItemId,
-    List<List<Sentence>> paragraphs,
-    Map<int, Set<int>> keywordsMap, {
+    List<List<Sentence>> paragraphs, {
     bool isFreePlay = false,
     LearningStage? catchUpStage,
     SubStageType? catchUpSubStage,
@@ -615,12 +617,18 @@ class LearningSession extends _$LearningSession {
           retellSentences.isNotEmpty ? retellSentences.first.text : null,
     );
 
-    // 初始化复述播放器
+    // 初始化复述播放器：按音频难度 + 学习阶段联合算可见词比例。
+    // 补练场景按 catchUpStage 算（补练 firstLearn 就走 firstLearn 的曲线）。
+    final effectiveStage = catchUpStage ?? progress.currentStage;
+    final autoRatio = KeywordRatio.forDifficultyAndStage(
+      progress.difficulty,
+      effectiveStage,
+    );
     final player = ref.read(retellPlayerProvider.notifier);
     player.initialize(
       paragraphs,
-      keywordsMap,
       startSentenceIndex: startSentenceIndex,
+      autoRatio: autoRatio,
     );
     _trackSessionStart();
   }
