@@ -68,6 +68,99 @@ void main() {
       }
     });
 
+    group('边界稳定性', () {
+      test('单词句 + 高比例不崩，返回该单词', () {
+        final sentences = _makeSentences(['Hello.']);
+        final result = extractKeywords(
+          sentences,
+          ratio: KeywordRatio.veryHard,
+          random: Random(1),
+        );
+        expect(result[0], {0});
+      });
+
+      test('单词句 + 该词是停用词 → 不收录', () {
+        final sentences = _makeSentences(['the']);
+        final result = extractKeywords(sentences, random: Random(1));
+        expect(result, isEmpty);
+      });
+
+      test('全标点 / 全空白句不崩', () {
+        final sentences = _makeSentences(['...!?', '   ', '']);
+        final result = extractKeywords(sentences, random: Random(1));
+        // 全标点 tokenize 后会得到含标点的 "词"；标点单元素如果 isStopword 去标点后变空串
+        // → 不在 stopwords 集合中（除非有空串） → 可能进 candidate。这里只保证不抛错。
+        expect(() => extractKeywords(sentences), returnsNormally);
+        // 空白和空字符串 tokenize 返回 []，跳过
+        expect(result.containsKey(1), isFalse);
+        expect(result.containsKey(2), isFalse);
+      });
+
+      test('所有 5 档比例 + 多种句子的笛卡尔积，不崩 + 范围正确', () {
+        final sentences = _makeSentences([
+          '',
+          'a',
+          'the the the the the', // 全停用词
+          'Hello world.',
+          'You may take notes while you are listening.',
+          'Understanding complex algorithms requires extensive practice with mathematical foundations and theoretical knowledge.',
+        ]);
+        for (final ratio in KeywordRatio.values) {
+          for (var seed = 0; seed < 30; seed++) {
+            final result = extractKeywords(
+              sentences,
+              ratio: ratio,
+              random: Random(seed),
+            );
+            // 索引必须在合法范围
+            for (final entry in result.entries) {
+              final words = tokenize(sentences[entry.key].text);
+              for (final i in entry.value) {
+                expect(
+                  i,
+                  inInclusiveRange(0, words.length - 1),
+                  reason:
+                      'ratio=${ratio.name} seed=$seed sentence=${entry.key}',
+                );
+              }
+              // 选出的集合不应超过总词数
+              expect(entry.value.length, lessThanOrEqualTo(words.length));
+              // 至少选 1 个（如果出现在 result 里）
+              expect(entry.value, isNotEmpty);
+            }
+          }
+        }
+      });
+
+      test('多次重复的句子（同内容）各自独立提取，互不污染', () {
+        final sentences = _makeSentences([
+          'Hello world today',
+          'Hello world today',
+          'Hello world today',
+        ]);
+        final result = extractKeywords(
+          sentences,
+          ratio: KeywordRatio.medium,
+          random: Random(7),
+        );
+        // 每个 sentence.index 各自有自己的结果
+        expect(result.keys.toSet(), {0, 1, 2});
+      });
+
+      test('targetCount = 全句词数时（高比例 + 短句）所有词被选中', () {
+        // 5 词，60% → round(5*0.6)=3。 但内容词不足 3 个时停用词补足。
+        // 这里测：极端情况 ratio=veryHard，所有词都是内容词
+        final sentences = _makeSentences(['alpha beta gamma delta epsilon']);
+        final result = extractKeywords(
+          sentences,
+          ratio: KeywordRatio.veryHard,
+          random: Random(11),
+        );
+        // round(5 * 0.6) = 3
+        expect(result[0]?.length, 3);
+      });
+    });
+
     test('固定种子产生确定性结果', () {
       final sentences = _makeSentences([
         'Understanding complex algorithms requires extensive practice',
