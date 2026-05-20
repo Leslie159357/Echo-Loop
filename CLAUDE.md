@@ -184,3 +184,16 @@ flutter test integration_test -d macos
 - **规则**：TTS 的 stop 和 speak 之间不能依赖 flutter_tts 内部的完成信号隔离，必须自行管理
 - **相关代码**：`lib/services/tts_service.dart`
 - **修复时间**：2026-04-06
+
+### 7.3 Android versionCode 必须全局单调递增，与 versionName 解耦
+
+- **现象**：已装 1.0.10+4 的设备无法安装 1.0.11+1/+2，系统提示「已存在更高版本」
+- **根因**：Android 升降级**只看 versionCode（整数）**，不看 versionName。Flutter `pubspec.yaml` 的 `+N` 直接映射到 Android versionCode。minor 升级时把 buildNumber 重置回 1，导致 versionCode 倒退（4 → 1）
+- **解法**：
+  - Git tag 改用纯 SemVer 格式 `v1.0.11`（**不带 `+N`**）
+  - versionCode 由 CI 用 `git rev-list --count <tag>` 自动生成，全局单调递增
+  - App 内"关于"页只显示 versionName，buildNumber 不暴露给用户
+  - 同 versionName 内需重新构建时：加空 commit (`git commit --allow-empty`) → commit count +1
+- **规则**：所有平台（Android/iOS/macOS）的发布脚本和 CI workflow 都按"tag = 纯 SemVer，versionCode = commit count"约定走。打 tag 前必须先升级 `pubspec.yaml` 的 version 字段（workflow 会强制校验一致）
+- **相关代码**：`scripts/lib/build_number.sh`、`scripts/release_*.sh`、`.github/workflows/release.yml`、`lib/screens/settings_screen.dart`
+- **修复时间**：2026-05-20

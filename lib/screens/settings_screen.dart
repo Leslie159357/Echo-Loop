@@ -315,12 +315,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppLocalizations l10n,
   ) {
     final packageInfo = ref.watch(packageInfoProvider);
-    final version = packageInfo.version;
-    final buildNumber = packageInfo.buildNumber;
-    // 仅当 buildNumber 是纯数字时显示 +N（空时默认 +1）
-    final buildNumberInt = int.tryParse(buildNumber);
-    final effectiveBuildNumber = buildNumberInt?.toString() ?? '1';
-    final versionDisplay = '$version+$effectiveBuildNumber';
+    // 仅向用户展示 versionName。Android versionCode（commit count）
+    // 是内部递增数字，对用户无意义，不显示。
+    final versionDisplay = packageInfo.version;
     final updateState = ref.watch(appUpdateProvider);
     final isChecking = updateState is AppUpdateChecking;
 

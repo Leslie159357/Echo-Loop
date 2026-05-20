@@ -55,12 +55,18 @@ fi
 
 # 如果参数和环境变量都没提供，从当前 commit 的 tag 解析
 if [[ -z "$BUILD_NAME" || -z "$BUILD_NUMBER" ]]; then
-  TAG="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+[+][0-9]+$' | head -1 || true)"
+  # 兼容新格式 vX.Y.Z 和旧格式 vX.Y.Z+N
+  TAG="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([+][0-9]+)?$' | head -1 || true)"
   if [[ -z "$TAG" ]]; then
     fail "No version tag on current commit. Run ci.sh first, or provide --build-name and --build-number."
   fi
   log "Using tag: $TAG"
   eval "$(parse_tag "$TAG")"
+  # 新格式 tag 不带 +N，BUILD_NUMBER 兜底用 commit count
+  if [[ -z "$BUILD_NUMBER" ]]; then
+    BUILD_NUMBER="$(git rev-list --count HEAD)"
+    log "BUILD_NUMBER from commit count: $BUILD_NUMBER"
+  fi
 fi
 
 # 安装包名字统一包含构建号

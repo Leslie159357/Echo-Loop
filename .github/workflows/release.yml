@@ -4,15 +4,20 @@ name: Release
 # 同时把 APK 作为 GitHub Release 附件挂出（IPA 不公开）。
 #
 # 触发：
-#   - push tag 形如 v1.0.8+1
+#   - push tag 形如 v1.0.11（推荐，新格式）或 v1.0.8+1（兼容旧格式）
 #   - 或在 Actions 页面手动 dispatch 选 tag
+#
+# 版本号约定：
+#   - tag 用纯 SemVer（v1.0.11），不带 +N
+#   - versionCode 由 CI 自动用 git rev-list --count <tag> 生成，全局单调递增
+#   - 详见 CLAUDE.md "Android versionCode 单调递增" 章节
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v1.0.8+1)'
+        description: 'Tag to release (e.g. v1.0.11)'
         required: true
 
 env:
@@ -61,23 +66,56 @@ jobs:
         env:
           TAG_REF: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          NAME="${TAG_REF#v}"
-          NAME="${NAME%+*}"
-          NUMBER="${TAG_REF##*+}"
-          if [[ "$NAME" == "$TAG_REF" || "$NUMBER" == "$TAG_REF" || -z "$NAME" || -z "$NUMBER" ]]; then
-            echo "ERROR: tag '$TAG_REF' is not in vX.Y.Z+N format" >&2
+          # 兼容新格式 vX.Y.Z 和旧格式 vX.Y.Z+N
+          if [[ "$TAG_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            NAME="${BASH_REMATCH[1]}"
+            # versionCode = 该 tag 指向 commit 的 git rev-list count
+            NUMBER="$(git rev-list --count "$TAG_REF")"
+          elif [[ "$TAG_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]; then
+            NAME="${BASH_REMATCH[1]}"
+            NUMBER="${BASH_REMATCH[2]}"
+          else
+            echo "ERROR: tag '$TAG_REF' is not in vX.Y.Z or vX.Y.Z+N format" >&2
             exit 1
           fi
+          if [[ -z "$NUMBER" || "$NUMBER" -le 0 ]]; then
+            echo "ERROR: invalid build number ($NUMBER) for tag $TAG_REF" >&2
+            exit 1
+          fi
+
+          # 校验 versionCode 严格大于所有历史 tag 的 versionCode
+          # 防止人为意外打了倒退的 +N 旧格式 tag
+          git fetch --tags --force
+          MAX_CODE=0
+          for t in $(git tag -l 'v*'); do
+            if [[ "$t" == "$TAG_REF" ]]; then continue; fi
+            if [[ "$t" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$ ]]; then
+              CODE="${BASH_REMATCH[2]}"
+            elif [[ "$t" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              CODE="$(git rev-list --count "$t" 2>/dev/null || echo 0)"
+            else
+              continue
+            fi
+            if [[ "$CODE" -gt "$MAX_CODE" ]]; then MAX_CODE="$CODE"; fi
+          done
+          if [[ "$NUMBER" -le "$MAX_CODE" ]]; then
+            echo "ERROR: versionCode $NUMBER must be strictly greater than max existing $MAX_CODE" >&2
+            echo "如需重新构建已发布的 tag，请在最新 commit 上加空 commit 后再打新 tag" >&2
+            exit 1
+          fi
+
+          # 校验 pubspec.yaml 版本号一致
           PUBSPEC_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)"
           if [[ "$NAME" != "$PUBSPEC_VERSION" ]]; then
             echo "ERROR: tag version ($NAME) does not match pubspec.yaml ($PUBSPEC_VERSION)" >&2
             echo "请先升级 pubspec.yaml 的 version 字段，再打 tag。" >&2
             exit 1
           fi
+
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
           echo "version=${NAME}+${NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "Parsed: name=$NAME number=$NUMBER (pubspec OK)"
+          echo "Parsed: name=$NAME number=$NUMBER (pubspec OK, max existing code=$MAX_CODE)"
 
       # ---------- Android ----------
 
