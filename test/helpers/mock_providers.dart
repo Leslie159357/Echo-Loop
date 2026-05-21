@@ -54,68 +54,10 @@ import 'package:echo_loop/providers/dictionary_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 
-// ========== 测试数据工厂 ==========
-
-/// 创建测试用 AudioItem
-AudioItem createTestAudioItem({
-  String id = 'test-audio-1',
-  String name = 'Test Audio',
-  String audioPath = 'audios/test.mp3',
-  String? transcriptPath = 'transcripts/test.srt',
-  DateTime? addedDate,
-  int totalDuration = 120,
-}) {
-  return AudioItem(
-    id: id,
-    name: name,
-    audioPath: audioPath,
-    transcriptPath: transcriptPath,
-    addedDate: addedDate ?? DateTime(2026, 1, 1),
-    totalDuration: totalDuration,
-  );
-}
-
-/// 创建测试用 Sentence 列表
-List<Sentence> createTestSentences({int count = 5}) {
-  return List.generate(count, (i) {
-    return Sentence(
-      index: i,
-      text: 'Test sentence number ${i + 1}.',
-      startTime: Duration(seconds: i * 5),
-      endTime: Duration(seconds: (i + 1) * 5),
-    );
-  });
-}
-
-/// 创建测试用 Collection
-Collection createTestCollection({
-  String id = 'test-collection-1',
-  String name = 'Test Collection',
-  bool isPinned = false,
-  DateTime? createdDate,
-}) {
-  return Collection(
-    id: id,
-    name: name,
-    createdDate: createdDate ?? DateTime(2026, 1, 1),
-    isPinned: isPinned,
-  );
-}
-
-/// 创建测试用 Tag
-Tag createTestTag({
-  String id = 'test-tag-1',
-  String name = 'Test Tag',
-  int colorValue = 0xFFF44336,
-  DateTime? createdDate,
-}) {
-  return Tag(
-    id: id,
-    name: name,
-    colorValue: colorValue,
-    createdDate: createdDate ?? DateTime(2026, 1, 1),
-  );
-}
+// 数据工厂（createTestAudioItem / createTestSentences / createTestCollection /
+// createTestTag / createTestLearningProgress）已抽到 shared/test_fixtures.dart
+// 供 test/ 与 integration_test/ 共用。
+export 'shared/test_fixtures.dart';
 
 // ========== 测试用分析服务 ==========
 
@@ -598,37 +540,6 @@ class TestListeningPractice extends ListeningPractice {
   }
 }
 
-/// 创建测试用 LearningProgress
-LearningProgress createTestLearningProgress({
-  String audioItemId = 'test-audio-1',
-  LearningStage currentStage = LearningStage.firstLearn,
-  SubStageType currentSubStage = SubStageType.blindListen,
-  DifficultyLevel difficulty = DifficultyLevel.medium,
-  DateTime? firstLearnCompletedAt,
-  DateTime? lastStageCompletedAt,
-  DateTime? currentStageStartedAt,
-  int totalStudyDurationMs = 0,
-  int blindListenPassCount = 0,
-  DateTime? newLearningBreakpointSavedAt,
-  DateTime? freePlayBreakpointSavedAt,
-  DateTime? updatedAt,
-}) {
-  return LearningProgress(
-    audioItemId: audioItemId,
-    currentStage: currentStage,
-    currentSubStage: currentSubStage,
-    difficulty: difficulty,
-    firstLearnCompletedAt: firstLearnCompletedAt,
-    lastStageCompletedAt: lastStageCompletedAt,
-    currentStageStartedAt: currentStageStartedAt,
-    totalStudyDurationMs: totalStudyDurationMs,
-    blindListenPassCount: blindListenPassCount,
-    newLearningBreakpointSavedAt: newLearningBreakpointSavedAt,
-    freePlayBreakpointSavedAt: freePlayBreakpointSavedAt,
-    updatedAt: updatedAt ?? DateTime(2026, 1, 1),
-  );
-}
-
 /// 测试用 LearningProgressNotifier — 不访问数据库
 class TestLearningProgressNotifier extends LearningProgressNotifier {
   final LearningProgressState _initialState;
@@ -723,7 +634,7 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
-  Future<void> saveBlindListenParagraphIndex(
+  Future<void> saveBlindListenSentenceIndex(
     String audioItemId,
     int? paragraphIndex, {
     required bool isFreePlay,
@@ -759,7 +670,7 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
-  Future<void> saveRetellParagraphIndex(
+  Future<void> saveRetellSentenceIndex(
     String audioItemId,
     int? paragraphIndex, {
     required bool isFreePlay,
@@ -1451,9 +1362,13 @@ class TestRetellPlayer extends RetellPlayer {
   }
 
   @override
-  int? get currentParagraphFirstSentenceIndex {
+  int? get currentSentenceGlobalIndex {
     final sentences = currentParagraphSentences;
-    return sentences.isNotEmpty ? sentences.first.index : null;
+    if (sentences.isEmpty) return null;
+    final localIdx = state.playingSentenceIndex >= 0
+        ? state.playingSentenceIndex.clamp(0, sentences.length - 1)
+        : 0;
+    return sentences[localIdx].index;
   }
 
   @override

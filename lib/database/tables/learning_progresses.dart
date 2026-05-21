@@ -61,17 +61,21 @@ class LearningProgresses extends Table {
   /// 难句补练断点续学句子索引（null 表示从头开始）
   IntColumn get difficultPracticeSentenceIndex => integer().nullable()();
 
-  /// 复述断点续学段落索引（null 表示从头开始）
-  IntColumn get retellParagraphIndex => integer().nullable()();
+  /// 复述断点续学句子索引（全局句子 index，null 表示从头开始）
+  ///
+  /// 段内位置：恢复时按句子 index 反查段，并在段时长 > 10s 时段内从该句开播。
+  IntColumn get retellSentenceIndex => integer().nullable()();
 
   /// 复述总完成遍数（每次完成复述 +1）
   IntColumn get retellPassCount => integer().nullable()();
 
-  /// 盲听断点续学段落索引（null 表示从头开始）
-  IntColumn get blindListenParagraphIndex => integer().nullable()();
+  /// 盲听断点续学句子索引（全局句子 index，null 表示从头开始）
+  ///
+  /// 段内位置：恢复时按句子 index 反查段，并在段时长 > 10s 时段内从该句开播。
+  IntColumn get blindListenSentenceIndex => integer().nullable()();
 
-  /// 自由练习-盲听断点段落索引
-  IntColumn get freePlayBlindListenParagraphIndex => integer().nullable()();
+  /// 自由练习-盲听断点句子索引（全局句子 index）
+  IntColumn get freePlayBlindListenSentenceIndex => integer().nullable()();
 
   /// 自由练习-精听断点句子索引
   IntColumn get freePlayIntensiveListenSentenceIndex => integer().nullable()();
@@ -83,8 +87,8 @@ class LearningProgresses extends Table {
   IntColumn get freePlayDifficultPracticeSentenceIndex =>
       integer().nullable()();
 
-  /// 自由练习-复述断点段落索引
-  IntColumn get freePlayRetellParagraphIndex => integer().nullable()();
+  /// 自由练习-复述断点句子索引（全局句子 index）
+  IntColumn get freePlayRetellSentenceIndex => integer().nullable()();
 
   /// 新学习断点保存时间（>3天则不恢复）
   DateTimeColumn get newLearningBreakpointSavedAt => dateTime().nullable()();

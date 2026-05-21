@@ -86,7 +86,7 @@ class _RecordingLearningProgressNotifier extends TestLearningProgressNotifier {
   final List<int?> savedIndices = [];
 
   @override
-  Future<void> saveRetellParagraphIndex(
+  Future<void> saveRetellSentenceIndex(
     String audioItemId,
     int? paragraphIndex, {
     required bool isFreePlay,
@@ -102,8 +102,8 @@ class _RecordingLearningProgressNotifier extends TestLearningProgressNotifier {
         );
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap[audioItemId] = progress.copyWith(
-      retellParagraphIndex: paragraphIndex,
-      clearRetellParagraphIndex: paragraphIndex == null,
+      retellSentenceIndex: paragraphIndex,
+      clearRetellSentenceIndex: paragraphIndex == null,
       updatedAt: DateTime(2026, 3, 11, 12),
     );
     state = state.copyWith(progressMap: newMap);
@@ -114,7 +114,7 @@ class _InMemoryLearningProgressNotifier extends TestLearningProgressNotifier {
   _InMemoryLearningProgressNotifier([super.initialState]);
 
   @override
-  Future<void> saveRetellParagraphIndex(
+  Future<void> saveRetellSentenceIndex(
     String audioItemId,
     int? paragraphIndex, {
     required bool isFreePlay,
@@ -122,8 +122,8 @@ class _InMemoryLearningProgressNotifier extends TestLearningProgressNotifier {
     final progress = await ensureProgress(audioItemId);
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap[audioItemId] = progress.copyWith(
-      retellParagraphIndex: paragraphIndex,
-      clearRetellParagraphIndex: paragraphIndex == null,
+      retellSentenceIndex: paragraphIndex,
+      clearRetellSentenceIndex: paragraphIndex == null,
       updatedAt: DateTime(2026, 3, 11, 12),
     );
     state = state.copyWith(progressMap: newMap);

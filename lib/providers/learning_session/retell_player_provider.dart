@@ -36,6 +36,9 @@ import 'learning_session_provider.dart';
 
 part 'retell_player_provider.g.dart';
 
+/// 段时长 > 该阈值时，断点恢复从段内具体句子开播；否则从段头开播。
+const Duration _resumeMinParagraphDuration = Duration(seconds: 10);
+
 /// 复述阶段
 enum RetellPhase {
   /// 正在播放段落音频
@@ -169,6 +172,9 @@ class RetellPlayer extends _$RetellPlayer {
   /// 段落列表
   List<List<Sentence>> _paragraphs = [];
 
+  /// 断点恢复的段内本地句子 index（仅首次播放该段时生效，用完清零）
+  int _resumeStartLocalSentenceIndex = 0;
+
   /// 所有句子列表（用于重新生成关键词）
   List<Sentence> _allSentences = [];
 
@@ -285,7 +291,8 @@ class RetellPlayer extends _$RetellPlayer {
   /// 初始化复述播放器
   ///
   /// [paragraphs] DP 分段结果
-  /// [startSentenceIndex] 断点续学句子索引（段落第一句的全局索引）
+  /// [startSentenceIndex] 断点续学的全局句子 index。会反查段，并把段内本地
+  ///   index 暂存到 `_resumeStartLocalSentenceIndex` 供首次播放该段时使用。
   /// [autoRatio] 按音频难度映射出的可见词比例档位；为 null 时使用 [RetellSettings] 默认值
   ///
   /// 关键词由内部根据 [autoRatio] 或当前 settings 自动生成，无需外部传入。
@@ -298,16 +305,22 @@ class RetellPlayer extends _$RetellPlayer {
     _paragraphs = paragraphs;
     _allSentences = paragraphs.expand((p) => p).toList();
 
-    // 根据句子索引查找对应段落
+    // 根据全局句子索引反查段 + 段内本地 index
     var safeIndex = 0;
+    var localIndex = 0;
     if (startSentenceIndex != null && paragraphs.isNotEmpty) {
       for (var i = 0; i < paragraphs.length; i++) {
-        if (paragraphs[i].any((s) => s.index == startSentenceIndex)) {
+        final local = paragraphs[i].indexWhere(
+          (s) => s.index == startSentenceIndex,
+        );
+        if (local >= 0) {
           safeIndex = i;
+          localIndex = local;
           break;
         }
       }
     }
+    _resumeStartLocalSentenceIndex = localIndex;
 
     final initialSettings = autoRatio == null
         ? const RetellSettings()
@@ -395,10 +408,17 @@ class RetellPlayer extends _$RetellPlayer {
     state = state.copyWith(bookmarkedSentenceIndices: newSet);
   }
 
-  /// 获取当前段落第一句的全局句子索引（用于保存断点）
-  int? get currentParagraphFirstSentenceIndex {
+  /// 获取当前播放句子的全局句子索引（用于保存断点）。
+  ///
+  /// 优先用 `playingSentenceIndex` 定位的句子；未开播时退化为段首句。
+  /// 段为空时返回 null。
+  int? get currentSentenceGlobalIndex {
     final sentences = currentParagraphSentences;
-    return sentences.isNotEmpty ? sentences.first.index : null;
+    if (sentences.isEmpty) return null;
+    final localIdx = state.playingSentenceIndex >= 0
+        ? state.playingSentenceIndex.clamp(0, sentences.length - 1)
+        : 0;
+    return sentences[localIdx].index;
   }
 
   /// 获取当前段落的句子列表
@@ -473,21 +493,27 @@ class RetellPlayer extends _$RetellPlayer {
     session.addOutputWords(paragraphWordCount);
   }
 
-  /// 异步保存复述断点，记录当前段首句的全局索引。
-  void _persistCurrentParagraphIndexAsync() {
+  /// 异步保存复述断点（当前播放句子的全局 index），不阻塞播放流程。
+  ///
+  /// 优先使用 `playingSentenceIndex` 定位的句子；未开播时退化为段首句。
+  void _persistCurrentSentenceIndexAsync() {
     final session = ref.read(learningSessionProvider);
     final audioItemId = session.audioItemId;
-    final sentenceIndex = currentParagraphFirstSentenceIndex;
-    if (audioItemId == null || sentenceIndex == null) {
-      return;
-    }
+    if (audioItemId == null) return;
+
+    final sentences = currentParagraphSentences;
+    if (sentences.isEmpty) return;
+    final localIdx = state.playingSentenceIndex >= 0
+        ? state.playingSentenceIndex.clamp(0, sentences.length - 1)
+        : 0;
+    final globalIdx = sentences[localIdx].index;
 
     unawaited(
       ref
           .read(learningProgressNotifierProvider.notifier)
-          .saveRetellParagraphIndex(
+          .saveRetellSentenceIndex(
             audioItemId,
-            sentenceIndex,
+            globalIdx,
             isFreePlay: session.isFreePlay,
           ),
     );
@@ -758,9 +784,21 @@ class RetellPlayer extends _$RetellPlayer {
   ///
   /// 使用局部变量 `sid` 捕获 sessionId，防止 pause/其他操作
   /// 覆写实例变量 `_sessionId` 后导致 guard 失效。
+  ///
+  /// 首次播放该段且段时长 > 10s 时，使用 `_resumeStartLocalSentenceIndex`
+  /// 段内偏移开播；用完一次立即清零，后续重复 / 下一段从段头开播。
   Future<void> _playCurrentParagraph() async {
     final sentences = currentParagraphSentences;
     if (sentences.isEmpty) return;
+
+    final paragraphDuration =
+        sentences.last.endTime - sentences.first.startTime;
+    final useOffset =
+        _resumeStartLocalSentenceIndex > 0 &&
+        _resumeStartLocalSentenceIndex < sentences.length &&
+        paragraphDuration > _resumeMinParagraphDuration;
+    final startLocalIdx = useOffset ? _resumeStartLocalSentenceIndex : 0;
+    _resumeStartLocalSentenceIndex = 0; // 只用一次
 
     final engine = ref.read(audioEngineProvider.notifier);
     _sessionId = engine.newSession();
@@ -769,7 +807,7 @@ class RetellPlayer extends _$RetellPlayer {
     state = state.copyWith(
       phase: RetellPhase.listening,
       isPlaying: true,
-      playingSentenceIndex: 0,
+      playingSentenceIndex: startLocalIdx,
       isRetellCountdown: false,
       isWaitingForUser: false,
       stepFinished: false,
@@ -777,12 +815,12 @@ class RetellPlayer extends _$RetellPlayer {
           ? null
           : RetellDisplayMode.hideAll,
     );
-    _persistCurrentParagraphIndexAsync();
+    _persistCurrentSentenceIndexAsync();
 
     // 订阅 position stream 实现句子高亮
     _startPositionTracking(sentences);
 
-    final start = sentences.first.startTime;
+    final start = sentences[startLocalIdx].startTime;
     final end = sentences.last.endTime;
 
     await engine.playRangeOnce(start, end, sid);
@@ -841,6 +879,8 @@ class RetellPlayer extends _$RetellPlayer {
       final idx = _findSentenceIndex(sentences, position);
       if (idx != state.playingSentenceIndex && idx >= 0) {
         state = state.copyWith(playingSentenceIndex: idx);
+        // 句子推进时更新断点（精确到当前句）
+        _persistCurrentSentenceIndexAsync();
       }
       _maybeSkipSilence(sentences, position, idx);
     });

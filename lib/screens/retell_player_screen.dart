@@ -474,10 +474,10 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     if (sessionState.isFreePlay) {
       final sentenceIndex = ref
           .read(retellPlayerProvider.notifier)
-          .currentParagraphFirstSentenceIndex;
+          .currentSentenceGlobalIndex;
       await ref
           .read(learningProgressNotifierProvider.notifier)
-          .saveRetellParagraphIndex(
+          .saveRetellSentenceIndex(
             widget.audioItemId,
             sentenceIndex,
             isFreePlay: true,
@@ -512,10 +512,10 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
 
     final sentenceIndex = ref
         .read(retellPlayerProvider.notifier)
-        .currentParagraphFirstSentenceIndex;
+        .currentSentenceGlobalIndex;
     await ref
         .read(learningProgressNotifierProvider.notifier)
-        .saveRetellParagraphIndex(
+        .saveRetellSentenceIndex(
           widget.audioItemId,
           sentenceIndex,
           isFreePlay: false,
@@ -598,7 +598,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
         onExit: () async {
           await ref
               .read(learningProgressNotifierProvider.notifier)
-              .saveRetellParagraphIndex(
+              .saveRetellSentenceIndex(
                 widget.audioItemId,
                 null,
                 isFreePlay: true,
@@ -635,7 +635,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     if (result != null) {
       await ref
           .read(learningProgressNotifierProvider.notifier)
-          .saveRetellParagraphIndex(
+          .saveRetellSentenceIndex(
             widget.audioItemId,
             null,
             isFreePlay: false,

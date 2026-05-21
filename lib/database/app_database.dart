@@ -85,7 +85,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 当前 schema 版本（静态访问，用于导入前版本检查）
-  static const currentSchemaVersion = 34;
+  static const currentSchemaVersion = 35;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -467,6 +467,38 @@ class AppDatabase extends _$AppDatabase {
           if ((tableExists.data['cnt'] as int) > 0) {
             await _migrateToPlanVersionsJson();
           }
+        }
+        // v34→v35：盲听/复述断点改成全局句子 index 粒度。
+        //
+        // - 4 个列重命名：*_paragraph_index → *_sentence_index
+        // - 盲听旧值（段索引语义）直接清零，避免被当成句子 index 错误恢复
+        // - 复述旧值（实际就是句首句的全局 index）语义不变，保留
+        if (from < 35) {
+          await customStatement(
+            'ALTER TABLE learning_progresses '
+            'RENAME COLUMN blind_listen_paragraph_index '
+            'TO blind_listen_sentence_index',
+          );
+          await customStatement(
+            'ALTER TABLE learning_progresses '
+            'RENAME COLUMN free_play_blind_listen_paragraph_index '
+            'TO free_play_blind_listen_sentence_index',
+          );
+          await customStatement(
+            'ALTER TABLE learning_progresses '
+            'RENAME COLUMN retell_paragraph_index '
+            'TO retell_sentence_index',
+          );
+          await customStatement(
+            'ALTER TABLE learning_progresses '
+            'RENAME COLUMN free_play_retell_paragraph_index '
+            'TO free_play_retell_sentence_index',
+          );
+          await customStatement(
+            'UPDATE learning_progresses SET '
+            'blind_listen_sentence_index = NULL, '
+            'free_play_blind_listen_sentence_index = NULL',
+          );
         }
       },
     );

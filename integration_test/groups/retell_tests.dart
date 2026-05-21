@@ -381,7 +381,8 @@ void retellTests() {
 
       // 点击确认退出
       await tester.tap(find.text('OK'));
-      await safeSettle(tester);
+      // 退出对话框确认后路由 pop + 状态清理需要多帧
+      await safeSettle(tester, timeout: const Duration(seconds: 10));
 
       // 验证复述页面已退出
       expect(find.byType(RetellPlayerScreen), findsNothing);
@@ -391,7 +392,7 @@ void retellTests() {
       final container2 = ProviderScope.containerOf(context);
       final progressState = container2.read(learningProgressNotifierProvider);
       final progress = progressState.progressMap['test-audio-1'];
-      expect(progress?.retellParagraphIndex, equals(2));
+      expect(progress?.retellSentenceIndex, equals(2));
     });
 
     testWidgets('设置按钮弹出设置面板', (tester) async {

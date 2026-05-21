@@ -386,13 +386,29 @@ class LearningSession extends _$LearningSession {
     );
     final dbPassCount = progress.blindListenPassCount;
 
-    // 读取断点续学索引：各自读取独立字段 + 校验过期时间
-    int startParagraphIndex = 0;
+    // 读取断点续学的全局句子 index + 校验过期时间
+    int? startSentenceIndex;
     if (isFreePlay && _isBreakpointValid(progress.freePlayBreakpointSavedAt)) {
-      startParagraphIndex = progress.freePlayBlindListenParagraphIndex ?? 0;
+      startSentenceIndex = progress.freePlayBlindListenSentenceIndex;
     } else if (!isFreePlay &&
         _isBreakpointValid(progress.newLearningBreakpointSavedAt)) {
-      startParagraphIndex = progress.blindListenParagraphIndex ?? 0;
+      startSentenceIndex = progress.blindListenSentenceIndex;
+    }
+
+    // 全局句子 index → (段索引, 段内本地句索引)
+    var startParagraphIndex = 0;
+    var startSentenceLocalIndex = 0;
+    if (startSentenceIndex != null) {
+      for (var i = 0; i < paragraphs.length; i++) {
+        final local = paragraphs[i].indexWhere(
+          (s) => s.index == startSentenceIndex,
+        );
+        if (local >= 0) {
+          startParagraphIndex = i;
+          startSentenceLocalIndex = local;
+          break;
+        }
+      }
     }
 
     state = state.copyWith(
@@ -421,6 +437,7 @@ class LearningSession extends _$LearningSession {
       paragraphs,
       settings ?? const BlindListenSettings(),
       startParagraphIndex: startParagraphIndex,
+      startSentenceLocalIndex: startSentenceLocalIndex,
     );
     _trackSessionStart();
   }
@@ -590,10 +607,10 @@ class LearningSession extends _$LearningSession {
         .getLatestOrEnsureProgress(audioItemId);
     int? startSentenceIndex;
     if (isFreePlay && _isBreakpointValid(progress.freePlayBreakpointSavedAt)) {
-      startSentenceIndex = progress.freePlayRetellParagraphIndex;
+      startSentenceIndex = progress.freePlayRetellSentenceIndex;
     } else if (!isFreePlay &&
         _isBreakpointValid(progress.newLearningBreakpointSavedAt)) {
-      startSentenceIndex = progress.retellParagraphIndex;
+      startSentenceIndex = progress.retellSentenceIndex;
     }
 
     state = state.copyWith(

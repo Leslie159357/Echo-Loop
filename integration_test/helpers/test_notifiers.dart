@@ -79,6 +79,12 @@ import 'package:echo_loop/providers/flashcard/flashcard_flow_phase.dart';
 import 'package:echo_loop/models/flashcard_item.dart';
 import 'package:echo_loop/models/flashcard_settings.dart';
 
+// 数据工厂（createTestAudioItem / createTestSentences / createTestCollection /
+// createTestLearningProgress）已抽到 test/helpers/shared/test_fixtures.dart，
+// 供 test/ 与 integration_test/ 共用。本地仅保留 live-runner 特化的 Notifier。
+import '../../test/helpers/shared/test_fixtures.dart';
+export '../../test/helpers/shared/test_fixtures.dart';
+
 /// 测试用 SavedWordList（返回空列表，不依赖数据库）
 class TestSavedWordList extends SavedWordList {
   @override
@@ -96,6 +102,10 @@ class TestDailyStudyTime extends DailyStudyTime {
 /// 真实 pumpAndSettle 在 LiveTest 下默认 10min 超时；测试中 Riverpod async
 /// provider / Showcase 等可能持续 schedule 帧导致 settle 不收敛。
 /// 这里限定到 5 秒并吞掉 TimeoutException，避免单个测试卡 10 分钟。
+///
+/// Phase 0 尝试 timeout 3s / interval 50ms：虽提速 12x，但失败 case 错误处理路径
+/// 不够鲁棒，导致后续 11 个本应通过的 case 标记 "did not complete"。已回退。
+/// 详见 docs/test-profile-optimized-v3.txt。
 Future<void> safeSettle(
   WidgetTester tester, {
   Duration timeout = const Duration(seconds: 5),
@@ -334,93 +344,6 @@ class TestSpeechPracticePlatform implements SpeechPracticeBackend {
   Future<void> dispose() async {
     await _controller.close();
   }
-}
-
-// ========== 测试数据工厂 ==========
-
-/// 创建测试用 AudioItem
-AudioItem createTestAudioItem({
-  String id = 'test-audio-1',
-  String name = 'Test Audio',
-  String audioPath = 'audios/test.mp3',
-  String? transcriptPath = 'transcripts/test.srt',
-  DateTime? addedDate,
-  int totalDuration = 120,
-}) {
-  return AudioItem(
-    id: id,
-    name: name,
-    audioPath: audioPath,
-    transcriptPath: transcriptPath,
-    addedDate: addedDate ?? DateTime(2026, 1, 1),
-    totalDuration: totalDuration,
-  );
-}
-
-/// 创建测试用 Sentence 列表
-List<Sentence> createTestSentences({int count = 5}) {
-  return List.generate(count, (i) {
-    return Sentence(
-      index: i,
-      text: 'Test sentence number ${i + 1}.',
-      startTime: Duration(seconds: i * 5),
-      endTime: Duration(seconds: (i + 1) * 5),
-    );
-  });
-}
-
-/// 创建测试用 Collection
-Collection createTestCollection({
-  String id = 'test-collection-1',
-  String name = 'Test Collection',
-  bool isPinned = false,
-  DateTime? createdDate,
-}) {
-  return Collection(
-    id: id,
-    name: name,
-    createdDate: createdDate ?? DateTime(2026, 1, 1),
-    isPinned: isPinned,
-  );
-}
-
-/// 创建测试用 LearningProgress
-LearningProgress createTestLearningProgress({
-  String audioItemId = 'test-audio-1',
-  LearningStage currentStage = LearningStage.firstLearn,
-  SubStageType currentSubStage = SubStageType.blindListen,
-  DifficultyLevel difficulty = DifficultyLevel.medium,
-  DateTime? firstLearnCompletedAt,
-  DateTime? lastStageCompletedAt,
-  DateTime? currentStageStartedAt,
-  int totalStudyDurationMs = 0,
-  int blindListenPassCount = 0,
-  int? intensiveListenDifficultCount,
-  int? intensiveListenPassCount,
-  int? shadowingPassCount,
-  int? intensiveListenSentenceIndex,
-  DateTime? newLearningBreakpointSavedAt,
-  DateTime? freePlayBreakpointSavedAt,
-  DateTime? updatedAt,
-}) {
-  return LearningProgress(
-    audioItemId: audioItemId,
-    currentStage: currentStage,
-    currentSubStage: currentSubStage,
-    difficulty: difficulty,
-    firstLearnCompletedAt: firstLearnCompletedAt,
-    lastStageCompletedAt: lastStageCompletedAt,
-    currentStageStartedAt: currentStageStartedAt,
-    totalStudyDurationMs: totalStudyDurationMs,
-    blindListenPassCount: blindListenPassCount,
-    intensiveListenDifficultCount: intensiveListenDifficultCount,
-    intensiveListenPassCount: intensiveListenPassCount,
-    shadowingPassCount: shadowingPassCount,
-    intensiveListenSentenceIndex: intensiveListenSentenceIndex,
-    newLearningBreakpointSavedAt: newLearningBreakpointSavedAt,
-    freePlayBreakpointSavedAt: freePlayBreakpointSavedAt,
-    updatedAt: updatedAt ?? DateTime(2026, 1, 1),
-  );
 }
 
 // ========== 测试 Notifier ==========
@@ -856,7 +779,7 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
-  Future<void> saveRetellParagraphIndex(
+  Future<void> saveRetellSentenceIndex(
     String audioItemId,
     int? paragraphIndex, {
     required bool isFreePlay,
@@ -867,15 +790,15 @@ class TestLearningProgressNotifier extends LearningProgressNotifier {
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     if (isFreePlay) {
       newMap[audioItemId] = progress.copyWith(
-        freePlayRetellParagraphIndex: paragraphIndex,
-        clearFreePlayRetellParagraphIndex: paragraphIndex == null,
+        freePlayRetellSentenceIndex: paragraphIndex,
+        clearFreePlayRetellSentenceIndex: paragraphIndex == null,
         freePlayBreakpointSavedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
     } else {
       newMap[audioItemId] = progress.copyWith(
-        retellParagraphIndex: paragraphIndex,
-        clearRetellParagraphIndex: paragraphIndex == null,
+        retellSentenceIndex: paragraphIndex,
+        clearRetellSentenceIndex: paragraphIndex == null,
         newLearningBreakpointSavedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );

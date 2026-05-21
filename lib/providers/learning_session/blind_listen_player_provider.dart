@@ -148,11 +148,20 @@ class BlindListenPlayerState {
   }
 }
 
+/// 段时长 > 该阈值时，断点恢复从段内具体句子开播；否则从段头开播。
+const Duration _resumeMinParagraphDuration = Duration(seconds: 10);
+
 /// 盲听专用播放器 Provider
 @Riverpod(keepAlive: true)
 class BlindListenPlayer extends _$BlindListenPlayer {
   /// 段落列表
   List<List<Sentence>> _paragraphs = [];
+
+  /// 断点恢复的段内本地句子 index（仅首次播放该段时生效）。
+  ///
+  /// `initializeParagraphs` 写入；`_playCurrentParagraph` 消费一次后清零。
+  /// 段切换 / 重听等场景下保持为 0，从段头开播。
+  int _resumeStartLocalSentenceIndex = 0;
 
   /// 学习事件记录器
   late StudyEventRecorder _recorder;
@@ -221,10 +230,13 @@ class BlindListenPlayer extends _$BlindListenPlayer {
   /// 初始化段落播放
   ///
   /// [startParagraphIndex] 断点续学段落索引，自动 clamp 到有效范围。
+  /// [startSentenceLocalIndex] 段内本地句子 index，断点位于段中间时使用；
+  ///   仅当对应段的时长 > 10s 时生效，且只用于首次播放该段。
   void initializeParagraphs(
     List<List<Sentence>> paragraphs,
     BlindListenSettings settings, {
     int startParagraphIndex = 0,
+    int startSentenceLocalIndex = 0,
   }) {
     _cleanup();
     _paragraphs = paragraphs;
@@ -232,6 +244,10 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     final safeIndex = paragraphs.isEmpty
         ? 0
         : startParagraphIndex.clamp(0, paragraphs.length - 1);
+    final paragraphLen = paragraphs.isEmpty ? 0 : paragraphs[safeIndex].length;
+    _resumeStartLocalSentenceIndex = paragraphLen == 0
+        ? 0
+        : startSentenceLocalIndex.clamp(0, paragraphLen - 1);
 
     state = BlindListenPlayerState(
       currentParagraphIndex: safeIndex,
@@ -468,28 +484,49 @@ class BlindListenPlayer extends _$BlindListenPlayer {
 
   // ========== 内部方法 ==========
 
-  /// 异步保存盲听断点段落索引，不阻塞播放流程
-  void _persistCurrentParagraphIndexAsync() {
+  /// 异步保存盲听断点（当前播放句子的全局 index），不阻塞播放流程。
+  ///
+  /// 优先使用 `playingSentenceIndex` 定位的句子；未开播时退化为段首句。
+  void _persistCurrentSentenceIndexAsync() {
     final session = ref.read(learningSessionProvider);
     final audioItemId = session.audioItemId;
     if (audioItemId == null) return;
 
+    final sentences = currentParagraphSentences;
+    if (sentences.isEmpty) return;
+    final localIdx = state.playingSentenceIndex >= 0
+        ? state.playingSentenceIndex.clamp(0, sentences.length - 1)
+        : 0;
+    final globalIdx = sentences[localIdx].index;
+
     unawaited(
       ref
           .read(learningProgressNotifierProvider.notifier)
-          .saveBlindListenParagraphIndex(
+          .saveBlindListenSentenceIndex(
             audioItemId,
-            state.currentParagraphIndex,
+            globalIdx,
             isFreePlay: session.isFreePlay,
           ),
     );
   }
 
   /// 播放当前段落
+  ///
+  /// 首次播放该段且段时长 > 10s 时，使用 `_resumeStartLocalSentenceIndex`
+  /// 段内偏移开播；用完一次立即清零，后续重复 / 下一段从段头开播。
   Future<void> _playCurrentParagraph() async {
-    _persistCurrentParagraphIndexAsync();
     final sentences = currentParagraphSentences;
     if (sentences.isEmpty) return;
+
+    // 计算段内起播句：仅在段时长 > 阈值时使用断点偏移
+    final paragraphDuration =
+        sentences.last.endTime - sentences.first.startTime;
+    final useOffset =
+        _resumeStartLocalSentenceIndex > 0 &&
+        _resumeStartLocalSentenceIndex < sentences.length &&
+        paragraphDuration > _resumeMinParagraphDuration;
+    final startLocalIdx = useOffset ? _resumeStartLocalSentenceIndex : 0;
+    _resumeStartLocalSentenceIndex = 0; // 只用一次
 
     final engine = ref.read(audioEngineProvider.notifier);
     _sessionId = engine.newSession();
@@ -498,15 +535,17 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     state = state.copyWith(
       hasCompletedCurrentParagraphPlayback: false,
       isPlaying: true,
-      playingSentenceIndex: 0,
+      playingSentenceIndex: startLocalIdx,
       isPauseCountdown: false,
       isWaitingForUser: false,
       stepFinished: false,
     );
 
+    _persistCurrentSentenceIndexAsync();
+
     _startPositionTracking(sentences);
 
-    final start = sentences.first.startTime;
+    final start = sentences[startLocalIdx].startTime;
     final end = sentences.last.endTime;
 
     await engine.playRangeOnce(start, end, sid);
@@ -568,6 +607,8 @@ class BlindListenPlayer extends _$BlindListenPlayer {
       final idx = _findSentenceIndex(sentences, position);
       if (idx != state.playingSentenceIndex && idx >= 0) {
         state = state.copyWith(playingSentenceIndex: idx);
+        // 句子推进时更新断点（精确到当前句）
+        _persistCurrentSentenceIndexAsync();
       }
       _maybeSkipSilence(sentences, position, idx);
     });

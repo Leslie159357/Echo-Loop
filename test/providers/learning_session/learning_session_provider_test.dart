@@ -679,7 +679,7 @@ void main() {
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,
         currentSubStage: SubStageType.retell,
-        retellParagraphIndex: 2,
+        retellSentenceIndex: 2,
         updatedAt: DateTime(2026, 3, 11),
       );
       final paragraphs = [
@@ -706,7 +706,7 @@ void main() {
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,
         currentSubStage: SubStageType.retell,
-        freePlayRetellParagraphIndex: 2,
+        freePlayRetellSentenceIndex: 2,
         freePlayBreakpointSavedAt: DateTime.now(),
         updatedAt: DateTime(2026, 3, 11),
       );

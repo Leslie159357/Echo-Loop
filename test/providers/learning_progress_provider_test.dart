@@ -433,7 +433,7 @@ void main() {
         intensiveListenSentenceIndex: 5,
         shadowingSentenceIndex: 3,
         difficultPracticeSentenceIndex: 2,
-        retellParagraphIndex: 1,
+        retellSentenceIndex: 1,
         updatedAt: now,
       );
 
@@ -448,7 +448,7 @@ void main() {
       expect(after.intensiveListenSentenceIndex, isNull, reason: '精听断点应被清除');
       expect(after.shadowingSentenceIndex, 3, reason: '跟读断点不应受影响');
       expect(after.difficultPracticeSentenceIndex, 2, reason: '难句补练断点不应受影响');
-      expect(after.retellParagraphIndex, 1, reason: '复述断点不应受影响');
+      expect(after.retellSentenceIndex, 1, reason: '复述断点不应受影响');
     });
 
     test('完成难句补练后仅清除 difficultPracticeSentenceIndex', () async {
@@ -463,7 +463,7 @@ void main() {
         intensiveListenSentenceIndex: 5,
         shadowingSentenceIndex: 3,
         difficultPracticeSentenceIndex: 7,
-        retellParagraphIndex: 1,
+        retellSentenceIndex: 1,
         updatedAt: now,
       );
 
@@ -482,7 +482,7 @@ void main() {
       );
       expect(after.intensiveListenSentenceIndex, 5, reason: '精听断点不应受影响');
       expect(after.shadowingSentenceIndex, 3, reason: '跟读断点不应受影响');
-      expect(after.retellParagraphIndex, 1, reason: '复述断点不应受影响');
+      expect(after.retellSentenceIndex, 1, reason: '复述断点不应受影响');
     });
 
     test('跨大阶段完成最后子步骤时清除该步骤对应索引', () async {
@@ -497,7 +497,7 @@ void main() {
         lastStageCompletedAt: completedAt,
         currentStageStartedAt: now,
         difficultPracticeSentenceIndex: 4,
-        retellParagraphIndex: 6,
+        retellSentenceIndex: 6,
         updatedAt: now,
       );
 
@@ -510,7 +510,7 @@ void main() {
 
       final after = readProgress(container, 'a1')!;
       expect(after.currentStage, LearningStage.review2);
-      expect(after.retellParagraphIndex, isNull, reason: '复述断点应被清除（跨阶段）');
+      expect(after.retellSentenceIndex, isNull, reason: '复述断点应被清除（跨阶段）');
       expect(after.difficultPracticeSentenceIndex, 4, reason: '难句补练断点不应受影响');
     });
 
@@ -548,7 +548,7 @@ void main() {
         intensiveListenSentenceIndex: 5,
         shadowingSentenceIndex: 3,
         difficultPracticeSentenceIndex: 2,
-        retellParagraphIndex: 1,
+        retellSentenceIndex: 1,
         updatedAt: now,
       );
 
@@ -563,7 +563,7 @@ void main() {
       expect(after.intensiveListenSentenceIndex, 5);
       expect(after.shadowingSentenceIndex, 3);
       expect(after.difficultPracticeSentenceIndex, 2);
-      expect(after.retellParagraphIndex, 1);
+      expect(after.retellSentenceIndex, 1);
     });
 
     test('复习未到时间时不推进进度（已有测试）', () async {
@@ -885,35 +885,35 @@ void main() {
       expect(after.difficultPracticeSentenceIndex, isNull);
     });
 
-    test('saveRetellParagraphIndex 保存断点', () async {
+    test('saveRetellSentenceIndex 保存断点', () async {
       final container = createContainer(
         LearningProgressState(progressMap: {'a1': baseProgress}),
       );
 
-      await notifier(container).saveRetellParagraphIndex(
+      await notifier(container).saveRetellSentenceIndex(
         'a1',
         2,
         isFreePlay: false,
       );
 
       final after = readProgress(container, 'a1')!;
-      expect(after.retellParagraphIndex, 2);
+      expect(after.retellSentenceIndex, 2);
     });
 
-    test('saveRetellParagraphIndex 清除断点', () async {
-      final progressWithIndex = baseProgress.copyWith(retellParagraphIndex: 2);
+    test('saveRetellSentenceIndex 清除断点', () async {
+      final progressWithIndex = baseProgress.copyWith(retellSentenceIndex: 2);
       final container = createContainer(
         LearningProgressState(progressMap: {'a1': progressWithIndex}),
       );
 
-      await notifier(container).saveRetellParagraphIndex(
+      await notifier(container).saveRetellSentenceIndex(
         'a1',
         null,
         isFreePlay: false,
       );
 
       final after = readProgress(container, 'a1')!;
-      expect(after.retellParagraphIndex, isNull);
+      expect(after.retellSentenceIndex, isNull);
     });
 
     test('audioItemId 不存在时断点保存安全返回', () async {
@@ -934,7 +934,7 @@ void main() {
         5,
         isFreePlay: false,
       );
-      await notifier(container).saveRetellParagraphIndex(
+      await notifier(container).saveRetellSentenceIndex(
         'nonexistent',
         5,
         isFreePlay: false,
@@ -944,7 +944,7 @@ void main() {
       expect(progress?.intensiveListenSentenceIndex, 5);
       expect(progress?.shadowingSentenceIndex, 5);
       expect(progress?.difficultPracticeSentenceIndex, 5);
-      expect(progress?.retellParagraphIndex, 5);
+      expect(progress?.retellSentenceIndex, 5);
       verify(() => mockDao.upsert(any())).called(greaterThanOrEqualTo(1));
     });
   });
@@ -1090,12 +1090,12 @@ void main() {
         intensiveListenSentenceIndex: 3,
         shadowingSentenceIndex: null,
         difficultPracticeSentenceIndex: null,
-        retellParagraphIndex: null,
+        retellSentenceIndex: null,
         retellPassCount: null,
         freePlayIntensiveListenSentenceIndex: null,
         freePlayShadowingSentenceIndex: null,
         freePlayDifficultPracticeSentenceIndex: null,
-        freePlayRetellParagraphIndex: null,
+        freePlayRetellSentenceIndex: null,
         newLearningBreakpointSavedAt: null,
         freePlayBreakpointSavedAt: null,
         skippedSubStages: '',
@@ -1124,7 +1124,7 @@ void main() {
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
         currentSubStage: SubStageType.retell,
-        retellParagraphIndex: 1,
+        retellSentenceIndex: 1,
         updatedAt: DateTime(2026, 3, 11, 9, 0),
       );
       final persistedRow = db.LearningProgressesData(
@@ -1143,12 +1143,12 @@ void main() {
         intensiveListenSentenceIndex: null,
         shadowingSentenceIndex: null,
         difficultPracticeSentenceIndex: null,
-        retellParagraphIndex: 7,
+        retellSentenceIndex: 7,
         retellPassCount: null,
         freePlayIntensiveListenSentenceIndex: null,
         freePlayShadowingSentenceIndex: null,
         freePlayDifficultPracticeSentenceIndex: null,
-        freePlayRetellParagraphIndex: null,
+        freePlayRetellSentenceIndex: null,
         newLearningBreakpointSavedAt: null,
         freePlayBreakpointSavedAt: null,
         skippedSubStages: '',
@@ -1166,8 +1166,8 @@ void main() {
 
       final result = await notifier(container).getLatestOrEnsureProgress('a1');
 
-      expect(result.retellParagraphIndex, 7);
-      expect(readProgress(container, 'a1')?.retellParagraphIndex, 7);
+      expect(result.retellSentenceIndex, 7);
+      expect(readProgress(container, 'a1')?.retellSentenceIndex, 7);
       verify(() => mockDao.getByAudioId('a1')).called(1);
       verifyNever(() => mockDao.upsert(any()));
     });

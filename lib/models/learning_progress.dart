@@ -43,8 +43,10 @@ class LearningProgress {
   /// 跟读总完成遍数（每次完成跟读 +1）
   final int? shadowingPassCount;
 
-  /// 盲听断点续学段落索引（null 表示从头开始）
-  final int? blindListenParagraphIndex;
+  /// 盲听断点续学句子索引（全局句子 index，null 表示从头开始）
+  ///
+  /// 段内位置：恢复时按句子 index 反查段，段时长 > 10s 时段内从该句开播。
+  final int? blindListenSentenceIndex;
 
   /// 精听断点续学句子索引（null 表示从头开始）
   final int? intensiveListenSentenceIndex;
@@ -55,14 +57,16 @@ class LearningProgress {
   /// 难句补练断点续学句子索引（null 表示从头开始）
   final int? difficultPracticeSentenceIndex;
 
-  /// 复述断点续学段落索引（null 表示从头开始）
-  final int? retellParagraphIndex;
+  /// 复述断点续学句子索引（全局句子 index，null 表示从头开始）
+  ///
+  /// 段内位置：恢复时按句子 index 反查段，段时长 > 10s 时段内从该句开播。
+  final int? retellSentenceIndex;
 
   /// 复述总完成遍数（每次完成复述 +1）
   final int? retellPassCount;
 
-  /// 自由练习-盲听断点段落索引
-  final int? freePlayBlindListenParagraphIndex;
+  /// 自由练习-盲听断点句子索引（全局句子 index）
+  final int? freePlayBlindListenSentenceIndex;
 
   /// 自由练习-精听断点句子索引
   final int? freePlayIntensiveListenSentenceIndex;
@@ -73,8 +77,8 @@ class LearningProgress {
   /// 自由练习-难句补练断点句子索引
   final int? freePlayDifficultPracticeSentenceIndex;
 
-  /// 自由练习-复述断点段落索引
-  final int? freePlayRetellParagraphIndex;
+  /// 自由练习-复述断点句子索引（全局句子 index）
+  final int? freePlayRetellSentenceIndex;
 
   /// 新学习断点保存时间（>3天则不恢复）
   final DateTime? newLearningBreakpointSavedAt;
@@ -125,17 +129,17 @@ class LearningProgress {
     this.intensiveListenDifficultCount,
     this.intensiveListenPassCount,
     this.shadowingPassCount,
-    this.blindListenParagraphIndex,
+    this.blindListenSentenceIndex,
     this.intensiveListenSentenceIndex,
     this.shadowingSentenceIndex,
     this.difficultPracticeSentenceIndex,
-    this.retellParagraphIndex,
+    this.retellSentenceIndex,
     this.retellPassCount,
-    this.freePlayBlindListenParagraphIndex,
+    this.freePlayBlindListenSentenceIndex,
     this.freePlayIntensiveListenSentenceIndex,
     this.freePlayShadowingSentenceIndex,
     this.freePlayDifficultPracticeSentenceIndex,
-    this.freePlayRetellParagraphIndex,
+    this.freePlayRetellSentenceIndex,
     this.newLearningBreakpointSavedAt,
     this.freePlayBreakpointSavedAt,
     required this.updatedAt,
@@ -337,23 +341,23 @@ class LearningProgress {
     int? intensiveListenDifficultCount,
     int? intensiveListenPassCount,
     int? shadowingPassCount,
-    int? blindListenParagraphIndex,
-    bool clearBlindListenParagraphIndex = false,
+    int? blindListenSentenceIndex,
+    bool clearBlindListenSentenceIndex = false,
     int? intensiveListenSentenceIndex,
     int? shadowingSentenceIndex,
     int? difficultPracticeSentenceIndex,
-    int? retellParagraphIndex,
+    int? retellSentenceIndex,
     int? retellPassCount,
-    int? freePlayBlindListenParagraphIndex,
-    bool clearFreePlayBlindListenParagraphIndex = false,
+    int? freePlayBlindListenSentenceIndex,
+    bool clearFreePlayBlindListenSentenceIndex = false,
     int? freePlayIntensiveListenSentenceIndex,
     bool clearFreePlayIntensiveListenSentenceIndex = false,
     int? freePlayShadowingSentenceIndex,
     bool clearFreePlayShadowingSentenceIndex = false,
     int? freePlayDifficultPracticeSentenceIndex,
     bool clearFreePlayDifficultPracticeSentenceIndex = false,
-    int? freePlayRetellParagraphIndex,
-    bool clearFreePlayRetellParagraphIndex = false,
+    int? freePlayRetellSentenceIndex,
+    bool clearFreePlayRetellSentenceIndex = false,
     DateTime? newLearningBreakpointSavedAt,
     bool clearNewLearningBreakpointSavedAt = false,
     DateTime? freePlayBreakpointSavedAt,
@@ -362,7 +366,7 @@ class LearningProgress {
     bool clearIntensiveListenSentenceIndex = false,
     bool clearShadowingSentenceIndex = false,
     bool clearDifficultPracticeSentenceIndex = false,
-    bool clearRetellParagraphIndex = false,
+    bool clearRetellSentenceIndex = false,
     Set<String>? skippedSubStageKeys,
     bool? isPaused,
     Map<LearningStage, int>? planVersionsByStage,
@@ -384,9 +388,9 @@ class LearningProgress {
       intensiveListenPassCount:
           intensiveListenPassCount ?? this.intensiveListenPassCount,
       shadowingPassCount: shadowingPassCount ?? this.shadowingPassCount,
-      blindListenParagraphIndex: clearBlindListenParagraphIndex
+      blindListenSentenceIndex: clearBlindListenSentenceIndex
           ? null
-          : (blindListenParagraphIndex ?? this.blindListenParagraphIndex),
+          : (blindListenSentenceIndex ?? this.blindListenSentenceIndex),
       intensiveListenSentenceIndex: clearIntensiveListenSentenceIndex
           ? null
           : (intensiveListenSentenceIndex ?? this.intensiveListenSentenceIndex),
@@ -397,14 +401,14 @@ class LearningProgress {
           ? null
           : (difficultPracticeSentenceIndex ??
                 this.difficultPracticeSentenceIndex),
-      retellParagraphIndex: clearRetellParagraphIndex
+      retellSentenceIndex: clearRetellSentenceIndex
           ? null
-          : (retellParagraphIndex ?? this.retellParagraphIndex),
+          : (retellSentenceIndex ?? this.retellSentenceIndex),
       retellPassCount: retellPassCount ?? this.retellPassCount,
-      freePlayBlindListenParagraphIndex: clearFreePlayBlindListenParagraphIndex
+      freePlayBlindListenSentenceIndex: clearFreePlayBlindListenSentenceIndex
           ? null
-          : (freePlayBlindListenParagraphIndex ??
-                this.freePlayBlindListenParagraphIndex),
+          : (freePlayBlindListenSentenceIndex ??
+                this.freePlayBlindListenSentenceIndex),
       freePlayIntensiveListenSentenceIndex:
           clearFreePlayIntensiveListenSentenceIndex
           ? null
@@ -419,9 +423,9 @@ class LearningProgress {
           ? null
           : (freePlayDifficultPracticeSentenceIndex ??
                 this.freePlayDifficultPracticeSentenceIndex),
-      freePlayRetellParagraphIndex: clearFreePlayRetellParagraphIndex
+      freePlayRetellSentenceIndex: clearFreePlayRetellSentenceIndex
           ? null
-          : (freePlayRetellParagraphIndex ?? this.freePlayRetellParagraphIndex),
+          : (freePlayRetellSentenceIndex ?? this.freePlayRetellSentenceIndex),
       newLearningBreakpointSavedAt: clearNewLearningBreakpointSavedAt
           ? null
           : (newLearningBreakpointSavedAt ?? this.newLearningBreakpointSavedAt),
