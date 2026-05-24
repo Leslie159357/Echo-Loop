@@ -837,12 +837,12 @@ class _AnalysisContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final fields = SentenceAnalysis.parseDisplayString(content);
 
-    // 展示顺序：语法 → 听力提示 → 重点词汇
+    // 展示顺序：重点词汇 → 听力提示 → 语法
     // 字段索引固定为 [0=grammar, 1=vocabulary, 2=listening]，由 fieldIndex 关联
     final sections = <_Section>[
-      _Section(0, l10n.aiGrammar, Icons.menu_book_outlined),
-      _Section(2, l10n.aiListening, Icons.hearing_outlined),
       _Section(1, l10n.aiVocabulary, Icons.translate_outlined),
+      _Section(2, l10n.aiListening, Icons.hearing_outlined),
+      _Section(0, l10n.aiGrammar, Icons.menu_book_outlined),
     ];
 
     // 仅渲染对应字段非空的段落
