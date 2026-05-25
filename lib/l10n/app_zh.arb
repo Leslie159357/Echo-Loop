@@ -836,6 +836,7 @@
   "privacyPolicy": "隐私政策",
   "writeFeedback": "意见反馈",
   "joinCommunity": "加入学习社群",
+  "joinCommunityInviteSubtitle": "找搭子，共享学习资料，提需求",
   "networkError": "无法连接，请检查网络后重试",
   "viewSourceCode": "查看源代码",
 

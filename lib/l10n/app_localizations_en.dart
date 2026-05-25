@@ -2066,6 +2066,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get joinCommunity => 'Join Community';
 
   @override
+  String get joinCommunityInviteSubtitle =>
+      'Find study buddies, share resources, request features';
+
+  @override
   String get networkError =>
       'Unable to connect. Please check your network and try again.';
 

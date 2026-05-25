@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
+import '../config/api_config.dart';
 import '../database/daos/stage_completion_dao.dart';
 import '../database/enums.dart';
 import '../l10n/app_localizations.dart';
@@ -164,6 +166,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                   vertical: AppSpacing.s,
                 ),
                 children: [
+                  // 加入学习社群邀请（置顶，单行紧凑样式）
+                  const _CommunityInviteCard(),
+                  const SizedBox(height: AppSpacing.s),
+
                   // 统计 Chips + 柱状图
                   GuideTarget(
                     step: stepStatsHeader,
@@ -266,6 +272,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         vertical: AppSpacing.s,
       ),
       children: [
+        const _CommunityInviteCard(),
+        const SizedBox(height: AppSpacing.s),
         GuideTarget(step: stepStatsHeader, child: const StudyStatsHeader()),
         const SizedBox(height: AppSpacing.xl),
         const _EmptyState(type: _EmptyStateType.allDone),
@@ -722,6 +730,78 @@ String _timeAgo(AppLocalizations l10n, DateTime now, DateTime completedAt) {
   if (diff.inMinutes < 1) return l10n.timeAgoJustNow;
   if (diff.inHours < 1) return l10n.timeAgoMinutes(diff.inMinutes);
   return l10n.timeAgoHours(diff.inHours);
+}
+
+// ============================================================
+// Community Invite Card
+// ============================================================
+
+/// 学习社群邀请条
+///
+/// 学习 Tab 顶部置顶单行紧凑样式：👥 emoji + 标题 + 副标题 + chevron。
+/// 点击行为与设置页「加入学习社群」一致：按 locale 打开对应社群页面。
+class _CommunityInviteCard extends ConsumerWidget {
+  const _CommunityInviteCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          ref
+              .read(analyticsServiceProvider)
+              .track(Events.communityInviteTapped);
+          final isZh = Localizations.localeOf(context).languageCode == 'zh';
+          final path = isZh ? '/zh-CN/social' : '/en/social';
+          launchUrl(Uri.parse('$apiBaseUrl$path'));
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.m,
+            vertical: 8,
+          ),
+          child: Row(
+            children: [
+              const Text('👥', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Text(
+                l10n.joinCommunity,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.joinCommunityInviteSubtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onPrimaryContainer.withValues(
+                      alpha: 0.7,
+                    ),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ============================================================

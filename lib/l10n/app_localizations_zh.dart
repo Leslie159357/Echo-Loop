@@ -2005,6 +2005,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get joinCommunity => '加入学习社群';
 
   @override
+  String get joinCommunityInviteSubtitle => '找搭子，共享学习资料，提需求';
+
+  @override
   String get networkError => '无法连接，请检查网络后重试';
 
   @override

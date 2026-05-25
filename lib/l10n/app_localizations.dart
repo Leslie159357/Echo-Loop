@@ -3692,6 +3692,12 @@ abstract class AppLocalizations {
   /// **'Join Community'**
   String get joinCommunity;
 
+  /// No description provided for @joinCommunityInviteSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find study buddies, share resources, request features'**
+  String get joinCommunityInviteSubtitle;
+
   /// No description provided for @networkError.
   ///
   /// In en, this message translates to:

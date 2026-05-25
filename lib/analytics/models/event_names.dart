@@ -154,6 +154,9 @@ abstract class Events {
   /// 查看某天阶段明细
   static const dayBreakdownViewed = 'day_breakdown_viewed';
 
+  /// 点击学习 Tab 的「加入学习社群」邀请卡片
+  static const communityInviteTapped = 'community_invite_tapped';
+
   // ── 收藏复习按钮 ──
   /// 点击句子复习按钮
   static const bookmarkReviewButtonTapped = 'bookmark_review_button_tapped';

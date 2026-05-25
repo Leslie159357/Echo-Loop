@@ -1,7 +1,23 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-05-25
-> 当前焦点：全文盲听播放速度设置（已完成）
+> 最后更新：2026-05-26
+> 当前焦点：学习 Tab 加入社群入口（已完成）
+
+## 已完成：学习 Tab 加入学习社群邀请卡片
+
+- [x] `lib/screens/study_screen.dart` 新增 `_CommunityInviteCard`：浅色 primaryContainer 底 + 👥 + 标题 + 副标题 + 右箭头，圆角 12，醒目但不扎眼
+- [x] 卡片位置：`StudyStatsHeader` 下方、任务区上方；「全部完成」视图同步插入
+- [x] 点击行为复用设置页逻辑：按 `Localizations.localeOf` 拼 `/zh-CN/social` 或 `/en/social`，`launchUrl('$apiBaseUrl$path')`
+- [x] 新增埋点事件 `community_invite_tapped`
+- [x] i18n：复用 `joinCommunity` 作标题，新增 `joinCommunityInviteSubtitle`（zh/en）
+
+### 验证
+- [x] `flutter analyze lib/screens/study_screen.dart lib/analytics/models/event_names.dart`：No issues found
+- [x] `flutter test test/screens/study_screen_test.dart`：12 tests passed
+
+**完成时间**: 2026-05-26
+
+---
 
 ## 已完成：全文盲听播放速度设置
 
