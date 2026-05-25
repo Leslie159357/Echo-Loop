@@ -331,16 +331,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.chevron_right),
-          onTap: isChecking
-              ? null
-              : () => _checkForUpdate(context, ref, l10n),
+          onTap: isChecking ? null : () => _checkForUpdate(context, ref, l10n),
         ),
         ListTile(
           leading: _emojiIcon('📜'),
           title: Text(l10n.termsOfService),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () =>
-              launchUrl(Uri.parse('https://www.echo-loop.top/terms')),
+          onTap: () => launchUrl(Uri.parse('https://www.echo-loop.top/terms')),
         ),
         ListTile(
           leading: _emojiIcon('🔒'),
@@ -361,7 +358,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () {
             final isZh = Localizations.localeOf(context).languageCode == 'zh';
-            final path = isZh ? '/zh-CN/social' : '/social';
+            final path = isZh ? '/zh-CN/social' : '/en/social';
             launchUrl(Uri.parse('$apiBaseUrl$path'));
           },
         ),
@@ -369,12 +366,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           leading: SizedBox(
             width: 32,
             height: 32,
-            child: Center(
-              child: FaIcon(
-                FontAwesomeIcons.github,
-                size: 22,
-              ),
-            ),
+            child: Center(child: FaIcon(FontAwesomeIcons.github, size: 22)),
           ),
           title: Text(l10n.viewSourceCode),
           subtitle: const Text(
@@ -382,9 +374,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: TextStyle(fontSize: 12),
           ),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => launchUrl(
-            Uri.parse('https://github.com/echo-loop/Echo-Loop/'),
-          ),
+          onTap: () =>
+              launchUrl(Uri.parse('https://github.com/echo-loop/Echo-Loop/')),
         ),
       ],
     );
