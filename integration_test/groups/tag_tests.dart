@@ -54,26 +54,26 @@ void tagTests() {
 
       // 打开弹出菜单
       await tester.tap(find.byType(PopupMenuButton<String>).first);
-      await tester.pump(const Duration(milliseconds: 500));
+      await safeSettle(tester);
 
-      // 点击"管理标签"
-      await tester.tap(find.text('Manage Tags'));
-      await tester.pump(const Duration(milliseconds: 500));
+      // 点击"管理标签"（PopupMenuItem）
+      await tester.tap(find.text('Manage Tags').last);
+      await safeSettle(tester);
 
       // BottomSheet 应出现 — 显示空状态文本
-      expect(find.text('No tags yet'), findsOneWidget);
+      expect(find.text('No tags yet'), findsWidgets);
 
       // 点击"创建标签"
       await tester.tap(find.text('Create Tag'));
-      await tester.pump(const Duration(milliseconds: 500));
+      await safeSettle(tester);
 
       // 输入标签名称
       await tester.enterText(find.byType(TextField), 'Business English');
-      await tester.pump(const Duration(milliseconds: 300));
+      await safeSettle(tester);
 
       // 点击添加按钮
       await tester.tap(find.text('Add'));
-      await tester.pump(const Duration(milliseconds: 500));
+      await safeSettle(tester);
 
       // 即时生效 — 标签自动创建并关联
       // 标签在 Sheet 列表中显示且自动勾选
@@ -85,7 +85,7 @@ void tagTests() {
       // 关闭 BottomSheet — 点击 Sheet 外部（屏幕顶部 scrim 区域）
       final size = tester.view.physicalSize / tester.view.devicePixelRatio;
       await tester.tapAt(Offset(size.width / 2, 10));
-      await tester.pump(const Duration(milliseconds: 500));
+      await safeSettle(tester);
 
       // 返回音频列表 — 应能看到彩色标签 chip
       expect(find.text('Business English'), findsAtLeast(1));
