@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../analytics/analytics_providers.dart';
@@ -31,6 +32,139 @@ enum _SurveyStep { goal, examType, dailyMinutes, referralSource, summary }
 
 /// 选完答案到自动跳下一步之间的延迟，留出选中高亮的视觉反馈。
 const _autoAdvanceDelay = Duration(milliseconds: 220);
+
+// ─────────────────────── 本地视觉常量 ───────────────────────
+// 仅 onboarding 模块内使用，避免污染全局 theme。
+
+const _kBgColor = Color(0xFFFAFBFD);
+const _kTitleColor = Color(0xFF1A2230);
+const _kMutedColor = Color(0xFF8A95A5);
+const _kBorderColor = Color(0xFFE2E8F0);
+
+/// 学习目标 emoji 映射。
+const _goalEmoji = <String, String>{
+  OnboardingGoal.exam: '🎯',
+  OnboardingGoal.daily: '☕',
+  OnboardingGoal.work: '💼',
+  OnboardingGoal.travel: '✈️',
+  OnboardingGoal.content: '🎬',
+  OnboardingGoal.other: '💭',
+};
+
+/// 每日时长 emoji 映射：用植物生长隐喻投入度递增。
+const _dailyMinutesEmoji = <String, String>{
+  OnboardingDailyMinutes.m5: '⚡',
+  OnboardingDailyMinutes.m10: '🌱',
+  OnboardingDailyMinutes.m20: '🌿',
+  OnboardingDailyMinutes.m30: '🌳',
+  OnboardingDailyMinutes.flexible: '🎈',
+};
+
+/// 单个渠道的品牌图标 + 品牌色。
+typedef _BrandToken = ({FaIconData icon, Color color});
+
+/// 来源渠道 → 平台图标 + 品牌色映射。
+///
+/// FontAwesome 11.0 已收录 weixin / bilibili / github / youtube / reddit /
+/// xTwitter / tiktok / instagram / google / googlePlay / appStore 等主流品牌图标。
+/// 中国特有的小红书 / 快手 / 百度无官方品牌图标，回退到通用 solid icon。
+/// "抖音"与 TikTok 实质上是同一公司同一 app 国内外双版本，复用 tiktok 图标。
+/// 品牌色取自各平台官方主视觉，朋友推荐 / 其他保持中性灰。
+const _referralBrand = <String, _BrandToken>{
+  // 中文渠道
+  OnboardingReferralSource.xiaohongshu: (
+    icon: FontAwesomeIcons.book,
+    color: Color(0xFFFF2442),
+  ),
+  OnboardingReferralSource.wechat: (
+    icon: FontAwesomeIcons.weixin,
+    color: Color(0xFF07C160),
+  ),
+  OnboardingReferralSource.douyin: (
+    icon: FontAwesomeIcons.tiktok,
+    color: Color(0xFF000000),
+  ),
+  OnboardingReferralSource.kuaishou: (
+    icon: FontAwesomeIcons.video,
+    color: Color(0xFFFF4906),
+  ),
+  OnboardingReferralSource.bilibili: (
+    icon: FontAwesomeIcons.bilibili,
+    color: Color(0xFF00AEEC),
+  ),
+  OnboardingReferralSource.baiduSearch: (
+    icon: FontAwesomeIcons.magnifyingGlass,
+    color: Color(0xFF2932E1),
+  ),
+  // 英文渠道
+  OnboardingReferralSource.youtube: (
+    icon: FontAwesomeIcons.youtube,
+    color: Color(0xFFFF0000),
+  ),
+  OnboardingReferralSource.reddit: (
+    icon: FontAwesomeIcons.reddit,
+    color: Color(0xFFFF4500),
+  ),
+  OnboardingReferralSource.xTwitter: (
+    icon: FontAwesomeIcons.xTwitter,
+    color: Color(0xFF000000),
+  ),
+  OnboardingReferralSource.tiktok: (
+    icon: FontAwesomeIcons.tiktok,
+    color: Color(0xFF000000),
+  ),
+  OnboardingReferralSource.instagram: (
+    icon: FontAwesomeIcons.instagram,
+    color: Color(0xFFE4405F),
+  ),
+  OnboardingReferralSource.googleSearch: (
+    icon: FontAwesomeIcons.google,
+    color: Color(0xFF4285F4),
+  ),
+  // 通用渠道
+  OnboardingReferralSource.github: (
+    icon: FontAwesomeIcons.github,
+    color: Color(0xFF181717),
+  ),
+  OnboardingReferralSource.appStore: (
+    icon: FontAwesomeIcons.appStore,
+    color: Color(0xFF007AFF),
+  ),
+  OnboardingReferralSource.googlePlay: (
+    icon: FontAwesomeIcons.googlePlay,
+    color: Color(0xFF34A853),
+  ),
+  OnboardingReferralSource.friend: (
+    icon: FontAwesomeIcons.userGroup,
+    color: Color(0xFF1976D2),
+  ),
+  OnboardingReferralSource.other: (
+    icon: FontAwesomeIcons.ellipsis,
+    color: Color(0xFF4A5568),
+  ),
+};
+
+/// Summary 页 4 条要点对应的 emoji，按 point1..4 顺序。
+const _summaryEmojis = <String>['🎧', '🧩', '🔁', '🗣️'];
+
+/// 把 emoji 字符包装成 SurveyChoiceTile 可用的 leading Widget。null 透传。
+Widget? _emojiLeading(String? emoji) {
+  if (emoji == null) return null;
+  return Text(emoji, style: const TextStyle(fontSize: 20, height: 1.0));
+}
+
+/// 来源渠道 leading：品牌图标 + 品牌主色，方便用户快速识别熟悉的平台。
+Widget _referralLeading(String code) {
+  final brand = _referralBrand[code];
+  if (brand == null) {
+    return const FaIcon(
+      FontAwesomeIcons.ellipsis,
+      size: 18,
+      color: Color(0xFF4A5568),
+    );
+  }
+  return FaIcon(brand.icon, size: 18, color: brand.color);
+}
 
 class OnboardingSurveyScreen extends ConsumerStatefulWidget {
   const OnboardingSurveyScreen({super.key});
@@ -199,6 +333,7 @@ class _OnboardingSurveyScreenState
     return PopScope(
       canPop: false,
       child: Scaffold(
+        backgroundColor: _kBgColor,
         body: SafeArea(
           child: Stack(
             children: [
@@ -213,7 +348,12 @@ class _OnboardingSurveyScreenState
                   Expanded(
                     child: _step == _SurveyStep.summary
                         ? _buildSummaryLayout(l10n)
-                        : _buildQuestionLayout(l10n, answers),
+                        : _buildQuestionLayout(
+                            l10n,
+                            answers,
+                            currentIndex,
+                            totalSteps,
+                          ),
                   ),
                 ],
               ),
@@ -258,7 +398,10 @@ class _OnboardingSurveyScreenState
   Widget _buildQuestionLayout(
     AppLocalizations l10n,
     OnboardingAnswers answers,
+    int currentIndex,
+    int totalSteps,
   ) {
+    final eyebrow = totalSteps > 0 ? '${currentIndex + 1} / $totalSteps' : '';
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -279,7 +422,7 @@ class _OnboardingSurveyScreenState
                         FadeTransition(opacity: animation, child: child),
                     child: KeyedSubtree(
                       key: ValueKey(_step),
-                      child: _buildQuestionStepBody(l10n, answers),
+                      child: _buildQuestionStepBody(l10n, answers, eyebrow),
                     ),
                   ),
                 ),
@@ -294,16 +437,17 @@ class _OnboardingSurveyScreenState
   Widget _buildQuestionStepBody(
     AppLocalizations l10n,
     OnboardingAnswers answers,
+    String eyebrow,
   ) {
     switch (_step) {
       case _SurveyStep.goal:
-        return _buildGoalStep(l10n, answers);
+        return _buildGoalStep(l10n, answers, eyebrow);
       case _SurveyStep.examType:
-        return _buildExamTypeStep(l10n, answers);
+        return _buildExamTypeStep(l10n, answers, eyebrow);
       case _SurveyStep.dailyMinutes:
-        return _buildDailyMinutesStep(l10n, answers);
+        return _buildDailyMinutesStep(l10n, answers, eyebrow);
       case _SurveyStep.referralSource:
-        return _buildReferralSourceStep(l10n, answers);
+        return _buildReferralSourceStep(l10n, answers, eyebrow);
       case _SurveyStep.summary:
         // summary 走 _buildSummaryLayout，不会进入这里
         return const SizedBox.shrink();
@@ -364,8 +508,8 @@ class _OnboardingSurveyScreenState
                             bottom: i == points.length - 1 ? 0 : 18,
                           ),
                           child: _SummaryPoint(
+                            emoji: _summaryEmojis[i],
                             text: points[i],
-                            color: colorScheme.primary,
                             textColor: colorScheme.onSurface,
                             textStyle: textTheme.bodyLarge,
                           ),
@@ -442,40 +586,50 @@ class _OnboardingSurveyScreenState
     );
   }
 
-  Widget _buildGoalStep(AppLocalizations l10n, OnboardingAnswers answers) {
+  Widget _buildGoalStep(
+    AppLocalizations l10n,
+    OnboardingAnswers answers,
+    String eyebrow,
+  ) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Prompt(text: l10n.onboardingQ1Prompt),
+        _Prompt(text: l10n.onboardingQ1Prompt, eyebrow: eyebrow),
         const SizedBox(height: 24),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionExam,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.exam]),
           selected: answers.goal == OnboardingGoal.exam,
           onTap: () => _selectGoal(OnboardingGoal.exam),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionDaily,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.daily]),
           selected: answers.goal == OnboardingGoal.daily,
           onTap: () => _selectGoal(OnboardingGoal.daily),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionWork,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.work]),
           selected: answers.goal == OnboardingGoal.work,
           onTap: () => _selectGoal(OnboardingGoal.work),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionTravel,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.travel]),
           selected: answers.goal == OnboardingGoal.travel,
           onTap: () => _selectGoal(OnboardingGoal.travel),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionContent,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.content]),
           selected: answers.goal == OnboardingGoal.content,
           onTap: () => _selectGoal(OnboardingGoal.content),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ1OptionOther,
+          leading: _emojiLeading(_goalEmoji[OnboardingGoal.other]),
           selected: answers.goal == OnboardingGoal.other,
           onTap: () => _selectGoal(OnboardingGoal.other),
         ),
@@ -483,7 +637,11 @@ class _OnboardingSurveyScreenState
     );
   }
 
-  Widget _buildExamTypeStep(AppLocalizations l10n, OnboardingAnswers answers) {
+  Widget _buildExamTypeStep(
+    AppLocalizations l10n,
+    OnboardingAnswers answers,
+    String eyebrow,
+  ) {
     final selected = answers.examType;
     // 中文用户保留全部考试；其它语言用户只展示国际通用考试 + Other，
     // 因为中高考 / 四六级 / 专四专八 都是中国国内考试。
@@ -492,7 +650,7 @@ class _OnboardingSurveyScreenState
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Prompt(text: l10n.onboardingExamPrompt),
+        _Prompt(text: l10n.onboardingExamPrompt, eyebrow: eyebrow),
         const SizedBox(height: 24),
         if (isChinese) ...[
           SurveyChoiceTile(
@@ -533,36 +691,42 @@ class _OnboardingSurveyScreenState
   Widget _buildDailyMinutesStep(
     AppLocalizations l10n,
     OnboardingAnswers answers,
+    String eyebrow,
   ) {
     final selected = answers.dailyMinutes;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Prompt(text: l10n.onboardingQ2Prompt),
+        _Prompt(text: l10n.onboardingQ2Prompt, eyebrow: eyebrow),
         const SizedBox(height: 24),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option5,
+          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m5]),
           selected: selected == OnboardingDailyMinutes.m5,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m5),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option10,
+          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m10]),
           selected: selected == OnboardingDailyMinutes.m10,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m10),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option20,
+          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m20]),
           selected: selected == OnboardingDailyMinutes.m20,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m20),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option30,
+          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m30]),
           selected: selected == OnboardingDailyMinutes.m30,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m30),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2OptionFlexible,
+          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.flexible]),
           selected: selected == OnboardingDailyMinutes.flexible,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.flexible),
         ),
@@ -576,6 +740,7 @@ class _OnboardingSurveyScreenState
   Widget _buildReferralSourceStep(
     AppLocalizations l10n,
     OnboardingAnswers answers,
+    String eyebrow,
   ) {
     final selected = answers.referralSource;
     final isChinese = Localizations.localeOf(context).languageCode == 'zh';
@@ -617,11 +782,12 @@ class _OnboardingSurveyScreenState
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Prompt(text: l10n.onboardingQ3Prompt),
+        _Prompt(text: l10n.onboardingQ3Prompt, eyebrow: eyebrow),
         const SizedBox(height: 24),
         for (final code in codes)
           SurveyChoiceTile(
             label: _referralSourceLabel(l10n, code),
+            leading: _referralLeading(code),
             selected: selected == code,
             onTap: () => _selectReferralSource(code),
           ),
@@ -697,17 +863,17 @@ class _PermissionPreviewChip extends StatelessWidget {
   }
 }
 
-/// summary 页的单条要点行：带圆形 check 图标，留有充足留白。
+/// summary 页的单条要点行：左侧 emoji，右侧文字。
 class _SummaryPoint extends StatelessWidget {
   const _SummaryPoint({
+    required this.emoji,
     required this.text,
-    required this.color,
     required this.textColor,
     required this.textStyle,
   });
 
+  final String emoji;
   final String text;
-  final Color color;
   final Color textColor;
   final TextStyle? textStyle;
 
@@ -716,26 +882,17 @@ class _SummaryPoint extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.only(top: 2, right: 14),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(Icons.check_rounded, size: 18, color: color),
+        Padding(
+          padding: const EdgeInsets.only(right: 16, top: 1),
+          child: Text(emoji, style: const TextStyle(fontSize: 24, height: 1.2)),
         ),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              text,
-              style: textStyle?.copyWith(
-                color: textColor,
-                height: 1.55,
-                fontWeight: FontWeight.w500,
-              ),
+          child: Text(
+            text,
+            style: textStyle?.copyWith(
+              color: textColor,
+              height: 1.55,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -744,7 +901,7 @@ class _SummaryPoint extends StatelessWidget {
   }
 }
 
-/// 顶部条：左侧"上一步"小按钮，右侧步骤指示点。
+/// 顶部条：左侧"上一步"小按钮，右侧节段进度条。
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.onBack,
@@ -762,17 +919,18 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(8, 12, 28, 8),
       child: Row(
         children: [
           SizedBox(
             height: 36,
+            width: 80,
             child: onBack == null
                 ? const SizedBox.shrink()
                 : TextButton.icon(
                     onPressed: onBack,
                     style: TextButton.styleFrom(
-                      foregroundColor: colorScheme.onSurfaceVariant,
+                      foregroundColor: _kMutedColor,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       minimumSize: const Size(0, 36),
                       visualDensity: VisualDensity.compact,
@@ -784,36 +942,50 @@ class _TopBar extends StatelessWidget {
                     ),
                   ),
           ),
-          const Spacer(),
-          _Dots(currentIndex: currentIndex, total: total),
+          const SizedBox(width: 8),
+          Expanded(
+            child: total == 0
+                ? const SizedBox.shrink()
+                : _SegmentedProgress(
+                    currentIndex: currentIndex,
+                    total: total,
+                    activeColor: colorScheme.primary,
+                  ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// 步骤指示点：当前步骤为实心，其它为浅色。
-class _Dots extends StatelessWidget {
-  const _Dots({required this.currentIndex, required this.total});
+/// 节段进度条：N 段等宽横条，已完成 + 当前段为 primary 色，未完成为浅灰。
+class _SegmentedProgress extends StatelessWidget {
+  const _SegmentedProgress({
+    required this.currentIndex,
+    required this.total,
+    required this.activeColor,
+  });
 
   final int currentIndex;
   final int total;
+  final Color activeColor;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: List.generate(total, (i) {
-        final active = i == currentIndex;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          width: active ? 18 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: active ? colorScheme.primary : colorScheme.outlineVariant,
-            borderRadius: BorderRadius.circular(3),
+        final reached = i <= currentIndex;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: i == total - 1 ? 0 : 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: 4,
+              decoration: BoxDecoration(
+                color: reached ? activeColor : _kBorderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
         );
       }),
@@ -821,19 +993,40 @@ class _Dots extends StatelessWidget {
   }
 }
 
-/// 题干文字。
+/// 题干区块：左对齐的 eyebrow（步骤计数）+ 题干文本。
 class _Prompt extends StatelessWidget {
-  const _Prompt({required this.text});
+  const _Prompt({required this.text, required this.eyebrow});
   final String text;
+  final String eyebrow;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (eyebrow.isNotEmpty) ...[
+          Text(
+            eyebrow,
+            style: textTheme.bodySmall?.copyWith(
+              color: _kMutedColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          text,
+          textAlign: TextAlign.start,
+          style: textTheme.headlineSmall?.copyWith(
+            fontSize: 22,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+            color: _kTitleColor,
+          ),
+        ),
+      ],
     );
   }
 }
