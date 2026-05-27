@@ -17,6 +17,14 @@ class AppTheme {
   /// 浅灰页面背景色
   static const Color _scaffoldBg = Color(0xFFF5F6FA);
 
+  /// 纯黑色板（深色主题专用，AMOLED 省电 + 沉浸式）
+  ///
+  /// 分层策略：页面背景纯黑，卡片/AppBar/底栏近黑浮起，浮层逐级提亮，
+  /// 既得纯黑效果又保留 M3 elevation 层次，避免大面积纯黑糊成一片。
+  static const Color _pureBlack = Color(0xFF000000); // 页面背景
+  static const Color _surfaceBlack = Color(0xFF0B0B0B); // 卡片 / AppBar / 底栏
+  static const Color _surfaceBorder = Color(0xFF1F1F1F); // 卡片描边
+
   /// 导航栏选中态颜色：明亮蓝
   static const Color navActiveColor = Color(0xFF3AA0FF);
 
@@ -41,11 +49,22 @@ class AppTheme {
     return _buildTheme(colorScheme, Brightness.light);
   }
 
-  /// 暗色主题
+  /// 暗色主题（纯黑 / AMOLED）
+  ///
+  /// 保留 `fromSeed` 派生的完整角色色（primary/secondary/container 等），
+  /// 仅用 `copyWith` 把 surface 系列覆盖为分级近黑，确保品牌蓝等不丢失。
   static ThemeData dark() {
-    final colorScheme = ColorScheme.fromSeed(
+    final base = ColorScheme.fromSeed(
       seedColor: seedColor,
       brightness: Brightness.dark,
+    );
+    final colorScheme = base.copyWith(
+      surface: _surfaceBlack,
+      surfaceContainerLowest: _pureBlack,
+      surfaceContainerLow: _surfaceBlack,
+      surfaceContainer: const Color(0xFF101010),
+      surfaceContainerHigh: const Color(0xFF161616),
+      surfaceContainerHighest: const Color(0xFF1C1C1C),
     );
     return _buildTheme(colorScheme, Brightness.dark);
   }
@@ -57,14 +76,21 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: isLight ? _scaffoldBg : colorScheme.surface,
+      scaffoldBackgroundColor: isLight ? _scaffoldBg : _pureBlack,
 
-      // Card 主题：去边框 + 微弱阴影，白色浮于灰底
+      // Card 主题：
+      // - 浅色：去边框 + 微弱阴影，白色浮于灰底
+      // - 深色（纯黑）：阴影在纯黑上不可见，改用 1px 近黑描边区分卡片边界
       cardTheme: CardThemeData(
         elevation: isLight ? 1 : 0,
         shadowColor: isLight ? Colors.black.withValues(alpha: 0.08) : null,
         color: colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isLight
+              ? BorderSide.none
+              : BorderSide(color: _surfaceBorder, width: 1),
+        ),
         margin: EdgeInsets.zero,
       ),
 
@@ -83,7 +109,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        backgroundColor: isLight ? _scaffoldBg : colorScheme.surface,
+        backgroundColor: isLight ? _scaffoldBg : _pureBlack,
         foregroundColor: colorScheme.onSurface,
         titleTextStyle: TextStyle(
           fontSize: 20,
@@ -95,7 +121,7 @@ class AppTheme {
       // 底部导航栏主题：白色底栏，选中态 #3AA0FF 蓝色图标和标签，无背景指示器
       navigationBarTheme: NavigationBarThemeData(
         height: 64,
-        backgroundColor: isLight ? Colors.white : null,
+        backgroundColor: isLight ? Colors.white : _pureBlack,
         indicatorColor: Colors.transparent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -119,7 +145,7 @@ class AppTheme {
       // 侧边导航栏主题：白色侧栏，选中态 #3AA0FF 蓝色图标和标签，无背景指示器
       navigationRailTheme: NavigationRailThemeData(
         indicatorColor: Colors.transparent,
-        backgroundColor: isLight ? Colors.white : null,
+        backgroundColor: isLight ? Colors.white : _pureBlack,
         selectedIconTheme: const IconThemeData(color: navActiveColor),
         unselectedIconTheme: IconThemeData(color: colorScheme.onSurfaceVariant),
         selectedLabelTextStyle: const TextStyle(
