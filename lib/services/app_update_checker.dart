@@ -67,9 +67,11 @@ class AppUpdateChecker {
   /// iOS：查 App Store Lookup API（返回 App Store 实际可下载版本）。
   /// 其他平台：拉取远程 version.json。
   /// 失败时返回 null（网络错误、JSON 解析失败等均静默处理）。
-  Future<AppUpdateInfo?> check() async {
+  /// [country] 指定 App Store 区域（如 `cn` / `us`），决定 Lookup API 返回
+  /// 哪个区域的 releaseNotes 本地化文案。仅 iOS 路径使用，为 null 时不传。
+  Future<AppUpdateInfo?> check({String? country}) async {
     if (_useIosLookup) {
-      return _checkIosLookup();
+      return _checkIosLookup(country: country);
     }
     return _checkVersionJson();
   }
@@ -79,13 +81,16 @@ class AppUpdateChecker {
   /// Lookup API 返回的 `version` 字段总是 App Store 当前可下载的版本，
   /// 不会包含审核中的 build，因此天然解决"提示有但下载不到"的问题。
   /// Lookup API 不提供 minimumVersion，回退为 `0.0.0`（不触发强制更新）。
-  Future<AppUpdateInfo?> _checkIosLookup() async {
+  Future<AppUpdateInfo?> _checkIosLookup({String? country}) async {
     final bundleId = _bundleId;
     if (bundleId == null || bundleId.isEmpty) {
       AppLogger.log(_logTag, 'iOS lookup skipped: empty bundleId');
       return null;
     }
-    AppLogger.log(_logTag, 'iOS lookup start: bundleId=$bundleId');
+    AppLogger.log(
+      _logTag,
+      'iOS lookup start: bundleId=$bundleId country=${country ?? "(default)"}',
+    );
     try {
       // iTunes Lookup 返回 Content-Type: text/javascript，Dio 默认 JSON
       // transformer 不识别该 MIME，会把 body 当作 String 透传。这里强制
@@ -93,7 +98,10 @@ class AppUpdateChecker {
       // 当成 Map 触发类型转换异常 → 静默 catch → "检查失败"。
       final response = await _dio.get<String>(
         _iosLookupBase,
-        queryParameters: {'bundleId': bundleId},
+        queryParameters: {
+          'bundleId': bundleId,
+          if (country != null && country.isNotEmpty) 'country': country,
+        },
         options: Options(responseType: ResponseType.plain),
       );
       final body = response.data;

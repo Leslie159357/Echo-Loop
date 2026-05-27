@@ -276,6 +276,49 @@ void main() {
       expect(result, isNull);
     });
 
+    test('传入 country 时作为查询参数发出', () async {
+      stubLookup({
+        'results': [
+          {'version': '1.0.12', 'trackViewUrl': 'https://apps.apple.com/x'},
+        ],
+      });
+
+      await iosChecker.check(country: 'cn');
+
+      final captured =
+          verify(
+                () => mockDio.get<String>(
+                  any(),
+                  queryParameters: captureAny(named: 'queryParameters'),
+                  options: any(named: 'options'),
+                ),
+              ).captured.single
+              as Map;
+      expect(captured['country'], 'cn');
+      expect(captured['bundleId'], 'top.echo-loop');
+    });
+
+    test('country 为 null 时不带 country 参数', () async {
+      stubLookup({
+        'results': [
+          {'version': '1.0.12', 'trackViewUrl': 'https://apps.apple.com/x'},
+        ],
+      });
+
+      await iosChecker.check();
+
+      final captured =
+          verify(
+                () => mockDio.get<String>(
+                  any(),
+                  queryParameters: captureAny(named: 'queryParameters'),
+                  options: any(named: 'options'),
+                ),
+              ).captured.single
+              as Map;
+      expect(captured.containsKey('country'), isFalse);
+    });
+
     test('results[0] 不是 Map 返回 null', () async {
       // 防御上游数据脏：results 元素是字符串/数字而非对象
       stubLookup({

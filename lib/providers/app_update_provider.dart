@@ -7,6 +7,7 @@
 library;
 
 import 'dart:io' show Platform;
+import 'dart:ui' show Locale, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -17,6 +18,7 @@ import '../services/app_logger.dart';
 import '../services/app_update_checker.dart';
 import '../utils/version_compare.dart';
 import 'package_info_provider.dart';
+import 'settings_provider.dart';
 
 part 'app_update_provider.g.dart';
 
@@ -67,7 +69,7 @@ class AppUpdate extends _$AppUpdate {
     AppLogger.log(_logTag, 'checkInBackground start');
     try {
       final prefs = await SharedPreferences.getInstance();
-      final info = await _checker?.check();
+      final info = await _checker?.check(country: _appStoreCountry());
       if (state is AppUpdateChecking) {
         AppLogger.log(
           _logTag,
@@ -99,7 +101,7 @@ class AppUpdate extends _$AppUpdate {
     AppLogger.log(_logTag, 'manualCheck start');
     state = const AppUpdateChecking();
 
-    final info = await _checker?.check();
+    final info = await _checker?.check(country: _appStoreCountry());
     final result = _buildResult(info: info, isManual: true);
     AppLogger.log(
       _logTag,
@@ -110,6 +112,26 @@ class AppUpdate extends _$AppUpdate {
     // 手动检查结束后恢复为初始状态，不触发 MainShell listener
     state = const AppUpdateInitial();
     return result;
+  }
+
+  /// 根据当前界面语言推断 App Store 区域代码
+  ///
+  /// 界面语言为 null（跟随系统）时按系统 locale 匹配后再映射。
+  String _appStoreCountry() {
+    final settings = ref.read(appSettingsProvider);
+    return appStoreCountryForLocale(settings.locale);
+  }
+
+  /// 把界面 locale 映射为 iTunes Lookup API 的区域代码（static 公开，便于测试）
+  ///
+  /// iTunes Lookup API 的 releaseNotes 文案取决于查询的 App Store 区域：
+  /// 不传 country 默认走美区（英文）。中文界面用户需查中国区（`cn`）才能
+  /// 拿到 App Store Connect 中配置的中文更新说明，其它语言一律走美区（`us`）。
+  /// [uiLocale] 为 null 表示跟随系统，此时按系统 locale 匹配界面语言。
+  static String appStoreCountryForLocale(Locale? uiLocale) {
+    final locale =
+        uiLocale ?? matchUiLocale(PlatformDispatcher.instance.locale);
+    return locale.languageCode == 'zh' ? 'cn' : 'us';
   }
 
   /// 根据远程信息构建检查结果
