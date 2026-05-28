@@ -599,6 +599,10 @@ class _IntensiveListenPlayerScreenState
                             l10n: l10n,
                             theme: theme,
                             isTextRevealed: playerState.isTextRevealed,
+                            // 仅当句子初始就是难句时才展示「取消标记 / 重新标记」按钮；
+                            // 否则（任务开始时未标记）只显示「听不太懂」。
+                            alwaysShowToggleButton:
+                                currentSentence?.isBookmarked ?? false,
                             countdown: Consumer(
                               builder: (context, ref, _) {
                                 final s = ref.watch(
