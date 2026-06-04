@@ -1,7 +1,46 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-03
-> 当前焦点：邮箱登录改为独立页面，消除展开跳变（已完成）
+> 最后更新：2026-06-04
+> 当前焦点：Android 复习提醒改为非精确本地通知（已完成）
+
+## 已完成：修复 GitHub Actions analyze 中 AnalyticsChannel 测试替身缺口
+
+修复 CI run `26926310353` 中 `flutter analyze` 失败的问题。`AnalyticsChannel` 已新增 `unregisterSuperProperty` 抽象方法，但 integration test 的 `_NoOpChannel` 测试替身未实现，导致 analyzer 报 `non_abstract_class_inherits_abstract_member`。
+
+### 实现
+- [x] `integration_test/helpers/test_notifiers.dart` 的 `_NoOpChannel` 补齐 `unregisterSuperProperty`
+- [x] 移除同文件不再需要的 `mocktail` import，保证定向 analyze 无 issue
+
+### 验证
+- [x] `flutter analyze integration_test/helpers/test_notifiers.dart`：No issues found
+- [x] `scripts/check.sh`：全量 `flutter analyze` 通过；全量 `flutter test` 2400 tests passed，11 skip；macOS integration 阶段失败在本地 App debug connection 启动失败（`The log reader stopped unexpectedly, or never started`），与本次 analyzer 修复无关
+
+**完成时间**: 2026-06-04 11:08 +0800
+
+## 已完成：Android 复习提醒改为非精确本地通知
+
+修复 Android 上收藏复习提醒和音频到期提醒不触发的问题。复习提醒不需要分钟级准点，因此不再使用 `exactAllowWhileIdle`，避免依赖 Android 12+ exact alarm 权限；同时补齐 `flutter_local_notifications` 调度通知所需的 Android receiver 和重启恢复权限。
+
+### 实现
+- [x] `ReviewReminderService` 的收藏复习提醒改用 `AndroidScheduleMode.inexactAllowWhileIdle`
+- [x] `ReviewReminderService` 的 per-audio 音频到期提醒改用 `AndroidScheduleMode.inexactAllowWhileIdle`
+- [x] `AndroidManifest.xml` 新增 `RECEIVE_BOOT_COMPLETED`
+- [x] `AndroidManifest.xml` 新增 `ScheduledNotificationReceiver` 和 `ScheduledNotificationBootReceiver`
+- [x] 补充回归测试，确保两类复习提醒不再使用 exact alarm 调度
+- [x] `ReviewReminderService` 关键路径接入 `AppLogger`：初始化、时区、调度、取消、skip 原因、通知点击和异常栈
+- [x] 补充 iOS/macOS 通知详情保护性测试，确认 Android 调度调整不影响 `DarwinNotificationDetails`
+- [x] 收藏复习提醒时间选择器改为 5 分钟间隔，方便 Android 真机调试且避免选项过密
+- [x] 补充设置保存、设置变更重调度、数据源统计和系统 pending notification 摘要日志
+- [x] 明确限制：Android 系统真正展示本地通知时不会自动唤醒 Dart，因此 AppLogger 只能记录调度成功、pending 摘要、通知点击和启动 payload
+
+### 验证
+- [x] `flutter analyze lib/services/review_reminder_service.dart test/services/review_reminder_service_test.dart`
+- [x] `flutter test test/services/review_reminder_service_test.dart`：20 tests passed
+- [x] `flutter analyze lib/screens/reminder_settings_screen.dart lib/providers/reminder_settings_provider.dart lib/services/review_reminder_service.dart test/services/review_reminder_service_test.dart`
+- [x] `flutter test test/services/review_reminder_service_test.dart test/models/reminder_settings_test.dart`：38 tests passed
+- [x] `scripts/check.sh`：全量 `flutter analyze` 通过；全量 `flutter test` 2400 tests passed，11 skip；macOS integration 阶段失败在本地 App debug connection 启动失败（`The log reader stopped unexpectedly, or never started`），与本次 Android 通知修复无关
+
+**完成时间**: 2026-06-04 10:38 +0800
 
 ## 已完成：PostHog 匿名态与登录态身份链路收敛
 
