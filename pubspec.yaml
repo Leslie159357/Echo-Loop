@@ -80,6 +80,9 @@ dependencies:
   timeago: ^3.7.1
   sherpa_onnx: ^1.12.36
   showcaseview: ^5.0.1
+  # 认证：复用 fluency-frontend 的 Supabase 项目（auth.users 共享），
+  # mobile 端走 native ID Token 流（Apple/Google）+ 邮箱密码。详见 docs / plan。
+  supabase_flutter: ^2.12.0
 
 dev_dependencies:
   flutter_test:
@@ -117,6 +120,7 @@ flutter:
 
   assets:
     - assets/demo/
+    - assets/icon/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

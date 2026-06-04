@@ -72,4 +72,14 @@ class AnalyticsService {
       // 埋点永远不应影响主业务流程，静默忽略所有异常
     }
   }
+
+  /// 注销 super property。
+  Future<void> unregisterSuperProperty(String name) async {
+    if (!_consent.hasConsented) return;
+    try {
+      await _channel.unregisterSuperProperty(name);
+    } catch (_) {
+      // 埋点永远不应影响主业务流程，静默忽略所有异常
+    }
+  }
 }

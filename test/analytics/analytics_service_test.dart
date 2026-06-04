@@ -11,6 +11,7 @@ class MockChannel implements AnalyticsChannel {
   final List<String?> userIds = [];
   final List<({String name, String? value})> userProperties = [];
   final List<Map<String, Object>> superPropertiesCalls = [];
+  final List<String> unregisteredSuperProperties = [];
 
   /// 测试时把它设为 true，下一次 [registerSuperProperties] 抛错；
   /// 验证 [AnalyticsService] 是否吞掉异常。
@@ -41,6 +42,11 @@ class MockChannel implements AnalyticsChannel {
   Future<void> registerSuperProperties(Map<String, Object> properties) async {
     if (throwOnRegister) throw StateError('register failed');
     superPropertiesCalls.add(properties);
+  }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {
+    unregisteredSuperProperties.add(name);
   }
 }
 
@@ -165,6 +171,12 @@ void main() {
       await service.registerSuperProperties({'k': 'v'});
 
       expect(channel.superPropertiesCalls, isEmpty); // 抛错时不会写入
+    });
+
+    test('unregisterSuperProperty 转发到 channel', () async {
+      await service.unregisterSuperProperty('supabase_user_id');
+
+      expect(channel.unregisteredSuperProperties, ['supabase_user_id']);
     });
   });
 }

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../database/app_database.dart';
@@ -28,6 +29,8 @@ import '../providers/new_user_guide_provider.dart';
 import '../providers/tag_provider.dart';
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
+import '../features/auth/providers/auth_providers.dart';
+import '../router/app_router.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import '../services/backup/backup_manifest.dart';
 import '../services/backup/backup_service.dart';
@@ -80,6 +83,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.m),
         children: [
+          _buildAccountSection(context, l10n),
+          const SizedBox(height: AppSpacing.m),
           _buildSection(
             context,
             title: l10n.appearance,
@@ -114,6 +119,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  /// 构建账号分组：登录、注册与后续账号管理入口。
+  Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
+    final session = ref.watch(supabaseSessionProvider).valueOrNull;
+    final isSignedIn = session != null;
+    final user = session?.user;
+    final accountSubtitle = isSignedIn
+        ? (user!.email ?? user.id)
+        : null;
+
+    return _buildSection(
+      context,
+      title: l10n.account,
+      children: [
+        ListTile(
+          leading: _emojiIcon('👤'),
+          title: Text(l10n.account),
+          subtitle: accountSubtitle == null ? null : Text(accountSubtitle),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isSignedIn ? l10n.authSignedInStatus : l10n.authSignedOutStatus,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+          onTap: () =>
+              context.push(isSignedIn ? AppRoutes.account : AppRoutes.login),
+        ),
+      ],
     );
   }
 

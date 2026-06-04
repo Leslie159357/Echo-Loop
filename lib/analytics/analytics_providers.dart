@@ -53,9 +53,10 @@ Future<AnalyticsService> initAnalyticsService(
   final consent = ConsentManager(prefs);
   final channel = _createChannel();
 
-  // 初始化通道 + 设置用户 ID
+  // 初始化通道。匿名阶段不做 identify，让 PostHog SDK 自己维护匿名 distinct id；
+  // 本地生成的匿名 UUID 仅作为事件级属性保留，供登录后与真实账号关联排查。
   await channel.initialize();
-  await channel.setUserId(userId);
+  await channel.registerSuperProperties({'app_anonymous_id': userId});
 
   // 关闭 Firebase 采集（当前使用 PostHog，避免 Firebase SDK 残留上报）
   if (!kDebugMode && !Platform.isMacOS) {

@@ -3196,4 +3196,213 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get speechPermUnsupportedToast =>
       'Recording is not supported on this platform';
+
+  @override
+  String get authSignInTitle => 'Sign in to Echo Loop';
+
+  @override
+  String get authChooseMethod => 'Choose how you want to continue.';
+
+  @override
+  String get authContinueWithEmail => 'Continue with Email Code';
+
+  @override
+  String get authContinueWithApple => 'Continue with Apple';
+
+  @override
+  String get authContinueWithGoogle => 'Continue with Google';
+
+  @override
+  String get authProviderComingSoon => 'Coming soon';
+
+  @override
+  String get authPasswordlessHint =>
+      'No password needed. We will email you a one-time code.';
+
+  @override
+  String get authEmailTitle => 'Email sign in';
+
+  @override
+  String get authEmailOtpTitle => 'Continue with email';
+
+  @override
+  String get authEmailOtpDescription =>
+      'Enter your email and we will send a one-time code.';
+
+  @override
+  String get authEmailOtpAutoCreateHint =>
+      'First-time use will create your account automatically.';
+
+  @override
+  String get authEmailLabel => 'Email';
+
+  @override
+  String get authOtpLabel => '6-digit code';
+
+  @override
+  String get authOtpRequired => 'Enter the 6-digit code';
+
+  @override
+  String get authOtpInvalid => 'Enter a valid 6-digit code';
+
+  @override
+  String get authEnterOtpTitle => 'Enter code';
+
+  @override
+  String get authOtpHelpText => 'Check spam if you do not see the email.';
+
+  @override
+  String get authSendOtpButton => 'Send Code';
+
+  @override
+  String get authSendingOtp => 'Sending code';
+
+  @override
+  String get authVerifyOtpButton => 'Continue';
+
+  @override
+  String get authVerifyingOtp => 'Verifying';
+
+  @override
+  String get authResendOtpButton => 'Resend code';
+
+  @override
+  String authResendOtpCountdown(int seconds) {
+    return '${seconds}s until resend';
+  }
+
+  @override
+  String get authOtpResent => 'A new code has been sent.';
+
+  @override
+  String get authPasswordLabel => 'Password';
+
+  @override
+  String get authConfirmPasswordLabel => 'Confirm Password';
+
+  @override
+  String get authSignInButton => 'Sign In';
+
+  @override
+  String get authSigningIn => 'Signing in';
+
+  @override
+  String get authCreateAccount => 'Create Account';
+
+  @override
+  String get authCreateAccountTitle => 'Create your account';
+
+  @override
+  String get authCreatingAccount => 'Creating account';
+
+  @override
+  String get authAlreadyHaveAccount => 'Already have an account? Sign in';
+
+  @override
+  String get authForgotPassword => 'Forgot password?';
+
+  @override
+  String get authForgotPasswordTitle => 'Reset password';
+
+  @override
+  String get authForgotPasswordDescription =>
+      'Enter your email and we will send a password reset link.';
+
+  @override
+  String get authResetPasswordTitle => 'Set a new password';
+
+  @override
+  String get authResetPasswordDescription =>
+      'Enter your new password to finish password recovery.';
+
+  @override
+  String get authNewPasswordLabel => 'New Password';
+
+  @override
+  String get authConfirmNewPasswordLabel => 'Confirm New Password';
+
+  @override
+  String get authUpdatePasswordButton => 'Update Password';
+
+  @override
+  String get authUpdatingPassword => 'Updating password';
+
+  @override
+  String get authSendResetLink => 'Send Reset Link';
+
+  @override
+  String get authSendingResetLink => 'Sending link';
+
+  @override
+  String get authBackToSignIn => 'Back to sign in';
+
+  @override
+  String get authCheckEmailTitle => 'Check your email';
+
+  @override
+  String authCheckEmailMessage(String email) {
+    return 'We sent a 6-digit code to $email.';
+  }
+
+  @override
+  String get authResetEmailSent =>
+      'If an account exists, a reset link has been sent.';
+
+  @override
+  String get authEmailRequired => 'Enter your email';
+
+  @override
+  String get authEmailInvalid => 'Enter a valid email';
+
+  @override
+  String get authPasswordRequired => 'Enter your password';
+
+  @override
+  String get authPasswordTooShort => 'Password must be at least 6 characters';
+
+  @override
+  String get authConfirmPasswordRequired => 'Confirm your password';
+
+  @override
+  String get authConfirmPasswordMismatch => 'Passwords do not match';
+
+  @override
+  String get authShowPassword => 'Show password';
+
+  @override
+  String get authHidePassword => 'Hide password';
+
+  @override
+  String get authUnavailable => 'Authentication is not configured yet.';
+
+  @override
+  String get authUnknownError => 'Something went wrong. Try again.';
+
+  @override
+  String get authAgreeRequired =>
+      'Please agree to the terms and privacy policy first.';
+
+  @override
+  String get authTermsAgreementPrefix => 'I have read and agree to the';
+
+  @override
+  String get authTermsContinuationPrefix => 'By continuing, you agree to the';
+
+  @override
+  String get authTermsJoiner => ' and ';
+
+  @override
+  String get authTermsOfService => 'Terms of Service';
+
+  @override
+  String get authPrivacyPolicy => 'Privacy Policy';
+
+  @override
+  String get authSignedInStatus => 'Signed in';
+
+  @override
+  String get authSignedOutStatus => 'Signed out';
+
+  @override
+  String get authSignOut => 'Sign Out';
 }

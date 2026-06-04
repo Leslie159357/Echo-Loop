@@ -72,6 +72,9 @@ class _RecordingChannel implements AnalyticsChannel {
   Future<void> registerSuperProperties(Map<String, Object> properties) async {
     superPropertiesCalls.add(properties);
   }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {}
 }
 
 /// readNotificationStatus 抛错的 probe，用于验证容错。

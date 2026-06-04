@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'l10n/app_localizations.dart';
 import 'utils/time_format.dart';
 import 'database/app_database.dart';
@@ -22,6 +23,7 @@ import 'services/bundled_example_installer.dart';
 import 'services/temp_cleanup_service.dart';
 import 'theme/app_theme.dart';
 import 'config/api_config.dart';
+import 'config/auth_config.dart' as auth_config;
 import 'providers/review_reminder_provider.dart';
 import 'services/notification_tap_router_bridge.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -43,6 +45,7 @@ import 'features/official_collections/data/trigger_official_sync.dart';
 import 'features/official_collections/download/official_download_notifier.dart';
 import 'features/onboarding_survey/data/onboarding_survey_storage.dart';
 import 'features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'features/auth/providers/auth_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -151,6 +154,27 @@ void main() async {
   // 初始化 Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // 初始化 Supabase（认证 + 未来云同步用）
+  //
+  // 仅在 --dart-define 注入了 SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY 时才初始化；
+  // 未配置时跳过，登录功能不可用但 app 仍可匿名运行（渐进式登录策略）。
+  // Session 默认走 SharedPreferences 持久化，重启自动恢复。
+  if (auth_config.isAuthConfigured) {
+    try {
+      await Supabase.initialize(
+        url: auth_config.supabaseUrl,
+        anonKey: auth_config.supabasePublishableKey,
+      );
+    } catch (e) {
+      AppLogger.log('App', 'Supabase 初始化失败，认证功能不可用: $e');
+    }
+  } else {
+    AppLogger.log(
+      'App',
+      'Supabase 未配置（缺 SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY），跳过初始化',
+    );
+  }
+
   // 初始化用户 ID（SecureStorage 持久化，卸载重装可恢复）
   final userId = await initUserIdService(prefs);
 
@@ -246,6 +270,7 @@ class EchoLoopApp extends ConsumerStatefulWidget {
 class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
     with WidgetsBindingObserver {
   StreamSubscription<NotificationIntent>? _intentSubscription;
+  ProviderSubscription<AsyncValue<Session?>>? _authSessionSubscription;
   late final ShowcaseView _showcase;
 
   @override
@@ -265,6 +290,19 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
 
     // 预加载词典（触发下载或打开本地词典）
     ref.read(dictionaryProvider);
+
+    _authSessionSubscription = ref.listenManual<AsyncValue<Session?>>(
+      supabaseSessionProvider,
+      (previous, next) {
+        unawaited(
+          ref.read(authAnalyticsSyncProvider).syncSessionChange(
+            previous: previous?.valueOrNull,
+            current: next.valueOrNull,
+          ),
+        );
+      },
+      fireImmediately: true,
+    );
 
     // 启动时先尝试从磁盘加载已缓存的 catalog（让 Discover 页一进来就有数据）。
     // 失败静默，下面的 syncAll 会按需重新拉网络。
@@ -298,6 +336,7 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _intentSubscription?.cancel();
+    _authSessionSubscription?.close();
     _showcase.unregister();
     super.dispose();
   }

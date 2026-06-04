@@ -30,6 +30,9 @@ class _RecordingChannel implements AnalyticsChannel {
 
   @override
   Future<void> registerSuperProperties(Map<String, Object> properties) async {}
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {}
 }
 
 void main() {

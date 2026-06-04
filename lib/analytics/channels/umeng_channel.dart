@@ -69,4 +69,9 @@ class UmengChannel implements AnalyticsChannel {
     // 友盟没有 super properties 概念；no-op。
     // 国内分群仍由 [setUserProperty] 转发的 user_property_set 事件兜底。
   }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {
+    // 友盟没有 super properties 概念；no-op。
+  }
 }

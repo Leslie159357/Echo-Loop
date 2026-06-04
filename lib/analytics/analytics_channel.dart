@@ -39,4 +39,9 @@ abstract class AnalyticsChannel {
   ///
   /// [properties] 的 value 只允许 String/int/double/bool。
   Future<void> registerSuperProperties(Map<String, Object> properties);
+
+  /// 注销 super property。
+  ///
+  /// PostHog 可移除后续事件自动附加的属性；其他通道 no-op。
+  Future<void> unregisterSuperProperty(String name);
 }

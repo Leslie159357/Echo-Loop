@@ -5683,6 +5683,402 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recording is not supported on this platform'**
   String get speechPermUnsupportedToast;
+
+  /// No description provided for @authSignInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to Echo Loop'**
+  String get authSignInTitle;
+
+  /// No description provided for @authChooseMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how you want to continue.'**
+  String get authChooseMethod;
+
+  /// No description provided for @authContinueWithEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Email Code'**
+  String get authContinueWithEmail;
+
+  /// No description provided for @authContinueWithApple.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Apple'**
+  String get authContinueWithApple;
+
+  /// No description provided for @authContinueWithGoogle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Google'**
+  String get authContinueWithGoogle;
+
+  /// No description provided for @authProviderComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon'**
+  String get authProviderComingSoon;
+
+  /// No description provided for @authPasswordlessHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No password needed. We will email you a one-time code.'**
+  String get authPasswordlessHint;
+
+  /// No description provided for @authEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sign in'**
+  String get authEmailTitle;
+
+  /// No description provided for @authEmailOtpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with email'**
+  String get authEmailOtpTitle;
+
+  /// No description provided for @authEmailOtpDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email and we will send a one-time code.'**
+  String get authEmailOtpDescription;
+
+  /// No description provided for @authEmailOtpAutoCreateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'First-time use will create your account automatically.'**
+  String get authEmailOtpAutoCreateHint;
+
+  /// No description provided for @authEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get authEmailLabel;
+
+  /// No description provided for @authOtpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit code'**
+  String get authOtpLabel;
+
+  /// No description provided for @authOtpRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code'**
+  String get authOtpRequired;
+
+  /// No description provided for @authOtpInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid 6-digit code'**
+  String get authOtpInvalid;
+
+  /// No description provided for @authEnterOtpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter code'**
+  String get authEnterOtpTitle;
+
+  /// No description provided for @authOtpHelpText.
+  ///
+  /// In en, this message translates to:
+  /// **'Check spam if you do not see the email.'**
+  String get authOtpHelpText;
+
+  /// No description provided for @authSendOtpButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Code'**
+  String get authSendOtpButton;
+
+  /// No description provided for @authSendingOtp.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending code'**
+  String get authSendingOtp;
+
+  /// No description provided for @authVerifyOtpButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get authVerifyOtpButton;
+
+  /// No description provided for @authVerifyingOtp.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying'**
+  String get authVerifyingOtp;
+
+  /// No description provided for @authResendOtpButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend code'**
+  String get authResendOtpButton;
+
+  /// No description provided for @authResendOtpCountdown.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s until resend'**
+  String authResendOtpCountdown(int seconds);
+
+  /// No description provided for @authOtpResent.
+  ///
+  /// In en, this message translates to:
+  /// **'A new code has been sent.'**
+  String get authOtpResent;
+
+  /// No description provided for @authPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get authPasswordLabel;
+
+  /// No description provided for @authConfirmPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Password'**
+  String get authConfirmPasswordLabel;
+
+  /// No description provided for @authSignInButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In'**
+  String get authSignInButton;
+
+  /// No description provided for @authSigningIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in'**
+  String get authSigningIn;
+
+  /// No description provided for @authCreateAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get authCreateAccount;
+
+  /// No description provided for @authCreateAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your account'**
+  String get authCreateAccountTitle;
+
+  /// No description provided for @authCreatingAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating account'**
+  String get authCreatingAccount;
+
+  /// No description provided for @authAlreadyHaveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Sign in'**
+  String get authAlreadyHaveAccount;
+
+  /// No description provided for @authForgotPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get authForgotPassword;
+
+  /// No description provided for @authForgotPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset password'**
+  String get authForgotPasswordTitle;
+
+  /// No description provided for @authForgotPasswordDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email and we will send a password reset link.'**
+  String get authForgotPasswordDescription;
+
+  /// No description provided for @authResetPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a new password'**
+  String get authResetPasswordTitle;
+
+  /// No description provided for @authResetPasswordDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your new password to finish password recovery.'**
+  String get authResetPasswordDescription;
+
+  /// No description provided for @authNewPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New Password'**
+  String get authNewPasswordLabel;
+
+  /// No description provided for @authConfirmNewPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm New Password'**
+  String get authConfirmNewPasswordLabel;
+
+  /// No description provided for @authUpdatePasswordButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Password'**
+  String get authUpdatePasswordButton;
+
+  /// No description provided for @authUpdatingPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating password'**
+  String get authUpdatingPassword;
+
+  /// No description provided for @authSendResetLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Reset Link'**
+  String get authSendResetLink;
+
+  /// No description provided for @authSendingResetLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending link'**
+  String get authSendingResetLink;
+
+  /// No description provided for @authBackToSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get authBackToSignIn;
+
+  /// No description provided for @authCheckEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email'**
+  String get authCheckEmailTitle;
+
+  /// No description provided for @authCheckEmailMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a 6-digit code to {email}.'**
+  String authCheckEmailMessage(String email);
+
+  /// No description provided for @authResetEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If an account exists, a reset link has been sent.'**
+  String get authResetEmailSent;
+
+  /// No description provided for @authEmailRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email'**
+  String get authEmailRequired;
+
+  /// No description provided for @authEmailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email'**
+  String get authEmailInvalid;
+
+  /// No description provided for @authPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password'**
+  String get authPasswordRequired;
+
+  /// No description provided for @authPasswordTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 6 characters'**
+  String get authPasswordTooShort;
+
+  /// No description provided for @authConfirmPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your password'**
+  String get authConfirmPasswordRequired;
+
+  /// No description provided for @authConfirmPasswordMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match'**
+  String get authConfirmPasswordMismatch;
+
+  /// No description provided for @authShowPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get authShowPassword;
+
+  /// No description provided for @authHidePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get authHidePassword;
+
+  /// No description provided for @authUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication is not configured yet.'**
+  String get authUnavailable;
+
+  /// No description provided for @authUnknownError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get authUnknownError;
+
+  /// No description provided for @authAgreeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please agree to the terms and privacy policy first.'**
+  String get authAgreeRequired;
+
+  /// No description provided for @authTermsAgreementPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read and agree to the'**
+  String get authTermsAgreementPrefix;
+
+  /// No description provided for @authTermsContinuationPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'By continuing, you agree to the'**
+  String get authTermsContinuationPrefix;
+
+  /// No description provided for @authTermsJoiner.
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get authTermsJoiner;
+
+  /// No description provided for @authTermsOfService.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get authTermsOfService;
+
+  /// No description provided for @authPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get authPrivacyPolicy;
+
+  /// No description provided for @authSignedInStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get authSignedInStatus;
+
+  /// No description provided for @authSignedOutStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get authSignedOutStatus;
+
+  /// No description provided for @authSignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out'**
+  String get authSignOut;
 }
 
 class _AppLocalizationsDelegate

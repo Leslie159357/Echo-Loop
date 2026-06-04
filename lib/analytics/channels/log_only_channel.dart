@@ -43,4 +43,9 @@ class LogOnlyChannel implements AnalyticsChannel {
         .join(', ');
     AppLogger.log(_tag, 'registerSuperProperties: {$pairs}');
   }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {
+    AppLogger.log(_tag, 'unregisterSuperProperty: $name');
+  }
 }

@@ -45,4 +45,9 @@ class FirebaseChannel implements AnalyticsChannel {
     // 调用方需要事件级冻结属性时应在 PostHog 通道生效，Firebase 通道下相关
     // 维度只能落到 user property（[setUserProperty]）。
   }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {
+    // Firebase Analytics 没有 super properties 概念；no-op。
+  }
 }

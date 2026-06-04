@@ -3,7 +3,6 @@
 /// 测试设置页面的渲染和交互。
 library;
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -14,10 +13,11 @@ import 'package:echo_loop/screens/settings_screen.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/package_info_provider.dart';
-import 'package:echo_loop/services/asr/offline_asr_engine.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
@@ -105,6 +105,38 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Version 1.0.0 (Debug)'), findsOneWidget);
+      });
+
+      testWidgets('已登录时账号区显示登录邮箱', (tester) async {
+        final user = User(
+          id: 'user-1',
+          appMetadata: const {},
+          userMetadata: const {},
+          aud: 'authenticated',
+          email: 'user@example.com',
+          createdAt: '2026-06-03T00:00:00.000Z',
+        );
+        final session = Session(
+          accessToken: 'token',
+          tokenType: 'bearer',
+          user: user,
+          refreshToken: 'refresh',
+        );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: [
+              ...buildOverrides(),
+              supabaseSessionProvider.overrideWith(
+                (ref) => Stream<Session?>.value(session),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('user@example.com'), findsOneWidget);
       });
 
       testWidgets('显示外观标题', (tester) async {

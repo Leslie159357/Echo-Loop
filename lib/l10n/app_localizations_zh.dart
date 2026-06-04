@@ -3074,4 +3074,206 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get speechPermUnsupportedToast => '当前平台不支持录音';
+
+  @override
+  String get authSignInTitle => '登录 Echo Loop';
+
+  @override
+  String get authChooseMethod => '选择一种方式继续。';
+
+  @override
+  String get authContinueWithEmail => '使用邮箱验证码继续';
+
+  @override
+  String get authContinueWithApple => '使用 Apple 继续';
+
+  @override
+  String get authContinueWithGoogle => '使用 Google 继续';
+
+  @override
+  String get authProviderComingSoon => '即将支持';
+
+  @override
+  String get authPasswordlessHint => '无需密码，我们会向你的邮箱发送一次性验证码。';
+
+  @override
+  String get authEmailTitle => '邮箱登录';
+
+  @override
+  String get authEmailOtpTitle => '继续使用邮箱';
+
+  @override
+  String get authEmailOtpDescription => '输入你的邮箱，我们会发送一次性验证码。';
+
+  @override
+  String get authEmailOtpAutoCreateHint => '首次使用会自动创建账号。';
+
+  @override
+  String get authEmailLabel => '邮箱';
+
+  @override
+  String get authOtpLabel => '6 位验证码';
+
+  @override
+  String get authOtpRequired => '请输入 6 位验证码';
+
+  @override
+  String get authOtpInvalid => '请输入有效的 6 位验证码';
+
+  @override
+  String get authEnterOtpTitle => '输入验证码';
+
+  @override
+  String get authOtpHelpText => '如果没有收到邮件，请检查垃圾邮件箱。';
+
+  @override
+  String get authSendOtpButton => '发送验证码';
+
+  @override
+  String get authSendingOtp => '发送中';
+
+  @override
+  String get authVerifyOtpButton => '继续';
+
+  @override
+  String get authVerifyingOtp => '验证中';
+
+  @override
+  String get authResendOtpButton => '重新发送验证码';
+
+  @override
+  String authResendOtpCountdown(int seconds) {
+    return '$seconds 秒后可重发';
+  }
+
+  @override
+  String get authOtpResent => '已重新发送验证码。';
+
+  @override
+  String get authPasswordLabel => '密码';
+
+  @override
+  String get authConfirmPasswordLabel => '确认密码';
+
+  @override
+  String get authSignInButton => '登录';
+
+  @override
+  String get authSigningIn => '登录中';
+
+  @override
+  String get authCreateAccount => '创建账号';
+
+  @override
+  String get authCreateAccountTitle => '创建你的账号';
+
+  @override
+  String get authCreatingAccount => '创建中';
+
+  @override
+  String get authAlreadyHaveAccount => '已有账号？登录';
+
+  @override
+  String get authForgotPassword => '忘记密码？';
+
+  @override
+  String get authForgotPasswordTitle => '重置密码';
+
+  @override
+  String get authForgotPasswordDescription => '输入你的邮箱，我们会发送一封重置密码邮件。';
+
+  @override
+  String get authResetPasswordTitle => '设置新密码';
+
+  @override
+  String get authResetPasswordDescription => '输入你的新密码，完成密码找回。';
+
+  @override
+  String get authNewPasswordLabel => '新密码';
+
+  @override
+  String get authConfirmNewPasswordLabel => '确认新密码';
+
+  @override
+  String get authUpdatePasswordButton => '更新密码';
+
+  @override
+  String get authUpdatingPassword => '更新中';
+
+  @override
+  String get authSendResetLink => '发送重置链接';
+
+  @override
+  String get authSendingResetLink => '发送中';
+
+  @override
+  String get authBackToSignIn => '返回登录';
+
+  @override
+  String get authCheckEmailTitle => '请查收邮件';
+
+  @override
+  String authCheckEmailMessage(String email) {
+    return '我们已向 $email 发送 6 位验证码。';
+  }
+
+  @override
+  String get authResetEmailSent => '如果账号存在，我们已发送重置链接。';
+
+  @override
+  String get authEmailRequired => '请输入邮箱';
+
+  @override
+  String get authEmailInvalid => '请输入有效邮箱';
+
+  @override
+  String get authPasswordRequired => '请输入密码';
+
+  @override
+  String get authPasswordTooShort => '密码至少 6 位';
+
+  @override
+  String get authConfirmPasswordRequired => '请再次输入密码';
+
+  @override
+  String get authConfirmPasswordMismatch => '两次输入的密码不一致';
+
+  @override
+  String get authShowPassword => '显示密码';
+
+  @override
+  String get authHidePassword => '隐藏密码';
+
+  @override
+  String get authUnavailable => '认证服务尚未配置，请稍后再试。';
+
+  @override
+  String get authUnknownError => '操作失败，请稍后重试。';
+
+  @override
+  String get authAgreeRequired => '请先同意服务条款和隐私政策';
+
+  @override
+  String get authTermsAgreementPrefix => '我已阅读并同意';
+
+  @override
+  String get authTermsContinuationPrefix => '继续即表示你同意';
+
+  @override
+  String get authTermsJoiner => '和';
+
+  @override
+  String get authTermsOfService => '服务条款';
+
+  @override
+  String get authPrivacyPolicy => '隐私政策';
+
+  @override
+  String get authSignedInStatus => '已登录';
+
+  @override
+  String get authSignedOutStatus => '未登录';
+
+  @override
+  String get authSignOut => '退出登录';
 }

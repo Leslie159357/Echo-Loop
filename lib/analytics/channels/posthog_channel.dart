@@ -75,4 +75,9 @@ class PostHogChannel implements AnalyticsChannel {
       await Posthog().register(entry.key, entry.value);
     }
   }
+
+  @override
+  Future<void> unregisterSuperProperty(String name) {
+    return Posthog().unregister(name);
+  }
 }

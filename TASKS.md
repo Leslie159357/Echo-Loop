@@ -1,7 +1,110 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-05-29
-> 当前焦点：字幕上传失败不再"假成功"（已完成）
+> 最后更新：2026-06-03
+> 当前焦点：邮箱登录改为独立页面，消除展开跳变（已完成）
+
+## 已完成：PostHog 匿名态与登录态身份链路收敛
+
+修正 PostHog 身份识别策略，避免匿名阶段过早 `identify` 成“已识别用户”，同时保留匿名事件可正常上报，并在登录成功后把 Supabase 真实 UUID、邮箱和本地匿名 UUID 关联到同一用户画像。
+
+### 分析链路
+- [x] `lib/analytics/analytics_providers.dart` 启动时不再把本地匿名 UUID 作为 `userId` 调用 `identify`
+- [x] 启动时改为注册事件级 super property `app_anonymous_id`，匿名事件持续可追踪
+- [x] `lib/features/auth/providers/auth_providers.dart` 登录成功后统一执行：`identify(realUserId)` + `setUserProperty(email)` + `setUserProperty(app_anonymous_id)`
+- [x] 登出仍沿用 `setUserId(null)`，由 PostHog `reset()` 回到新的匿名态
+
+### 测试
+- [x] `test/features/auth/auth_providers_test.dart` 补充登录成功后同步真实 UUID、邮箱和匿名 UUID 的测试
+- [x] 补充“无邮箱时跳过 email 属性但仍保留匿名 UUID 关联”的测试
+
+### 验证
+- [x] `flutter test test/features/auth/auth_providers_test.dart`
+- [ ] `scripts/check.sh`：已通过全量 `flutter analyze`（仅仓库既有 info/warning）；全量 `flutter test` 长时间运行中，当前未见与本次 PostHog 身份链路改动相关失败
+
+**完成时间**: 2026-06-03 22:27 +0800
+
+## 已完成：邮箱密码认证重构为一次性 OTP 登录
+
+将现有 Supabase 邮箱密码登录 / 注册 / 忘记密码流程，重构为标准的一次性邮箱验证码登录。现在邮箱入口不再区分注册与登录，用户输入邮箱后发送 6 位验证码；首次使用该邮箱会在验证成功后自动创建账号并登录，后续同一路径直接登录。UI 也同步收敛为“登录方式选择 → 邮箱输入 → 验证码输入”三段流，避免旧多分叉认证心智和深链依赖。
+
+### 认证架构
+- [x] `lib/features/auth/providers/auth_providers.dart` 改为 `sendEmailOtp` / `verifyEmailOtp` / `signOut` 三个统一入口
+- [x] 页面层不再直接依赖密码登录、注册、重置密码接口，继续通过 `AuthController` 收敛动作
+- [x] 保留 `supabaseSessionProvider` 作为全局唯一登录态来源，移除仅服务于密码恢复的事件监听
+
+### 路由与页面
+- [x] `lib/router/app_router.dart` 删除 `emailSignUp` / `forgotPassword` / `resetPassword` 路由，认证流收敛为 `login` / `emailSignIn` / `checkEmail`
+- [x] `lib/features/auth/screens/login_screen.dart` 邮箱入口改为“使用邮箱验证码继续”，补充无需密码提示
+- [x] `lib/features/auth/screens/email_sign_in_screen.dart` 重构为单邮箱输入页：发送验证码、首次自动创建账号说明、保留品牌骨架
+- [x] `lib/features/auth/screens/check_email_screen.dart` 重构为真实验证码页：6 位验证码输入、自动提交、60 秒倒计时重发、更换邮箱、就地错误提示
+- [x] 删除 `lib/features/auth/screens/email_sign_up_screen.dart`、`forgot_password_screen.dart`、`reset_password_screen.dart`
+
+### 文案与测试
+- [x] `lib/l10n/app_en.arb` / `lib/l10n/app_zh.arb` 新增 OTP 文案并更新生成代码
+- [x] `test/features/auth/auth_flow_screens_test.dart` 重写为 OTP 流测试，覆盖邮箱页、验证码页、倒计时重发、返回保留邮箱、成功登录
+- [x] `test/features/auth/auth_providers_test.dart` 重写为 OTP controller 测试，覆盖发送验证码 / 验证登录 / 登出
+
+### 验证
+- [x] `flutter gen-l10n`
+- [x] `flutter analyze lib/features/auth lib/router/app_router.dart lib/main.dart test/features/auth/auth_flow_screens_test.dart test/features/auth/auth_providers_test.dart`
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart test/features/auth/auth_providers_test.dart`
+- [ ] `scripts/check.sh`：已通过全量 `flutter analyze`（仅仓库既有 info/warning）；全量 `flutter test` 仍在运行中，当前未见与本次 OTP 改动相关失败
+
+**完成时间**: 2026-06-03 18:43 +0800
+
+## 已完成：Supabase 邮箱认证收敛为全局唯一登录态，并补齐密码找回闭环
+
+基于现有 Supabase Auth 接入，补齐了标准邮箱认证链路，并把认证动作统一收敛到单一 controller/repository 入口，避免任意页面、任意登录方式直接各自维护状态。全局登录态仍只认 `onAuthStateChange`/`currentSession` 这一份事实来源，页面层不再分散直连 `Supabase.instance.client.auth.*`。
+
+### 认证架构
+- [x] `lib/features/auth/providers/auth_providers.dart` 新增 `AuthRepository` / `SupabaseAuthRepository` / `AuthController`
+- [x] 邮箱登录、注册、忘记密码、登出统一改走 `authControllerProvider`
+- [x] 保留 `supabaseSessionProvider` 作为全局唯一 session 来源，并新增 `supabaseAuthStateProvider` 承接恢复密码事件
+
+### 密码找回闭环
+- [x] `lib/features/auth/screens/reset_password_screen.dart` 新增“设置新密码”页，承接 Supabase `passwordRecovery` 事件
+- [x] `lib/router/app_router.dart` 新增 `AppRoutes.resetPassword`
+- [x] `lib/main.dart` 根部监听 `supabaseAuthStateProvider`；收到 `AuthChangeEvent.passwordRecovery` 后统一跳转重置密码页
+- [x] `resetPasswordForEmail` 增加 `redirectTo=https://echo-loop.top/login/reset-password`，避免只回网页不回 App
+- [x] `android/app/src/main/AndroidManifest.xml` 新增 `/login/reset-password` deep link intent-filter，补齐 Android 回跳入口
+
+### 文案与测试
+- [x] `lib/l10n/app_en.arb` / `lib/l10n/app_zh.arb` 新增重置密码页文案，并更新生成代码
+- [x] `test/features/auth/auth_flow_screens_test.dart` 补充重置密码页流转与校验测试
+- [x] `test/features/auth/auth_providers_test.dart` 补充 `AuthController` 统一入口测试（登录 / 发重置邮件 / 更新密码 / 登出）
+
+### 验证
+- [x] `flutter gen-l10n`
+- [x] `flutter analyze lib/features/auth lib/router/app_router.dart lib/main.dart`
+- [x] `flutter analyze test/features/auth/auth_flow_screens_test.dart test/features/auth/auth_providers_test.dart`
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart test/features/auth/auth_providers_test.dart`
+- [ ] `scripts/check.sh`：已启动并通过全量 `flutter analyze`（仅仓库既有 info/warning）；全量 `flutter test` 仍在运行中，当前未见与本次认证改动相关失败
+
+**完成时间**: 2026-06-03 16:44 +0800
+
+## 已完成：邮箱登录改为独立页面，消除展开跳变
+
+将账户页里的“使用邮箱继续”从原地展开表单改为跳转到独立的邮箱登录页，并新增统一认证骨架，让邮箱登录/注册页沿用 Echo Loop logo 与主登录页的视觉结构。这样登录入口页不再因表单展开、键盘弹起而发生高度突变，邮箱登录与注册流程也保持一致的布局节奏。
+
+### 页面结构
+- [x] `lib/features/auth/screens/login_screen.dart` 删除内联邮箱表单，仅保留 Apple / Google / Email 三种入口
+- [x] “使用邮箱继续” 改为跳转 `AppRoutes.emailSignIn`，不再在当前页展开内容
+- [x] `lib/features/auth/auth_form_utils.dart` 新增 `AuthScaffold` / `AuthBrandHeader` / `AuthPolicyNotice` 共享骨架，统一认证页 logo、标题与协议提示
+- [x] `lib/features/auth/screens/email_sign_in_screen.dart` / `email_sign_up_screen.dart` 切换到共享骨架，保留 Echo Loop logo 和主登录页近似布局
+- [x] `lib/features/auth/screens/forgot_password_screen.dart` 切换到共享认证骨架与统一输入框装饰，“返回登录” 改为与左上角返回按钮相同的回退语义，不再额外 push 一层登录页
+
+### 测试
+- [x] `test/features/auth/auth_flow_screens_test.dart` 更新为独立页面流转测试，覆盖“点击邮箱进入新页”、品牌 logo 与协议文案保留、登录/注册/重置密码流程
+- [x] 补充重置密码页回归测试：覆盖输入框样式与邮箱登录页一致，以及“返回登录”执行真正回退
+
+### 验证
+- [x] `flutter analyze lib/features/auth/auth_form_utils.dart lib/features/auth/screens/login_screen.dart lib/features/auth/screens/email_sign_in_screen.dart lib/features/auth/screens/email_sign_up_screen.dart test/features/auth/auth_flow_screens_test.dart`
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart`
+- [x] `flutter analyze lib/features/auth/screens/forgot_password_screen.dart test/features/auth/auth_flow_screens_test.dart`
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart`
+- [ ] `scripts/check.sh`：执行中；`flutter analyze` 仅报告仓库既有 info/warning，未发现本次改动新增问题
+
+**完成时间**: 2026-06-03 16:16 +0800
 
 ## 已完成：字幕上传失败不再"假成功"，明确区分格式不支持 / 无效 / 空
 

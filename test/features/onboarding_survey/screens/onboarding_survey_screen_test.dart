@@ -41,6 +41,9 @@ class _RecordingAnalyticsChannel implements AnalyticsChannel {
 
   @override
   Future<void> setUserProperty(String name, String? value) async {}
+
+  @override
+  Future<void> unregisterSuperProperty(String name) async {}
 }
 
 /// 创建一个最小化的可路由测试 App，承载 onboarding 页 + study 占位页。

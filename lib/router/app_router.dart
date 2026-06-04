@@ -11,6 +11,11 @@ import 'package:go_router/go_router.dart';
 
 import '../analytics/analytics_observer.dart';
 import '../analytics/analytics_providers.dart';
+import '../features/auth/screens/account_screen.dart';
+import '../features/auth/screens/check_email_screen.dart';
+import '../features/auth/screens/email_sign_in_screen.dart';
+import '../features/auth/screens/login_screen.dart';
+import '../features/auth/providers/auth_providers.dart';
 import '../features/official_collections/screens/discover_collections_screen.dart';
 import '../features/official_collections/screens/official_collection_detail_screen.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart';
@@ -42,6 +47,10 @@ abstract class AppRoutes {
   static const study = '/study';
   static const favorites = '/favorites';
   static const settings = '/settings';
+  static const login = '/login';
+  static const emailSignIn = '/login/email';
+  static const checkEmail = '/login/check-email';
+  static const account = '/account';
 
   /// 合集详情页路径
   static String collectionDetail(String collectionId) =>
@@ -115,7 +124,6 @@ abstract class AppRoutes {
 
   /// Onboarding 问卷页路径（仅首启新用户访问）
   static const onboardingSurvey = '/onboarding/survey';
-
 }
 
 /// GoRouter Provider（keepAlive，不可 invalidate）
@@ -126,6 +134,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.study,
     observers: [AnalyticsObserver(analyticsService)],
     redirect: (context, state) {
+      final isAuthenticated = ref.read(isAuthenticatedProvider);
+      final isAuthRoute =
+          state.uri.path == AppRoutes.login ||
+          state.uri.path == AppRoutes.emailSignIn ||
+          state.uri.path == AppRoutes.checkEmail;
+      if (isAuthenticated && isAuthRoute) {
+        return AppRoutes.settings;
+      }
+      if (!isAuthenticated && state.uri.path == AppRoutes.account) {
+        return AppRoutes.settings;
+      }
       // /onboarding/survey 自身路径必须早返，否则在拦截路径上产生死循环
       if (state.uri.path == AppRoutes.onboardingSurvey) return null;
       // 首启新用户、未完成且未学习过 → 强制进入问卷
@@ -189,6 +208,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.onboardingSurvey,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const OnboardingSurveyScreen(),
+      ),
+      // 账号与登录流程（全屏）
+      GoRoute(
+        path: AppRoutes.login,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.emailSignIn,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra;
+          final email = extra is String ? extra : '';
+          return EmailSignInScreen(initialEmail: email);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.checkEmail,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra;
+          final email = extra is String ? extra : '';
+          return CheckEmailScreen(email: email);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.account,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const AccountScreen(),
       ),
       // 收藏句子复习（全屏）
       GoRoute(
