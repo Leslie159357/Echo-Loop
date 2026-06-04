@@ -96,6 +96,7 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.google.android.gms:play-services-base:18.9.0")
     testImplementation("junit:junit:4.13.2")
     // flutter-plugin-loader 将 integration_test (dev_dependency) 只注入 debugImplementation，
     // 但 GeneratedPluginRegistrant.java 在所有构建变体中均引用该类，导致 release 编译失败。
