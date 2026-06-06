@@ -616,24 +616,6 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (audioItem.hasTranscript) ...[
-            _buildOptionTile(
-              theme: theme,
-              icon: Icons.edit_note,
-              title: l10n.editSubtitles,
-              subtitle: l10n.saveSubtitleEdits,
-              selected: false,
-              onTap: () {
-                final navContext = rootNavigatorKey.currentContext;
-                Navigator.of(context).pop();
-                navContext?.push(
-                  AppRoutes.subtitleEditor(audioItem.id),
-                  extra: audioItem,
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.s),
-          ],
           _buildOptionTile(
             theme: theme,
             icon: Icons.folder_open_outlined,
