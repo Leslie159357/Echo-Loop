@@ -40,7 +40,6 @@ void main() {
         duration: const Duration(seconds: 60),
         sentences: sentences,
         activeSentence: sentences[0],
-        selectedIndex: 0,
         selectionEpoch: selectionEpoch,
         playbackPosition: position,
         isPlaying: isPlaying,
@@ -48,7 +47,6 @@ void main() {
         onZoomChanged: (_) {},
         onScrub: (_) {},
         onScrubEnd: (_) {},
-        onAdjustBoundary: (_, _, _) {},
         onAdjustEnd: () {},
       ),
     );

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/audio_item.dart';
 import '../../models/sentence.dart';
+import '../../models/word_timestamp.dart';
 import '../../providers/new_user_guide_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/guide_flow.dart';
@@ -147,19 +148,21 @@ class _SubtitleSimpleEditorScreenState
                         duration: state.totalDuration,
                         sentences: state.sentences,
                         activeSentence: state.selectedSentence,
-                        selectedIndex: state.selectedSentenceIndex,
                         selectionEpoch: state.selectionEpoch,
                         playbackPosition: state.playbackPosition,
                         isPlaying:
                             state.isPlaying &&
-                            state.playbackMode ==
-                                SubtitleEditorPlaybackMode.sentence,
+                            (state.playbackMode ==
+                                    SubtitleEditorPlaybackMode.sentence ||
+                                state.playbackMode ==
+                                    SubtitleEditorPlaybackMode.word),
+                        wordBoundaries: controller.wordBoundariesForWaveform,
+                        onAdjustWord: controller.adjustWord,
                         zoomScale: state.waveformZoomScale,
                         onZoomChanged: controller.setWaveformZoomScale,
                         onScrub: controller.scrubTo,
                         onScrubEnd: (position) =>
                             unawaited(controller.finishScrub(position)),
-                        onAdjustBoundary: controller.adjustSentenceBoundary,
                         onAdjustEnd: () {},
                       ),
                     ),
@@ -176,10 +179,15 @@ class _SubtitleSimpleEditorScreenState
                         sentences: state.sentences,
                         selectedIndex: state.selectedSentenceIndex,
                         playingIndex: state.playingSentenceIndex,
+                        selectedSentenceWords:
+                            controller.wordsOfSelectedSentence,
+                        focusedWordIndex: state.focusedWordIndex,
                         onPlay: (index) =>
                             unawaited(controller.playSentence(index)),
                         onStop: () => unawaited(controller.stopPlayback()),
                         onSelect: controller.selectSentence,
+                        onWordTap: (index) =>
+                            unawaited(controller.playWord(index)),
                         onMergeNext: controller.mergeWithNext,
                         onDelete: (index) =>
                             _deleteSentence(context, controller, l10n, index),
@@ -436,9 +444,18 @@ class _SentenceList extends StatefulWidget {
   final List<Sentence> sentences;
   final int? selectedIndex;
   final int? playingIndex;
+
+  /// 选中句包含的词列表（按时间升序），用于把选中句拆成单词 label。
+  final List<WordTimestamp> selectedSentenceWords;
+
+  /// 选中句内当前点中词的序号；null 表示无点中词（label 无强调）。
+  final int? focusedWordIndex;
   final void Function(int index) onPlay;
   final VoidCallback onStop;
   final void Function(int index) onSelect;
+
+  /// 点击选中句某个单词 label 时回调，传入词在句内的序号。
+  final void Function(int wordIndex) onWordTap;
   final void Function(int index) onMergeNext;
   final void Function(int index) onDelete;
   final GuideStep? firstPlayGuideStep;
@@ -448,9 +465,12 @@ class _SentenceList extends StatefulWidget {
     required this.sentences,
     required this.selectedIndex,
     required this.playingIndex,
+    required this.selectedSentenceWords,
+    required this.focusedWordIndex,
     required this.onPlay,
     required this.onStop,
     required this.onSelect,
+    required this.onWordTap,
     required this.onMergeNext,
     required this.onDelete,
     this.firstPlayGuideStep,
@@ -610,7 +630,16 @@ class _SentenceListState extends State<_SentenceList> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(sentence.text),
+                            // 选中句拆成单词 label（可点词播放并显示词边界）；
+                            // 其余句保持纯文本，降低视觉噪音、突出当前编辑句。
+                            isSelected
+                                ? _SentenceWordLabels(
+                                    text: sentence.text,
+                                    words: widget.selectedSentenceWords,
+                                    focusedWordIndex: widget.focusedWordIndex,
+                                    onWordTap: widget.onWordTap,
+                                  )
+                                : Text(sentence.text),
                             const SizedBox(height: 2),
                             Text(
                               '${_formatTime(sentence.startTime)} - '
@@ -661,6 +690,93 @@ class _SentenceListState extends State<_SentenceList> {
     final clamped = duration.isNegative ? Duration.zero : duration;
     final seconds = clamped.inMilliseconds / 1000;
     return '${seconds.toStringAsFixed(1)}s';
+  }
+}
+
+/// 选中句的单词 label 流。
+///
+/// 直接以词级时间戳列表（[words]）逐词渲染成可点 chip：第 i 个 chip 严格对应
+/// 第 i 个词，点击播放该词并在波形上显示该词及左右各两词的边界，避免「label 与
+/// 词数不一致导致点 A 词却播 B 词」。点中词用 primary 强调。无词时退化为纯文本。
+class _SentenceWordLabels extends StatelessWidget {
+  final String text;
+  final List<WordTimestamp> words;
+  final int? focusedWordIndex;
+  final void Function(int wordIndex) onWordTap;
+
+  const _SentenceWordLabels({
+    required this.text,
+    required this.words,
+    required this.focusedWordIndex,
+    required this.onWordTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // label 与词级数据同源：保证「点中的词 = 播放的词 = 波形高亮的词」一致。
+    if (words.isEmpty) return Text(text);
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (var i = 0; i < words.length; i++)
+          _WordChip(
+            key: ValueKey('subtitle-word-label-$i'),
+            label: words[i].word,
+            focused: focusedWordIndex == i,
+            onTap: () => onWordTap(i),
+          ),
+      ],
+    );
+  }
+}
+
+/// 单个单词 chip。默认极淡描边暗示「可点」，点中态用 primary 填充 + 文字色强调。
+class _WordChip extends StatelessWidget {
+  final String label;
+  final bool focused;
+  final VoidCallback onTap;
+
+  const _WordChip({
+    super.key,
+    required this.label,
+    required this.focused,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: focused
+          ? scheme.primary.withValues(alpha: .14)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: focused
+                  ? scheme.primary.withValues(alpha: .55)
+                  : scheme.outlineVariant.withValues(alpha: .6),
+            ),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: focused ? scheme.primary : scheme.onSurface,
+              fontWeight: focused ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

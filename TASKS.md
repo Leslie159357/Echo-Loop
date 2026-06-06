@@ -1,7 +1,48 @@
 # Echo Loop 任务清单
 
 > 最后更新：2026-06-06
-> 当前焦点：字幕存储从文件迁移到数据库 Phase 1（已完成）
+> 当前焦点：字幕编辑器词级编辑（任务 1/7 已完成）
+
+## 已完成：字幕编辑器词级编辑（任务 1）——句聚焦拆词 label + 点词播放 + 词边界
+
+把字幕编辑页升级为词级编辑的第一步：选中句的中间文本区从只读整段文本变成单词 label 流，点某个单词 label 即播放该词，并在波形上显示该词及左右各两词的边界（绿起/红止，与句子边界同款样式）；句子起止边界保持常显。整体路线见 `~/.claude/plans/label-...-adaptive-treasure.md`（共 7 个任务，本次只做任务 1）。
+
+### 实现
+- [x] `SubtitleEditorState` 新增 `words`（全音频词级时间戳）+ `focusedWordIndex`（选中句内点中词序号）
+- [x] `load()` 加载词级时间戳：优先读 DB `word_timestamps_json`，无则用 `generateSyntheticWordTimestamps` 按句内字符比例合成（本地字幕亦可用，DB 持久化留待后续保存任务）
+- [x] controller 新增 `playWord`（复用 `playRangeOnce` + session 隔离 + 播放头计时器）、`wordsOfSelectedSentence` / `focusedWordWindow` / `focusedWordIndexInWindow` 派生 getter，新增播放模式 `word`
+- [x] 切句 / 播放整句 / 合并 / 删除 / 调边界 / 撤销 / scrub 时清空 `focusedWordIndex`，回到纯文本态
+- [x] `_SentenceList` 选中句中间区渲染 `_SentenceWordLabels`（**label 直接以词级数据逐词渲染，杜绝 label↔词错位**），非选中句保持纯文本；点词回调 `playWord`
+- [x] `SubtitleWaveformView` 新增 `focusedWordBoundaries` / `focusedWordInWindow` 入参；`_WaveformLayerPainter` 新增词边界层，复用绿/红配色与 `_drawBoundaryIfVisible`
+- [x] 词边界绘制按去重分界点：聚焦词起绿/止红用主样式，其余分界点统一绿（次），**词层最多一条红线，杜绝两条红柱相邻**
+- [x] 修复一轮 bug：点 A 词播 B 词、两红柱相邻
+
+### 修复二轮（用户实测反馈）
+- [x] bug1（句首单字母词 "I" 丢失）：词不再按「时间中点落入句区间」筛选（句首词真实起点常早于 SRT 句起点，会被分到上一句而丢失）。改为 **label 来自句子文本按空格拆分（绝不丢词）**，时间区间按「全篇词数与词级时间戳数一致则顺序索引对齐真实时间（钳到句区间）、否则按句内字符比例近似切分」
+- [x] bug2（红绿柱互相遮挡）：词边界改为画**细竖线、不画粗把手**（把手专属可拖的句子边界），并把 x 相近的边界线**聚类后并排错开**，红绿都可见、互不遮挡
+- [x] bug3（拖句子边界时词参考线消失）：`adjustSentenceBoundary` 不再清空 `focusedWordIndex`，拖动时词边界作为参考线保持可见（用比例切分时还随句区间实时重算）
+- [x] 测试：新增 bug1 回归（含句首 "I" 的句子拆词不丢词）、bug3 回归（拖边界保留词聚焦）、token 对齐/比例切分/窗口用例改写
+
+### 修复三轮（用户实测反馈）
+- [x] 句子边界与词边界合并：首词起点贴句首、末词终点贴句尾（`_tokensWithTimes` 末尾对齐），使二者精确重合
+- [x] 波形边界统一绘制：`_drawBoundaries` 收集句子 + 词全部边界，按屏幕位置去重（重合只画一条，句子边界优先级最高），词边界恢复把手；句子起止始终显示，当首/末词在窗口内时与句子边界合并为一条线（不再两条近邻线）
+- [x] 同位置「起始(绿)」优先于「结束(红)」，相邻词共享分界点更倾向显示绿，避免红线扎堆
+
+### 增强：词边界可拖动 + 保存同步词级字幕（用户需求）
+- [x] 词级时间做成编辑期可编辑真相源：加载时按句子文本 token 物化 `state.words`（AI 真实时间顺序索引对齐 / 否则按字符比例切分，首尾贴句界）；读取按句切片 + 钳到句区间
+- [x] `adjustWord(globalIndex, edge, target)`：拖动单词起/止边界，与句子边界同款钳制（不跨句、不重叠、最小词长）；句首词起点 / 句末词终点交给句子边界
+- [x] 波形命中测试 / 拖动统一支持句子边界 + 词边界（`_BoundaryRef{isWord,index,edge}`），词边界与句子边界重合处交给句子边界；新增 `focusedWordWindowStart` / `onAdjustWord` 入参
+- [x] 合并 / 删除 / 撤销后按新结构重建词列表（合并词数不变保留时间、删除移除对应词切片）；`_wordsDirty` 让纯词级编辑也可保存
+- [x] 保存：句子 SRT + 词级 `word_timestamps_json` 同时写入（词列表逐句贴合句子边界后落库）
+- [x] 测试：`adjustWord` 拖动/钳制/句首句末忽略、拖词边界后保存同步词级与 SRT、波形拖内部词边界上报 `onAdjustWord`
+
+### 验证
+- [x] `dart format lib/features/subtitle_editor`
+- [x] `flutter analyze lib/features/subtitle_editor`：No issues found（全量 analyze 无 error，仅仓库既有 warning/info）
+- [x] `flutter test test/features/subtitle_editor/`：全部通过（含词级加载/关联/点词播放、label 渲染、词边界绘制、bug1 回归断言）
+- [x] `flutter test` 全量：2545 passed（改 bug 前）；改后定位用例全过，最终全量见收尾
+
+**完成时间**: 2026-06-06
 
 ## 已完成：用户上传字幕生成词级时间戳与意群播放提示
 

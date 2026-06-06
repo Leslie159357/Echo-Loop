@@ -4,6 +4,11 @@ import 'package:just_waveform/just_waveform.dart';
 import '../../models/sentence.dart';
 import 'subtitle_edit_engine.dart';
 
+/// 一条可拖动边界的引用：全篇词列表下标 + 起 / 止端。
+///
+/// 所有边界都是单词边界——句子起止即首词起点 / 末词终点，由 controller 同步。
+typedef _BoundaryRef = ({int globalIndex, BoundaryEdge edge});
+
 /// 波形视图的「单一坐标真相源」。
 ///
 /// 所有元素（波形、句子边界、播放头红线、命中测试、时间轴）都只经由这里的
@@ -80,9 +85,9 @@ class WaveformMetrics {
 
 /// 简版字幕编辑波形视图。
 ///
-/// 展示整段波形、当前句起止区间、前后相邻句的边界参照线和播放进度。
-/// 当前句的起止边界带可抓取把手，可拖动调整；拖动经 [onAdjustBoundary]
-/// 上报，越界钳制由 controller / engine 负责。
+/// 展示整段波形、当前句起止区间、当前句与前后相邻句的全部单词边界和播放进度。
+/// 所有边界都是单词边界（句子起止即首词起点 / 末词终点）带可抓取把手，拖动经
+/// [onAdjustWord] 上报，越界钳制（含句子时间同步）由 controller 负责。
 ///
 /// 架构：单 [CustomPaint] 填满视口（非内容宽），波形/边界/红线都由同一帧算出的
 /// [WaveformMetrics] + viewOffset 派生绘制——无 ScrollView、无独立 overlay、无
@@ -96,8 +101,12 @@ class WaveformMetrics {
 class SubtitleWaveformView extends StatefulWidget {
   static const double horizontalPadding = 16;
 
-  /// 边界把手命中半径（逻辑像素）。
-  static const double boundaryHitRadius = 8;
+  /// 边界命中区相对把手宽度的横向外扩（逻辑像素）。
+  ///
+  /// 设为 0：命中区横向就是把手宽本身、不额外吸附，两条相近边界不易误选；
+  /// 纵向覆盖整条竖线（见 [_SubtitleWaveformViewState._hitTestBoundaries]），
+  /// 故线身任意处都能抓取。
+  static const double boundaryHitRadius = 0;
 
   /// 边界把手底部贴住时间轴上沿，避免边界细线在把手下方露头。
   static const double boundaryHandleAxisGap = 0;
@@ -115,14 +124,21 @@ class SubtitleWaveformView extends StatefulWidget {
   /// 当前播放位置线配色（蓝），与起止的绿/红区分开。
   static const Color playheadColor = Color(0xFF1E88E5);
 
+  /// [onAdjustWord] 默认空实现（未接入词级拖动时）。
+  static void _ignoreWordAdjust(
+    int index,
+    BoundaryEdge edge,
+    Duration target,
+  ) {}
+
+  /// [onAdjustEnd] 默认空实现。
+  static void _ignoreAdjustEnd() {}
+
   final Waveform? waveform;
   final double extractionProgress;
   final Duration? duration;
   final List<Sentence> sentences;
   final Sentence? activeSentence;
-
-  /// 当前选中句子的索引，用于定位前后相邻句以绘制参照线。
-  final int? selectedIndex;
 
   /// 用户显式点选句子的递增计数（见 SubtitleEditorState.selectionEpoch）。
   /// 仅当它变化时才把当前句居中；播放推进/结束不会改变它，故播放停止后波形不跳变。
@@ -132,16 +148,23 @@ class SubtitleWaveformView extends StatefulWidget {
   final bool isPlaying;
   final double zoomScale;
 
+  /// 当前选中句 + 前后相邻句的全部单词边界（统一为可拖动的边界，含句子起止）。
+  ///
+  /// 句子起止边界即首词起点 / 末词终点，统一去重绘制（见 `_drawBoundaries`）。
+  /// 当前句为主样式（大把手），相邻句为次样式（小把手）。空表示当前无选中句。
+  final List<WaveformWordBoundary> wordBoundaries;
+
+  /// 拖动单词边界时回调（全局词下标 + 起 / 止端 + 目标时间）。
+  /// 句首词起点 / 句末词终点的拖动由 controller 同步到句子起止时间。
+  final void Function(int wordIndex, BoundaryEdge edge, Duration target)
+  onAdjustWord;
+
   /// 双指捏合缩放时回调，传入新的缩放倍数（越界由上层钳制）。
   final ValueChanged<double> onZoomChanged;
 
   /// 定位播放头（轻点空白处）时实时上报与结束上报。
   final ValueChanged<Duration> onScrub;
   final ValueChanged<Duration> onScrubEnd;
-
-  /// 拖动某句（当前句或相邻句）某一端边界时回调（实时）。
-  final void Function(int index, BoundaryEdge edge, Duration target)
-  onAdjustBoundary;
 
   /// 边界拖动结束时回调。
   final VoidCallback onAdjustEnd;
@@ -153,16 +176,16 @@ class SubtitleWaveformView extends StatefulWidget {
     required this.duration,
     required this.sentences,
     required this.activeSentence,
-    required this.selectedIndex,
     required this.selectionEpoch,
     required this.playbackPosition,
     required this.isPlaying,
     required this.zoomScale,
+    this.wordBoundaries = const [],
+    this.onAdjustWord = _ignoreWordAdjust,
     required this.onZoomChanged,
     required this.onScrub,
     required this.onScrubEnd,
-    required this.onAdjustBoundary,
-    required this.onAdjustEnd,
+    this.onAdjustEnd = _ignoreAdjustEnd,
   });
 
   @override
@@ -192,12 +215,16 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
   WaveformMetrics? _metrics;
   double _renderOffset = 0;
 
+  /// 鼠标光标：悬停在某条边界（竖线/把手）上时显示「可左右移动」（↔），
+  /// 其余波形区域为默认箭头，让用户一眼区分「能抓边界」与「普通区域」。
+  MouseCursor _hoverCursor = SystemMouseCursors.basic;
+
   // ── 手势状态 ──
-  /// 当前正在拖动的边界（句索引 + 端）；null 表示未在拖动边界。
-  ({int index, BoundaryEdge edge})? _draggingBoundary;
+  /// 当前正在拖动的边界（句子或词）；null 表示未在拖动边界。
+  _BoundaryRef? _draggingBoundary;
 
   /// 按下时命中多条重合/相邻边界，待首次移动按方向定夺的候选。
-  List<({int index, BoundaryEdge edge})>? _pendingBoundaries;
+  List<_BoundaryRef>? _pendingBoundaries;
 
   /// 多边界方向定夺的起始视口 localX。
   double? _pendingLocalX;
@@ -294,7 +321,9 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
                   _metrics = metrics; // 供指针回调使用
 
                   return MouseRegion(
-                    cursor: SystemMouseCursors.resizeLeftRight,
+                    cursor: _hoverCursor,
+                    onHover: (event) =>
+                        _updateHoverCursor(event.localPosition, metrics),
                     child: Listener(
                       behavior: HitTestBehavior.opaque,
                       onPointerDown: _onPointerDown,
@@ -339,8 +368,7 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
                                     viewOffset: offset,
                                     sentences: widget.sentences,
                                     activeSentence: widget.activeSentence,
-                                    prevSentence: _neighbor(-1),
-                                    nextSentence: _neighbor(1),
+                                    wordBoundaries: widget.wordBoundaries,
                                     color: theme.colorScheme.outline,
                                     activeColor: theme.colorScheme.primary,
                                     startColor:
@@ -437,15 +465,6 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
       focalTime = oldM.timeAt(focalScreenX, oldOffset);
     }
     return newM.clampOffset(newM.timeToContentX(focalTime) - focalScreenX);
-  }
-
-  /// 取相对当前选中句 [offset] 位置的相邻句（-1 为上一句，1 为下一句）。
-  Sentence? _neighbor(int offset) {
-    final index = widget.selectedIndex;
-    if (index == null) return null;
-    final target = index + offset;
-    if (target < 0 || target >= widget.sentences.length) return null;
-    return widget.sentences[target];
   }
 
   // ── 指针多路分发：单指走平移/轻点/拖边界，双指走捏合缩放 ──
@@ -589,61 +608,93 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
     }
   }
 
-  /// 当前可拖动的边界候选：当前句及前后相邻句的起止边界。
-  List<({int index, BoundaryEdge edge})> _boundaryCandidates() {
-    final index = widget.selectedIndex;
-    if (index == null) return const [];
-    final count = widget.sentences.length;
-    return [
-      (index: index, edge: BoundaryEdge.start),
-      (index: index, edge: BoundaryEdge.end),
-      if (index - 1 >= 0) (index: index - 1, edge: BoundaryEdge.start),
-      if (index - 1 >= 0) (index: index - 1, edge: BoundaryEdge.end),
-      if (index + 1 < count) (index: index + 1, edge: BoundaryEdge.start),
-      if (index + 1 < count) (index: index + 1, edge: BoundaryEdge.end),
-    ];
+  /// 当前可拖动的边界候选：所有单词边界的起 / 止两端。
+  ///
+  /// 句子起止边界即首词起点 / 末词终点，已统一在 [SubtitleWaveformView.wordBoundaries]
+  /// 中。`globalIndex < 0`（与 token 暂不同步）的词只绘制、不可拖动。
+  List<_BoundaryRef> _boundaryCandidates() {
+    final result = <_BoundaryRef>[];
+    for (final b in widget.wordBoundaries) {
+      if (b.globalIndex < 0) continue;
+      result.add((globalIndex: b.globalIndex, edge: BoundaryEdge.start));
+      result.add((globalIndex: b.globalIndex, edge: BoundaryEdge.end));
+    }
+    return result;
   }
 
-  /// 命中测试：返回落在底部把手命中区域内的所有边界，按距离升序。
-  List<({int index, BoundaryEdge edge})> _hitTestBoundaries(
+  /// 按全局词下标查找对应的边界数据。
+  WaveformWordBoundary? _boundaryByIndex(int globalIndex) {
+    for (final b in widget.wordBoundaries) {
+      if (b.globalIndex == globalIndex) return b;
+    }
+    return null;
+  }
+
+  /// 边界对应的时间；引用失效返回 null。
+  Duration? _boundaryTime(_BoundaryRef ref) {
+    final b = _boundaryByIndex(ref.globalIndex);
+    if (b == null) return null;
+    return ref.edge == BoundaryEdge.start ? b.word.startTime : b.word.endTime;
+  }
+
+  /// 该边界是否次样式（小把手）：相邻句的单词边界为次样式。
+  bool _boundaryIsSecondary(_BoundaryRef ref) {
+    final b = _boundaryByIndex(ref.globalIndex);
+    return b == null || !b.primary;
+  }
+
+  /// 鼠标悬停时更新光标：在边界命中区内显示「可左右移动」（↔），否则默认箭头。
+  void _updateHoverCursor(Offset localPosition, WaveformMetrics metrics) {
+    final overBoundary = _hitTestBoundaries(
+      localPosition,
+      metrics,
+      _renderOffset,
+    ).isNotEmpty;
+    final next = overBoundary
+        ? SystemMouseCursors.resizeLeftRight
+        : SystemMouseCursors.basic;
+    if (next != _hoverCursor) {
+      setState(() => _hoverCursor = next);
+    }
+  }
+
+  /// 命中测试：返回竖线（含把手）命中区域内的所有边界，按横向距离升序。
+  ///
+  /// 命中区 = 整条竖线：横向仅把手宽（外扩 [SubtitleWaveformView.boundaryHitRadius]
+  /// = 0，相近边界不易误选），纵向覆盖竖线全高（顶到时间轴上沿），故线身任意处都可抓取。
+  List<_BoundaryRef> _hitTestBoundaries(
     Offset localPosition,
     WaveformMetrics metrics,
     double offset,
   ) {
-    const radius = SubtitleWaveformView.boundaryHitRadius;
-    final hits = <({({int index, BoundaryEdge edge}) c, double d})>[];
     final bottom = context.size?.height;
     if (bottom == null) return const [];
-    final handleBottom =
+    final lineBottom =
         bottom -
         SubtitleWaveformView.axisHeight -
         SubtitleWaveformView.boundaryHandleAxisGap;
+    if (localPosition.dy < 0 || localPosition.dy > lineBottom) return const [];
+    final hits = <({_BoundaryRef c, double d})>[];
     for (final candidate in _boundaryCandidates()) {
-      final sentence = widget.sentences[candidate.index];
-      final time = candidate.edge == BoundaryEdge.start
-          ? sentence.startTime
-          : sentence.endTime;
+      final time = _boundaryTime(candidate);
+      if (time == null) continue;
       final x = metrics.screenX(time, offset);
-      final isSecondary = candidate.index != widget.selectedIndex;
-      final width = isSecondary ? 7.0 : 10.0;
-      final height = isSecondary ? 10.0 : 14.0;
-      final rect = Rect.fromCenter(
-        center: Offset(x, handleBottom - height / 2),
-        width: width,
-        height: height,
-      ).inflate(radius);
-      if (rect.contains(localPosition)) {
-        hits.add((c: candidate, d: (localPosition.dx - x).abs()));
-      }
+      final isSecondary = _boundaryIsSecondary(candidate);
+      final halfWidth =
+          (isSecondary ? 7.0 : 10.0) / 2 +
+          SubtitleWaveformView.boundaryHitRadius;
+      final dx = (localPosition.dx - x).abs();
+      if (dx > halfWidth) continue;
+      hits.add((c: candidate, d: dx));
     }
     hits.sort((a, b) => a.d.compareTo(b.d));
     return [for (final hit in hits) hit.c];
   }
 
-  /// 多条重合边界按拖动方向定夺：向左选「结束」边界（左句缩短），
-  /// 向右选「开始」边界（右句缩短），从而总能朝指针方向移动。
-  ({int index, BoundaryEdge edge}) _chooseByDirection(
-    List<({int index, BoundaryEdge edge})> candidates,
+  /// 多条重合边界按拖动方向定夺：向左选「结束」边界，向右选「开始」边界，
+  /// 从而总能朝指针方向移动。
+  _BoundaryRef _chooseByDirection(
+    List<_BoundaryRef> candidates,
     double direction,
   ) {
     final preferEnd = direction < 0;
@@ -662,7 +713,7 @@ class _SubtitleWaveformViewState extends State<SubtitleWaveformView> {
     final boundary = _draggingBoundary;
     if (boundary == null) return;
     final target = metrics.timeAt(localX, offset);
-    widget.onAdjustBoundary(boundary.index, boundary.edge, target);
+    widget.onAdjustWord(boundary.globalIndex, boundary.edge, target);
   }
 }
 
@@ -725,8 +776,9 @@ class _WaveformLayerPainter extends CustomPainter {
   final double viewOffset;
   final List<Sentence> sentences;
   final Sentence? activeSentence;
-  final Sentence? prevSentence;
-  final Sentence? nextSentence;
+
+  /// 选中句 + 前后相邻句的全部单词边界（含句子起止）。当前句为主样式，邻句为次样式。
+  final List<WaveformWordBoundary> wordBoundaries;
   final Color color;
   final Color activeColor;
 
@@ -741,8 +793,7 @@ class _WaveformLayerPainter extends CustomPainter {
     required this.viewOffset,
     required this.sentences,
     required this.activeSentence,
-    required this.prevSentence,
-    required this.nextSentence,
+    required this.wordBoundaries,
     required this.color,
     required this.activeColor,
     required this.startColor,
@@ -845,50 +896,8 @@ class _WaveformLayerPainter extends CustomPainter {
     // 句子文本（弱化小字，钉在每句起点、随内容平移、按句区间裁剪）。
     _drawSentenceTexts(canvas, viewport, topPadding);
 
-    // 前后相邻句边界（淡色 + 小把手）。
-    for (final neighbor in [prevSentence, nextSentence]) {
-      if (neighbor == null) continue;
-      _drawBoundaryIfVisible(
-        canvas,
-        metrics.screenX(neighbor.startTime, viewOffset),
-        viewport,
-        topPadding,
-        waveformBottom,
-        startColor,
-        secondary: true,
-      );
-      _drawBoundaryIfVisible(
-        canvas,
-        metrics.screenX(neighbor.endTime, viewOffset),
-        viewport,
-        topPadding,
-        waveformBottom,
-        endColor,
-        secondary: true,
-      );
-    }
-
-    // 当前句起止边界（实色主线 + 大把手）。绿=起始，红=结束。
-    if (active != null) {
-      _drawBoundaryIfVisible(
-        canvas,
-        metrics.screenX(active.startTime, viewOffset),
-        viewport,
-        topPadding,
-        waveformBottom,
-        startColor,
-        secondary: false,
-      );
-      _drawBoundaryIfVisible(
-        canvas,
-        metrics.screenX(active.endTime, viewOffset),
-        viewport,
-        topPadding,
-        waveformBottom,
-        endColor,
-        secondary: false,
-      );
-    }
+    // 句子边界 + 词边界统一去重绘制（见 _drawBoundaries）。
+    _drawBoundaries(canvas, viewport, topPadding, waveformBottom);
 
     // 播放头红线由独立的 _PlayheadLayerPainter 绘制，不在此层。
     _drawTimeAxis(canvas: canvas, size: size, waveformBottom: waveformBottom);
@@ -935,38 +944,123 @@ class _WaveformLayerPainter extends CustomPainter {
     return false;
   }
 
-  /// 仅当边界落在视口内（含少量外扩，容纳把手）时绘制。
+  /// 统一绘制所有单词边界（都带把手），按屏幕位置聚合后绘制。
+  ///
+  /// 规则（句子起止边界即首词起点 / 末词终点，已并入单词边界）：
+  /// - 当前句（主样式：粗、大把手）优先于相邻句（次样式：细、小把手）。
+  /// - 同一位置若**同时**有「结束(红)」与「起始(绿)」边界（相邻词首尾相接），
+  ///   不再让绿色覆盖红色，而是分段双色显示（见 [_drawBoundaryIfVisible]），
+  ///   让用户看出这里既是上一段的结束、又是下一段的开始。
+  void _drawBoundaries(
+    Canvas canvas,
+    double viewport,
+    double top,
+    double bottom,
+  ) {
+    // 按屏幕 x 聚合：记录该位置是否有起始(绿)/结束(红)边界、是否属于当前句(主样式)。
+    final byX = <int, ({double x, bool hasStart, bool hasEnd, bool primary})>{};
+    void add(Duration t, {required bool isStart, required bool primary}) {
+      final x = metrics.screenX(t, viewOffset);
+      final key = x.round();
+      final e = byX[key];
+      byX[key] = (
+        x: e?.x ?? x,
+        hasStart: (e?.hasStart ?? false) || isStart,
+        hasEnd: (e?.hasEnd ?? false) || !isStart,
+        primary: (e?.primary ?? false) || primary,
+      );
+    }
+
+    for (final b in wordBoundaries) {
+      add(b.word.startTime, isStart: true, primary: b.primary);
+      add(b.word.endTime, isStart: false, primary: b.primary);
+    }
+
+    // 次样式先画、主样式后画，主把手叠在最上层。
+    final markers = byX.values.toList()
+      ..sort((a, b) => (a.primary ? 1 : 0).compareTo(b.primary ? 1 : 0));
+    for (final m in markers) {
+      _drawBoundaryIfVisible(
+        canvas,
+        m.x,
+        viewport,
+        top,
+        bottom,
+        hasStart: m.hasStart,
+        hasEnd: m.hasEnd,
+        secondary: !m.primary,
+      );
+    }
+  }
+
+  /// 仅当边界落在视口内（含少量外扩，容纳把手）时绘制竖线 + 底部把手。
+  ///
+  /// 当同一位置同时有「结束(红)」和「起始(绿)」边界（相邻词首尾相接）时，竖线与把手
+  /// 都分成**左红右绿**：左 = 上一段的结束、右 = 下一段的开始。接缝落在真实时间点 [x]，
+  /// 既不让绿色覆盖红色，又对应拖动方向（向左抓结束 / 向右抓开始）——业界 NLE 双修剪
+  /// 手柄约定。
   void _drawBoundaryIfVisible(
     Canvas canvas,
     double x,
     double viewport,
     double top,
-    double bottom,
-    Color color, {
+    double bottom, {
+    required bool hasStart,
+    required bool hasEnd,
     required bool secondary,
   }) {
     if (x < -12 || x > viewport + 12) return;
-    final linePaint = Paint()
-      ..color = color.withValues(alpha: secondary ? .35 : .9)
-      ..strokeWidth = secondary ? 1 : 1.6;
-    canvas.drawLine(Offset(x, top), Offset(x, bottom), linePaint);
-
-    final handlePaint = Paint()
-      ..color = color.withValues(alpha: secondary ? .55 : 1)
-      ..style = PaintingStyle.fill;
+    final lineAlpha = secondary ? .35 : .9;
+    final handleAlpha = secondary ? .55 : 1.0;
+    final lineHalf = secondary ? 0.5 : 0.8; // 竖线半宽（单色时即标准 1 / 1.6px）
     final width = secondary ? 7.0 : 10.0;
     final height = secondary ? 10.0 : 14.0;
     final handleBottom = bottom - SubtitleWaveformView.boundaryHandleAxisGap;
+    final rect = Rect.fromCenter(
+      center: Offset(x, handleBottom - height / 2),
+      width: width,
+      height: height,
+    );
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(3));
+
+    if (hasStart && hasEnd) {
+      // 左红(结束) / 右绿(开始)：竖线合成一条略宽双色柱，把手左右两半双色。
+      canvas.drawRect(
+        Rect.fromLTRB(x - lineHalf, top, x, bottom),
+        Paint()..color = endColor.withValues(alpha: lineAlpha),
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(x, top, x + lineHalf, bottom),
+        Paint()..color = startColor.withValues(alpha: lineAlpha),
+      );
+      canvas.save();
+      canvas.clipRRect(rrect);
+      canvas.drawRect(
+        Rect.fromLTRB(rect.left, rect.top, x, rect.bottom),
+        Paint()..color = endColor.withValues(alpha: handleAlpha),
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(x, rect.top, rect.right, rect.bottom),
+        Paint()..color = startColor.withValues(alpha: handleAlpha),
+      );
+      canvas.restore();
+      return;
+    }
+
+    // 仅起始或仅结束：单色竖线 + 单色把手。
+    final color = hasStart ? startColor : endColor;
+    canvas.drawLine(
+      Offset(x, top),
+      Offset(x, bottom),
+      Paint()
+        ..color = color.withValues(alpha: lineAlpha)
+        ..strokeWidth = lineHalf * 2,
+    );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(x, handleBottom - height / 2),
-          width: width,
-          height: height,
-        ),
-        const Radius.circular(3),
-      ),
-      handlePaint,
+      rrect,
+      Paint()
+        ..color = color.withValues(alpha: handleAlpha)
+        ..style = PaintingStyle.fill,
     );
   }
 
@@ -1065,12 +1159,29 @@ class _WaveformLayerPainter extends CustomPainter {
         waveform != oldDelegate.waveform ||
         !identical(sentences, oldDelegate.sentences) ||
         activeSentence != oldDelegate.activeSentence ||
-        prevSentence != oldDelegate.prevSentence ||
-        nextSentence != oldDelegate.nextSentence ||
+        // 按值比较词边界：词边界列表每帧重建，仅当时间 / 主次样式真正变化才重绘，
+        // 避免播放时（实例每帧不同但内容相同）触发整层波形重绘。
+        !_wordBoundariesEqual(wordBoundaries, oldDelegate.wordBoundaries) ||
         color != oldDelegate.color ||
         activeColor != oldDelegate.activeColor ||
         startColor != oldDelegate.startColor ||
         endColor != oldDelegate.endColor ||
         axisColor != oldDelegate.axisColor;
+  }
+
+  /// 词边界按时间值 + 主次样式比较（词文本不影响绘制）。
+  static bool _wordBoundariesEqual(
+    List<WaveformWordBoundary> a,
+    List<WaveformWordBoundary> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].word.startTime != b[i].word.startTime ||
+          a[i].word.endTime != b[i].word.endTime ||
+          a[i].primary != b[i].primary) {
+        return false;
+      }
+    }
+    return true;
   }
 }

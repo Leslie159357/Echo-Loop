@@ -7,6 +7,7 @@ import 'package:echo_loop/features/subtitle_editor/subtitle_waveform_view.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/models/word_timestamp.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/widgets/guide_flow.dart';
 import 'package:flutter/gestures.dart';
@@ -37,7 +38,6 @@ void main() {
             duration: const Duration(seconds: 10),
             sentences: _sentences(),
             activeSentence: null,
-            selectedIndex: null,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
@@ -45,7 +45,6 @@ void main() {
             onZoomChanged: (_) {},
             onScrub: scrubbed.add,
             onScrubEnd: (position) => endedAt = position,
-            onAdjustBoundary: (_, _, _) {},
             onAdjustEnd: () {},
           ),
         ),
@@ -74,7 +73,6 @@ void main() {
             duration: const Duration(seconds: 120),
             sentences: _sentences(duration: const Duration(seconds: 120)),
             activeSentence: null,
-            selectedIndex: null,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
@@ -82,7 +80,6 @@ void main() {
             onZoomChanged: (_) {},
             onScrub: scrubbed.add,
             onScrubEnd: (_) {},
-            onAdjustBoundary: (_, _, _) {},
             onAdjustEnd: () {},
           ),
         ),
@@ -104,15 +101,17 @@ void main() {
       expect(scrubbed, isEmpty, reason: '拖动是平移，不应触发播放头定位');
     });
 
-    testWidgets('在当前句结束边界把手附近按下拖动会上报边界调整而非播放头', (tester) async {
+    testWidgets('拖动句末词把手（即句子结束边界）上报 onAdjustWord 而非播放头', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 240));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final scrubbed = <Duration>[];
-      final adjusts = <(int, BoundaryEdge, Duration)>[];
+      final wordAdjusts = <(int, BoundaryEdge, Duration)>[];
       var adjustEnded = false;
 
       final sentences = _sentences();
+      // 当前句 [4s,8s] 两词；末词终点 8s 即句子结束边界（统一为单词边界）。
+      const words = _activeWords;
       await tester.pumpWidget(
         createTestApp(
           SubtitleWaveformView(
@@ -120,24 +119,24 @@ void main() {
             extractionProgress: 1,
             duration: const Duration(seconds: 10),
             sentences: sentences,
-            activeSentence: sentences[1], // [4s, 8s]
-            selectedIndex: 1,
+            activeSentence: sentences[1],
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
             zoomScale: 1,
+            wordBoundaries: words,
+            onAdjustWord: (i, edge, target) =>
+                wordAdjusts.add((i, edge, target)),
             onZoomChanged: (_) {},
             onScrub: scrubbed.add,
             onScrubEnd: (_) {},
-            onAdjustBoundary: (index, edge, target) =>
-                adjusts.add((index, edge, target)),
             onAdjustEnd: () => adjustEnded = true,
           ),
         ),
       );
 
       final rect = tester.getRect(find.byType(SubtitleWaveformView));
-      // zoom==1 不滚动，screen-x == content-x。结束边界 8s：16 + 768*0.8 = 630.4。
+      // zoom==1 不滚动，screen-x == content-x。末词终点 8s：16 + 768*0.8 = 630.4。
       final endX = rect.left + 630;
       final handleY =
           rect.bottom -
@@ -153,23 +152,24 @@ void main() {
       await tester.pump();
 
       expect(scrubbed, isEmpty, reason: '命中边界把手时不应触发播放头拖动');
-      expect(adjusts, isNotEmpty);
-      // 命中的是当前句（index 1）的结束边界。
+      expect(wordAdjusts, isNotEmpty);
+      // 命中的是末词（globalIndex 3）的结束边界。
       expect(
-        adjusts.every((a) => a.$1 == 1 && a.$2 == BoundaryEdge.end),
+        wordAdjusts.every((a) => a.$1 == 3 && a.$2 == BoundaryEdge.end),
         isTrue,
       );
-      expect(adjusts.last.$3, lessThan(const Duration(seconds: 8)));
-      expect(adjusts.last.$3, greaterThan(const Duration(seconds: 4)));
+      expect(wordAdjusts.last.$3, lessThan(const Duration(seconds: 8)));
+      expect(wordAdjusts.last.$3, greaterThan(const Duration(seconds: 4)));
       expect(adjustEnded, isTrue);
     });
 
-    testWidgets('顶部边界线不可误触发把手拖动', (tester) async {
+    testWidgets('整条竖线（非底部把手处）也可抓取拖动边界', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 240));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final adjusts = <(int, BoundaryEdge, Duration)>[];
+      final wordAdjusts = <(int, BoundaryEdge, Duration)>[];
       final sentences = _sentences();
+      const words = _activeWords;
       await tester.pumpWidget(
         createTestApp(
           SubtitleWaveformView(
@@ -178,22 +178,24 @@ void main() {
             duration: const Duration(seconds: 10),
             sentences: sentences,
             activeSentence: sentences[1], // [4s, 8s]
-            selectedIndex: 1,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
             zoomScale: 1,
+            wordBoundaries: words,
+            onAdjustWord: (i, edge, target) =>
+                wordAdjusts.add((i, edge, target)),
             onZoomChanged: (_) {},
             onScrub: (_) {},
             onScrubEnd: (_) {},
-            onAdjustBoundary: (index, edge, target) =>
-                adjusts.add((index, edge, target)),
             onAdjustEnd: () {},
           ),
         ),
       );
 
       final rect = tester.getRect(find.byType(SubtitleWaveformView));
+      // 末词终点竖线在 8s（x≈630）。在竖线上半部分（远离底部把手）按下并拖动，
+      // 整条竖线都应可抓取该边界。
       final endX = rect.left + 630;
       final gesture = await tester.startGesture(Offset(endX, rect.top + 8));
       await tester.pump();
@@ -202,7 +204,9 @@ void main() {
       await gesture.up();
       await tester.pump();
 
-      expect(adjusts, isEmpty);
+      expect(wordAdjusts, isNotEmpty, reason: '线身任意处都应可抓取');
+      expect(wordAdjusts.last.$1, 3);
+      expect(wordAdjusts.last.$2, BoundaryEdge.end);
     });
 
     testWidgets('播放时让播放头红线钉在视口中线（近首尾退化为扫过）', (tester) async {
@@ -222,7 +226,6 @@ void main() {
           duration: const Duration(seconds: 120),
           sentences: sentences,
           activeSentence: sentences.first,
-          selectedIndex: 0,
           selectionEpoch: 0,
           playbackPosition: position,
           isPlaying: true,
@@ -230,7 +233,6 @@ void main() {
           onZoomChanged: (_) {},
           onScrub: (_) {},
           onScrubEnd: (_) {},
-          onAdjustBoundary: (_, _, _) {},
           onAdjustEnd: () {},
         ),
       );
@@ -269,7 +271,6 @@ void main() {
           sentences: sentences,
           // 不设当前句，隔离选句居中，仅验证缩放焦点保持。
           activeSentence: null,
-          selectedIndex: null,
           selectionEpoch: 0,
           playbackPosition: const Duration(seconds: 12), // 焦点位置
           isPlaying: false,
@@ -277,7 +278,6 @@ void main() {
           onZoomChanged: (_) {},
           onScrub: (_) {},
           onScrubEnd: (_) {},
-          onAdjustBoundary: (_, _, _) {},
           onAdjustEnd: () {},
         ),
       );
@@ -309,7 +309,6 @@ void main() {
             duration: const Duration(seconds: 10),
             sentences: _sentences(),
             activeSentence: null,
-            selectedIndex: null,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
@@ -317,7 +316,6 @@ void main() {
             onZoomChanged: (_) {},
             onScrub: (_) {},
             onScrubEnd: (position) => endedAt = position,
-            onAdjustBoundary: (_, _, _) {},
             onAdjustEnd: () {},
           ),
         ),
@@ -346,7 +344,6 @@ void main() {
             duration: const Duration(seconds: 10),
             sentences: _sentences(),
             activeSentence: null,
-            selectedIndex: null,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
@@ -354,7 +351,6 @@ void main() {
             onZoomChanged: zooms.add,
             onScrub: (_) {},
             onScrubEnd: (_) {},
-            onAdjustBoundary: (_, _, _) {},
             onAdjustEnd: () {},
           ),
         ),
@@ -386,6 +382,173 @@ void main() {
       expect(zooms.last, closeTo(4, 0.3));
     });
 
+    testWidgets('传入单词边界时波形层绘制对应词边界', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final sentences = _sentences();
+      const words = <WaveformWordBoundary>[
+        (
+          globalIndex: 0,
+          word: WordTimestamp(
+            word: 'First',
+            startTime: Duration.zero,
+            endTime: Duration(seconds: 2),
+            confidence: 0,
+          ),
+          primary: true,
+          isSentenceStart: true,
+          isSentenceEnd: false,
+        ),
+        (
+          globalIndex: 1,
+          word: WordTimestamp(
+            word: 'sentence.',
+            startTime: Duration(seconds: 2),
+            endTime: Duration(seconds: 4),
+            confidence: 0,
+          ),
+          primary: true,
+          isSentenceStart: false,
+          isSentenceEnd: true,
+        ),
+      ];
+
+      // 无选中句：不绘制任何词边界。
+      await tester.pumpWidget(
+        createTestApp(
+          SubtitleWaveformView(
+            waveform: _waveform(),
+            extractionProgress: 1,
+            duration: const Duration(seconds: 10),
+            sentences: sentences,
+            activeSentence: sentences.first,
+            selectionEpoch: 0,
+            playbackPosition: Duration.zero,
+            isPlaying: false,
+            zoomScale: 1,
+            onZoomChanged: (_) {},
+            onScrub: (_) {},
+            onScrubEnd: (_) {},
+            onAdjustEnd: () {},
+          ),
+        ),
+      );
+      expect(_wordBoundaries(tester), isEmpty);
+
+      // 传入单词边界：波形层拿到对应词边界。
+      await tester.pumpWidget(
+        createTestApp(
+          SubtitleWaveformView(
+            waveform: _waveform(),
+            extractionProgress: 1,
+            duration: const Duration(seconds: 10),
+            sentences: sentences,
+            activeSentence: sentences.first,
+            selectionEpoch: 0,
+            playbackPosition: Duration.zero,
+            isPlaying: false,
+            zoomScale: 1,
+            wordBoundaries: words,
+            onZoomChanged: (_) {},
+            onScrub: (_) {},
+            onScrubEnd: (_) {},
+            onAdjustEnd: () {},
+          ),
+        ),
+      );
+      expect(_wordBoundaries(tester).length, 2);
+    });
+
+    testWidgets('拖动内部词边界把手上报 onAdjustWord', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final sentences = _sentences();
+      final wordAdjusts = <(int, BoundaryEdge, Duration)>[];
+      // 句 0 [0,4s] 内三个词，内部边界在 1s、2.5s。
+      const words = <WaveformWordBoundary>[
+        (
+          globalIndex: 0,
+          word: WordTimestamp(
+            word: 'one',
+            startTime: Duration.zero,
+            endTime: Duration(seconds: 1),
+            confidence: 0,
+          ),
+          primary: true,
+          isSentenceStart: true,
+          isSentenceEnd: false,
+        ),
+        (
+          globalIndex: 1,
+          word: WordTimestamp(
+            word: 'two',
+            startTime: Duration(seconds: 1),
+            endTime: Duration(milliseconds: 2500),
+            confidence: 0,
+          ),
+          primary: true,
+          isSentenceStart: false,
+          isSentenceEnd: false,
+        ),
+        (
+          globalIndex: 2,
+          word: WordTimestamp(
+            word: 'three',
+            startTime: Duration(milliseconds: 2500),
+            endTime: Duration(seconds: 4),
+            confidence: 0,
+          ),
+          primary: true,
+          isSentenceStart: false,
+          isSentenceEnd: true,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        createTestApp(
+          SubtitleWaveformView(
+            waveform: _waveform(),
+            extractionProgress: 1,
+            duration: const Duration(seconds: 10),
+            sentences: sentences,
+            activeSentence: sentences[0],
+            selectionEpoch: 0,
+            playbackPosition: Duration.zero,
+            isPlaying: false,
+            zoomScale: 1,
+            wordBoundaries: words,
+            onAdjustWord: (index, edge, target) =>
+                wordAdjusts.add((index, edge, target)),
+            onZoomChanged: (_) {},
+            onScrub: (_) {},
+            onScrubEnd: (_) {},
+            onAdjustEnd: () {},
+          ),
+        ),
+      );
+
+      final rect = tester.getRect(find.byType(SubtitleWaveformView));
+      // 内部词边界 1s：screenX = 16 + 768*0.1 = 92.8。
+      final x = rect.left + 92.8;
+      final handleY =
+          rect.bottom -
+          SubtitleWaveformView.axisHeight -
+          SubtitleWaveformView.boundaryHandleAxisGap -
+          7;
+      final gesture = await tester.startGesture(Offset(x, handleY));
+      await tester.pump();
+      await gesture.moveTo(Offset(rect.left + 200, handleY)); // 向右拖
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(wordAdjusts, isNotEmpty, reason: '应上报词边界调整');
+      // 向右拖选「开始」边界：命中的是某个词的 start。
+      expect(wordAdjusts.last.$2, BoundaryEdge.start);
+    });
+
     testWidgets('触控板捏合（pan-zoom）按 scale 放大波形', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 240));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -399,7 +562,6 @@ void main() {
             duration: const Duration(seconds: 10),
             sentences: _sentences(),
             activeSentence: null,
-            selectedIndex: null,
             selectionEpoch: 0,
             playbackPosition: Duration.zero,
             isPlaying: false,
@@ -407,7 +569,6 @@ void main() {
             onZoomChanged: zooms.add,
             onScrub: (_) {},
             onScrubEnd: (_) {},
-            onAdjustBoundary: (_, _, _) {},
             onAdjustEnd: () {},
           ),
         ),
@@ -527,13 +688,10 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(SubtitleSimpleEditorScreen)),
       );
+      // 句0 末词 'sentence.' = 全局词 1，前移其终点使字幕进入已修改态。
       container
           .read(subtitleEditorControllerProvider(audioItem).notifier)
-          .adjustSentenceBoundary(
-            0,
-            BoundaryEdge.end,
-            const Duration(seconds: 2),
-          );
+          .adjustWord(1, BoundaryEdge.end, const Duration(seconds: 2));
       await tester.pump();
 
       saveButton = tester.widget(saveFinder);
@@ -579,6 +737,80 @@ void main() {
         "Drag the red or green handles on the waveform to adjust the current sentence's start and end time.",
       ]);
 
+      audioEngine.disposeController();
+    });
+
+    testWidgets('选中句拆成单词 label，未选中句保持纯文本', (tester) async {
+      final audioEngine = _ScreenTestAudioEngine(
+        duration: const Duration(seconds: 10),
+        sentences: _sentences(),
+      );
+
+      await tester.pumpWidget(
+        createTestScreen(
+          SubtitleSimpleEditorScreen(audioItem: createTestAudioItem()),
+          overrides: [audioEngineProvider.overrideWith(() => audioEngine)],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 默认选中第一句 "First sentence." → 两个单词 label。
+      expect(
+        find.byKey(const ValueKey('subtitle-word-label-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('subtitle-word-label-1')),
+        findsOneWidget,
+      );
+      expect(find.text('First'), findsOneWidget);
+      expect(find.text('sentence.'), findsOneWidget);
+      // 未选中句仍是整段纯文本。
+      expect(find.text('Second sentence.'), findsOneWidget);
+      expect(find.text('Third sentence.'), findsOneWidget);
+
+      audioEngine.disposeController();
+    });
+
+    testWidgets('点击单词 label 播放该词并在波形显示词边界', (tester) async {
+      final audioItem = createTestAudioItem();
+      final audioEngine = _ScreenTestAudioEngine(
+        duration: const Duration(seconds: 10),
+        sentences: _sentences(),
+      );
+
+      await tester.pumpWidget(
+        createTestScreen(
+          SubtitleSimpleEditorScreen(audioItem: audioItem),
+          overrides: [audioEngineProvider.overrideWith(() => audioEngine)],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const ValueKey('subtitle-word-label-1')));
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SubtitleSimpleEditorScreen)),
+      );
+      final notifier = container.read(
+        subtitleEditorControllerProvider(audioItem).notifier,
+      );
+      final st = container.read(subtitleEditorControllerProvider(audioItem));
+      expect(st.focusedWordIndex, 1);
+      expect(audioEngine.playRangeOnceCallCount, 1);
+      // 关键回归（bug1）：点第 2 个 label 必须播放第 2 个词的区间，
+      // 而非因 label↔词错位 / 越界钳制播放到别的词。
+      final words = notifier.wordsOfSelectedSentence;
+      expect(audioEngine.lastRangeStart, words[1].startTime);
+      expect(audioEngine.lastRangeEnd, words[1].endTime);
+      // 选中句即展示其全部单词边界（具体绘制在 SubtitleWaveformView 用例验证）。
+      expect(notifier.wordBoundariesForWaveform, isNotEmpty);
+
+      audioEngine.completePlayback();
+      await tester.pump();
       audioEngine.disposeController();
     });
 
@@ -654,6 +886,46 @@ bool _hasPlayhead(WidgetTester tester) {
   return false;
 }
 
+/// 读取波形层 painter 当前绘制的词边界列表（点中词 + 左右邻词）。
+List<dynamic> _wordBoundaries(WidgetTester tester) {
+  for (final cp in tester.widgetList<CustomPaint>(find.byType(CustomPaint))) {
+    final p = cp.painter;
+    if (p != null && p.runtimeType.toString() == '_WaveformLayerPainter') {
+      return (p as dynamic).wordBoundaries as List<dynamic>;
+    }
+  }
+  fail('找不到波形层 painter');
+}
+
+/// 当前句（[_sentences] 的句 1，区间 [4s,8s]）的两词边界：
+/// 全局词下标 2/3，末词终点 8s 即句子结束边界。均为主样式。
+const List<WaveformWordBoundary> _activeWords = [
+  (
+    globalIndex: 2,
+    word: WordTimestamp(
+      word: 'aa',
+      startTime: Duration(seconds: 4),
+      endTime: Duration(seconds: 6),
+      confidence: 0,
+    ),
+    primary: true,
+    isSentenceStart: true,
+    isSentenceEnd: false,
+  ),
+  (
+    globalIndex: 3,
+    word: WordTimestamp(
+      word: 'bb',
+      startTime: Duration(seconds: 6),
+      endTime: Duration(seconds: 8),
+      confidence: 0,
+    ),
+    primary: true,
+    isSentenceStart: false,
+    isSentenceEnd: true,
+  ),
+];
+
 List<Sentence> _sentences({Duration duration = const Duration(seconds: 10)}) {
   return [
     Sentence(
@@ -700,6 +972,9 @@ class _ScreenTestAudioEngine extends AudioEngine {
   int _sessionId = 0;
   int stopPlaybackCallCount = 0;
   Sentence? lastPlayedSentence;
+  int playRangeOnceCallCount = 0;
+  Duration? lastRangeStart;
+  Duration? lastRangeEnd;
 
   @override
   AudioEngineState build() => AudioEngineState(totalDuration: duration);
@@ -740,6 +1015,20 @@ class _ScreenTestAudioEngine extends AudioEngine {
   @override
   Future<void> playClipOnce(Sentence sentence, int sessionId) async {
     lastPlayedSentence = sentence;
+    final completer = Completer<void>();
+    _playbackCompleters.add(completer);
+    await completer.future;
+  }
+
+  @override
+  Future<void> playRangeOnce(
+    Duration start,
+    Duration end,
+    int sessionId,
+  ) async {
+    playRangeOnceCallCount += 1;
+    lastRangeStart = start;
+    lastRangeEnd = end;
     final completer = Completer<void>();
     _playbackCompleters.add(completer);
     await completer.future;

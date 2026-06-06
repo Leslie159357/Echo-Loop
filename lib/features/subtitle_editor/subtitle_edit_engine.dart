@@ -1,4 +1,5 @@
 import '../../models/sentence.dart';
+import '../../models/word_timestamp.dart';
 
 /// 句子可拖动的边界端。
 enum BoundaryEdge {
@@ -9,8 +10,21 @@ enum BoundaryEdge {
   end,
 }
 
-/// 拖动句子边界时允许的最小句长，避免拖成零长或负长。
-const Duration kMinSentenceDuration = Duration(milliseconds: 100);
+/// 波形上一条可绘制 / 可拖动的单词边界。
+///
+/// 句子的起止边界即首词起点 / 末词终点，故统一用单词边界表达，不再单列句子边界。
+/// - [globalIndex]：映射回全篇词列表；`-1` 表示与文本 token 暂不同步（只绘制、不可拖动）。
+/// - [word]：句区间内、已贴合句界的显示值。
+/// - [primary]：true 为当前选中句（主样式大把手），false 为相邻句（次样式小把手）。
+/// - [isSentenceStart] / [isSentenceEnd]：该词是否为所在句的首词起点 / 末词终点
+///   （即句子的起止边界）。
+typedef WaveformWordBoundary = ({
+  int globalIndex,
+  WordTimestamp word,
+  bool primary,
+  bool isSentenceStart,
+  bool isSentenceEnd,
+});
 
 /// 字幕编辑纯逻辑。
 ///
@@ -45,54 +59,6 @@ class SubtitleEditEngine {
 
     final next = [...sentences]..removeAt(index);
     return _reindex(next);
-  }
-
-  /// 调整 [index] 句子某一端边界到 [target]，返回新列表。
-  ///
-  /// 自动按相邻句最近边界与 [kMinSentenceDuration] 钳制，保证句子互不重叠、
-  /// 顺序不变，且只修改本句、不影响相邻句。无实际变化时返回原列表（同一引用）。
-  ///
-  /// - start 端：下限为上一句的 `endTime`（首句为 0），上限为本句 `endTime` 减去最小句长。
-  /// - end 端：下限为本句 `startTime` 加上最小句长，上限为下一句的 `startTime`
-  ///   （末句为 [totalDuration]）。
-  List<Sentence> adjustBoundary(
-    List<Sentence> sentences,
-    int index,
-    BoundaryEdge edge,
-    Duration target, {
-    required Duration totalDuration,
-  }) {
-    if (index < 0 || index >= sentences.length) return sentences;
-    final current = sentences[index];
-
-    final Duration clamped;
-    if (edge == BoundaryEdge.start) {
-      final lower = index > 0 ? sentences[index - 1].endTime : Duration.zero;
-      final upper = current.endTime - kMinSentenceDuration;
-      if (upper < lower) return sentences; // 句子过短，无法调整。
-      clamped = _clampDuration(target, lower, upper);
-      if (clamped == current.startTime) return sentences;
-    } else {
-      final lower = current.startTime + kMinSentenceDuration;
-      final upper = index < sentences.length - 1
-          ? sentences[index + 1].startTime
-          : totalDuration;
-      if (upper < lower) return sentences; // 句子过短，无法调整。
-      clamped = _clampDuration(target, lower, upper);
-      if (clamped == current.endTime) return sentences;
-    }
-
-    final next = [...sentences];
-    next[index] = edge == BoundaryEdge.start
-        ? current.copyWith(startTime: clamped)
-        : current.copyWith(endTime: clamped);
-    return next;
-  }
-
-  Duration _clampDuration(Duration value, Duration lower, Duration upper) {
-    if (value < lower) return lower;
-    if (value > upper) return upper;
-    return value;
   }
 
   List<Sentence> _reindex(List<Sentence> sentences) {
