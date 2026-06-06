@@ -51,6 +51,39 @@ class SubtitleEditEngine {
     return _reindex(next);
   }
 
+  /// 把第 [index] 句从中间拆成两句。
+  ///
+  /// 前半保留原起点、文本设为 [firstText]、终点设为 [firstEnd]；后半起点
+  /// [secondStart]、文本 [secondText]、保留原终点。文本由调用方按 token 切好传入
+  /// （词级时间对齐由 controller 负责）。原句的 bookmark 归前半，后半不收藏。
+  /// 拆完重排 index 保持连续。
+  List<Sentence> splitSentence(
+    List<Sentence> sentences,
+    int index, {
+    required String firstText,
+    required Duration firstEnd,
+    required String secondText,
+    required Duration secondStart,
+  }) {
+    if (index < 0 || index >= sentences.length) {
+      return sentences;
+    }
+    final original = sentences[index];
+    final next = [...sentences];
+    next[index] = original.copyWith(text: firstText, endTime: firstEnd);
+    next.insert(
+      index + 1,
+      Sentence(
+        index: index + 1,
+        text: secondText,
+        startTime: secondStart,
+        endTime: original.endTime,
+        isBookmarked: false,
+      ),
+    );
+    return _reindex(next);
+  }
+
   /// 删除指定句子；不允许删除到空字幕。
   List<Sentence> deleteSentence(List<Sentence> sentences, int index) {
     if (sentences.length <= 1 || index < 0 || index >= sentences.length) {

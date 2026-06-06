@@ -584,6 +584,127 @@ class SubtitleEditorController extends StateNotifier<SubtitleEditorState> {
     return alnum > 0 ? alnum : 1;
   }
 
+  /// 就地编辑选中句第 [localWordIndex] 个词为 [input]（铅笔编辑提交时调用）。
+  ///
+  /// 同步更新句子文本 token 与词列表，维持「词数 == 句子 token 数」不变量：
+  /// - [input] 为空 → 删除该词（其余词时间戳不变）；若是句中唯一词则删整句。
+  /// - 单个词 → 仅改词文本，时间区间不变。
+  /// - 多个词 → 把原词的 `[start, end]` 按各词字符数比例切成多段（[_proportionalTokens]）。
+  ///
+  /// 删首/末词会让句界跟随新首/末词时间，避免 [_buildWords] 把它 snap 回旧句界从而
+  /// 改动其余词时间戳。
+  void editWord(int localWordIndex, String input) {
+    final selected = state.selectedSentenceIndex;
+    if (selected == null ||
+        selected < 0 ||
+        selected >= state.sentences.length) {
+      return;
+    }
+    final range = _sentenceTokenRange(selected);
+    if (range == null) return;
+    if (localWordIndex < 0 || localWordIndex >= range.count) return;
+    final view = _sentenceWords(selected);
+    if (localWordIndex >= view.length) return;
+    final globalIndex = range.offset + localWordIndex;
+    final original = view[localWordIndex];
+
+    final newTokens = _splitTokens(input);
+
+    // 句子文本 token：用新 token 替换被编辑词。
+    final sentence = state.sentences[selected];
+    final tokens = _splitTokens(sentence.text)
+      ..replaceRange(localWordIndex, localWordIndex + 1, newTokens);
+    final newText = tokens.join(' ');
+
+    // 删空了该词：句中唯一词则删整句（deleteSentence 内部会处理单句无法删的情况），
+    // 否则只移除该词。
+    if (newText.isEmpty) {
+      deleteSentence(selected);
+      return;
+    }
+
+    // 词列表：用新词（按字符比例分配原词区间）替换被编辑词；删除则移除。
+    final replacement = newTokens.isEmpty
+        ? const <WordTimestamp>[]
+        : _proportionalTokens(
+            newTokens,
+            Sentence(
+              index: 0,
+              text: '',
+              startTime: original.startTime,
+              endTime: original.endTime,
+            ),
+          );
+    final newWords = List<WordTimestamp>.of(state.words)
+      ..replaceRange(globalIndex, globalIndex + 1, replacement);
+
+    // 句界跟随新首/末词，保证其余词时间戳不被 _buildWords 的首尾 snap 改动。
+    final newStart = newWords[range.offset].startTime;
+    final newEnd = newWords[range.offset + tokens.length - 1].endTime;
+    final nextSentences = [...state.sentences];
+    nextSentences[selected] = sentence.copyWith(
+      text: newText,
+      startTime: newStart,
+      endTime: newEnd,
+    );
+
+    _wordsDirty = true;
+    final wasPlaying = state.isPlaying;
+    if (wasPlaying) _cancelPlaybackSession();
+    state = state.copyWith(
+      sentences: nextSentences,
+      words: _buildWords(nextSentences, newWords),
+      focusedWordIndex: null,
+      isDirty: _sentencesChanged(nextSentences) || _wordsDirty,
+      playingSentenceIndex: wasPlaying ? null : state.playingSentenceIndex,
+      isPlaying: wasPlaying ? false : state.isPlaying,
+      playbackMode: wasPlaying
+          ? SubtitleEditorPlaybackMode.idle
+          : state.playbackMode,
+    );
+  }
+
+  /// 把选中句从第 [localWordIndex] 个词处分成两句（剪刀分句时调用）。
+  ///
+  /// 该词成为新句（后半）的首词；前半保留原起点、终点贴前一词终点，后半起点贴该词
+  /// 起点、保留原终点。首词（[localWordIndex] == 0）不允许分句（会产生空句）。
+  /// 词数不变 → [_buildWords] 按序对齐保留已编辑时间。
+  void splitSentenceAtWord(int localWordIndex) {
+    final selected = state.selectedSentenceIndex;
+    if (selected == null ||
+        selected < 0 ||
+        selected >= state.sentences.length) {
+      return;
+    }
+    final sentence = state.sentences[selected];
+    final tokens = _splitTokens(sentence.text);
+    final view = _sentenceWords(selected);
+    if (localWordIndex < 1 || localWordIndex >= tokens.length) return;
+    if (localWordIndex >= view.length) return;
+
+    final next = _engine.splitSentence(
+      state.sentences,
+      selected,
+      firstText: tokens.sublist(0, localWordIndex).join(' '),
+      firstEnd: view[localWordIndex - 1].endTime,
+      secondText: tokens.sublist(localWordIndex).join(' '),
+      secondStart: view[localWordIndex].startTime,
+    );
+    if (identical(next, state.sentences)) return;
+    _cancelPlaybackSession();
+    state = state.copyWith(
+      sentences: next,
+      selectedSentenceIndex: selected,
+      playingSentenceIndex: null,
+      isPlaying: false,
+      playbackMode: SubtitleEditorPlaybackMode.idle,
+      playbackPosition: next[selected].startTime,
+      isDirty: _sentencesChanged(next) || _wordsDirty,
+      focusedWordIndex: null,
+      words: _buildWords(next, state.words),
+    );
+  }
+
   /// 播放选中句内第 [wordIndex] 个词，并把它标记为「点中词」以显示词边界。
   ///
   /// 复用区间播放基元（[AudioEngine.playRangeOnce]）、session 隔离与播放头计时器，
