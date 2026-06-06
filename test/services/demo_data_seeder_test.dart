@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -161,18 +160,21 @@ void main() {
         expect(srt, contains(demoAudios[0].sentences[0].text));
       });
 
-      test('seed 后 SRT 文件正确生成在 demo 目录', () async {
+      test('seed 后字幕内容写入 DB 列（transcriptSrt），不再落 SRT 文件', () async {
         final seeder = DemoDataSeeder(db);
         await seeder.seedIfEmpty();
 
-        final demoDir = Directory(p.join(tempDir.path, 'demo'));
-        expect(demoDir.existsSync(), isTrue);
-
         for (var i = 0; i < demoAudios.length; i++) {
-          final srtFile = File(p.join(demoDir.path, 'audio_${i + 1}.srt'));
-          expect(srtFile.existsSync(), isTrue);
-          final content = await srtFile.readAsString();
-          expect(content, contains(demoAudios[i].sentences[0].text));
+          final audio = demoAudios[i];
+          final srt = await db.audioItemDao.getTranscriptSrt(audio.id);
+          expect(srt, isNotNull);
+          expect(srt!, contains(audio.sentences[0].text));
+
+          // 不再生成 SRT 文件
+          final srtFile = File(
+            p.join(tempDir.path, 'demo', 'audio_${i + 1}.srt'),
+          );
+          expect(srtFile.existsSync(), isFalse);
         }
       });
     });

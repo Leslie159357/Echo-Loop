@@ -183,9 +183,6 @@ void main() {
 
   test('updateTranscript 覆盖句子/词级字幕，并清空收藏句子和学习进度', () async {
     await seedAudio('a1', remoteAudioId: 'r1', downloaded: true);
-    final transcriptFile = File('${tmpDir.path}/transcripts/official_x.srt');
-    await transcriptFile.parent.create(recursive: true);
-    await transcriptFile.writeAsString('old subtitle');
     await db.bookmarkDao.addBookmark(
       BookmarksCompanion.insert(
         audioItemId: 'a1',
@@ -223,13 +220,15 @@ void main() {
 
     expect(result, SubtitleUpdateResult.updated);
     expect(fakeApi.callCount, 1);
-    expect(await transcriptFile.readAsString(), contains('new subtitle'));
-    final sentences = await SubtitleParser.parseSubtitle(transcriptFile.path);
+    // 字幕内容写入 DB transcript_srt 列，transcriptPath 置 null（不再落文件）
+    final srt = await db.audioItemDao.getTranscriptSrt('a1');
+    expect(srt, contains('new subtitle'));
+    final sentences = await SubtitleParser.parseSubtitleString(srt!);
     expect(sentences, hasLength(1));
     expect(sentences.single.text, 'new subtitle');
 
     final row = await db.audioItemDao.getById('a1');
-    expect(row?.transcriptPath, 'transcripts/official_x.srt');
+    expect(row?.transcriptPath, isNull);
     expect(row?.wordTimestampsJson, contains('"word":"new"'));
     // 字幕统计随更新一起入库，避免学习计划页只显示时长
     expect(row?.sentenceCount, 1);

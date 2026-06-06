@@ -43,6 +43,7 @@ void main() {
     name: 'Test Audio',
     audioPath: 'audios/test.mp3',
     transcriptPath: 'transcripts/test.srt',
+    transcriptSource: TranscriptSource.ai,
     addedDate: DateTime(2026, 1, 1),
     sentenceCount: 10,
     wordCount: 50,

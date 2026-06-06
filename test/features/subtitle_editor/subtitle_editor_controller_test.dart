@@ -17,7 +17,6 @@ import 'package:echo_loop/utils/app_data_dir.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' as ja;
-import 'package:path/path.dart' as p;
 
 import '../../helpers/mock_providers.dart';
 
@@ -437,18 +436,15 @@ void main() {
   group('save 是否清空学习进度/收藏', () {
     late Directory tempDir;
     late TestBookmarkDao bookmarkDao;
+    late TestAudioItemDao audioItemDao;
     late TestLearningProgressNotifier progressNotifier;
 
     setUp(() async {
-      // save() 会向 transcriptPath 写文件，准备临时目录与已存在的字幕文件。
+      // save() 现在把字幕内容写入 DB transcript_srt 列（不再落文件）。
       tempDir = await Directory.systemTemp.createTemp('subtitle_save_test');
       appDataDirectoryOverride = tempDir;
-      final transcriptFile = File(
-        p.join(tempDir.path, audioItem.transcriptPath!),
-      );
-      await transcriptFile.parent.create(recursive: true);
-      await transcriptFile.writeAsString('');
 
+      audioItemDao = TestAudioItemDao();
       bookmarkDao = TestBookmarkDao();
       // 预置收藏与学习进度，用来验证保存后是否被清空。
       await bookmarkDao.addBookmark(
@@ -491,7 +487,7 @@ void main() {
         overrides: [
           audioEngineProvider.overrideWith(() => engine),
           bookmarkDaoProvider.overrideWithValue(bookmarkDao),
-          audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
+          audioItemDaoProvider.overrideWithValue(audioItemDao),
           audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
           listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
           learningProgressNotifierProvider.overrideWith(() => progressNotifier),
@@ -518,6 +514,10 @@ void main() {
       final saved = await notifier.save();
 
       expect(saved, isTrue);
+      // 字幕内容写入 DB transcript_srt 列
+      final savedSrt = audioItemDao.transcriptSrtStore[audioItem.id];
+      expect(savedSrt, isNotNull);
+      expect(savedSrt!, contains('-->'));
       expect(
         await bookmarkDao.getBookmarkedIndices(audioItem.id),
         contains(1),
@@ -606,7 +606,7 @@ void main() {
         overrides: [
           audioEngineProvider.overrideWith(() => engine),
           bookmarkDaoProvider.overrideWithValue(bookmarkDao),
-          audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
+          audioItemDaoProvider.overrideWithValue(audioItemDao),
           audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
           listeningPracticeProvider.overrideWith(() => recordingLp),
           learningProgressNotifierProvider.overrideWith(() => progressNotifier),

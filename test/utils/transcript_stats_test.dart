@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/utils/transcript_stats.dart';
 
 /// 纯逻辑测试：统计句子数和单词数
 ///
@@ -97,6 +98,22 @@ void main() {
       final result = computeStats(sentences);
       expect(result.$1, 2);
       expect(result.$2, 1); // 空文本产生 0 个有效单词
+    });
+  });
+
+  group('getTranscriptStatsFromSrt（从 SRT 字符串统计）', () {
+    test('多句 SRT 统计句数/词数', () async {
+      const srt =
+          '1\n00:00:00,000 --> 00:00:02,000\nHello world\n\n'
+          '2\n00:00:02,000 --> 00:00:05,000\nThis is a test sentence\n';
+      final stats = await getTranscriptStatsFromSrt(srt);
+      expect(stats.$1, 2);
+      expect(stats.$2, 7); // 2 + 5
+    });
+
+    test('空字符串返回 (0, 0)', () async {
+      final stats = await getTranscriptStatsFromSrt('');
+      expect(stats, (0, 0));
     });
   });
 }

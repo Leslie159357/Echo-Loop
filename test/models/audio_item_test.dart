@@ -109,25 +109,54 @@ void main() {
     });
 
     group('hasTranscript', () {
-      test('有 transcriptPath 时返回 true', () {
-        final item = createSample(transcriptPath: 'transcripts/test.srt');
+      // 字幕内容入库后，hasTranscript 以 transcriptSource 是否有值为准
+      // （内容存 DB 列，不再依赖 transcriptPath）。
+      test('有 transcriptSource 时返回 true（transcriptPath 为 null 也成立）', () {
+        final item = createSample(
+          transcriptPath: null,
+          transcriptSource: TranscriptSource.ai,
+        );
         expect(item.hasTranscript, isTrue);
       });
 
-      test('transcriptPath 为 null 时返回 false', () {
-        final item = createSample(transcriptPath: null);
+      test('transcriptSource 为 null 时返回 false（即使有遗留 transcriptPath）', () {
+        final item = createSample(
+          transcriptPath: 'transcripts/test.srt',
+          transcriptSource: null,
+        );
         expect(item.hasTranscript, isFalse);
       });
 
-      test('transcriptPath 为空字符串时返回 false', () {
-        final item = createSample(transcriptPath: '');
-        expect(item.hasTranscript, isFalse);
+      test('本地字幕来源返回 true', () {
+        final item = createSample(transcriptSource: TranscriptSource.local);
+        expect(item.hasTranscript, isTrue);
       });
 
-      test('transcriptPath 为 null 时 isAudioReady 仍可为 true（有音频但没字幕）', () {
-        final item = createSample(transcriptPath: null);
+      test('无字幕（source=null）时 isAudioReady 仍可为 true（有音频但没字幕）', () {
+        final item = createSample(transcriptPath: null, transcriptSource: null);
         expect(item.hasTranscript, isFalse);
         expect(item.isAudioReady, isTrue);
+      });
+    });
+
+    group('getFullTranscriptPath', () {
+      // 字幕内容入库后，DB-only 行 transcriptPath=null 即使 hasTranscript=true 也
+      // 必须安全返回 null（而非 transcriptPath! 空断言崩溃）。
+      test('DB-only 行（source 非空、path=null）返回 null 不崩溃', () async {
+        final item = createSample(
+          transcriptPath: null,
+          transcriptSource: TranscriptSource.ai,
+        );
+        expect(item.hasTranscript, isTrue);
+        expect(await item.getFullTranscriptPath(), isNull);
+      });
+
+      test('transcriptPath 为空字符串返回 null', () async {
+        final item = createSample(
+          transcriptPath: '',
+          transcriptSource: TranscriptSource.local,
+        );
+        expect(await item.getFullTranscriptPath(), isNull);
       });
     });
 
@@ -398,7 +427,7 @@ void main() {
         );
         final copied = item.copyWith(
           audioPath: 'audios/official/hash.m4a',
-          transcriptPath: 'transcripts/official_a1.srt',
+          transcriptSource: TranscriptSource.ai,
         );
         expect(copied.isAudioReady, isTrue);
         expect(copied.hasTranscript, isTrue);

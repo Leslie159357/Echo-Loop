@@ -160,6 +160,99 @@ void main() {
       final items = await stream.first;
       expect(items.length, 1);
     });
+
+    test('transcriptSrt get/update 往返', () async {
+      final now = DateTime.now();
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Audio 1'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // 初始为空
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), isNull);
+
+      const srt = '1\n00:00:00,000 --> 00:00:01,000\nHello\n';
+      await db.audioItemDao.updateTranscriptSrt('audio-1', srt);
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), srt);
+
+      // 置空
+      await db.audioItemDao.updateTranscriptSrt('audio-1', null);
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), isNull);
+    });
+
+    test('saveTranscriptContent 原子写入 SRT + 词级时间戳', () async {
+      final now = DateTime.now();
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Audio 1'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      await db.audioItemDao.saveTranscriptContent(
+        'audio-1',
+        srt: 'srt-content',
+        wordTimestampsJson: '[{"word":"hi"}]',
+      );
+
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), 'srt-content');
+      expect(
+        await db.audioItemDao.getWordTimestamps('audio-1'),
+        '[{"word":"hi"}]',
+      );
+
+      // wordTimestampsJson 传 null 同时清空词级时间戳
+      await db.audioItemDao.saveTranscriptContent(
+        'audio-1',
+        srt: 'srt-2',
+        wordTimestampsJson: null,
+      );
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), 'srt-2');
+      expect(await db.audioItemDao.getWordTimestamps('audio-1'), isNull);
+    });
+
+    test('getRowsNeedingSrtBackfill 只返回有 path 且 srt 为空的行', () async {
+      final now = DateTime.now();
+      // 行1：有 path、无 srt → 需要 backfill
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('need'),
+          name: Value('need'),
+          transcriptPath: Value('transcripts/need.srt'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      // 行2：有 path 且已有 srt → 不需要
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('done'),
+          name: Value('done'),
+          transcriptPath: Value('transcripts/done.srt'),
+          transcriptSrt: Value('already'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      // 行3：无 path → 不需要
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('nopath'),
+          name: Value('nopath'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      final rows = await db.audioItemDao.getRowsNeedingSrtBackfill();
+      expect(rows.map((r) => r.id), ['need']);
+    });
   });
 
   group('CollectionDao', () {

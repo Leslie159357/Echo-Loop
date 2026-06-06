@@ -98,10 +98,7 @@ This is a test.
         expect(s[0].index, 0);
         expect(s[0].text, 'Hello world.');
         expect(s[0].startTime, const Duration(seconds: 1));
-        expect(
-          s[0].endTime,
-          const Duration(seconds: 3, milliseconds: 500),
-        );
+        expect(s[0].endTime, const Duration(seconds: 3, milliseconds: 500));
         expect(s[1].index, 1);
         expect(s[1].text, 'This is a test.');
         expect(s[1].startTime, const Duration(seconds: 4));
@@ -109,8 +106,7 @@ This is a test.
       });
 
       test('CRLF 换行可正常解析', () async {
-        const srt =
-            '1\r\n00:00:01,000 --> 00:00:02,000\r\nCRLF line.\r\n\r\n';
+        const srt = '1\r\n00:00:01,000 --> 00:00:02,000\r\nCRLF line.\r\n\r\n';
         final path = await writeFile('crlf.srt', srt);
         final s = await SubtitleParser.parseSubtitle(path);
 
@@ -209,10 +205,7 @@ This is a test.
         expect(s.length, 2);
         expect(s[0].text, 'Hello world.');
         expect(s[0].startTime, const Duration(seconds: 1));
-        expect(
-          s[0].endTime,
-          const Duration(seconds: 3, milliseconds: 500),
-        );
+        expect(s[0].endTime, const Duration(seconds: 3, milliseconds: 500));
         expect(s[1].text, 'This is a test.');
       });
 
@@ -418,8 +411,11 @@ Upper.
           () => SubtitleParser.parseSubtitleStrict(path),
           throwsA(
             isA<SubtitleParseException>()
-                .having((e) => e.kind, 'kind',
-                    SubtitleParseErrorKind.unsupportedFormat)
+                .having(
+                  (e) => e.kind,
+                  'kind',
+                  SubtitleParseErrorKind.unsupportedFormat,
+                )
                 .having((e) => e.detail, 'detail', 'lrc'),
           ),
         );
@@ -499,7 +495,14 @@ Upper.
       });
 
       test('随机二进制内容（无法 readAsString）抛 formatInvalid', () async {
-        final path = await writeBytes('binary.srt', [0xFF, 0xFE, 0xFD, 0xFC, 0x00, 0x01]);
+        final path = await writeBytes('binary.srt', [
+          0xFF,
+          0xFE,
+          0xFD,
+          0xFC,
+          0x00,
+          0x01,
+        ]);
         expect(
           () => SubtitleParser.parseSubtitleStrict(path),
           throwsA(
@@ -578,6 +581,49 @@ Dialogue: 0,0:00:01.00,0:00:03.00,Hello world.
         );
         try {
           await SubtitleParser.parseSubtitleStrict(path);
+          fail('应抛异常');
+        } on SubtitleParseException catch (e) {
+          expect(
+            e.kind,
+            anyOf(
+              SubtitleParseErrorKind.empty,
+              SubtitleParseErrorKind.formatInvalid,
+            ),
+          );
+        }
+      });
+    });
+
+    group('parseSubtitleString（从字符串解析，DB 列入口）', () {
+      const srt =
+          '1\n00:00:00,000 --> 00:00:02,000\nHello world\n\n'
+          '2\n00:00:02,000 --> 00:00:04,000\nHow are you\n';
+
+      test('解析 SRT 字符串返回句子', () async {
+        final sentences = await SubtitleParser.parseSubtitleString(srt);
+        expect(sentences, hasLength(2));
+        expect(sentences[0].text, 'Hello world');
+        expect(sentences[0].startTime, Duration.zero);
+        expect(sentences[1].text, 'How are you');
+      });
+
+      test('空字符串返回空列表', () async {
+        final sentences = await SubtitleParser.parseSubtitleString('');
+        expect(sentences, isEmpty);
+      });
+    });
+
+    group('parseSubtitleStrictString（字符串严格校验）', () {
+      test('有效 SRT 返回句子', () async {
+        final sentences = await SubtitleParser.parseSubtitleStrictString(
+          '1\n00:00:00,000 --> 00:00:01,000\nHi\n',
+        );
+        expect(sentences.single.text, 'Hi');
+      });
+
+      test('空内容抛 empty 异常', () async {
+        try {
+          await SubtitleParser.parseSubtitleStrictString('');
           fail('应抛异常');
         } on SubtitleParseException catch (e) {
           expect(

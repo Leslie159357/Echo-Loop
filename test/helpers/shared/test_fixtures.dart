@@ -17,23 +17,37 @@ import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/models/tag.dart';
 
 /// 创建测试用 AudioItem
+///
+/// 字幕内容入库后，`hasTranscript` 以 [transcriptSource] 为准。为保持「默认有字幕」
+/// 的旧语义，未显式传 [transcriptSource] 时按 [transcriptPath] 是否有值自动推导
+/// （有路径 → local，无路径 → 无字幕）。需要精确控制时显式传入。
 AudioItem createTestAudioItem({
   String id = 'test-audio-1',
   String name = 'Test Audio',
   String audioPath = 'audios/test.mp3',
   String? transcriptPath = 'transcripts/test.srt',
+  Object? transcriptSource = _deriveSource,
   DateTime? addedDate,
   int totalDuration = 120,
 }) {
+  final resolvedSource = identical(transcriptSource, _deriveSource)
+      ? ((transcriptPath != null && transcriptPath.isNotEmpty)
+            ? TranscriptSource.local
+            : null)
+      : transcriptSource as TranscriptSource?;
   return AudioItem(
     id: id,
     name: name,
     audioPath: audioPath,
     transcriptPath: transcriptPath,
+    transcriptSource: resolvedSource,
     addedDate: addedDate ?? DateTime(2026, 1, 1),
     totalDuration: totalDuration,
   );
 }
+
+/// [createTestAudioItem] 的 transcriptSource 哨兵：表示「按 transcriptPath 推导」。
+const Object _deriveSource = Object();
 
 /// 创建测试用 Sentence 列表
 List<Sentence> createTestSentences({int count = 5}) {

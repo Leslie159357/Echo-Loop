@@ -171,7 +171,10 @@ void main() {
     });
 
     testWidgets('用户音频无字幕时不显示编辑字幕菜单', (tester) async {
-      final item = baseItem.copyWith(transcriptPath: null);
+      final item = baseItem.copyWith(
+        transcriptPath: null,
+        transcriptSource: null,
+      );
       await tester.pumpWidget(
         buildCompactTile(AudioLibraryState(audioItems: [item])),
       );

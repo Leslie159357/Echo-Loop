@@ -19,10 +19,45 @@ import 'package:echo_loop/database/daos/stage_completion_dao.dart'
 
 // ========== FakeAudioItemDao ==========
 
-/// 无操作 AudioItemDao — 所有查询返回 null/空
+/// 无操作 AudioItemDao — 默认查询返回 null/空；字幕内容与词级时间戳走内存存储，
+/// 方便测试断言 transcript_srt 写入。
 class FakeAudioItemDao implements AudioItemDao {
+  /// 内存存储：audioItemId → 字幕 SRT 内容
+  final Map<String, String?> transcriptSrtStore = {};
+
+  /// 内存存储：audioItemId → 词级时间戳 JSON
+  final Map<String, String?> wordTimestampsStore = {};
+
   @override
   Future<AudioItem?> getById(String id) async => null;
+
+  @override
+  Future<String?> getTranscriptSrt(String audioItemId) async =>
+      transcriptSrtStore[audioItemId];
+
+  @override
+  Future<void> updateTranscriptSrt(String audioItemId, String? srt) async {
+    transcriptSrtStore[audioItemId] = srt;
+  }
+
+  @override
+  Future<String?> getWordTimestamps(String audioItemId) async =>
+      wordTimestampsStore[audioItemId];
+
+  @override
+  Future<void> updateWordTimestamps(String audioItemId, String? json) async {
+    wordTimestampsStore[audioItemId] = json;
+  }
+
+  @override
+  Future<void> saveTranscriptContent(
+    String audioItemId, {
+    required String srt,
+    required String? wordTimestampsJson,
+  }) async {
+    transcriptSrtStore[audioItemId] = srt;
+    wordTimestampsStore[audioItemId] = wordTimestampsJson;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => Future<dynamic>.value();

@@ -5,10 +5,14 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:echo_loop/database/app_database.dart' as db;
+import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/word_timestamp.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
@@ -72,12 +76,14 @@ AudioItem _testAudioItem({
 ProviderContainer _createContainer({
   required MockTranscriptionApiClient mockApi,
   required MockTranscriptionFileOps mockFileOps,
+  required db.AppDatabase database,
   MockSubtitleAutoAlignService? mockAutoAlignService,
   List<AudioItem>? audioItems,
 }) {
   final overrides = <Override>[
     transcriptionApiClientProvider.overrideWithValue(mockApi),
     transcriptionFileOpsProvider.overrideWithValue(mockFileOps),
+    appDatabaseProvider.overrideWithValue(database),
     audioLibraryProvider.overrideWith(TestAudioLibrary.new),
     // 避免测试触达 SharedPreferences（需要 Flutter binding）。
     appSettingsProvider.overrideWith(() => _FakeAppSettings()),
@@ -90,16 +96,38 @@ ProviderContainer _createContainer({
   }
   final container = ProviderContainer(overrides: overrides);
   // 初始化音频库
+  final items = audioItems ?? [_testAudioItem()];
   (container.read(audioLibraryProvider.notifier) as TestAudioLibrary).setItems(
-    audioItems ?? [_testAudioItem()],
+    items,
   );
   return container;
+}
+
+/// 把测试音频行插入内存 DB，让 saveTranscriptContent 的 UPDATE 能命中。
+Future<void> _seedAudioRows(
+  db.AppDatabase database,
+  List<AudioItem> items,
+) async {
+  for (final item in items) {
+    await database
+        .into(database.audioItems)
+        .insert(
+          db.AudioItemsCompanion.insert(
+            id: item.id,
+            name: item.name,
+            audioPath: Value(item.audioPath),
+            addedDate: item.addedDate,
+            updatedAt: DateTime(2026),
+          ),
+        );
+  }
 }
 
 void main() {
   late MockTranscriptionApiClient mockApi;
   late MockTranscriptionFileOps mockFileOps;
   late MockSubtitleAutoAlignService mockAutoAlignService;
+  late db.AppDatabase database;
 
   setUpAll(() {
     registerFallbackValue(FakeAudioItem());
@@ -109,6 +137,7 @@ void main() {
     mockApi = MockTranscriptionApiClient();
     mockFileOps = MockTranscriptionFileOps();
     mockAutoAlignService = MockSubtitleAutoAlignService();
+    database = db.AppDatabase(NativeDatabase.memory());
 
     // 所有调用 startTranscription 的测试都需要 getDataDir
     when(
@@ -126,11 +155,16 @@ void main() {
     );
   });
 
+  tearDown(() async {
+    await database.close();
+  });
+
   group('TranscriptionTaskManager', () {
     test('初始状态为空 Map', () {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final state = container.read(transcriptionTaskManagerProvider);
       expect(state, isEmpty);
@@ -141,6 +175,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -153,6 +188,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -179,6 +215,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -199,6 +236,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -221,6 +259,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -239,6 +278,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
       );
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
@@ -259,10 +299,6 @@ void main() {
         () => mockFileOps.computeSha256(any()),
       ).thenAnswer((_) async => 'abc123');
       when(() => mockFileOps.getFileSize(any())).thenAnswer((_) async => 1024);
-      when(
-        () => mockFileOps.saveSrt(any(), any()),
-      ).thenAnswer((_) async => 'transcripts/test_ai.srt');
-      when(() => mockFileOps.getStats(any())).thenAnswer((_) async => (5, 50));
 
       // mock API: 音频已存在 + 字幕缓存命中
       when(
@@ -310,8 +346,10 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
+      await _seedAudioRows(database, [audioItem]);
       final notifier = container.read(
         transcriptionTaskManagerProvider.notifier,
       );
@@ -342,8 +380,12 @@ void main() {
             mockApi.getJobStatus(any(), accessToken: any(named: 'accessToken')),
       );
 
-      // 应该保存 SRT
-      verify(() => mockFileOps.saveSrt('test-audio-1', any())).called(1);
+      // 字幕内容应写入 DB transcript_srt 列（含转录文本）
+      final savedSrt = await database.audioItemDao.getTranscriptSrt(
+        'test-audio-1',
+      );
+      expect(savedSrt, isNotNull);
+      expect(savedSrt!, contains('Hello world'));
 
       // 最终状态是 Completed
       expect(
@@ -428,14 +470,10 @@ void main() {
         ),
       );
 
-      when(
-        () => mockFileOps.saveSrt(any(), any()),
-      ).thenAnswer((_) async => 'transcripts/test_ai.srt');
-      when(() => mockFileOps.getStats(any())).thenAnswer((_) async => (1, 1));
-
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
@@ -474,10 +512,6 @@ void main() {
       final audioItem = _testAudioItem(audioSha256: 'abc123');
 
       when(() => mockFileOps.getFileSize(any())).thenAnswer((_) async => 1024);
-      when(
-        () => mockFileOps.saveSrt(any(), any()),
-      ).thenAnswer((_) async => 'transcripts/test_ai.srt');
-      when(() => mockFileOps.getStats(any())).thenAnswer((_) async => (1, 2));
 
       when(
         () => mockApi.getUploadUrl(
@@ -539,6 +573,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         mockAutoAlignService: mockAutoAlignService,
         audioItems: [audioItem],
       );
@@ -563,10 +598,6 @@ void main() {
       final audioItem = _testAudioItem(audioSha256: 'abc123');
 
       when(() => mockFileOps.getFileSize(any())).thenAnswer((_) async => 1024);
-      when(
-        () => mockFileOps.saveSrt(any(), any()),
-      ).thenAnswer((_) async => 'transcripts/test_ai.srt');
-      when(() => mockFileOps.getStats(any())).thenAnswer((_) async => (1, 2));
 
       when(
         () => mockApi.getUploadUrl(
@@ -630,6 +661,7 @@ void main() {
         overrides: [
           transcriptionApiClientProvider.overrideWithValue(mockApi),
           transcriptionFileOpsProvider.overrideWithValue(mockFileOps),
+          appDatabaseProvider.overrideWithValue(database),
           audioLibraryProvider.overrideWith(TestAudioLibrary.new),
           subtitleAutoAlignServiceProvider.overrideWithValue(
             mockAutoAlignService,
@@ -666,10 +698,6 @@ void main() {
       ).copyWith(remoteAudioId: 'remote-1');
 
       when(() => mockFileOps.getFileSize(any())).thenAnswer((_) async => 1024);
-      when(
-        () => mockFileOps.saveSrt(any(), any()),
-      ).thenAnswer((_) async => 'transcripts/test_ai.srt');
-      when(() => mockFileOps.getStats(any())).thenAnswer((_) async => (1, 2));
 
       when(
         () => mockApi.getUploadUrl(
@@ -731,6 +759,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         mockAutoAlignService: mockAutoAlignService,
         audioItems: [audioItem],
       );
@@ -787,6 +816,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
@@ -828,6 +858,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
@@ -868,6 +899,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
@@ -931,6 +963,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
@@ -968,6 +1001,7 @@ void main() {
       final container = _createContainer(
         mockApi: mockApi,
         mockFileOps: mockFileOps,
+        database: database,
         audioItems: [audioItem],
       );
       final notifier = container.read(
