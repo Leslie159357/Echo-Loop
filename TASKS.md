@@ -3,6 +3,26 @@
 > 最后更新：2026-06-06
 > 当前焦点：字幕编辑器词级编辑（任务 1/7 已完成）
 
+## 已完成：修复自由练习点击句子从音频开头播放
+
+自由练习普通播放器点击字幕句子时，应从该句起点播放；此前字幕编辑器引入的无条件 `clearClip()` 会在无 clip 状态下也重载音源，导致选句后的 seek/play 退回音频开头。
+
+### 实现
+- [x] `AudioEngineState` 新增 `isClipActive`，显式区分“当前是否真的处于裁剪播放”与 `clipStart == 0`
+- [x] `AudioEngine.clearClip()` 仅在 clip active 时清理，避免自由练习普通播放器无 clip 选句时重载整条音频
+- [x] `setClip` / `playClipOnce` / `playRangeOnce` 设置 clip active，`loadAudio` / `clearClip` 清除 clip active
+- [x] 保留字幕编辑器句子播放和单词播放路径：句子仍走 `playClipOnce`，单词仍走 `playRangeOnce`；clip 起点为 0 的首句也会被正确清理
+
+### 验证
+- [x] `dart format lib/models/audio_engine_state.dart lib/providers/audio_engine/audio_engine_provider.dart test/models/audio_engine_state_test.dart test/providers/audio_engine_provider_test.dart`
+- [x] `flutter analyze lib/models/audio_engine_state.dart lib/providers/audio_engine/audio_engine_provider.dart test/models/audio_engine_state_test.dart test/providers/audio_engine_provider_test.dart`：No issues found
+- [x] `flutter test test/models/audio_engine_state_test.dart test/providers/audio_engine_provider_test.dart`：6 passed
+- [x] `flutter test test/screens/player_screen_test.dart test/widgets/playback_controls_test.dart`：22 passed
+- [x] `flutter test test/features/subtitle_editor/subtitle_editor_controller_test.dart test/features/subtitle_editor/subtitle_waveform_view_test.dart test/features/subtitle_editor/subtitle_editor_stop_position_test.dart`：61 passed（含句子播放、单词播放）
+- [x] `scripts/check.sh`：已跑到全量 `flutter test` 约 1228 tests / 4 skip，未见失败；随后按用户要求中断全量检查，改跑上述定向验证
+
+**完成时间**: 2026-06-06 20:18 +0800
+
 ## 已完成：字幕编辑器词级就地编辑 + 词处分句 + 浮层工具栏
 
 点击单词后在该词上方弹出带指向三角的悬浮工具栏（编辑 / 断句），让词级修改与断句直接在 label 上完成。

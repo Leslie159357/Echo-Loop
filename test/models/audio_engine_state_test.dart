@@ -8,6 +8,7 @@ void main() {
         const state = AudioEngineState();
 
         expect(state.clipStart, Duration.zero);
+        expect(state.isClipActive, isFalse);
         expect(state.totalDuration, isNull);
         expect(state.isLoading, isFalse);
         expect(state.sessionId, 0);
@@ -21,11 +22,13 @@ void main() {
         const state = AudioEngineState();
         final copied = state.copyWith(
           clipStart: const Duration(seconds: 30),
+          isClipActive: true,
           isLoading: true,
           sessionId: 5,
         );
 
         expect(copied.clipStart, const Duration(seconds: 30));
+        expect(copied.isClipActive, isTrue);
         expect(copied.isLoading, isTrue);
         expect(copied.sessionId, 5);
         // 未修改字段保持原值
@@ -50,11 +53,13 @@ void main() {
       test('不传参数时保持原值', () {
         final state = const AudioEngineState(
           clipStart: Duration(seconds: 10),
+          isClipActive: true,
           sessionId: 3,
         );
         final copied = state.copyWith();
 
         expect(copied.clipStart, const Duration(seconds: 10));
+        expect(copied.isClipActive, isTrue);
         expect(copied.sessionId, 3);
       });
     });

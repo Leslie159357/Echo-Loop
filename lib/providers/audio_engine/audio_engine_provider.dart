@@ -71,6 +71,7 @@ class AudioEngine extends _$AudioEngine {
       state = state.copyWith(
         totalDuration: duration,
         clipStart: Duration.zero,
+        isClipActive: false,
         currentAudioId: item.id,
         isLoading: false,
       );
@@ -160,12 +161,13 @@ class AudioEngine extends _$AudioEngine {
 
   // --- Clip 管理 ---
   Future<void> setClip(Duration start, Duration end) async {
-    state = state.copyWith(clipStart: start);
+    state = state.copyWith(clipStart: start, isClipActive: true);
     await _audioPlayer.setClip(start: start, end: end);
   }
 
   Future<void> clearClip() async {
-    state = state.copyWith(clipStart: Duration.zero);
+    if (!state.isClipActive) return;
+    state = state.copyWith(clipStart: Duration.zero, isClipActive: false);
     await _audioPlayer.setClip(start: null, end: null);
   }
 
@@ -178,7 +180,7 @@ class AudioEngine extends _$AudioEngine {
       '▶ playClip: loadedAudio=${state.currentAudioId}, '
           'clip=${sentence.startTime.inMilliseconds}-${sentence.endTime.inMilliseconds}ms',
     );
-    state = state.copyWith(clipStart: sentence.startTime);
+    state = state.copyWith(clipStart: sentence.startTime, isClipActive: true);
     await _audioPlayer.setClip(
       start: sentence.startTime,
       end: sentence.endTime,
@@ -276,7 +278,7 @@ class AudioEngine extends _$AudioEngine {
       return;
     }
 
-    state = state.copyWith(clipStart: start);
+    state = state.copyWith(clipStart: start, isClipActive: true);
     await _audioPlayer.setClip(start: start, end: end);
 
     // setClip 是 await 点，microtask 可能在此期间改变 session
