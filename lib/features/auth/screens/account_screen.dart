@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +11,45 @@ import '../../../theme/app_theme.dart';
 import '../providers/auth_providers.dart';
 
 enum AuthDisplayProvider { apple, google, email, unknown }
+
+/// 从当前 Supabase Session 判断本次登录实际使用的认证方式。
+///
+/// JWT 的 `amr` 记录当前会话的认证方法：邮箱验证码为 `otp`，第三方登录为
+/// `oauth`。关联身份只用于进一步区分 Apple / Google，避免用户关联过 Google
+/// 后改用邮箱 OTP 登录时仍被展示为 Google 登录。
+AuthDisplayProvider authDisplayProviderForSession(Session session) {
+  final authenticationMethods = _authenticationMethods(session.accessToken);
+  if (authenticationMethods.contains('otp')) {
+    return AuthDisplayProvider.email;
+  }
+  if (authenticationMethods.contains('oauth')) {
+    return authDisplayProviderForUser(session.user);
+  }
+  return authDisplayProviderForUser(session.user);
+}
+
+Set<String> _authenticationMethods(String accessToken) {
+  final segments = accessToken.split('.');
+  if (segments.length != 3) return const {};
+
+  try {
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(segments[1]))),
+    );
+    if (payload is! Map<String, Object?>) return const {};
+
+    final amr = payload['amr'];
+    if (amr is! Iterable<Object?>) return const {};
+
+    return {
+      for (final entry in amr)
+        if (entry is Map && entry['method'] is String)
+          (entry['method'] as String).toLowerCase(),
+    };
+  } on FormatException {
+    return const {};
+  }
+}
 
 /// 从 Supabase User 的 provider 元数据判断登录方式。
 ///
@@ -112,14 +153,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final l10n = AppLocalizations.of(context)!;
     final sessionState = ref.watch(supabaseSessionProvider);
     final session = sessionState.valueOrNull;
-    final user = session?.user;
 
-    if (user == null) {
+    if (session == null) {
       if (sessionState.hasValue) {
         _redirectToSettingsIfSignedOut();
       }
       return const Scaffold(body: SizedBox.shrink());
     }
+    final user = session.user;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.account)),
@@ -129,7 +170,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           children: [
             _SignedInAccountCard(
               email: user.email ?? user.id,
-              provider: authDisplayProviderForUser(user),
+              provider: authDisplayProviderForSession(session),
               isSigningOut: _isSigningOut,
               onSignOut: _signOut,
             ),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:echo_loop/features/auth/screens/email_sign_in_screen.dart';
 import 'package:echo_loop/features/auth/screens/login_screen.dart';
 import 'package:echo_loop/features/auth/screens/account_screen.dart';
@@ -741,6 +743,71 @@ void main() {
     expect(find.text('long.google.account@example.com'), findsOneWidget);
   });
 
+  testWidgets('账号页关联 Google 后使用邮箱 OTP 登录仍显示邮箱账户', (tester) async {
+    final user = User(
+      id: 'user-1',
+      appMetadata: const {
+        'provider': 'google',
+        'providers': ['email', 'google'],
+      },
+      userMetadata: const {},
+      aud: 'authenticated',
+      email: 'user@example.com',
+      createdAt: '2026-06-07T00:00:00.000Z',
+      identities: const [
+        UserIdentity(
+          id: 'identity-1',
+          userId: 'user-1',
+          identityData: {},
+          identityId: 'identity-1',
+          provider: 'google',
+          createdAt: '2026-06-04T00:00:00.000Z',
+          lastSignInAt: '2026-06-04T00:00:00.000Z',
+        ),
+        UserIdentity(
+          id: 'identity-2',
+          userId: 'user-1',
+          identityData: {},
+          identityId: 'identity-2',
+          provider: 'email',
+          createdAt: '2026-06-07T00:00:00.000Z',
+          lastSignInAt: '2026-06-07T00:00:00.000Z',
+        ),
+      ],
+    );
+    final session = Session(
+      accessToken: _jwtWithAuthenticationMethod('otp'),
+      tokenType: 'bearer',
+      user: user,
+      refreshToken: 'refresh',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          supabaseSessionProvider.overrideWith((ref) => Stream.value(session)),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('en'), Locale('zh')],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light(),
+          home: const AccountScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account'), findsNWidgets(2));
+    expect(find.text('user@example.com'), findsOneWidget);
+    expect(find.text('Google account'), findsNothing);
+  });
+
   test('账号显示登录方式优先使用 Supabase identities provider', () {
     final user = User(
       id: 'user-1',
@@ -765,6 +832,27 @@ void main() {
     expect(authDisplayProviderForUser(user), AuthDisplayProvider.google);
   });
 
+  test('当前会话使用 OTP 时优先显示邮箱登录方式', () {
+    final user = User(
+      id: 'user-1',
+      appMetadata: const {
+        'provider': 'google',
+        'providers': ['email', 'google'],
+      },
+      userMetadata: const {},
+      aud: 'authenticated',
+      email: 'user@example.com',
+      createdAt: '2026-06-07T00:00:00.000Z',
+    );
+    final session = Session(
+      accessToken: _jwtWithAuthenticationMethod('otp'),
+      tokenType: 'bearer',
+      user: user,
+    );
+
+    expect(authDisplayProviderForSession(session), AuthDisplayProvider.email);
+  });
+
   testWidgets('可见登录方式图标左侧对齐且尺寸一致', (tester) async {
     await tester.pumpWidget(_app(_authRouter()));
     await tester.pumpAndSettle();
@@ -784,4 +872,12 @@ void main() {
     expect(appleRect.height, 22);
     expect(emailRect.height, 22);
   });
+}
+
+String _jwtWithAuthenticationMethod(String method) {
+  final header = base64Url.encode(utf8.encode('{"alg":"none"}'));
+  final payload = base64Url.encode(
+    utf8.encode('{"amr":[{"method":"$method","timestamp":0}]}'),
+  );
+  return '$header.$payload.';
 }

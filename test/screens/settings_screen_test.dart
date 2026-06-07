@@ -3,6 +3,8 @@
 /// 测试设置页面的渲染和交互。
 library;
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -243,6 +245,42 @@ void main() {
         expect(find.text('Signed in with Google'), findsOneWidget);
       });
 
+      testWidgets('关联 Google 后使用邮箱 OTP 登录在账号入口显示邮箱', (tester) async {
+        final user = User(
+          id: 'user-1',
+          appMetadata: const {
+            'provider': 'google',
+            'providers': ['email', 'google'],
+          },
+          userMetadata: const {},
+          aud: 'authenticated',
+          email: 'user@example.com',
+          createdAt: '2026-06-07T00:00:00.000Z',
+        );
+        final session = Session(
+          accessToken: _jwtWithAuthenticationMethod('otp'),
+          tokenType: 'bearer',
+          user: user,
+          refreshToken: 'refresh',
+        );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: [
+              ...buildOverrides(),
+              supabaseSessionProvider.overrideWith(
+                (ref) => Stream<Session?>.value(session),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('user@example.com'), findsOneWidget);
+        expect(find.text('Signed in with Google'), findsNothing);
+      });
+
       testWidgets('邮箱登录不通过 Apple relay 域名误判登录方式', (tester) async {
         final user = User(
           id: 'user-1',
@@ -450,6 +488,14 @@ void main() {
       });
     });
   });
+}
+
+String _jwtWithAuthenticationMethod(String method) {
+  final header = base64Url.encode(utf8.encode('{"alg":"none"}'));
+  final payload = base64Url.encode(
+    utf8.encode('{"amr":[{"method":"$method","timestamp":0}]}'),
+  );
+  return '$header.$payload.';
 }
 
 /// 测试用 DeveloperOptions Notifier，固定返回指定值。

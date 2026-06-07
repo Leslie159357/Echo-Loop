@@ -3,6 +3,24 @@
 > 最后更新：2026-06-07
 > 当前焦点：字幕编辑器词级编辑（任务 1/7 已完成）
 
+## 已完成：账号入口按本次登录方式展示
+
+修复同一账号关联 Google 后改用邮箱 OTP 登录，设置页仍显示“已通过 Google 登录”的问题；账号入口现在优先读取当前 Supabase Session 的认证方法。
+
+### 实现
+- [x] 解析当前 access token 的 `amr` 声明，邮箱 OTP 会话明确识别为邮箱登录
+- [x] OAuth 会话继续结合 Supabase provider 元数据区分 Apple / Google
+- [x] token 缺失或无法解析时保留原 provider 元数据兜底
+- [x] 设置页邮箱 OTP 登录显示邮箱地址，账号详情页显示普通邮箱账户
+- [x] 补充“关联 Google 后使用邮箱 OTP 登录”的设置页和账号页回归测试
+
+### 验证
+- [x] `flutter analyze lib/features/auth/screens/account_screen.dart lib/screens/settings_screen.dart test/features/auth/auth_flow_screens_test.dart test/screens/settings_screen_test.dart`：No issues found
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart test/screens/settings_screen_test.dart`：51 passed
+- [x] `scripts/check.sh`：全量 `flutter analyze` 通过（仅仓库既有 101 条 warning/info）；全量 `flutter test` 2565 passed、11 skip；macOS integration 中 `native_audio_decoder_integration_test.dart` 通过，`asr_engine_test.dart` / `app_test.dart` 失败在本地 debug connection 启动失败（`The log reader stopped unexpectedly, or never started`），与本次账号展示改动无关
+
+**完成时间**: 2026-06-07 09:37 +0800
+
 ## 已完成：登录流程结束后返回来源页面
 
 用户从 AI 转录、翻译、解析、意群等受保护功能进入登录流程后，登录成功、失败或取消均返回触发登录前的页面，不再固定切换到“我的”Tab；失败提示会在来源页面继续显示。

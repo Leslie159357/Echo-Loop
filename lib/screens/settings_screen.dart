@@ -128,15 +128,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
     final session = ref.watch(supabaseSessionProvider).valueOrNull;
     final isSignedIn = session != null;
-    final user = session?.user;
-    final accountIdentifier = isSignedIn ? (user!.email ?? user.id) : null;
-    final accountSubtitle = accountIdentifier == null
+    final accountSubtitle = session == null
         ? null
-        : switch (authDisplayProviderForUser(user!)) {
+        : switch (authDisplayProviderForSession(session)) {
             AuthDisplayProvider.apple => l10n.authSignedInWithApple,
             AuthDisplayProvider.google => l10n.authSignedInWithGoogle,
-            AuthDisplayProvider.email || AuthDisplayProvider.unknown =>
-              compactAccountListIdentifier(accountIdentifier),
+            AuthDisplayProvider.email ||
+            AuthDisplayProvider.unknown => compactAccountListIdentifier(
+              session.user.email ?? session.user.id,
+            ),
           };
 
     return _buildSection(
