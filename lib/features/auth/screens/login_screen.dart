@@ -259,10 +259,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
   }
 
-  /// 认证流程由来源页通过 push 打开，因此完成后优先回退原导航栈。
+  /// 登录成功或用户取消时结束认证流程；失败时留在主登录页，方便改选其它方式。
   ///
   /// 独立深链进入登录页时没有可回退页面，继续使用“我的”页作为兜底。
   void _finishAuthAttempt(AuthAttemptResult result) {
+    if (result == AuthAttemptResult.failure) {
+      return;
+    }
     if (context.canPop()) {
       context.pop(result);
       return;

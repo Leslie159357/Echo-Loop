@@ -3,6 +3,23 @@
 > 最后更新：2026-06-07
 > 当前焦点：字幕编辑器词级编辑（任务 1/7 已完成）
 
+## 已完成：登录方式失败后停留在主登录页
+
+修复 Apple / Google / 邮箱验证码等登录尝试失败后直接返回来源页面的问题；失败时保留在登录主页面并显示错误提示，让用户可以改选其它登录方式。登录成功和用户主动取消仍结束认证流程并回到来源页面。
+
+### 实现
+- [x] 主登录页统一处理 `AuthAttemptResult.failure`：失败结果不再 pop 导航栈
+- [x] Apple / Google 登录失败显示 snackbar 后停留在登录主页面
+- [x] 邮箱 OTP 校验失败从验证码页回到登录主页面，并保留错误提示
+- [x] 成功和取消路径保持原行为：成功返回来源页面，取消静默返回来源页面
+
+### 验证
+- [x] `flutter analyze lib/features/auth/screens/login_screen.dart lib/features/auth/auth_form_utils.dart test/features/auth/auth_flow_screens_test.dart`：No issues found
+- [x] `flutter test test/features/auth/auth_flow_screens_test.dart`：33 passed
+- [x] `scripts/check.sh`：全量 `flutter analyze` 通过（仅仓库既有 100 条 warning/info）；全量 `flutter test` 2573 passed、11 skip；macOS integration 已完成构建并启动运行，但在最终汇总前被用户中断，未取得最终结果
+
+**完成时间**: 2026-06-07 13:25 +0800
+
 ## 已完成：登录方式与字幕编辑器入口埋点
 
 补齐登录和字幕编辑功能的粗粒度行为埋点，不采集验证码、登录结果或字幕编辑细节操作。
