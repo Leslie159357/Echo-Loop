@@ -15,6 +15,22 @@ void main() {
       });
     });
 
+    test('时光机最小时间为当前分钟的下一分钟', () {
+      final now = DateTime(2026, 6, 9, 12, 28, 30);
+
+      expect(minimumTimeMachineDateTime(now), DateTime(2026, 6, 9, 12, 29));
+    });
+
+    test('过去的时光机时间会被规整到最小未来时间', () {
+      final now = DateTime(2026, 6, 9, 12, 28, 30);
+      final past = DateTime(2026, 5, 29, 12);
+
+      expect(
+        normalizedFutureTimeMachineDateTime(past, now),
+        DateTime(2026, 6, 9, 12, 29),
+      );
+    });
+
     group('copyWith', () {
       test('setThemeMode 更新状态', () {
         const state = AppSettingsState();
@@ -79,8 +95,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('加载已保存的时光机时间', () async {
-      final expected = DateTime(2026, 3, 11, 21, 30);
+    test('加载已保存的未来时光机时间', () async {
+      final expected = DateTime(2027, 3, 11, 21, 30);
       SharedPreferences.setMockInitialValues({
         'developer_time_machine_at_ms': expected.millisecondsSinceEpoch,
       });
@@ -93,6 +109,41 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(container.read(appSettingsProvider).timeMachineDateTime, expected);
+    });
+
+    test('加载已保存的过去时光机时间时自动清除', () async {
+      final past = DateTime(2020, 1, 1);
+      SharedPreferences.setMockInitialValues({
+        'developer_time_machine_at_ms': past.millisecondsSinceEpoch,
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(appSettingsProvider);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(appSettingsProvider).timeMachineDateTime, isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt('developer_time_machine_at_ms'), isNull);
+    });
+
+    test('保存过去时光机时间时自动提升到未来', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final before = minimumTimeMachineDateTime(DateTime.now());
+
+      await container
+          .read(appSettingsProvider.notifier)
+          .setTimeMachineDateTime(DateTime(2020, 1, 1));
+
+      final saved = container.read(appSettingsProvider).timeMachineDateTime;
+      expect(saved, isNotNull);
+      expect(saved!.isBefore(before), isFalse);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt('developer_time_machine_at_ms'), isNotNull);
     });
 
     test('isDemoMode 默认为 false', () async {

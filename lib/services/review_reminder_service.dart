@@ -78,10 +78,12 @@ class ReviewReminderService {
     required NotificationTapRouterBridge bridge,
     required ReviewReminderTimeCalculator timeCalculator,
     bool? supportsSystemNotificationOverride,
+    DateTime Function()? systemNow,
   }) : _plugin = plugin,
        _bridge = bridge,
        _timeCalculator = timeCalculator,
-       _supportsSystemNotificationOverride = supportsSystemNotificationOverride;
+       _supportsSystemNotificationOverride = supportsSystemNotificationOverride,
+       _systemNow = systemNow ?? DateTime.now;
 
   final FlutterLocalNotificationsPlugin _plugin;
   final NotificationTapRouterBridge _bridge;
@@ -89,6 +91,9 @@ class ReviewReminderService {
 
   /// 测试覆盖：指定是否支持系统通知
   final bool? _supportsSystemNotificationOverride;
+
+  /// 系统通知插件使用设备真实时间校验 scheduledDate，不能跟随开发者时光机。
+  final DateTime Function() _systemNow;
 
   bool _initialized = false;
   bool _timezoneReady = false;
@@ -267,9 +272,17 @@ class ReviewReminderService {
       return;
     }
 
+    // 系统通知使用真实设备时间；开发者时光机可能让业务层传入
+    // 对应用内时间来说是未来、但对系统来说已过期的提醒。
+    final systemNow = _systemNow();
+    final schedulableReminders = reminders
+        .where((r) => r.triggerAt.isAfter(systemNow))
+        .toList(growable: false);
+    var skippedExpiredCount = reminders.length - schedulableReminders.length;
+
     // 构建快照
     final newSnapshot = <String>{
-      for (final r in reminders)
+      for (final r in schedulableReminders)
         '${r.audioId}|${r.triggerAt.millisecondsSinceEpoch}',
     };
     if (_lastSnapshot != null && setEquals(newSnapshot, _lastSnapshot)) {
@@ -279,16 +292,22 @@ class ReviewReminderService {
 
     try {
       // cancel 旧通知（含跨重启残留的 per-audio 通知）
-      await _cancelStalePerAudioNotifications(reminders);
+      await _cancelStalePerAudioNotifications(schedulableReminders);
       AppLogger.log(
         _logTag,
-        'syncPerAudioReminders scheduling count=${reminders.length} '
+        'syncPerAudioReminders scheduling count=${schedulableReminders.length} '
+        'skippedExpired=$skippedExpiredCount '
         'androidMode=${AndroidScheduleMode.inexactAllowWhileIdle.name}',
       );
 
       // 调度新通知
-      for (final r in reminders) {
+      var scheduledCount = 0;
+      for (final r in schedulableReminders) {
         final nid = _perAudioNotificationId(r.audioId);
+        if (!r.triggerAt.isAfter(_systemNow())) {
+          skippedExpiredCount += 1;
+          continue;
+        }
         final scheduledTz = tz.TZDateTime.from(r.triggerAt, tz.local);
 
         await _plugin.zonedSchedule(
@@ -311,10 +330,12 @@ class ReviewReminderService {
           payload: '$_openAudioPrefix${r.audioId}',
         );
         _scheduledPerAudioIds.add(nid);
+        scheduledCount += 1;
       }
       AppLogger.log(
         _logTag,
-        'syncPerAudioReminders success count=${reminders.length}',
+        'syncPerAudioReminders success count=$scheduledCount '
+        'skippedExpired=$skippedExpiredCount',
       );
       await _logPendingSnapshot('perAudioScheduled');
     } on MissingPluginException {

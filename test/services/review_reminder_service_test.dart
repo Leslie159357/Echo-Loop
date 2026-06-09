@@ -42,7 +42,10 @@ void main() {
   late MockReviewReminderTimeCalculator mockTimeCalc;
 
   /// 创建 service 并 stub plugin（含指定的 launch payload）
-  ReviewReminderService createService({String? launchPayload}) {
+  ReviewReminderService createService({
+    String? launchPayload,
+    DateTime Function()? systemNow,
+  }) {
     mockPlugin = MockFlutterLocalNotificationsPlugin();
     bridge = NotificationTapRouterBridge();
     mockTimeCalc = MockReviewReminderTimeCalculator();
@@ -123,6 +126,7 @@ void main() {
       bridge: bridge,
       timeCalculator: mockTimeCalc,
       supportsSystemNotificationOverride: true, // 强制启用通知支持（CI 在 Ubuntu 上运行）
+      systemNow: systemNow,
     );
   }
 
@@ -182,6 +186,102 @@ void main() {
           payload: any(named: 'payload'),
         ),
       ).called(1);
+    });
+
+    test('跳过对真实系统时间已过期的单条提醒', () async {
+      final service = createService();
+
+      await service.syncPerAudioReminders([
+        PerAudioReminderInfo(
+          audioId: 'expired-audio',
+          audioName: 'Expired Audio',
+          triggerAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          reviewRound: 1,
+        ),
+      ]);
+
+      verifyNever(
+        () => mockPlugin.zonedSchedule(
+          any(),
+          any(),
+          any(),
+          any(),
+          any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      );
+    });
+
+    test('过期提醒被过滤为空时仍清理残留 per-audio 通知', () async {
+      final service = createService();
+
+      when(() => mockPlugin.pendingNotificationRequests()).thenAnswer(
+        (_) async => [
+          const PendingNotificationRequest(
+            5000,
+            'Echo Loop',
+            'old',
+            'old_payload',
+          ),
+        ],
+      );
+
+      await service.syncPerAudioReminders([
+        PerAudioReminderInfo(
+          audioId: 'expired-audio',
+          audioName: 'Expired Audio',
+          triggerAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          reviewRound: 1,
+        ),
+      ]);
+
+      verifyNever(
+        () => mockPlugin.zonedSchedule(
+          any(),
+          any(),
+          any(),
+          any(),
+          any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      );
+      verify(() => mockPlugin.cancel(5000)).called(1);
+    });
+
+    test('调度前再次跳过异步等待期间过期的单条提醒', () async {
+      var tick = 0;
+      final baseTime = DateTime(2026, 6, 9, 12);
+      final service = createService(
+        systemNow: () {
+          tick += 1;
+          return tick == 1
+              ? baseTime
+              : baseTime.add(const Duration(minutes: 2));
+        },
+      );
+
+      await service.syncPerAudioReminders([
+        PerAudioReminderInfo(
+          audioId: 'late-expired-audio',
+          audioName: 'Late Expired Audio',
+          triggerAt: baseTime.add(const Duration(minutes: 1)),
+          reviewRound: 1,
+        ),
+      ]);
+
+      verifyNever(
+        () => mockPlugin.zonedSchedule(
+          any(),
+          any(),
+          any(),
+          any(),
+          any(),
+          androidScheduleMode: any(named: 'androidScheduleMode'),
+          payload: any(named: 'payload'),
+        ),
+      );
     });
 
     test('保留 iOS 通知详情，避免 Android 调度调整影响 iOS', () async {

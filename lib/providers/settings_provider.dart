@@ -21,6 +21,24 @@ const silenceThresholdMinSeconds = 1;
 const silenceThresholdMaxSeconds = 10;
 const silenceThresholdDefaultSeconds = 2;
 
+/// 时光机只允许跳到未来；picker 只有分钟精度，因此最小值取下一分钟。
+DateTime minimumTimeMachineDateTime(DateTime now) {
+  return DateTime(
+    now.year,
+    now.month,
+    now.day,
+    now.hour,
+    now.minute,
+  ).add(const Duration(minutes: 1));
+}
+
+/// 规整用户选择的时光机时间，避免调试时间早于真实系统时间。
+DateTime normalizedFutureTimeMachineDateTime(DateTime value, DateTime now) {
+  final minimum = minimumTimeMachineDateTime(now);
+  if (value.isBefore(minimum)) return minimum;
+  return value;
+}
+
 /// 支持的母语列表（BCP 47 代码 → 本地名称）
 ///
 /// 后续扩展只需在此处添加条目。
@@ -240,7 +258,12 @@ class AppSettings extends _$AppSettings {
   Future<DateTime?> _loadTimeMachineDateTime(SharedPreferences prefs) async {
     final storedMillis = prefs.getInt(_timeMachineDateTimeKey);
     if (storedMillis != null) {
-      return DateTime.fromMillisecondsSinceEpoch(storedMillis);
+      final storedDateTime = DateTime.fromMillisecondsSinceEpoch(storedMillis);
+      if (storedDateTime.isBefore(minimumTimeMachineDateTime(DateTime.now()))) {
+        await prefs.remove(_timeMachineDateTimeKey);
+        return null;
+      }
+      return storedDateTime;
     }
 
     final legacyUnlockAllReviews =
@@ -299,16 +322,22 @@ class AppSettings extends _$AppSettings {
   ///
   /// 传入 null 时恢复系统真实时间。
   Future<void> setTimeMachineDateTime(DateTime? value) async {
+    final normalizedValue = value == null
+        ? null
+        : normalizedFutureTimeMachineDateTime(value, DateTime.now());
     state = state.copyWith(
-      timeMachineDateTime: value,
-      clearTimeMachineDateTime: value == null,
+      timeMachineDateTime: normalizedValue,
+      clearTimeMachineDateTime: normalizedValue == null,
     );
 
     final prefs = await SharedPreferences.getInstance();
-    if (value == null) {
+    if (normalizedValue == null) {
       await prefs.remove(_timeMachineDateTimeKey);
     } else {
-      await prefs.setInt(_timeMachineDateTimeKey, value.millisecondsSinceEpoch);
+      await prefs.setInt(
+        _timeMachineDateTimeKey,
+        normalizedValue.millisecondsSinceEpoch,
+      );
     }
     await prefs.remove(_legacyUnlockAllReviewsKey);
   }

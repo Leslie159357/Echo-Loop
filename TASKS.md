@@ -1,7 +1,46 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-08
-> 当前焦点：修复 Android 首次学习完成后通知权限弹窗不出现
+> 最后更新：2026-06-09
+> 当前焦点：限制开发者时光机只能跳到未来
+
+## 已完成：限制开发者时光机只能跳到未来
+
+开发者时光机此前允许设置到真实系统时间之前，会让应用内复习解锁时间和系统通知插件的真实时间校验出现冲突。现在时光机入口只接受真实系统时间之后的分钟级时间；已保存的过去时间会在加载时自动清除，用户选择或保存过去时间时会规整到下一分钟，避免再次出现“应用内未来、系统通知已过期”的状态。
+
+### 实现
+- [x] 新增时光机最小可选时间计算：真实系统当前分钟的下一分钟
+- [x] 保存时光机时间时统一规整到未来；传入 null 仍恢复系统时间
+- [x] 加载旧的过去时光机配置时自动移除，避免历史调试状态继续污染复习逻辑
+- [x] 设置页日期 picker 从今天开始，时间 picker 结果保存前再次规整到未来
+- [x] 补充回归测试：最小未来时间、过去时间规整、加载过去配置自动清理、保存过去配置自动提升到未来
+
+### 验证
+- [x] `dart format lib/providers/settings_provider.dart lib/screens/settings_screen.dart test/providers/settings_provider_test.dart test/services/review_reminder_service_test.dart`
+- [x] `flutter analyze lib/services/review_reminder_service.dart lib/providers/settings_provider.dart lib/screens/settings_screen.dart test/services/review_reminder_service_test.dart test/providers/settings_provider_test.dart test/screens/settings_screen_test.dart`：No issues found
+- [x] `flutter test test/services/review_reminder_service_test.dart test/providers/settings_provider_test.dart test/screens/settings_screen_test.dart`：71 passed
+- [x] `git diff --check -- lib/services/review_reminder_service.dart lib/providers/settings_provider.dart lib/screens/settings_screen.dart test/services/review_reminder_service_test.dart test/providers/settings_provider_test.dart`：通过
+- [x] `scripts/check.sh`：`flutter analyze` 通过（仅仓库既有 warning/info）；全量 `flutter test` 2618 passed、11 skip；macOS integration 中 `native_audio_decoder_integration_test.dart` 通过，`asr_engine_test.dart` / `app_test.dart` 失败在本地 debug connection 启动失败（`The log reader stopped unexpectedly, or never started`），与本次时光机/通知逻辑无关
+
+**完成时间**: 2026-06-09 13:23 +0800
+
+## 已完成：修复时光机过去时间导致系统通知调度报错
+
+开发者时光机可以把应用内 `nowProvider` 调到过去，但系统通知插件使用设备真实时间校验 `scheduledDate`。此前单条音频复习提醒会把“应用内未来、系统真实时间已过期”的 `nextReviewAt` 传给 macOS 通知插件，导致 `Invalid argument (scheduledDate): Must be a date in the future`。现在通知服务在调用系统插件前按真实设备时间过滤过期的 per-audio reminder，并在实际 `zonedSchedule` 前二次校验，避免调试时光机状态污染真实系统通知调度。
+
+### 实现
+- [x] `ReviewReminderService.syncPerAudioReminders` 在构建快照和调度前过滤真实系统时间已过期的单条音频提醒
+- [x] 实际调用 `zonedSchedule` 前再次校验，覆盖取消旧通知等异步等待期间刚好过期的竞态
+- [x] 取消旧通知、快照去重和实际调度统一使用过滤后的 reminder 列表
+- [x] 日志补充 `skippedExpired`，便于区分“没有可调度提醒”和“时光机/过期数据被跳过”
+- [x] 补充回归测试：过期单条音频提醒不会调用 `zonedSchedule`，异步等待期间过期也不会调度
+
+### 验证
+- [x] `dart format lib/services/review_reminder_service.dart test/services/review_reminder_service_test.dart`
+- [x] `flutter analyze lib/services/review_reminder_service.dart test/services/review_reminder_service_test.dart`：No issues found
+- [x] `flutter test test/services/review_reminder_service_test.dart`：22 passed
+- [x] `scripts/check.sh`：`flutter analyze` 通过（仅仓库既有 warning/info）；全量 `flutter test` 2609 passed、11 skip；macOS integration 中 `native_audio_decoder_integration_test.dart` 通过，`asr_engine_test.dart` / `app_test.dart` 失败在本地 debug connection 启动失败（`The log reader stopped unexpectedly, or never started`），与本次通知调度修复无关
+
+**完成时间**: 2026-06-09 12:14 +0800
 
 ## 已完成：修复 Android 首次学习完成后通知权限弹窗不出现
 

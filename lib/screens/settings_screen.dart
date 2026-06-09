@@ -1154,21 +1154,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     BuildContext context,
     DateTime? currentDateTime,
   ) async {
-    final baseDateTime = _normalizedPickerBaseDateTime(currentDateTime);
+    final minimumDateTime = minimumTimeMachineDateTime(DateTime.now());
+    final baseDateTime = _normalizedPickerBaseDateTime(
+      currentDateTime,
+      minimumDateTime: minimumDateTime,
+    );
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: baseDateTime,
-      firstDate: DateTime(2020, 1, 1),
+      firstDate: DateTime(
+        minimumDateTime.year,
+        minimumDateTime.month,
+        minimumDateTime.day,
+      ),
       lastDate: DateTime(2100, 12, 31),
     );
     if (pickedDate == null) return null;
 
-    return DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      baseDateTime.hour,
-      baseDateTime.minute,
+    return normalizedFutureTimeMachineDateTime(
+      DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        baseDateTime.hour,
+        baseDateTime.minute,
+      ),
+      DateTime.now(),
     );
   }
 
@@ -1177,7 +1188,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     BuildContext context,
     DateTime? currentDateTime,
   ) async {
-    final baseDateTime = _normalizedPickerBaseDateTime(currentDateTime);
+    final baseDateTime = _normalizedPickerBaseDateTime(
+      currentDateTime,
+      minimumDateTime: minimumTimeMachineDateTime(DateTime.now()),
+    );
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(
@@ -1187,18 +1201,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (pickedTime == null) return null;
 
-    return DateTime(
-      baseDateTime.year,
-      baseDateTime.month,
-      baseDateTime.day,
-      pickedTime.hour,
-      pickedTime.minute,
+    return normalizedFutureTimeMachineDateTime(
+      DateTime(
+        baseDateTime.year,
+        baseDateTime.month,
+        baseDateTime.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      ),
+      DateTime.now(),
     );
   }
 
   /// 为 picker 提供分钟精度的默认时间。
-  DateTime _normalizedPickerBaseDateTime(DateTime? currentDateTime) {
-    final baseDateTime = currentDateTime ?? DateTime.now();
+  DateTime _normalizedPickerBaseDateTime(
+    DateTime? currentDateTime, {
+    required DateTime minimumDateTime,
+  }) {
+    final baseDateTime = currentDateTime == null
+        ? minimumDateTime
+        : normalizedFutureTimeMachineDateTime(
+            currentDateTime,
+            minimumDateTime.subtract(const Duration(minutes: 1)),
+          );
     return DateTime(
       baseDateTime.year,
       baseDateTime.month,
