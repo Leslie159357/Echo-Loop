@@ -7,8 +7,11 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.RandomAccessFile
 import kotlin.math.max
@@ -123,7 +126,12 @@ class WavRecorder {
      * @return 录音文件路径。
      */
     fun stopRecording(): String? {
-        recordingJob?.cancel()
+        // 先等录音协程真正退出，再操作 AudioRecord 和文件，避免 read() 与 stop() 并发。
+        // 录音中 read() 最多阻塞一个 buffer 周期（~64ms）必然返回，join 不会卡死；
+        // withTimeoutOrNull 兜底：极端情况（麦克风 hang）超时后退回原 stop() 行为，不劣于现状。
+        runBlocking {
+            withTimeoutOrNull(500) { recordingJob?.cancelAndJoin() }
+        }
         recordingJob = null
 
         try {
@@ -141,7 +149,10 @@ class WavRecorder {
 
     /** 释放 AudioRecord 和所有资源。 */
     fun release() {
-        recordingJob?.cancel()
+        // 同 stopRecording：先 join 录音协程，消除与 stop()/release() 的并发。
+        runBlocking {
+            withTimeoutOrNull(500) { recordingJob?.cancelAndJoin() }
+        }
         recordingJob = null
 
         try {
