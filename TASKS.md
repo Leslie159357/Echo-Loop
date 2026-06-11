@@ -7,6 +7,25 @@
 
 - [ ] 崩在 sherpa-onnx 的 Silero VAD native 推理（`_extractSpeechWithVad`）；cpu provider、AudioRecord 串行、自适应跳过 VAD 三种尝试均未解决（skip-VAD 真机连续崩多次已撤销）。诊断设施已保留，待真机 **logcat + `/data/tombstones`** 确诊信号/栈后再定方案。详见 CLAUDE.md §7.4。
 
+## 已完成：审核员专用隐藏邮箱密码登录
+
+App Store / Google Play 审核员无法收 OTP、无 Apple/Google 账号，新增隐藏的邮箱+密码登录入口：登录主页连续点击 Echo Loop logo 5 次进入密码登录页，账号在 Supabase 后台手动预创建，仅登录、不提供注册/找回密码。复用现有 Supabase 认证分层与 l10n 遗留密码键，未引入新状态来源、未新增 l10n 键。
+
+### 实现
+- [x] `AuthRepository` / `SupabaseAuthRepository` / `AuthController` 新增 `signInWithPassword`（透传 `GoTrueClient.signInWithPassword`，成功后同步分析身份）
+- [x] `AuthScaffold` / `AuthBrandHeader` 新增可选 `onLogoTap`，仅登录主页注入（其它认证页 logo 行为不变）
+- [x] `LoginScreen` 连点 logo 满 5 次跳转 `AppRoutes.passwordSignIn`，记录登录方式 `password`
+- [x] 新增 `PasswordSignInScreen`（邮箱+密码表单，参照 `EmailSignInScreen` 结构）
+- [x] 路由：新增 `AppRoutes.passwordSignIn = '/login/password'`、注册路由、加入 redirect 的 `isAuthRoute`
+- [x] 测试：repository/controller 单测 + 密码页 Widget 测试（连点 logo、表单校验、成功返回、失败提示）
+
+### 验证
+- [x] `flutter analyze lib/features/auth test/features/auth`：No issues found
+- [x] `flutter test test/features/auth`：67 passed
+- [ ] Supabase 后台配置审核账号（需用户在 Dashboard 操作）
+
+**完成时间**: 2026-06-10
+
 ## 已完成：移除独立网盘导入入口
 
 导入音频弹窗不再把“从网盘导入”做成第二个系统文件选择器入口；当前没有真实网盘登录/OAuth 能力前，只保留“从本地文件导入”和“从链接导入”。方式选择页使用短描述“选择手机或网盘中的音频文件”，进入选择文件页后再提示用户先安装并登录对应网盘，且少部分网盘可能不支持从文件选择器中直接选择。
