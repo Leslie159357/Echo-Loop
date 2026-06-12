@@ -2885,6 +2885,7 @@ class _NoTranscriptBanner extends StatelessWidget {
   void _showManageSubtitlesSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (_) => ManageSubtitlesSheet(audioItem: audioItem),
     );
   }

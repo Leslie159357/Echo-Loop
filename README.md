@@ -23,9 +23,11 @@
 
   <p>
     <a href="https://apps.apple.com/cn/app/echo-loop-%E9%AB%98%E6%95%88%E8%8B%B1%E8%AF%AD%E5%90%AC%E8%AF%B4%E8%AE%AD%E7%BB%83/id6760324074"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="48" /></a>
-    <a href="https://play.google.com/store/apps/details?id=app.echoloop"><img src="assets/badges/google-play-en.png" alt="Get it on Google Play" height="40" /></a>
+    <a href="https://groups.google.com/u/0/g/echo-loop-testers/c/vzaTF9j4ys8"><img src="assets/badges/google-play-en.png" alt="Get it on Google Play" height="40" /></a>
   </p>
 </div>
+
+> 🤖 **Android 用户请注意**：Android 版目前处于 Google Play closed test。点击 Google Play 按钮会打开测试邀请帖，请按帖内说明先加入 Google Group，再加入测试并安装应用。
 
 > 🇨🇳 **中国区用户请注意**：中国区 App Store 正在申请 ICP 备案，应用暂时下架。中国大陆用户可切换到非中国区 Apple 账号（如美区、港区）下载安装 Echo Loop。备案完成后会恢复上架。
 
@@ -169,10 +171,11 @@ flowchart LR
       <p>
         <a href="https://apps.apple.com/cn/app/echo-loop-%E9%AB%98%E6%95%88%E8%8B%B1%E8%AF%AD%E5%90%AC%E8%AF%B4%E8%AE%AD%E7%BB%83/id6760324074"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="App Store" height="48" /></a>
         &nbsp;
-        <a href="https://play.google.com/store/apps/details?id=app.echoloop"><img src="assets/badges/google-play-en.png" alt="Get it on Google Play" height="40" /></a>
+        <a href="https://groups.google.com/u/0/g/echo-loop-testers/c/vzaTF9j4ys8"><img src="assets/badges/google-play-en.png" alt="Get it on Google Play" height="40" /></a>
         &nbsp;
         <a href="https://github.com/echo-loop/Echo-Loop/releases"><img src="https://img.shields.io/badge/Android-下载%20APK-3DDC84?logo=android&logoColor=white&style=for-the-badge" alt="Android APK" height="48" /></a>
       </p>
+      <p><sub>Android 版目前处于 Google Play closed test，点击 Google Play 按钮可加入测试邀请。</sub></p>
       <p><sub>桌面端：macOS 开发中 · Windows 规划中 · Web 暂无计划</sub></p>
     </td>
     <td valign="middle" align="center" width="120">

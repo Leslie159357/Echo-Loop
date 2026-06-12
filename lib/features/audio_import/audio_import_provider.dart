@@ -85,6 +85,79 @@ class AudioImportController extends _$AudioImportController {
     }
   }
 
+  /// Podcast 单集懒下载：下载 enclosure 到沙盒并**就地更新现有占位条目**，
+  /// 不新建 [AudioItem]（避免资源库出现重复孤儿条目）。
+  ///
+  /// 成功返回 true 并已写回 audioPath / 时长 / 指纹；失败返回 false 并置
+  /// [AudioImportFailed]。state 的 displayName 取 enclosure URL，与列表项的
+  /// 行内进度条匹配逻辑一致。
+  Future<bool> downloadPodcastEpisode(AudioItem item) async {
+    if (state is AudioImportDownloading || state is AudioImportSaving) {
+      return false;
+    }
+    final enclosureUrl = item.podcastEnclosureUrl;
+    if (enclosureUrl == null || enclosureUrl.isEmpty) return false;
+
+    _sessionId++;
+    final sid = _sessionId;
+    _cancelToken = CancelToken();
+    // 立即进入下载态，保证行内进度条第一时间出现（不定进度）。
+    state = AudioImportDownloading(displayName: enclosureUrl, progress: -1.0);
+
+    try {
+      final result = await ref
+          .read(audioImportServiceProvider)
+          .downloadEpisodeToSandbox(
+            url: enclosureUrl,
+            enclosureType: item.podcastEnclosureType,
+            cancelToken: _cancelToken,
+            onProgress: (received, total) {
+              if (sid != _sessionId) return;
+              final progress = total == null || total <= 0
+                  ? -1.0
+                  : received / total;
+              state = AudioImportDownloading(
+                displayName: enclosureUrl,
+                progress: progress,
+                receivedBytes: received,
+                totalBytes: total,
+              );
+            },
+          );
+      if (sid != _sessionId) return false;
+
+      await ref
+          .read(audioLibraryProvider.notifier)
+          .updateAudioItem(
+            item.copyWith(
+              audioPath: result.relativePath,
+              totalDuration: result.durationSeconds > 0
+                  ? result.durationSeconds
+                  : item.totalDuration,
+              audioSha256: result.audioSha256,
+            ),
+          );
+      state = const AudioImportIdle();
+      return true;
+    } on AudioImportException catch (e) {
+      if (sid != _sessionId) return false;
+      state = AudioImportFailed(e);
+      return false;
+    } catch (e) {
+      if (sid != _sessionId) return false;
+      state = AudioImportFailed(
+        AudioImportException(
+          AudioImportFailureCode.unknown,
+          'Podcast episode download failed',
+          e,
+        ),
+      );
+      return false;
+    } finally {
+      if (sid == _sessionId) _cancelToken = null;
+    }
+  }
+
   Future<void> cancel() async {
     _sessionId++;
     _cancelToken?.cancel('user-cancelled');

@@ -36,6 +36,9 @@ import '../services/audio_export_service.dart';
 import 'dialogs/export_audio_dialog.dart';
 import 'dialogs/text_input_dialog.dart';
 import 'manage_subtitles_sheet.dart';
+import '../features/audio_import/audio_import_models.dart';
+import '../features/audio_import/audio_import_provider.dart';
+import '../features/podcast/podcast_info_sheet.dart';
 
 /// 音频列表项 — 资源库全局列表和合集详情页共用
 ///
@@ -113,6 +116,9 @@ class AudioListTile extends ConsumerWidget {
     final transcriptionTask = ref.watch(
       transcriptionTaskManagerProvider.select((map) => map[audioItem.id]),
     );
+    final podcastDownloadState = _podcastDownloadState(
+      ref.watch(audioImportControllerProvider),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -160,6 +166,7 @@ class AudioListTile extends ConsumerWidget {
                                   collectionNames,
                                   tagData,
                                   transcriptionTask,
+                                  podcastDownloadState,
                                 ),
                               ],
                             ),
@@ -183,6 +190,15 @@ class AudioListTile extends ConsumerWidget {
         );
       },
     );
+  }
+
+  /// 当前卡片对应的 podcast 单集正在通过链接导入下载时，返回下载状态。
+  AudioImportDownloading? _podcastDownloadState(AudioImportState state) {
+    final enclosureUrl = audioItem.podcastEnclosureUrl;
+    if (audioItem.isAudioReady || enclosureUrl == null) return null;
+    if (state is! AudioImportDownloading) return null;
+    if (state.displayName != enclosureUrl) return null;
+    return state;
   }
 
   /// 构建左侧环形进度图标
@@ -237,6 +253,7 @@ class AudioListTile extends ConsumerWidget {
     List<String> collectionNames,
     List<Tag> tagData,
     TranscriptionTaskState? transcriptionTask,
+    AudioImportDownloading? podcastDownloadState,
   ) {
     // 是否有进行中的转录任务
     final isTranscribing =
@@ -246,13 +263,16 @@ class AudioListTile extends ConsumerWidget {
 
     final metaParts = <String>[];
     if (audioItem.totalDuration > 0) {
-      metaParts.add(_formatDuration(audioItem.totalDuration));
+      metaParts.add(l10n.audioDuration(_formatDuration(audioItem.totalDuration)));
     }
     // 日期 meta：
-    // - 用户自建音频：显示「添加于 X」（addedDate 是 import 时间，有意义）
-    // - 官方合集音频：显示「发布于 yyyy/M/d」（originalDate 是后端运营录入的原始播出日期）；
+    // - 用户自建普通音频：显示「添加于 X」（addedDate 是 import 时间，有意义）
+    // - 官方合集 / podcast 单集：显示「发布于 yyyy/M/d」
+    //   （originalDate 为后端运营录入或 RSS pubDate 的原始播出日期）；
     //   originalDate 未录入则跳过
-    if (audioItem.remoteAudioId == null) {
+    final isPublishedSource =
+        audioItem.remoteAudioId != null || audioItem.podcastEpisodeGuid != null;
+    if (!isPublishedSource) {
       metaParts.add(l10n.addedOn(_formatDate(context, audioItem.addedDate)));
     } else if (audioItem.originalDate case final originalDate?) {
       metaParts.add(l10n.publishedOn(_formatAbsoluteDate(originalDate)));
@@ -266,7 +286,8 @@ class AudioListTile extends ConsumerWidget {
         isTranscribing ||
         (progress?.isStarted ?? false) ||
         collectionNames.isNotEmpty ||
-        tagData.isNotEmpty;
+        tagData.isNotEmpty ||
+        podcastDownloadState != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,10 +416,49 @@ class AudioListTile extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (podcastDownloadState != null)
+                _buildPodcastDownloadProgress(
+                  theme,
+                  l10n,
+                  podcastDownloadState,
+                ),
             ],
           ),
         ],
       ],
+    );
+  }
+
+  /// Podcast 懒下载进度，显示在对应单集行内，避免只用短暂提示承载状态。
+  Widget _buildPodcastDownloadProgress(
+    ThemeData theme,
+    AppLocalizations l10n,
+    AudioImportDownloading state,
+  ) {
+    final value = state.progress < 0 ? null : state.progress.clamp(0.0, 1.0);
+    final percent = value == null ? null : (value * 100).toStringAsFixed(0);
+    return SizedBox(
+      key: const Key('audio_list_tile_podcast_download_progress'),
+      width: 180,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: 56, child: LinearProgressIndicator(value: value)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              percent == null
+                  ? l10n.audioDownloadInProgress
+                  : '${l10n.audioDownloadInProgress} $percent%',
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -603,6 +663,14 @@ class AudioListTile extends ConsumerWidget {
                 l10n.delete,
               ),
             ),
+          if (audioItem.podcastEpisodeGuid != null)
+            PopupMenuItem(
+              value: 'podcastEpisodeInfo',
+              child: _buildMenuItemRow(
+                const Icon(Icons.info_outline, size: 20),
+                l10n.podcastEpisodeMeta,
+              ),
+            ),
         ],
         onSelected: (value) {
           if (value == 'togglePin') {
@@ -630,10 +698,18 @@ class AudioListTile extends ConsumerWidget {
             _showResetProgressDialog(context, ref);
           } else if (value == 'delete') {
             onDelete?.call();
+          } else if (value == 'podcastEpisodeInfo') {
+            showPodcastEpisodeInfoSheet(context, _latestAudioItem(ref));
           }
         },
       ),
     );
+  }
+
+  /// 从 provider 读取当前最新 AudioItem，避免下载完成后 widget 仍持有旧对象。
+  AudioItem _latestAudioItem(WidgetRef ref) {
+    return ref.read(audioLibraryProvider.notifier).getItemById(audioItem.id) ??
+        audioItem;
   }
 
   /// 处理点击 — 验证文件后导航
@@ -642,14 +718,21 @@ class AudioListTile extends ConsumerWidget {
     WidgetRef ref,
     AppLocalizations l10n,
   ) async {
-    // 音频未就绪（audioPath=null）= 官方合集未下载 → 走按需下载流程
-    if (!audioItem.isAudioReady) {
-      await _handleOfficialDownloadTap(context, ref, l10n);
+    final currentItem = _latestAudioItem(ref);
+    // 音频未就绪（audioPath=null）= 未下载 → 走按需下载流程
+    if (!currentItem.isAudioReady) {
+      // podcast 合集：用 enclosure URL 懒下载
+      if (currentItem.podcastEpisodeGuid != null &&
+          currentItem.podcastEnclosureUrl != null) {
+        await _handlePodcastDownloadTap(context, ref, l10n, currentItem);
+      } else {
+        await _handleOfficialDownloadTap(context, ref, l10n);
+      }
       return;
     }
 
     // 验证音频文件是否存在
-    final fullAudioPath = await audioItem.getFullAudioPath();
+    final fullAudioPath = await currentItem.getFullAudioPath();
     if (fullAudioPath == null || !await File(fullAudioPath).exists()) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1012,6 +1095,38 @@ class AudioListTile extends ConsumerWidget {
         context,
       ).showSnackBar(SnackBar(content: Text('${l10n.exportAudio}: $e')));
     }
+  }
+
+  /// Podcast episode 懒下载：下载 enclosure 到沙盒并就地更新现有占位条目
+  /// （保留 podcast 元字段），不新建条目。下载进度由行内进度条
+  /// （[_podcastDownloadState] / [_buildPodcastDownloadProgress]）承载，
+  /// 这里只负责发起下载、按结果跳转或提示失败。
+  Future<void> _handlePodcastDownloadTap(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    AudioItem currentItem,
+  ) async {
+    final ok = await ref
+        .read(audioImportControllerProvider.notifier)
+        .downloadPodcastEpisode(currentItem);
+
+    if (!context.mounted) return;
+    if (ok) {
+      _pushPlan(context);
+      return;
+    }
+    // 仅在确实失败时提示；并发占用（另一单集正在下载）静默忽略，
+    // 不误报"下载失败"。
+    final isFailed =
+        ref.read(audioImportControllerProvider) is AudioImportFailed;
+    if (!isFailed) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.downloadFailed(audioItem.name)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {

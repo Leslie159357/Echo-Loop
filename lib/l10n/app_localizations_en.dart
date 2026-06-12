@@ -3619,4 +3619,87 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cancelDownload => 'Cancel Download';
+
+  @override
+  String get subscribePodcast => 'Subscribe Podcast';
+
+  @override
+  String get podcastUrlLabel => 'Apple Podcasts or RSS URL';
+
+  @override
+  String get podcastUrlHint =>
+      'https://podcasts.apple.com/... or https://…/feed.xml';
+
+  @override
+  String get podcastSubscribing => 'Fetching podcast feed…';
+
+  @override
+  String podcastSubscribeFailed(String error) {
+    return 'Failed to subscribe: $error';
+  }
+
+  @override
+  String get podcastRefreshFeed => 'Refresh Feed';
+
+  @override
+  String get podcastUnsubscribe => 'Unsubscribe';
+
+  @override
+  String podcastUnsubscribeConfirmTitle(String name) {
+    return 'Unsubscribe from $name?';
+  }
+
+  @override
+  String get podcastUnsubscribeConfirmMessage =>
+      'All episodes and downloaded audio files in this collection will be deleted.';
+
+  @override
+  String get podcastFeedInfo => 'Feed Info';
+
+  @override
+  String get podcastDetails => 'Details';
+
+  @override
+  String get podcastEpisodeMeta => 'Episode Info';
+
+  @override
+  String get podcastShowMore => 'More';
+
+  @override
+  String get podcastShowLess => 'Less';
+
+  @override
+  String get podcastTitle => 'Title';
+
+  @override
+  String get podcastAuthor => 'Author';
+
+  @override
+  String get podcastDescription => 'Description';
+
+  @override
+  String get podcastFeedUrl => 'RSS URL';
+
+  @override
+  String get podcastAppleLink => 'Apple Podcasts';
+
+  @override
+  String get podcastOriginalLink => 'Link';
+
+  @override
+  String get podcastAudioType => 'Audio Type';
+
+  @override
+  String get podcastOpenLinkFailed => 'Could not open link';
+
+  @override
+  String podcastLastRefreshed(String time) {
+    return 'Last refreshed: $time';
+  }
+
+  @override
+  String get podcastEpisodeGuid => 'GUID';
+
+  @override
+  String get podcastEnclosureUrl => 'Audio URL';
 }

@@ -97,6 +97,26 @@ class AudioItem {
   /// 直链导入记录原始下载 URL；本地文件导入不记录设备绝对路径，保持 null。
   final String? importSourceUrl;
 
+  // ── Podcast Episode 字段 ──────────────────────────────────────────────
+
+  /// Podcast episode 的 RSS guid；同一合集内用于去重。null 表示非 podcast 音频。
+  final String? podcastEpisodeGuid;
+
+  /// Episode 音频文件的 enclosure URL（RSS `<enclosure url="...">`）
+  final String? podcastEnclosureUrl;
+
+  /// Enclosure MIME type，如 audio/mpeg
+  final String? podcastEnclosureType;
+
+  /// Episode 的简介文本，来自 RSS item description。
+  final String? podcastDescription;
+
+  /// Episode 的封面图，优先来自 RSS item itunes:image。
+  final String? podcastImageUrl;
+
+  /// Episode 的网页链接，来自 RSS item link。
+  final String? podcastLink;
+
   AudioItem({
     required this.id,
     required this.name,
@@ -114,6 +134,12 @@ class AudioItem {
     this.originalDate,
     this.importSourceType,
     this.importSourceUrl,
+    this.podcastEpisodeGuid,
+    this.podcastEnclosureUrl,
+    this.podcastEnclosureType,
+    this.podcastDescription,
+    this.podcastImageUrl,
+    this.podcastLink,
   });
 
   /// 音频文件是否已就绪（在本地可播）。
@@ -159,6 +185,12 @@ class AudioItem {
     'originalDate': originalDate?.toIso8601String(),
     'importSourceType': importSourceType?.storageValue,
     'importSourceUrl': importSourceUrl,
+    'podcastEpisodeGuid': podcastEpisodeGuid,
+    'podcastEnclosureUrl': podcastEnclosureUrl,
+    'podcastEnclosureType': podcastEnclosureType,
+    'podcastDescription': podcastDescription,
+    'podcastImageUrl': podcastImageUrl,
+    'podcastLink': podcastLink,
   };
 
   factory AudioItem.fromJson(Map<String, dynamic> json) => AudioItem(
@@ -182,6 +214,12 @@ class AudioItem {
       json['importSourceType'] as String?,
     ),
     importSourceUrl: json['importSourceUrl'] as String?,
+    podcastEpisodeGuid: json['podcastEpisodeGuid'] as String?,
+    podcastEnclosureUrl: json['podcastEnclosureUrl'] as String?,
+    podcastEnclosureType: json['podcastEnclosureType'] as String?,
+    podcastDescription: json['podcastDescription'] as String?,
+    podcastImageUrl: json['podcastImageUrl'] as String?,
+    podcastLink: json['podcastLink'] as String?,
   );
 
   AudioItem copyWith({
@@ -201,6 +239,12 @@ class AudioItem {
     Object? originalDate = _sentinel,
     Object? importSourceType = _sentinel,
     Object? importSourceUrl = _sentinel,
+    Object? podcastEpisodeGuid = _sentinel,
+    Object? podcastEnclosureUrl = _sentinel,
+    Object? podcastEnclosureType = _sentinel,
+    Object? podcastDescription = _sentinel,
+    Object? podcastImageUrl = _sentinel,
+    Object? podcastLink = _sentinel,
   }) {
     return AudioItem(
       id: id ?? this.id,
@@ -235,6 +279,24 @@ class AudioItem {
       importSourceUrl: importSourceUrl == _sentinel
           ? this.importSourceUrl
           : importSourceUrl as String?,
+      podcastEpisodeGuid: podcastEpisodeGuid == _sentinel
+          ? this.podcastEpisodeGuid
+          : podcastEpisodeGuid as String?,
+      podcastEnclosureUrl: podcastEnclosureUrl == _sentinel
+          ? this.podcastEnclosureUrl
+          : podcastEnclosureUrl as String?,
+      podcastEnclosureType: podcastEnclosureType == _sentinel
+          ? this.podcastEnclosureType
+          : podcastEnclosureType as String?,
+      podcastDescription: podcastDescription == _sentinel
+          ? this.podcastDescription
+          : podcastDescription as String?,
+      podcastImageUrl: podcastImageUrl == _sentinel
+          ? this.podcastImageUrl
+          : podcastImageUrl as String?,
+      podcastLink: podcastLink == _sentinel
+          ? this.podcastLink
+          : podcastLink as String?,
     );
   }
 }

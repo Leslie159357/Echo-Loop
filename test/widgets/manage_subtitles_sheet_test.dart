@@ -20,11 +20,29 @@ import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
 
 void main() {
+  Session signedInSession() {
+    final user = User(
+      id: 'user-1',
+      appMetadata: const {'provider': 'email'},
+      userMetadata: const {},
+      aud: 'authenticated',
+      email: 'learner@example.com',
+      createdAt: '2026-06-12T00:00:00.000Z',
+    );
+    return Session(
+      accessToken: 'token',
+      tokenType: 'bearer',
+      user: user,
+      refreshToken: 'refresh',
+    );
+  }
+
   group('ManageSubtitlesSheet', () {
     /// 构建弹窗测试 App（包含所有必要的 provider override）
     Widget buildSheet(
       AudioItem audioItem, {
       LearningProgressState? progressState,
+      Session? session,
     }) {
       final libraryState = AudioLibraryState(audioItems: [audioItem]);
       return createTestApp(
@@ -66,7 +84,7 @@ void main() {
             (ref) => createTestTranscriptionApiClient(),
           ),
           supabaseSessionProvider.overrideWith(
-            (ref) => Stream<Session?>.value(null),
+            (ref) => Stream<Session?>.value(session),
           ),
         ],
       );
@@ -259,6 +277,34 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         expect(find.text('Sign in to use AI transcription'), findsNothing);
+      });
+
+      testWidgets('AI 转录音频过长时在弹窗内显示 5 秒错误提示', (tester) async {
+        final item = createTestAudioItem(
+          totalDuration: 16 * 60,
+        ).copyWith(transcriptSource: TranscriptSource.local);
+        await tester.pumpWidget(buildSheet(item, session: signedInSession()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.pump();
+
+        await tester.tap(find.text('AI Transcription'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Start Transcription'),
+        );
+        await tester.pump();
+
+        expect(find.textContaining('Audio too long'), findsOneWidget);
+        expect(find.byType(SnackBar), findsNothing);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Audio too long'), findsNothing);
       });
     });
 

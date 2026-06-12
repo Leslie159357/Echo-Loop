@@ -85,7 +85,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 当前 schema 版本（静态访问，用于导入前版本检查）
-  static const currentSchemaVersion = 37;
+  static const currentSchemaVersion = 38;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -97,6 +97,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
         // 创建自定义索引
         await _createCustomIndexes(m);
+      },
+      beforeOpen: (details) async {
+        // v38 发布过程里可能出现过 user_version 已到 38，但 podcast 列未真正落库
+        // 的开发/测试数据库。启动时再做一次幂等补列，避免订阅时插入 episode 崩溃。
+        await _ensurePodcastColumns();
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
@@ -525,6 +530,15 @@ class AppDatabase extends _$AppDatabase {
             'TEXT',
           );
         }
+        // v37→v38：Podcast 合集支持字段。
+        // - collections 加 podcast_input_url / podcast_feed_url /
+        //   podcast_meta_json / podcast_last_refreshed_at
+        // - audio_items 加 podcast_episode_guid / podcast_enclosure_url /
+        //   podcast_enclosure_type / podcast_description / podcast_image_url /
+        //   podcast_link
+        if (from < 38) {
+          await _ensurePodcastColumns();
+        }
       },
     );
   }
@@ -762,6 +776,31 @@ class AppDatabase extends _$AppDatabase {
         'ALTER TABLE $table ADD COLUMN $column $definition',
       );
     }
+  }
+
+  /// 确保 v38 podcast 合集/episode 字段存在。
+  ///
+  /// 该方法故意保持幂等：正常迁移路径和启动自愈路径共用它，避免 schema
+  /// 版本号与真实表结构短暂不一致时影响用户订阅 podcast。
+  Future<void> _ensurePodcastColumns() async {
+    await _addColumnIfNotExists('collections', 'podcast_input_url', 'TEXT');
+    await _addColumnIfNotExists('collections', 'podcast_feed_url', 'TEXT');
+    await _addColumnIfNotExists('collections', 'podcast_meta_json', 'TEXT');
+    await _addColumnIfNotExists(
+      'collections',
+      'podcast_last_refreshed_at',
+      'INTEGER',
+    );
+    await _addColumnIfNotExists('audio_items', 'podcast_episode_guid', 'TEXT');
+    await _addColumnIfNotExists('audio_items', 'podcast_enclosure_url', 'TEXT');
+    await _addColumnIfNotExists(
+      'audio_items',
+      'podcast_enclosure_type',
+      'TEXT',
+    );
+    await _addColumnIfNotExists('audio_items', 'podcast_description', 'TEXT');
+    await _addColumnIfNotExists('audio_items', 'podcast_image_url', 'TEXT');
+    await _addColumnIfNotExists('audio_items', 'podcast_link', 'TEXT');
   }
 
   /// 创建自定义索引

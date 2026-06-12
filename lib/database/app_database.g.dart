@@ -244,6 +244,72 @@ class $AudioItemsTable extends AudioItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _podcastEpisodeGuidMeta =
+      const VerificationMeta('podcastEpisodeGuid');
+  @override
+  late final GeneratedColumn<String> podcastEpisodeGuid =
+      GeneratedColumn<String>(
+        'podcast_episode_guid',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _podcastEnclosureUrlMeta =
+      const VerificationMeta('podcastEnclosureUrl');
+  @override
+  late final GeneratedColumn<String> podcastEnclosureUrl =
+      GeneratedColumn<String>(
+        'podcast_enclosure_url',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _podcastEnclosureTypeMeta =
+      const VerificationMeta('podcastEnclosureType');
+  @override
+  late final GeneratedColumn<String> podcastEnclosureType =
+      GeneratedColumn<String>(
+        'podcast_enclosure_type',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _podcastDescriptionMeta =
+      const VerificationMeta('podcastDescription');
+  @override
+  late final GeneratedColumn<String> podcastDescription =
+      GeneratedColumn<String>(
+        'podcast_description',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _podcastImageUrlMeta = const VerificationMeta(
+    'podcastImageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> podcastImageUrl = GeneratedColumn<String>(
+    'podcast_image_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _podcastLinkMeta = const VerificationMeta(
+    'podcastLink',
+  );
+  @override
+  late final GeneratedColumn<String> podcastLink = GeneratedColumn<String>(
+    'podcast_link',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -267,6 +333,12 @@ class $AudioItemsTable extends AudioItems
     originalDate,
     importSourceType,
     importSourceUrl,
+    podcastEpisodeGuid,
+    podcastEnclosureUrl,
+    podcastEnclosureType,
+    podcastDescription,
+    podcastImageUrl,
+    podcastLink,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -447,6 +519,60 @@ class $AudioItemsTable extends AudioItems
         ),
       );
     }
+    if (data.containsKey('podcast_episode_guid')) {
+      context.handle(
+        _podcastEpisodeGuidMeta,
+        podcastEpisodeGuid.isAcceptableOrUnknown(
+          data['podcast_episode_guid']!,
+          _podcastEpisodeGuidMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_enclosure_url')) {
+      context.handle(
+        _podcastEnclosureUrlMeta,
+        podcastEnclosureUrl.isAcceptableOrUnknown(
+          data['podcast_enclosure_url']!,
+          _podcastEnclosureUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_enclosure_type')) {
+      context.handle(
+        _podcastEnclosureTypeMeta,
+        podcastEnclosureType.isAcceptableOrUnknown(
+          data['podcast_enclosure_type']!,
+          _podcastEnclosureTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_description')) {
+      context.handle(
+        _podcastDescriptionMeta,
+        podcastDescription.isAcceptableOrUnknown(
+          data['podcast_description']!,
+          _podcastDescriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_image_url')) {
+      context.handle(
+        _podcastImageUrlMeta,
+        podcastImageUrl.isAcceptableOrUnknown(
+          data['podcast_image_url']!,
+          _podcastImageUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_link')) {
+      context.handle(
+        _podcastLinkMeta,
+        podcastLink.isAcceptableOrUnknown(
+          data['podcast_link']!,
+          _podcastLinkMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -540,6 +666,30 @@ class $AudioItemsTable extends AudioItems
         DriftSqlType.string,
         data['${effectivePrefix}import_source_url'],
       ),
+      podcastEpisodeGuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_episode_guid'],
+      ),
+      podcastEnclosureUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_enclosure_url'],
+      ),
+      podcastEnclosureType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_enclosure_type'],
+      ),
+      podcastDescription: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_description'],
+      ),
+      podcastImageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_image_url'],
+      ),
+      podcastLink: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_link'],
+      ),
     );
   }
 
@@ -625,6 +775,25 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
 
   /// 用户导入来源 URL。直链导入记录原始 URL；本地文件导入保持 NULL。
   final String? importSourceUrl;
+
+  /// Podcast episode 的 RSS guid；用于同一合集内去重。
+  /// 无 guid 的 episode 不导入。
+  final String? podcastEpisodeGuid;
+
+  /// Episode 音频文件的 enclosure URL（RSS <enclosure url="...">）
+  final String? podcastEnclosureUrl;
+
+  /// Enclosure MIME type，如 audio/mpeg
+  final String? podcastEnclosureType;
+
+  /// Episode 简介文本，来自 RSS item description。
+  final String? podcastDescription;
+
+  /// Episode 封面图 URL，来自 RSS item itunes:image。
+  final String? podcastImageUrl;
+
+  /// Episode 网页链接，来自 RSS item link。
+  final String? podcastLink;
   const AudioItem({
     required this.id,
     required this.name,
@@ -647,6 +816,12 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     this.originalDate,
     this.importSourceType,
     this.importSourceUrl,
+    this.podcastEpisodeGuid,
+    this.podcastEnclosureUrl,
+    this.podcastEnclosureType,
+    this.podcastDescription,
+    this.podcastImageUrl,
+    this.podcastLink,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -695,6 +870,24 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     }
     if (!nullToAbsent || importSourceUrl != null) {
       map['import_source_url'] = Variable<String>(importSourceUrl);
+    }
+    if (!nullToAbsent || podcastEpisodeGuid != null) {
+      map['podcast_episode_guid'] = Variable<String>(podcastEpisodeGuid);
+    }
+    if (!nullToAbsent || podcastEnclosureUrl != null) {
+      map['podcast_enclosure_url'] = Variable<String>(podcastEnclosureUrl);
+    }
+    if (!nullToAbsent || podcastEnclosureType != null) {
+      map['podcast_enclosure_type'] = Variable<String>(podcastEnclosureType);
+    }
+    if (!nullToAbsent || podcastDescription != null) {
+      map['podcast_description'] = Variable<String>(podcastDescription);
+    }
+    if (!nullToAbsent || podcastImageUrl != null) {
+      map['podcast_image_url'] = Variable<String>(podcastImageUrl);
+    }
+    if (!nullToAbsent || podcastLink != null) {
+      map['podcast_link'] = Variable<String>(podcastLink);
     }
     return map;
   }
@@ -746,6 +939,24 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       importSourceUrl: importSourceUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(importSourceUrl),
+      podcastEpisodeGuid: podcastEpisodeGuid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastEpisodeGuid),
+      podcastEnclosureUrl: podcastEnclosureUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastEnclosureUrl),
+      podcastEnclosureType: podcastEnclosureType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastEnclosureType),
+      podcastDescription: podcastDescription == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastDescription),
+      podcastImageUrl: podcastImageUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastImageUrl),
+      podcastLink: podcastLink == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastLink),
     );
   }
 
@@ -780,6 +991,20 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       originalDate: serializer.fromJson<DateTime?>(json['originalDate']),
       importSourceType: serializer.fromJson<String?>(json['importSourceType']),
       importSourceUrl: serializer.fromJson<String?>(json['importSourceUrl']),
+      podcastEpisodeGuid: serializer.fromJson<String?>(
+        json['podcastEpisodeGuid'],
+      ),
+      podcastEnclosureUrl: serializer.fromJson<String?>(
+        json['podcastEnclosureUrl'],
+      ),
+      podcastEnclosureType: serializer.fromJson<String?>(
+        json['podcastEnclosureType'],
+      ),
+      podcastDescription: serializer.fromJson<String?>(
+        json['podcastDescription'],
+      ),
+      podcastImageUrl: serializer.fromJson<String?>(json['podcastImageUrl']),
+      podcastLink: serializer.fromJson<String?>(json['podcastLink']),
     );
   }
   @override
@@ -807,6 +1032,12 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       'originalDate': serializer.toJson<DateTime?>(originalDate),
       'importSourceType': serializer.toJson<String?>(importSourceType),
       'importSourceUrl': serializer.toJson<String?>(importSourceUrl),
+      'podcastEpisodeGuid': serializer.toJson<String?>(podcastEpisodeGuid),
+      'podcastEnclosureUrl': serializer.toJson<String?>(podcastEnclosureUrl),
+      'podcastEnclosureType': serializer.toJson<String?>(podcastEnclosureType),
+      'podcastDescription': serializer.toJson<String?>(podcastDescription),
+      'podcastImageUrl': serializer.toJson<String?>(podcastImageUrl),
+      'podcastLink': serializer.toJson<String?>(podcastLink),
     };
   }
 
@@ -832,6 +1063,12 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     Value<DateTime?> originalDate = const Value.absent(),
     Value<String?> importSourceType = const Value.absent(),
     Value<String?> importSourceUrl = const Value.absent(),
+    Value<String?> podcastEpisodeGuid = const Value.absent(),
+    Value<String?> podcastEnclosureUrl = const Value.absent(),
+    Value<String?> podcastEnclosureType = const Value.absent(),
+    Value<String?> podcastDescription = const Value.absent(),
+    Value<String?> podcastImageUrl = const Value.absent(),
+    Value<String?> podcastLink = const Value.absent(),
   }) => AudioItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -870,6 +1107,22 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     importSourceUrl: importSourceUrl.present
         ? importSourceUrl.value
         : this.importSourceUrl,
+    podcastEpisodeGuid: podcastEpisodeGuid.present
+        ? podcastEpisodeGuid.value
+        : this.podcastEpisodeGuid,
+    podcastEnclosureUrl: podcastEnclosureUrl.present
+        ? podcastEnclosureUrl.value
+        : this.podcastEnclosureUrl,
+    podcastEnclosureType: podcastEnclosureType.present
+        ? podcastEnclosureType.value
+        : this.podcastEnclosureType,
+    podcastDescription: podcastDescription.present
+        ? podcastDescription.value
+        : this.podcastDescription,
+    podcastImageUrl: podcastImageUrl.present
+        ? podcastImageUrl.value
+        : this.podcastImageUrl,
+    podcastLink: podcastLink.present ? podcastLink.value : this.podcastLink,
   );
   AudioItem copyWithCompanion(AudioItemsCompanion data) {
     return AudioItem(
@@ -920,6 +1173,24 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       importSourceUrl: data.importSourceUrl.present
           ? data.importSourceUrl.value
           : this.importSourceUrl,
+      podcastEpisodeGuid: data.podcastEpisodeGuid.present
+          ? data.podcastEpisodeGuid.value
+          : this.podcastEpisodeGuid,
+      podcastEnclosureUrl: data.podcastEnclosureUrl.present
+          ? data.podcastEnclosureUrl.value
+          : this.podcastEnclosureUrl,
+      podcastEnclosureType: data.podcastEnclosureType.present
+          ? data.podcastEnclosureType.value
+          : this.podcastEnclosureType,
+      podcastDescription: data.podcastDescription.present
+          ? data.podcastDescription.value
+          : this.podcastDescription,
+      podcastImageUrl: data.podcastImageUrl.present
+          ? data.podcastImageUrl.value
+          : this.podcastImageUrl,
+      podcastLink: data.podcastLink.present
+          ? data.podcastLink.value
+          : this.podcastLink,
     );
   }
 
@@ -946,7 +1217,13 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           ..write('remoteAudioId: $remoteAudioId, ')
           ..write('originalDate: $originalDate, ')
           ..write('importSourceType: $importSourceType, ')
-          ..write('importSourceUrl: $importSourceUrl')
+          ..write('importSourceUrl: $importSourceUrl, ')
+          ..write('podcastEpisodeGuid: $podcastEpisodeGuid, ')
+          ..write('podcastEnclosureUrl: $podcastEnclosureUrl, ')
+          ..write('podcastEnclosureType: $podcastEnclosureType, ')
+          ..write('podcastDescription: $podcastDescription, ')
+          ..write('podcastImageUrl: $podcastImageUrl, ')
+          ..write('podcastLink: $podcastLink')
           ..write(')'))
         .toString();
   }
@@ -974,6 +1251,12 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     originalDate,
     importSourceType,
     importSourceUrl,
+    podcastEpisodeGuid,
+    podcastEnclosureUrl,
+    podcastEnclosureType,
+    podcastDescription,
+    podcastImageUrl,
+    podcastLink,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -999,7 +1282,13 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           other.remoteAudioId == this.remoteAudioId &&
           other.originalDate == this.originalDate &&
           other.importSourceType == this.importSourceType &&
-          other.importSourceUrl == this.importSourceUrl);
+          other.importSourceUrl == this.importSourceUrl &&
+          other.podcastEpisodeGuid == this.podcastEpisodeGuid &&
+          other.podcastEnclosureUrl == this.podcastEnclosureUrl &&
+          other.podcastEnclosureType == this.podcastEnclosureType &&
+          other.podcastDescription == this.podcastDescription &&
+          other.podcastImageUrl == this.podcastImageUrl &&
+          other.podcastLink == this.podcastLink);
 }
 
 class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
@@ -1024,6 +1313,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
   final Value<DateTime?> originalDate;
   final Value<String?> importSourceType;
   final Value<String?> importSourceUrl;
+  final Value<String?> podcastEpisodeGuid;
+  final Value<String?> podcastEnclosureUrl;
+  final Value<String?> podcastEnclosureType;
+  final Value<String?> podcastDescription;
+  final Value<String?> podcastImageUrl;
+  final Value<String?> podcastLink;
   final Value<int> rowid;
   const AudioItemsCompanion({
     this.id = const Value.absent(),
@@ -1047,6 +1342,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.originalDate = const Value.absent(),
     this.importSourceType = const Value.absent(),
     this.importSourceUrl = const Value.absent(),
+    this.podcastEpisodeGuid = const Value.absent(),
+    this.podcastEnclosureUrl = const Value.absent(),
+    this.podcastEnclosureType = const Value.absent(),
+    this.podcastDescription = const Value.absent(),
+    this.podcastImageUrl = const Value.absent(),
+    this.podcastLink = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   AudioItemsCompanion.insert({
@@ -1071,6 +1372,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.originalDate = const Value.absent(),
     this.importSourceType = const Value.absent(),
     this.importSourceUrl = const Value.absent(),
+    this.podcastEpisodeGuid = const Value.absent(),
+    this.podcastEnclosureUrl = const Value.absent(),
+    this.podcastEnclosureType = const Value.absent(),
+    this.podcastDescription = const Value.absent(),
+    this.podcastImageUrl = const Value.absent(),
+    this.podcastLink = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1098,6 +1405,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Expression<DateTime>? originalDate,
     Expression<String>? importSourceType,
     Expression<String>? importSourceUrl,
+    Expression<String>? podcastEpisodeGuid,
+    Expression<String>? podcastEnclosureUrl,
+    Expression<String>? podcastEnclosureType,
+    Expression<String>? podcastDescription,
+    Expression<String>? podcastImageUrl,
+    Expression<String>? podcastLink,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1123,6 +1436,15 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       if (originalDate != null) 'original_date': originalDate,
       if (importSourceType != null) 'import_source_type': importSourceType,
       if (importSourceUrl != null) 'import_source_url': importSourceUrl,
+      if (podcastEpisodeGuid != null)
+        'podcast_episode_guid': podcastEpisodeGuid,
+      if (podcastEnclosureUrl != null)
+        'podcast_enclosure_url': podcastEnclosureUrl,
+      if (podcastEnclosureType != null)
+        'podcast_enclosure_type': podcastEnclosureType,
+      if (podcastDescription != null) 'podcast_description': podcastDescription,
+      if (podcastImageUrl != null) 'podcast_image_url': podcastImageUrl,
+      if (podcastLink != null) 'podcast_link': podcastLink,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1149,6 +1471,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Value<DateTime?>? originalDate,
     Value<String?>? importSourceType,
     Value<String?>? importSourceUrl,
+    Value<String?>? podcastEpisodeGuid,
+    Value<String?>? podcastEnclosureUrl,
+    Value<String?>? podcastEnclosureType,
+    Value<String?>? podcastDescription,
+    Value<String?>? podcastImageUrl,
+    Value<String?>? podcastLink,
     Value<int>? rowid,
   }) {
     return AudioItemsCompanion(
@@ -1173,6 +1501,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       originalDate: originalDate ?? this.originalDate,
       importSourceType: importSourceType ?? this.importSourceType,
       importSourceUrl: importSourceUrl ?? this.importSourceUrl,
+      podcastEpisodeGuid: podcastEpisodeGuid ?? this.podcastEpisodeGuid,
+      podcastEnclosureUrl: podcastEnclosureUrl ?? this.podcastEnclosureUrl,
+      podcastEnclosureType: podcastEnclosureType ?? this.podcastEnclosureType,
+      podcastDescription: podcastDescription ?? this.podcastDescription,
+      podcastImageUrl: podcastImageUrl ?? this.podcastImageUrl,
+      podcastLink: podcastLink ?? this.podcastLink,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1243,6 +1577,28 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     if (importSourceUrl.present) {
       map['import_source_url'] = Variable<String>(importSourceUrl.value);
     }
+    if (podcastEpisodeGuid.present) {
+      map['podcast_episode_guid'] = Variable<String>(podcastEpisodeGuid.value);
+    }
+    if (podcastEnclosureUrl.present) {
+      map['podcast_enclosure_url'] = Variable<String>(
+        podcastEnclosureUrl.value,
+      );
+    }
+    if (podcastEnclosureType.present) {
+      map['podcast_enclosure_type'] = Variable<String>(
+        podcastEnclosureType.value,
+      );
+    }
+    if (podcastDescription.present) {
+      map['podcast_description'] = Variable<String>(podcastDescription.value);
+    }
+    if (podcastImageUrl.present) {
+      map['podcast_image_url'] = Variable<String>(podcastImageUrl.value);
+    }
+    if (podcastLink.present) {
+      map['podcast_link'] = Variable<String>(podcastLink.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1273,6 +1629,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
           ..write('originalDate: $originalDate, ')
           ..write('importSourceType: $importSourceType, ')
           ..write('importSourceUrl: $importSourceUrl, ')
+          ..write('podcastEpisodeGuid: $podcastEpisodeGuid, ')
+          ..write('podcastEnclosureUrl: $podcastEnclosureUrl, ')
+          ..write('podcastEnclosureType: $podcastEnclosureType, ')
+          ..write('podcastDescription: $podcastDescription, ')
+          ..write('podcastImageUrl: $podcastImageUrl, ')
+          ..write('podcastLink: $podcastLink, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1417,6 +1779,50 @@ class $CollectionsTable extends Collections
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _podcastInputUrlMeta = const VerificationMeta(
+    'podcastInputUrl',
+  );
+  @override
+  late final GeneratedColumn<String> podcastInputUrl = GeneratedColumn<String>(
+    'podcast_input_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _podcastFeedUrlMeta = const VerificationMeta(
+    'podcastFeedUrl',
+  );
+  @override
+  late final GeneratedColumn<String> podcastFeedUrl = GeneratedColumn<String>(
+    'podcast_feed_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _podcastMetaJsonMeta = const VerificationMeta(
+    'podcastMetaJson',
+  );
+  @override
+  late final GeneratedColumn<String> podcastMetaJson = GeneratedColumn<String>(
+    'podcast_meta_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _podcastLastRefreshedAtMeta =
+      const VerificationMeta('podcastLastRefreshedAt');
+  @override
+  late final GeneratedColumn<DateTime> podcastLastRefreshedAt =
+      GeneratedColumn<DateTime>(
+        'podcast_last_refreshed_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1431,6 +1837,10 @@ class $CollectionsTable extends Collections
     coverUrl,
     description,
     deprecatedAt,
+    podcastInputUrl,
+    podcastFeedUrl,
+    podcastMetaJson,
+    podcastLastRefreshedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1530,6 +1940,42 @@ class $CollectionsTable extends Collections
         ),
       );
     }
+    if (data.containsKey('podcast_input_url')) {
+      context.handle(
+        _podcastInputUrlMeta,
+        podcastInputUrl.isAcceptableOrUnknown(
+          data['podcast_input_url']!,
+          _podcastInputUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_feed_url')) {
+      context.handle(
+        _podcastFeedUrlMeta,
+        podcastFeedUrl.isAcceptableOrUnknown(
+          data['podcast_feed_url']!,
+          _podcastFeedUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_meta_json')) {
+      context.handle(
+        _podcastMetaJsonMeta,
+        podcastMetaJson.isAcceptableOrUnknown(
+          data['podcast_meta_json']!,
+          _podcastMetaJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_last_refreshed_at')) {
+      context.handle(
+        _podcastLastRefreshedAtMeta,
+        podcastLastRefreshedAt.isAcceptableOrUnknown(
+          data['podcast_last_refreshed_at']!,
+          _podcastLastRefreshedAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1587,6 +2033,22 @@ class $CollectionsTable extends Collections
         DriftSqlType.dateTime,
         data['${effectivePrefix}deprecated_at'],
       ),
+      podcastInputUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_input_url'],
+      ),
+      podcastFeedUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_feed_url'],
+      ),
+      podcastMetaJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_meta_json'],
+      ),
+      podcastLastRefreshedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}podcast_last_refreshed_at'],
+      ),
     );
   }
 
@@ -1637,6 +2099,18 @@ class Collection extends DataClass implements Insertable<Collection> {
   /// 官方合集被后端标记下架的时间；非 null 时 UI 置灰、sync 不再请求。
   /// source='local' 永远为 null。
   final DateTime? deprecatedAt;
+
+  /// 用户输入的原始 URL（Apple Podcasts 链接或直接 RSS 链接）
+  final String? podcastInputUrl;
+
+  /// 解析后的 RSS Feed URL（Apple 链接经 iTunes lookup 后得到；直接 RSS 直通）
+  final String? podcastFeedUrl;
+
+  /// Feed 元信息 JSON（title / author / imageUrl / description 等）
+  final String? podcastMetaJson;
+
+  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  final DateTime? podcastLastRefreshedAt;
   const Collection({
     required this.id,
     required this.name,
@@ -1650,6 +2124,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     this.coverUrl,
     this.description,
     this.deprecatedAt,
+    this.podcastInputUrl,
+    this.podcastFeedUrl,
+    this.podcastMetaJson,
+    this.podcastLastRefreshedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1675,6 +2153,20 @@ class Collection extends DataClass implements Insertable<Collection> {
     }
     if (!nullToAbsent || deprecatedAt != null) {
       map['deprecated_at'] = Variable<DateTime>(deprecatedAt);
+    }
+    if (!nullToAbsent || podcastInputUrl != null) {
+      map['podcast_input_url'] = Variable<String>(podcastInputUrl);
+    }
+    if (!nullToAbsent || podcastFeedUrl != null) {
+      map['podcast_feed_url'] = Variable<String>(podcastFeedUrl);
+    }
+    if (!nullToAbsent || podcastMetaJson != null) {
+      map['podcast_meta_json'] = Variable<String>(podcastMetaJson);
+    }
+    if (!nullToAbsent || podcastLastRefreshedAt != null) {
+      map['podcast_last_refreshed_at'] = Variable<DateTime>(
+        podcastLastRefreshedAt,
+      );
     }
     return map;
   }
@@ -1703,6 +2195,18 @@ class Collection extends DataClass implements Insertable<Collection> {
       deprecatedAt: deprecatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(deprecatedAt),
+      podcastInputUrl: podcastInputUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastInputUrl),
+      podcastFeedUrl: podcastFeedUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastFeedUrl),
+      podcastMetaJson: podcastMetaJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastMetaJson),
+      podcastLastRefreshedAt: podcastLastRefreshedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastLastRefreshedAt),
     );
   }
 
@@ -1724,6 +2228,12 @@ class Collection extends DataClass implements Insertable<Collection> {
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       description: serializer.fromJson<String?>(json['description']),
       deprecatedAt: serializer.fromJson<DateTime?>(json['deprecatedAt']),
+      podcastInputUrl: serializer.fromJson<String?>(json['podcastInputUrl']),
+      podcastFeedUrl: serializer.fromJson<String?>(json['podcastFeedUrl']),
+      podcastMetaJson: serializer.fromJson<String?>(json['podcastMetaJson']),
+      podcastLastRefreshedAt: serializer.fromJson<DateTime?>(
+        json['podcastLastRefreshedAt'],
+      ),
     );
   }
   @override
@@ -1742,6 +2252,12 @@ class Collection extends DataClass implements Insertable<Collection> {
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'description': serializer.toJson<String?>(description),
       'deprecatedAt': serializer.toJson<DateTime?>(deprecatedAt),
+      'podcastInputUrl': serializer.toJson<String?>(podcastInputUrl),
+      'podcastFeedUrl': serializer.toJson<String?>(podcastFeedUrl),
+      'podcastMetaJson': serializer.toJson<String?>(podcastMetaJson),
+      'podcastLastRefreshedAt': serializer.toJson<DateTime?>(
+        podcastLastRefreshedAt,
+      ),
     };
   }
 
@@ -1758,6 +2274,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     Value<String?> coverUrl = const Value.absent(),
     Value<String?> description = const Value.absent(),
     Value<DateTime?> deprecatedAt = const Value.absent(),
+    Value<String?> podcastInputUrl = const Value.absent(),
+    Value<String?> podcastFeedUrl = const Value.absent(),
+    Value<String?> podcastMetaJson = const Value.absent(),
+    Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
   }) => Collection(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -1771,6 +2291,18 @@ class Collection extends DataClass implements Insertable<Collection> {
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
     description: description.present ? description.value : this.description,
     deprecatedAt: deprecatedAt.present ? deprecatedAt.value : this.deprecatedAt,
+    podcastInputUrl: podcastInputUrl.present
+        ? podcastInputUrl.value
+        : this.podcastInputUrl,
+    podcastFeedUrl: podcastFeedUrl.present
+        ? podcastFeedUrl.value
+        : this.podcastFeedUrl,
+    podcastMetaJson: podcastMetaJson.present
+        ? podcastMetaJson.value
+        : this.podcastMetaJson,
+    podcastLastRefreshedAt: podcastLastRefreshedAt.present
+        ? podcastLastRefreshedAt.value
+        : this.podcastLastRefreshedAt,
   );
   Collection copyWithCompanion(CollectionsCompanion data) {
     return Collection(
@@ -1794,6 +2326,18 @@ class Collection extends DataClass implements Insertable<Collection> {
       deprecatedAt: data.deprecatedAt.present
           ? data.deprecatedAt.value
           : this.deprecatedAt,
+      podcastInputUrl: data.podcastInputUrl.present
+          ? data.podcastInputUrl.value
+          : this.podcastInputUrl,
+      podcastFeedUrl: data.podcastFeedUrl.present
+          ? data.podcastFeedUrl.value
+          : this.podcastFeedUrl,
+      podcastMetaJson: data.podcastMetaJson.present
+          ? data.podcastMetaJson.value
+          : this.podcastMetaJson,
+      podcastLastRefreshedAt: data.podcastLastRefreshedAt.present
+          ? data.podcastLastRefreshedAt.value
+          : this.podcastLastRefreshedAt,
     );
   }
 
@@ -1811,7 +2355,11 @@ class Collection extends DataClass implements Insertable<Collection> {
           ..write('remoteId: $remoteId, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('description: $description, ')
-          ..write('deprecatedAt: $deprecatedAt')
+          ..write('deprecatedAt: $deprecatedAt, ')
+          ..write('podcastInputUrl: $podcastInputUrl, ')
+          ..write('podcastFeedUrl: $podcastFeedUrl, ')
+          ..write('podcastMetaJson: $podcastMetaJson, ')
+          ..write('podcastLastRefreshedAt: $podcastLastRefreshedAt')
           ..write(')'))
         .toString();
   }
@@ -1830,6 +2378,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     coverUrl,
     description,
     deprecatedAt,
+    podcastInputUrl,
+    podcastFeedUrl,
+    podcastMetaJson,
+    podcastLastRefreshedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -1846,7 +2398,11 @@ class Collection extends DataClass implements Insertable<Collection> {
           other.remoteId == this.remoteId &&
           other.coverUrl == this.coverUrl &&
           other.description == this.description &&
-          other.deprecatedAt == this.deprecatedAt);
+          other.deprecatedAt == this.deprecatedAt &&
+          other.podcastInputUrl == this.podcastInputUrl &&
+          other.podcastFeedUrl == this.podcastFeedUrl &&
+          other.podcastMetaJson == this.podcastMetaJson &&
+          other.podcastLastRefreshedAt == this.podcastLastRefreshedAt);
 }
 
 class CollectionsCompanion extends UpdateCompanion<Collection> {
@@ -1862,6 +2418,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
   final Value<String?> coverUrl;
   final Value<String?> description;
   final Value<DateTime?> deprecatedAt;
+  final Value<String?> podcastInputUrl;
+  final Value<String?> podcastFeedUrl;
+  final Value<String?> podcastMetaJson;
+  final Value<DateTime?> podcastLastRefreshedAt;
   final Value<int> rowid;
   const CollectionsCompanion({
     this.id = const Value.absent(),
@@ -1876,6 +2436,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.coverUrl = const Value.absent(),
     this.description = const Value.absent(),
     this.deprecatedAt = const Value.absent(),
+    this.podcastInputUrl = const Value.absent(),
+    this.podcastFeedUrl = const Value.absent(),
+    this.podcastMetaJson = const Value.absent(),
+    this.podcastLastRefreshedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CollectionsCompanion.insert({
@@ -1891,6 +2455,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.coverUrl = const Value.absent(),
     this.description = const Value.absent(),
     this.deprecatedAt = const Value.absent(),
+    this.podcastInputUrl = const Value.absent(),
+    this.podcastFeedUrl = const Value.absent(),
+    this.podcastMetaJson = const Value.absent(),
+    this.podcastLastRefreshedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1909,6 +2477,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Expression<String>? coverUrl,
     Expression<String>? description,
     Expression<DateTime>? deprecatedAt,
+    Expression<String>? podcastInputUrl,
+    Expression<String>? podcastFeedUrl,
+    Expression<String>? podcastMetaJson,
+    Expression<DateTime>? podcastLastRefreshedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1924,6 +2496,11 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       if (coverUrl != null) 'cover_url': coverUrl,
       if (description != null) 'description': description,
       if (deprecatedAt != null) 'deprecated_at': deprecatedAt,
+      if (podcastInputUrl != null) 'podcast_input_url': podcastInputUrl,
+      if (podcastFeedUrl != null) 'podcast_feed_url': podcastFeedUrl,
+      if (podcastMetaJson != null) 'podcast_meta_json': podcastMetaJson,
+      if (podcastLastRefreshedAt != null)
+        'podcast_last_refreshed_at': podcastLastRefreshedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1941,6 +2518,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Value<String?>? coverUrl,
     Value<String?>? description,
     Value<DateTime?>? deprecatedAt,
+    Value<String?>? podcastInputUrl,
+    Value<String?>? podcastFeedUrl,
+    Value<String?>? podcastMetaJson,
+    Value<DateTime?>? podcastLastRefreshedAt,
     Value<int>? rowid,
   }) {
     return CollectionsCompanion(
@@ -1956,6 +2537,11 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       coverUrl: coverUrl ?? this.coverUrl,
       description: description ?? this.description,
       deprecatedAt: deprecatedAt ?? this.deprecatedAt,
+      podcastInputUrl: podcastInputUrl ?? this.podcastInputUrl,
+      podcastFeedUrl: podcastFeedUrl ?? this.podcastFeedUrl,
+      podcastMetaJson: podcastMetaJson ?? this.podcastMetaJson,
+      podcastLastRefreshedAt:
+          podcastLastRefreshedAt ?? this.podcastLastRefreshedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1999,6 +2585,20 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     if (deprecatedAt.present) {
       map['deprecated_at'] = Variable<DateTime>(deprecatedAt.value);
     }
+    if (podcastInputUrl.present) {
+      map['podcast_input_url'] = Variable<String>(podcastInputUrl.value);
+    }
+    if (podcastFeedUrl.present) {
+      map['podcast_feed_url'] = Variable<String>(podcastFeedUrl.value);
+    }
+    if (podcastMetaJson.present) {
+      map['podcast_meta_json'] = Variable<String>(podcastMetaJson.value);
+    }
+    if (podcastLastRefreshedAt.present) {
+      map['podcast_last_refreshed_at'] = Variable<DateTime>(
+        podcastLastRefreshedAt.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2020,6 +2620,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
           ..write('coverUrl: $coverUrl, ')
           ..write('description: $description, ')
           ..write('deprecatedAt: $deprecatedAt, ')
+          ..write('podcastInputUrl: $podcastInputUrl, ')
+          ..write('podcastFeedUrl: $podcastFeedUrl, ')
+          ..write('podcastMetaJson: $podcastMetaJson, ')
+          ..write('podcastLastRefreshedAt: $podcastLastRefreshedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -10350,6 +10954,12 @@ typedef $$AudioItemsTableCreateCompanionBuilder =
       Value<DateTime?> originalDate,
       Value<String?> importSourceType,
       Value<String?> importSourceUrl,
+      Value<String?> podcastEpisodeGuid,
+      Value<String?> podcastEnclosureUrl,
+      Value<String?> podcastEnclosureType,
+      Value<String?> podcastDescription,
+      Value<String?> podcastImageUrl,
+      Value<String?> podcastLink,
       Value<int> rowid,
     });
 typedef $$AudioItemsTableUpdateCompanionBuilder =
@@ -10375,6 +10985,12 @@ typedef $$AudioItemsTableUpdateCompanionBuilder =
       Value<DateTime?> originalDate,
       Value<String?> importSourceType,
       Value<String?> importSourceUrl,
+      Value<String?> podcastEpisodeGuid,
+      Value<String?> podcastEnclosureUrl,
+      Value<String?> podcastEnclosureType,
+      Value<String?> podcastDescription,
+      Value<String?> podcastImageUrl,
+      Value<String?> podcastLink,
       Value<int> rowid,
     });
 
@@ -10676,6 +11292,36 @@ class $$AudioItemsTableFilterComposer
 
   ColumnFilters<String> get importSourceUrl => $composableBuilder(
     column: $table.importSourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastEpisodeGuid => $composableBuilder(
+    column: $table.podcastEpisodeGuid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastEnclosureUrl => $composableBuilder(
+    column: $table.podcastEnclosureUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastEnclosureType => $composableBuilder(
+    column: $table.podcastEnclosureType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastDescription => $composableBuilder(
+    column: $table.podcastDescription,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastImageUrl => $composableBuilder(
+    column: $table.podcastImageUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastLink => $composableBuilder(
+    column: $table.podcastLink,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10993,6 +11639,36 @@ class $$AudioItemsTableOrderingComposer
     column: $table.importSourceUrl,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get podcastEpisodeGuid => $composableBuilder(
+    column: $table.podcastEpisodeGuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastEnclosureUrl => $composableBuilder(
+    column: $table.podcastEnclosureUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastEnclosureType => $composableBuilder(
+    column: $table.podcastEnclosureType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastDescription => $composableBuilder(
+    column: $table.podcastDescription,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastImageUrl => $composableBuilder(
+    column: $table.podcastImageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastLink => $composableBuilder(
+    column: $table.podcastLink,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AudioItemsTableAnnotationComposer
@@ -11090,6 +11766,36 @@ class $$AudioItemsTableAnnotationComposer
 
   GeneratedColumn<String> get importSourceUrl => $composableBuilder(
     column: $table.importSourceUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastEpisodeGuid => $composableBuilder(
+    column: $table.podcastEpisodeGuid,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastEnclosureUrl => $composableBuilder(
+    column: $table.podcastEnclosureUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastEnclosureType => $composableBuilder(
+    column: $table.podcastEnclosureType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastDescription => $composableBuilder(
+    column: $table.podcastDescription,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastImageUrl => $composableBuilder(
+    column: $table.podcastImageUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastLink => $composableBuilder(
+    column: $table.podcastLink,
     builder: (column) => column,
   );
 
@@ -11354,6 +12060,12 @@ class $$AudioItemsTableTableManager
                 Value<DateTime?> originalDate = const Value.absent(),
                 Value<String?> importSourceType = const Value.absent(),
                 Value<String?> importSourceUrl = const Value.absent(),
+                Value<String?> podcastEpisodeGuid = const Value.absent(),
+                Value<String?> podcastEnclosureUrl = const Value.absent(),
+                Value<String?> podcastEnclosureType = const Value.absent(),
+                Value<String?> podcastDescription = const Value.absent(),
+                Value<String?> podcastImageUrl = const Value.absent(),
+                Value<String?> podcastLink = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AudioItemsCompanion(
                 id: id,
@@ -11377,6 +12089,12 @@ class $$AudioItemsTableTableManager
                 originalDate: originalDate,
                 importSourceType: importSourceType,
                 importSourceUrl: importSourceUrl,
+                podcastEpisodeGuid: podcastEpisodeGuid,
+                podcastEnclosureUrl: podcastEnclosureUrl,
+                podcastEnclosureType: podcastEnclosureType,
+                podcastDescription: podcastDescription,
+                podcastImageUrl: podcastImageUrl,
+                podcastLink: podcastLink,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -11402,6 +12120,12 @@ class $$AudioItemsTableTableManager
                 Value<DateTime?> originalDate = const Value.absent(),
                 Value<String?> importSourceType = const Value.absent(),
                 Value<String?> importSourceUrl = const Value.absent(),
+                Value<String?> podcastEpisodeGuid = const Value.absent(),
+                Value<String?> podcastEnclosureUrl = const Value.absent(),
+                Value<String?> podcastEnclosureType = const Value.absent(),
+                Value<String?> podcastDescription = const Value.absent(),
+                Value<String?> podcastImageUrl = const Value.absent(),
+                Value<String?> podcastLink = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AudioItemsCompanion.insert(
                 id: id,
@@ -11425,6 +12149,12 @@ class $$AudioItemsTableTableManager
                 originalDate: originalDate,
                 importSourceType: importSourceType,
                 importSourceUrl: importSourceUrl,
+                podcastEpisodeGuid: podcastEpisodeGuid,
+                podcastEnclosureUrl: podcastEnclosureUrl,
+                podcastEnclosureType: podcastEnclosureType,
+                podcastDescription: podcastDescription,
+                podcastImageUrl: podcastImageUrl,
+                podcastLink: podcastLink,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11674,6 +12404,10 @@ typedef $$CollectionsTableCreateCompanionBuilder =
       Value<String?> coverUrl,
       Value<String?> description,
       Value<DateTime?> deprecatedAt,
+      Value<String?> podcastInputUrl,
+      Value<String?> podcastFeedUrl,
+      Value<String?> podcastMetaJson,
+      Value<DateTime?> podcastLastRefreshedAt,
       Value<int> rowid,
     });
 typedef $$CollectionsTableUpdateCompanionBuilder =
@@ -11690,6 +12424,10 @@ typedef $$CollectionsTableUpdateCompanionBuilder =
       Value<String?> coverUrl,
       Value<String?> description,
       Value<DateTime?> deprecatedAt,
+      Value<String?> podcastInputUrl,
+      Value<String?> podcastFeedUrl,
+      Value<String?> podcastMetaJson,
+      Value<DateTime?> podcastLastRefreshedAt,
       Value<int> rowid,
     });
 
@@ -11795,6 +12533,26 @@ class $$CollectionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get podcastInputUrl => $composableBuilder(
+    column: $table.podcastInputUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastFeedUrl => $composableBuilder(
+    column: $table.podcastFeedUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastMetaJson => $composableBuilder(
+    column: $table.podcastMetaJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get podcastLastRefreshedAt => $composableBuilder(
+    column: $table.podcastLastRefreshedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   Expression<bool> collectionAudioItemsRefs(
     Expression<bool> Function($$CollectionAudioItemsTableFilterComposer f) f,
   ) {
@@ -11889,6 +12647,26 @@ class $$CollectionsTableOrderingComposer
     column: $table.deprecatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get podcastInputUrl => $composableBuilder(
+    column: $table.podcastInputUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastFeedUrl => $composableBuilder(
+    column: $table.podcastFeedUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastMetaJson => $composableBuilder(
+    column: $table.podcastMetaJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get podcastLastRefreshedAt => $composableBuilder(
+    column: $table.podcastLastRefreshedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CollectionsTableAnnotationComposer
@@ -11941,6 +12719,26 @@ class $$CollectionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get deprecatedAt => $composableBuilder(
     column: $table.deprecatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastInputUrl => $composableBuilder(
+    column: $table.podcastInputUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastFeedUrl => $composableBuilder(
+    column: $table.podcastFeedUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastMetaJson => $composableBuilder(
+    column: $table.podcastMetaJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get podcastLastRefreshedAt => $composableBuilder(
+    column: $table.podcastLastRefreshedAt,
     builder: (column) => column,
   );
 
@@ -12011,6 +12809,10 @@ class $$CollectionsTableTableManager
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<DateTime?> deprecatedAt = const Value.absent(),
+                Value<String?> podcastInputUrl = const Value.absent(),
+                Value<String?> podcastFeedUrl = const Value.absent(),
+                Value<String?> podcastMetaJson = const Value.absent(),
+                Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CollectionsCompanion(
                 id: id,
@@ -12025,6 +12827,10 @@ class $$CollectionsTableTableManager
                 coverUrl: coverUrl,
                 description: description,
                 deprecatedAt: deprecatedAt,
+                podcastInputUrl: podcastInputUrl,
+                podcastFeedUrl: podcastFeedUrl,
+                podcastMetaJson: podcastMetaJson,
+                podcastLastRefreshedAt: podcastLastRefreshedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12041,6 +12847,10 @@ class $$CollectionsTableTableManager
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<DateTime?> deprecatedAt = const Value.absent(),
+                Value<String?> podcastInputUrl = const Value.absent(),
+                Value<String?> podcastFeedUrl = const Value.absent(),
+                Value<String?> podcastMetaJson = const Value.absent(),
+                Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CollectionsCompanion.insert(
                 id: id,
@@ -12055,6 +12865,10 @@ class $$CollectionsTableTableManager
                 coverUrl: coverUrl,
                 description: description,
                 deprecatedAt: deprecatedAt,
+                podcastInputUrl: podcastInputUrl,
+                podcastFeedUrl: podcastFeedUrl,
+                podcastMetaJson: podcastMetaJson,
+                podcastLastRefreshedAt: podcastLastRefreshedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

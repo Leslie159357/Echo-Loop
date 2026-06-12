@@ -6,6 +6,7 @@ import '../database/app_database.dart' as db;
 import '../database/providers.dart';
 import '../models/collection.dart';
 import '../services/app_logger.dart';
+import 'audio_library_provider.dart';
 
 part 'collection_provider.g.dart';
 
@@ -115,6 +116,10 @@ class CollectionList extends _$CollectionList {
               coverUrl: row.coverUrl,
               description: row.description,
               deprecatedAt: row.deprecatedAt,
+              podcastInputUrl: row.podcastInputUrl,
+              podcastFeedUrl: row.podcastFeedUrl,
+              podcastMetaJson: row.podcastMetaJson,
+              podcastLastRefreshedAt: row.podcastLastRefreshedAt,
             ),
           )
           .toList();
@@ -308,8 +313,48 @@ class CollectionList extends _$CollectionList {
         coverUrl: Value(collection.coverUrl),
         description: Value(collection.description),
         deprecatedAt: Value(collection.deprecatedAt),
+        podcastInputUrl: Value(collection.podcastInputUrl),
+        podcastFeedUrl: Value(collection.podcastFeedUrl),
+        podcastMetaJson: Value(collection.podcastMetaJson),
+        podcastLastRefreshedAt: Value(collection.podcastLastRefreshedAt),
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  // ── Podcast 专用方法 ─────────────────────────────────────────────────
+
+  /// 创建 podcast 合集（已由 PodcastRepository 填充完整 Collection 对象）。
+  Future<void> createPodcastCollection(Collection collection) async {
+    state = state.copyWith(
+      rawCollections: [...state.rawCollections, collection],
+      audioIdsMap: {...state.audioIdsMap, collection.id: []},
+    );
+    await _upsertCollection(collection);
+  }
+
+  /// 更新 podcast 合集元信息（刷新时间、coverUrl、metaJson）。
+  Future<void> updatePodcastCollection(Collection updated) async {
+    final idx = state.rawCollections.indexWhere((c) => c.id == updated.id);
+    if (idx == -1) return;
+    final list = [...state.rawCollections]..[idx] = updated;
+    state = state.copyWith(rawCollections: list);
+    await _upsertCollection(updated);
+  }
+
+  /// 退订 podcast 合集：彻底清理合集**独占**的所有单集（DB 记录 + 已下载音频/字幕
+  /// 文件 + 学习进度/书签等关联数据），再删除合集本身。
+  ///
+  /// 与通用 [deleteCollection] 不同：本地手建合集的音频可能被多个合集共享，删除合集
+  /// 不应删音频；而 podcast 单集由该合集独占，退订即应一并清除，避免孤儿条目与文件残留。
+  /// 逐个复用 [AudioLibrary.removeAudioItem] 完成单条目的完整清理（删文件 + CASCADE +
+  /// 内存状态），最后调用 [deleteCollection] 删合集行。
+  Future<void> unsubscribePodcastCollection(String id) async {
+    final audioIds = List<String>.from(state.getAudioIds(id));
+    final audioLib = ref.read(audioLibraryProvider.notifier);
+    for (final audioId in audioIds) {
+      await audioLib.removeAudioItem(audioId);
+    }
+    await deleteCollection(id);
   }
 }

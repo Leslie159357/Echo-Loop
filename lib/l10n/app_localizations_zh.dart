@@ -3475,4 +3475,86 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get cancelDownload => '取消下载';
+
+  @override
+  String get subscribePodcast => '订阅 Podcast';
+
+  @override
+  String get podcastUrlLabel => 'Apple Podcasts 或 RSS 链接';
+
+  @override
+  String get podcastUrlHint =>
+      'https://podcasts.apple.com/... 或 https://…/feed.xml';
+
+  @override
+  String get podcastSubscribing => '正在获取 Podcast Feed…';
+
+  @override
+  String podcastSubscribeFailed(String error) {
+    return '订阅失败：$error';
+  }
+
+  @override
+  String get podcastRefreshFeed => '刷新 Feed';
+
+  @override
+  String get podcastUnsubscribe => '退订';
+
+  @override
+  String podcastUnsubscribeConfirmTitle(String name) {
+    return '退订「$name」？';
+  }
+
+  @override
+  String get podcastUnsubscribeConfirmMessage => '该合集内所有单集及已下载的音频文件将被删除。';
+
+  @override
+  String get podcastFeedInfo => 'Feed 信息';
+
+  @override
+  String get podcastDetails => '详情';
+
+  @override
+  String get podcastEpisodeMeta => '单集信息';
+
+  @override
+  String get podcastShowMore => '更多';
+
+  @override
+  String get podcastShowLess => '收起';
+
+  @override
+  String get podcastTitle => '标题';
+
+  @override
+  String get podcastAuthor => '作者';
+
+  @override
+  String get podcastDescription => '简介';
+
+  @override
+  String get podcastFeedUrl => 'RSS 链接';
+
+  @override
+  String get podcastAppleLink => 'Apple 播客';
+
+  @override
+  String get podcastOriginalLink => '链接';
+
+  @override
+  String get podcastAudioType => '音频类型';
+
+  @override
+  String get podcastOpenLinkFailed => '无法打开链接';
+
+  @override
+  String podcastLastRefreshed(String time) {
+    return '上次刷新：$time';
+  }
+
+  @override
+  String get podcastEpisodeGuid => 'GUID';
+
+  @override
+  String get podcastEnclosureUrl => '音频链接';
 }

@@ -7,12 +7,16 @@ enum CollectionSource {
   local,
 
   /// 从后端加入的官方合集（需要 sync、按需下载音频、移除时彻底清空）
-  official;
+  official,
+
+  /// 用户订阅的 Podcast RSS 合集（本机私有，不同步后端）
+  podcast;
 
   /// 反序列化辅助；未知字符串回退到 [local] 避免炸。
   static CollectionSource fromString(String? raw) {
     return switch (raw) {
       'official' => CollectionSource.official,
+      'podcast' => CollectionSource.podcast,
       _ => CollectionSource.local,
     };
   }
@@ -20,6 +24,7 @@ enum CollectionSource {
   String get storageValue => switch (this) {
     CollectionSource.local => 'local',
     CollectionSource.official => 'official',
+    CollectionSource.podcast => 'podcast',
   };
 }
 
@@ -31,6 +36,12 @@ enum CollectionSource {
 /// - [remoteId]：后端 collection.id（UUID）
 /// - [coverUrl] / [description]：后端 detail 返回的元信息
 /// - [deprecatedAt]：后端下架后的本地标记时间
+///
+/// Podcast 合集字段（source=podcast 时有效）：
+/// - [podcastInputUrl]：用户输入的原始 URL（Apple Podcasts 或 RSS 直链）
+/// - [podcastFeedUrl]：解析后的 RSS Feed URL
+/// - [podcastMetaJson]：Feed 元信息 JSON（title/author/imageUrl/description）
+/// - [podcastLastRefreshedAt]：最后一次成功刷新时间
 class Collection {
   final String id;
   final String name;
@@ -40,17 +51,31 @@ class Collection {
   /// 合集来源；默认 [CollectionSource.local] 兼容老数据
   final CollectionSource source;
 
-  /// 官方合集在后端的 UUID；source=local 时为 null
+  /// 官方合集在后端的 UUID；source=local/podcast 时为 null
   final String? remoteId;
 
-  /// 合集封面图；用户自建合集目前为 null
+  /// 合集封面图；官方合集从后端获取；podcast 合集从 feed imageUrl 获取
   final String? coverUrl;
 
-  /// 合集描述；用户自建合集目前为 null
+  /// 合集描述；官方合集从后端获取；podcast 合集从 feed description 获取
   final String? description;
 
   /// 官方合集被标记下架的时间；非 null 时 UI 置灰，sync 不再请求
   final DateTime? deprecatedAt;
+
+  // ── Podcast 字段 ──────────────────────────────────────────────────────
+
+  /// 用户输入的原始 URL（Apple Podcasts 链接或直接 RSS 链接）
+  final String? podcastInputUrl;
+
+  /// 解析后的 RSS Feed URL
+  final String? podcastFeedUrl;
+
+  /// Feed 元信息 JSON（title / author / imageUrl / description 等）
+  final String? podcastMetaJson;
+
+  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  final DateTime? podcastLastRefreshedAt;
 
   Collection({
     required this.id,
@@ -62,10 +87,17 @@ class Collection {
     this.coverUrl,
     this.description,
     this.deprecatedAt,
+    this.podcastInputUrl,
+    this.podcastFeedUrl,
+    this.podcastMetaJson,
+    this.podcastLastRefreshedAt,
   });
 
   /// 方便判断：是否为官方合集
   bool get isOfficial => source == CollectionSource.official;
+
+  /// 方便判断：是否为 podcast 合集
+  bool get isPodcast => source == CollectionSource.podcast;
 
   /// 方便判断：官方合集是否已下架
   bool get isDeprecated => deprecatedAt != null;
@@ -82,6 +114,12 @@ class Collection {
     description: json['description'] as String?,
     deprecatedAt: json['deprecatedAt'] != null
         ? DateTime.parse(json['deprecatedAt'] as String)
+        : null,
+    podcastInputUrl: json['podcastInputUrl'] as String?,
+    podcastFeedUrl: json['podcastFeedUrl'] as String?,
+    podcastMetaJson: json['podcastMetaJson'] as String?,
+    podcastLastRefreshedAt: json['podcastLastRefreshedAt'] != null
+        ? DateTime.parse(json['podcastLastRefreshedAt'] as String)
         : null,
   );
 
@@ -100,6 +138,10 @@ class Collection {
     String? coverUrl,
     String? description,
     DateTime? deprecatedAt,
+    String? podcastInputUrl,
+    String? podcastFeedUrl,
+    String? podcastMetaJson,
+    DateTime? podcastLastRefreshedAt,
   }) {
     return Collection(
       id: id ?? this.id,
@@ -111,6 +153,11 @@ class Collection {
       coverUrl: coverUrl ?? this.coverUrl,
       description: description ?? this.description,
       deprecatedAt: deprecatedAt ?? this.deprecatedAt,
+      podcastInputUrl: podcastInputUrl ?? this.podcastInputUrl,
+      podcastFeedUrl: podcastFeedUrl ?? this.podcastFeedUrl,
+      podcastMetaJson: podcastMetaJson ?? this.podcastMetaJson,
+      podcastLastRefreshedAt:
+          podcastLastRefreshedAt ?? this.podcastLastRefreshedAt,
     );
   }
 }

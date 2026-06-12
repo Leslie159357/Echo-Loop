@@ -104,11 +104,11 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     super.dispose();
   }
 
-  /// 显示内联错误条，6 秒后自动消失。重复触发会重置倒计时。
+  /// 显示内联错误条，5 秒后自动消失。重复触发会重置倒计时。
   void _showInlineError(_InlineError err) {
     _errorClearTimer?.cancel();
     setState(() => _error = err);
-    _errorClearTimer = Timer(const Duration(seconds: 6), () {
+    _errorClearTimer = Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
       setState(() => _error = null);
     });
@@ -232,7 +232,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                 ),
               ),
               const SizedBox(height: AppSpacing.m),
-              // 内联错误提示（淡入 + 上滑，sheet 高度平滑变化；6 秒自动消失）
+              // 内联错误提示（淡入 + 上滑，sheet 高度平滑变化；5 秒自动消失）
               AnimatedSize(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
@@ -262,7 +262,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                             AppSpacing.m,
                             0,
                             AppSpacing.m,
-                            AppSpacing.m,
+                            AppSpacing.s,
                           ),
                           child: _buildInlineErrorCard(theme, l10n, _error!),
                         ),
@@ -476,12 +476,9 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   }
 
   /// 构建空转录结果视图（音频无人声）
-  /// 上传失败的内联错误卡片。
+  /// 上传失败的内联错误条。
   ///
-  /// 风格与 [_buildOptionTile] 对齐：浅灰描边卡片 + 左侧圆角图标徽章 +
-  /// 标题/描述两行文字 + 右上角关闭按钮。语义色用 amber 而非红色：
-  /// 这三种错误均属"用户改个文件就好"的可纠正级别，红色 errorContainer
-  /// 会让人误以为是不可逆故障。
+  /// 使用紧凑单行样式，避免占用底部弹窗过多垂直空间。
   Widget _buildInlineErrorCard(
     ThemeData theme,
     AppLocalizations l10n,
@@ -515,59 +512,46 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       label: '$title. ${err.message}',
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.s + 4,
-          AppSpacing.s,
-          AppSpacing.xs,
-          AppSpacing.s + 2,
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: colorScheme.outlineVariant, width: 1),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            // 第一行：图标 + 标题 + 关闭按钮
-            Row(
-              children: [
-                Icon(icon, size: 18, color: accent),
-                const SizedBox(width: AppSpacing.s),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                      height: 1.2,
+            Icon(icon, size: 17, color: accent),
+            const SizedBox(width: AppSpacing.s),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: title,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                  ),
+                    TextSpan(
+                      text: ' · ${err.message}',
+                      style: TextStyle(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: _dismissInlineError,
-                  icon: const Icon(Icons.close, size: 18),
-                  color: colorScheme.onSurfaceVariant,
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
-                  ),
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                ),
-              ],
-            ),
-            // 第二行：详细描述（与标题左对齐，占满剩余宽度）
-            Padding(
-              padding: const EdgeInsets.fromLTRB(26, 2, AppSpacing.xs, 0),
-              child: Text(
-                err.message,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.35,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                  height: 1.25,
                 ),
               ),
+            ),
+            IconButton(
+              onPressed: _dismissInlineError,
+              icon: const Icon(Icons.close, size: 18),
+              color: colorScheme.onSurfaceVariant,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             ),
           ],
         ),
@@ -985,10 +969,10 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     AudioItem audioItem,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    final accessToken = ref
-        .read(supabaseSessionProvider)
-        .valueOrNull
-        ?.accessToken;
+    final accessToken = (await ref.read(
+      supabaseSessionProvider.future,
+    ))?.accessToken;
+    if (!mounted || !context.mounted) return;
     if (accessToken == null || accessToken.isEmpty) {
       await _showTranscriptionSignInDialog(context);
       return;
@@ -996,28 +980,32 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
 
     // 检查时长限制
     if (audioItem.totalDuration > _maxDurationSeconds) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.transcriptionErrorTooLong(15))),
-        );
-      }
+      _showInlineError(
+        _InlineError(
+          _UploadErrorKind.generic,
+          l10n.transcriptionErrorTooLong(15),
+        ),
+      );
       return;
     }
 
     // 检查文件大小限制
     final fullPath = await audioItem.getFullAudioPath();
     if (fullPath == null) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.audioFileNotFound)));
+      if (!mounted) return;
+      _showInlineError(
+        _InlineError(_UploadErrorKind.generic, l10n.audioFileNotFound),
+      );
       return;
     }
     final fileSize = await File(fullPath).length();
-    if (!context.mounted) return;
+    if (!mounted) return;
     if (fileSize > _maxFileSize) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.transcriptionErrorFileTooLarge(50))),
+      _showInlineError(
+        _InlineError(
+          _UploadErrorKind.generic,
+          l10n.transcriptionErrorFileTooLarge(50),
+        ),
       );
       return;
     }

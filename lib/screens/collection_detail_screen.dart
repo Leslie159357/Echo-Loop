@@ -2,9 +2,13 @@
 //
 // 展示合集中的音频列表，复用 AudioListView 和 AudioSortButton。
 // 支持上传音频到合集。
+import 'dart:convert';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/audio_item.dart';
+import '../models/collection.dart';
 import '../providers/collection_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/new_user_guide_provider.dart';
@@ -14,6 +18,9 @@ import '../providers/audio_list_settings_provider.dart';
 import '../widgets/audio_list_view.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/import_audio_sheet.dart';
+import '../features/podcast/podcast_repository.dart';
+import '../features/podcast/podcast_models.dart';
+import '../features/podcast/podcast_info_sheet.dart';
 
 /// 合集详情页面 - 展示合集中的音频，支持上传音频
 class CollectionDetailScreen extends ConsumerStatefulWidget {
@@ -29,6 +36,9 @@ class CollectionDetailScreen extends ConsumerStatefulWidget {
 class _CollectionDetailScreenState
     extends ConsumerState<CollectionDetailScreen> {
   final _keyUpload = GlobalKey();
+
+  /// podcast feed 刷新中标志：刷新期间按钮显示加载态并禁用，防止二次点击。
+  bool _isRefreshingPodcast = false;
 
   /// 官方合集的排序状态，页面内独立持有（不走全局 audioListSettingsProvider，
   /// 避免污染资源库 / 用户自建合集的排序偏好）。首次打开默认「官方编排顺序」。
@@ -85,6 +95,23 @@ class _CollectionDetailScreenState
         appBar: AppBar(
           title: Text(collection.name),
           actions: [
+            // podcast 合集：刷新按钮保留在详情页，信息展示收敛到页面头部和合集菜单。
+            if (collection.isPodcast) ...[
+              IconButton(
+                icon: _isRefreshingPodcast
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+                tooltip: l10n.podcastRefreshFeed,
+                // 刷新中禁用按钮，避免重复触发请求
+                onPressed: _isRefreshingPodcast
+                    ? null
+                    : () => _refreshPodcastFeed(context, collection.id),
+              ),
+            ],
             // 官方合集：独立 sort state + 5 项菜单（默认 / 名称×2 / 原始发布×2）
             // 用户合集：保持现状 —— 4 项默认菜单 + 全局 provider
             if (collection.isOfficial)
@@ -95,8 +122,8 @@ class _CollectionDetailScreenState
               )
             else
               const AudioSortButton(),
-            // 官方合集禁止手动添加/删除音频，按钮隐藏
-            if (!collection.isOfficial)
+            // 官方合集 / podcast 合集禁止手动添加/删除音频，按钮隐藏
+            if (!collection.isOfficial && !collection.isPodcast)
               GuideTarget(
                 step: stepUpload,
                 child: IconButton(
@@ -109,31 +136,215 @@ class _CollectionDetailScreenState
               ),
           ],
         ),
-        body: AudioListView(
-          items: audioItems,
-          collectionId: widget.collectionId,
-          guideFirstAudioMenu: hasAudioItems,
-          guideLeadingItems: hasAudioItems,
-          overrideSortType: collection.isOfficial ? _officialSort : null,
-          emptyState: collection.isOfficial
+        body: collection.isPodcast
+            ? _PodcastCollectionBody(
+                collection: collection,
+                audioItems: audioItems,
+                guideFirstAudioMenu: hasAudioItems,
+                guideLeadingItems: hasAudioItems,
+              )
+            : AudioListView(
+                items: audioItems,
+                collectionId: widget.collectionId,
+                guideFirstAudioMenu: hasAudioItems,
+                guideLeadingItems: hasAudioItems,
+                overrideSortType: collection.isOfficial ? _officialSort : null,
+                emptyState: collection.isOfficial
+                    ? Center(
+                        child: Text(
+                          // 区分「已下架」vs「暂无音频」：前者是后端主动下线，后者
+                          // 是合集刚建还没上内容，两种文案语义不同不能复用。
+                          collection.isDeprecated
+                              ? l10n.officialCollectionDeprecated
+                              : l10n.officialCollectionEmpty,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : _CollectionEmptyState(
+                        l10n: l10n,
+                        onAdd: () => showImportAudioSheet(
+                          context,
+                          collectionId: collection.id,
+                        ),
+                      ),
+              ),
+      ),
+    );
+  }
+
+  /// 刷新 podcast feed（force）。
+  ///
+  /// 刷新期间通过 [_isRefreshingPodcast] 让顶部刷新按钮进入加载态并禁用，
+  /// 不再展示「正在获取」snackbar；仅在失败时弹出 snackbar 提示。
+  Future<void> _refreshPodcastFeed(
+    BuildContext context,
+    String collectionId,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _isRefreshingPodcast = true);
+    try {
+      await ref
+          .read(podcastRepositoryProvider)
+          .refresh(collectionId, force: true);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.podcastSubscribeFailed(e.toString()))),
+      );
+    } finally {
+      if (mounted) setState(() => _isRefreshingPodcast = false);
+    }
+  }
+}
+
+/// Podcast 合集详情内容：顶部展示 Feed 元信息，下面复用音频列表。
+class _PodcastCollectionBody extends StatelessWidget {
+  final Collection collection;
+  final List<AudioItem> audioItems;
+  final bool guideFirstAudioMenu;
+  final bool guideLeadingItems;
+
+  const _PodcastCollectionBody({
+    required this.collection,
+    required this.audioItems,
+    required this.guideFirstAudioMenu,
+    required this.guideLeadingItems,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      children: [
+        _PodcastFeedHeader(collection: collection),
+        Expanded(
+          child: audioItems.isEmpty
               ? Center(
                   child: Text(
-                    // 区分「已下架」vs「暂无音频」：前者是后端主动下线，后者
-                    // 是合集刚建还没上内容，两种文案语义不同不能复用。
-                    collection.isDeprecated
-                        ? l10n.officialCollectionDeprecated
-                        : l10n.officialCollectionEmpty,
+                    l10n.officialCollectionEmpty,
                     textAlign: TextAlign.center,
                   ),
                 )
-              : _CollectionEmptyState(
-                  l10n: l10n,
-                  onAdd: () => showImportAudioSheet(
-                    context,
-                    collectionId: collection.id,
-                  ),
+              : AudioListView(
+                  items: audioItems,
+                  collectionId: collection.id,
+                  guideFirstAudioMenu: guideFirstAudioMenu,
+                  guideLeadingItems: guideLeadingItems,
                 ),
         ),
+      ],
+    );
+  }
+}
+
+class _PodcastFeedHeader extends StatefulWidget {
+  final Collection collection;
+
+  const _PodcastFeedHeader({required this.collection});
+
+  @override
+  State<_PodcastFeedHeader> createState() => _PodcastFeedHeaderState();
+}
+
+class _PodcastFeedHeaderState extends State<_PodcastFeedHeader> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final meta = _decodeMeta(widget.collection.podcastMetaJson);
+    final imageUrl = meta?.imageUrl ?? widget.collection.coverUrl;
+    final description = meta?.description ?? widget.collection.description;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => showPodcastFeedInfoSheet(context, widget.collection),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.m,
+            AppSpacing.s,
+            AppSpacing.m,
+            AppSpacing.s,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _PodcastCover(imageUrl: imageUrl),
+              const SizedBox(width: AppSpacing.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (description != null && description.isNotEmpty) ...[
+                      Text(
+                        description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                    ],
+                    Text(
+                      l10n.podcastShowMore,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  PodcastFeedMeta? _decodeMeta(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return PodcastFeedMeta.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _PodcastCover extends StatelessWidget {
+  final String? imageUrl;
+
+  const _PodcastCover({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        Icons.podcasts_rounded,
+        color: theme.colorScheme.onPrimaryContainer,
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: imageUrl == null || imageUrl!.isEmpty
+            ? placeholder
+            : CachedNetworkImage(
+                imageUrl: imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => placeholder,
+                errorWidget: (_, __, ___) => placeholder,
+              ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,8 +15,12 @@ import 'package:echo_loop/providers/learning_session/learning_session_provider.d
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/tag_provider.dart';
+import 'package:echo_loop/features/audio_import/audio_import_models.dart';
+import 'package:echo_loop/features/audio_import/audio_import_provider.dart';
+import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/audio_list_tile.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
@@ -30,6 +36,58 @@ class _AudioListTileWrapper extends ConsumerWidget {
     if (items.isEmpty) return const SizedBox.shrink();
     return AudioListTile(audioItem: items.first);
   }
+}
+
+class _DownloadingAudioImportController extends AudioImportController {
+  @override
+  AudioImportState build() => const AudioImportDownloading(
+    displayName: 'https://example.com/episode.mp3',
+    progress: 0.42,
+    receivedBytes: 42,
+    totalBytes: 100,
+  );
+}
+
+class _PendingAudioImportController extends AudioImportController {
+  final Completer<bool> _completer = Completer<bool>();
+
+  @override
+  AudioImportState build() => const AudioImportIdle();
+
+  @override
+  Future<bool> downloadPodcastEpisode(AudioItem item) {
+    // 立即进入下载态（不定进度），承载行内进度条；下载结果由测试控制。
+    state = AudioImportDownloading(
+      displayName: item.podcastEnclosureUrl!,
+      progress: -1.0,
+    );
+    return _completer.future;
+  }
+
+  void complete([bool ok = false]) {
+    if (!_completer.isCompleted) {
+      // 收尾置回 idle，停止不定进度动画，避免 pumpAndSettle 超时。
+      state = const AudioImportIdle();
+      _completer.complete(ok);
+    }
+  }
+}
+
+Session _signedInSession() {
+  final user = User(
+    id: 'user-1',
+    appMetadata: const {'provider': 'email'},
+    userMetadata: const {},
+    aud: 'authenticated',
+    email: 'learner@example.com',
+    createdAt: '2026-06-12T00:00:00.000Z',
+  );
+  return Session(
+    accessToken: 'token',
+    tokenType: 'bearer',
+    user: user,
+    refreshToken: 'refresh',
+  );
 }
 
 void main() {
@@ -107,6 +165,271 @@ void main() {
       expect(find.byKey(const Key('audio_list_tile_badge_row')), findsNothing);
       expect(find.byIcon(Icons.subtitles_outlined), findsNothing);
       expect(find.text('Transcript'), findsNothing);
+    });
+  });
+
+  group('AudioListTile 日期元信息', () {
+    Widget buildTile(AudioItem item) {
+      return createTestApp(
+        Center(
+          child: SizedBox(width: 360, child: AudioListTile(audioItem: item)),
+        ),
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+          ),
+        ],
+      );
+    }
+
+    testWidgets('用户自建普通音频显示「添加于」', (tester) async {
+      final item = createTestAudioItem(name: 'User Audio');
+
+      await tester.pumpWidget(buildTile(item));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Added'), findsOneWidget);
+      expect(find.textContaining('Published'), findsNothing);
+    });
+
+    testWidgets('podcast 单集显示「发布于」而非「添加于」', (tester) async {
+      final item = createTestAudioItem(name: 'Podcast Episode').copyWith(
+        podcastEpisodeGuid: 'episode-guid-1',
+        podcastEnclosureUrl: 'https://example.com/episode.mp3',
+        originalDate: DateTime(2025, 3, 31),
+      );
+
+      await tester.pumpWidget(buildTile(item));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Published'), findsOneWidget);
+      expect(find.textContaining('Added'), findsNothing);
+    });
+  });
+
+  group('AudioListTile Podcast 单集', () {
+    testWidgets('未下载单集显示对应的懒下载进度', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            audioImportControllerProvider.overrideWith(
+              _DownloadingAudioImportController.new,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_podcast_download_progress')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Downloading audio 42%'), findsOneWidget);
+    });
+
+    testWidgets('未下载单集点击时只下载音频并显示行内进度', (tester) async {
+      final controller = _PendingAudioImportController();
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            audioImportControllerProvider.overrideWith(() => controller),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Podcast Episode'));
+      await tester.pump();
+
+      // 下载进度落在列表项行内（不定进度，无百分比），且仅下载音频。
+      expect(
+        find.byKey(const Key('audio_list_tile_podcast_download_progress')),
+        findsOneWidget,
+      );
+      expect(find.text('Downloading audio'), findsOneWidget);
+      expect(find.text('Downloading audio and subtitle...'), findsNothing);
+
+      controller.complete();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('菜单管理字幕 AI 转录音频过长时显示弹窗内错误提示', (tester) async {
+      final item = createTestAudioItem(
+        name: 'Long Audio',
+        totalDuration: 16 * 60,
+      ).copyWith(transcriptSource: TranscriptSource.local);
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            supabaseSessionProvider.overrideWith(
+              (ref) => Stream<Session?>.value(_signedInSession()),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manage Subtitles'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('AI Transcription'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Start Transcription'),
+      );
+      await tester.pump();
+
+      expect(find.textContaining('Audio too long'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Audio too long'), findsNothing);
+    });
+
+    testWidgets('单集信息展示简介、网页链接和音频下载链接', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+            totalDuration: 1830,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+            podcastDescription: 'Episode summary for learners.',
+            podcastImageUrl: 'https://example.com/episode.jpg',
+            podcastLink: 'https://example.com/episode',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Episode Info'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Podcast Episode'), findsWidgets);
+      expect(find.text('Episode summary for learners.'), findsOneWidget);
+      expect(find.text('Link'), findsOneWidget);
+      expect(find.text('https://example.com/episode'), findsOneWidget);
+      expect(find.text('Audio URL'), findsOneWidget);
+      expect(find.text('https://example.com/episode.mp3'), findsOneWidget);
+      expect(find.text('GUID'), findsNothing);
+      expect(find.text('episode-guid-1'), findsNothing);
+      expect(find.text('Audio Type'), findsNothing);
+      expect(find.text('audio/mpeg'), findsNothing);
+      expect(find.byIcon(Icons.open_in_new_rounded), findsNWidgets(2));
+      // 时长展示在弹窗 meta 行（精确 '30:30'；列表项是 '30:30 · …' 组合文案）。
+      expect(find.text('30:30'), findsOneWidget);
+      // 单集封面区域渲染（无图时回退 podcasts 占位图标）。
+      expect(find.byIcon(Icons.podcasts_rounded), findsWidgets);
+    });
+
+    testWidgets('单集信息用 http guid 兜底展示网页链接', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'VOA Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid:
+                'https://learningenglish.voanews.com/a/8008768.html',
+            podcastEnclosureUrl: 'https://voa-audio.voanews.eu/vle/episode.mp3',
+            podcastDescription: 'VOA episode summary.',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Episode Info'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Link'), findsOneWidget);
+      expect(
+        find.text('https://learningenglish.voanews.com/a/8008768.html'),
+        findsOneWidget,
+      );
+      expect(find.text('Audio URL'), findsOneWidget);
+      expect(
+        find.text('https://voa-audio.voanews.eu/vle/episode.mp3'),
+        findsOneWidget,
+      );
     });
   });
 

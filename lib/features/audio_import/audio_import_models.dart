@@ -47,6 +47,22 @@ class ResolvedAudioImport {
   final int? contentLength;
 }
 
+/// 仅落盘的音频下载结果（不入库）。
+///
+/// 供 podcast 单集懒下载使用：拿到沙盒相对路径、时长、指纹后，由调用方更新
+/// 已存在的占位 [AudioItem]，而不是新建条目。
+class DownloadedAudio {
+  const DownloadedAudio({
+    required this.relativePath,
+    required this.durationSeconds,
+    this.audioSha256,
+  });
+
+  final String relativePath;
+  final int durationSeconds;
+  final String? audioSha256;
+}
+
 enum AudioImportFailureCode {
   invalidUrl,
   unsupportedScheme,

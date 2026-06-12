@@ -9,12 +9,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/official_collections/providers/official_enrollment_provider.dart';
 import '../features/official_collections/widgets/official_badge.dart';
+import '../features/podcast/podcast_info_sheet.dart';
+import '../features/podcast/podcast_repository.dart';
 import '../models/collection.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../services/app_network_image_cache.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common/secondary_action_button.dart';
 import '../widgets/dialogs/confirm_dialog.dart';
 import '../widgets/dialogs/text_input_dialog.dart';
 import '../widgets/guide_flow.dart';
@@ -154,33 +157,553 @@ class CollectionListView extends StatelessWidget {
 
 /// 显示创建合集对话框（公开供 LibraryScreen 使用）
 ///
-/// 需要 [WidgetRef] 来读取合集列表状态并创建合集。
+/// 使用统一底部 sheet：选择创建本地合集或订阅 Podcast 后，在 sheet 内完成输入。
 void showCreateCollectionDialog(BuildContext context) {
-  // 从 context 中找到最近的 ProviderScope
-  final container = ProviderScope.containerOf(context);
-  final l10n = AppLocalizations.of(context)!;
-
-  showTextInputDialog(
+  showModalBottomSheet<void>(
     context: context,
-    title: l10n.createCollection,
-    labelText: l10n.collectionName,
-    hintText: l10n.enterCollectionName,
-    confirmLabel: l10n.add,
-    cancelLabel: l10n.cancel,
-    validator: (name) {
-      if (name.isEmpty) return l10n.collectionNameEmpty;
-      final collectionState = container.read(collectionListProvider);
-      final exists = collectionState.collections.any(
-        (c) => c.name.toLowerCase() == name.toLowerCase(),
-      );
-      if (exists) return l10n.collectionNameExists;
-      return null;
-    },
-  ).then((name) {
-    if (name != null) {
-      container.read(collectionListProvider.notifier).createCollection(name);
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => const _CreateCollectionFlowSheet(),
+  );
+}
+
+enum _CreateCollectionStep { chooseType, local, podcast }
+
+class _CreateCollectionFlowSheet extends ConsumerStatefulWidget {
+  const _CreateCollectionFlowSheet();
+
+  @override
+  ConsumerState<_CreateCollectionFlowSheet> createState() =>
+      _CreateCollectionFlowSheetState();
+}
+
+class _CreateCollectionFlowSheetState
+    extends ConsumerState<_CreateCollectionFlowSheet> {
+  final _nameController = TextEditingController();
+  final _podcastUrlController = TextEditingController();
+  _CreateCollectionStep _step = _CreateCollectionStep.chooseType;
+  String? _errorText;
+  bool _isSubmittingPodcast = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _podcastUrlController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return PopScope(
+      canPop: !_isSubmittingPodcast,
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.86,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _CollectionSheetHeader(
+                  title: _titleFor(l10n),
+                  showBack:
+                      _step != _CreateCollectionStep.chooseType &&
+                      !_isSubmittingPodcast,
+                  onBack: _goBackToType,
+                  onClose: _isSubmittingPodcast
+                      ? null
+                      : () => Navigator.pop(context),
+                ),
+                const SizedBox(height: AppSpacing.m),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _buildStep(l10n),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _titleFor(AppLocalizations l10n) {
+    return switch (_step) {
+      _CreateCollectionStep.chooseType => l10n.createCollection,
+      _CreateCollectionStep.local => l10n.createCollection,
+      _CreateCollectionStep.podcast => l10n.subscribePodcast,
+    };
+  }
+
+  Widget _buildStep(AppLocalizations l10n) {
+    return switch (_step) {
+      _CreateCollectionStep.chooseType => _CollectionTypePanel(
+        key: const ValueKey('choose-collection-type'),
+        onLocal: () => _setStep(_CreateCollectionStep.local),
+        onPodcast: () => _setStep(_CreateCollectionStep.podcast),
+      ),
+      _CreateCollectionStep.local => _LocalCollectionPanel(
+        key: const ValueKey('local-collection-form'),
+        controller: _nameController,
+        errorText: _errorText,
+        onBack: _goBackToType,
+        onSubmit: _submitLocalCollection,
+      ),
+      _CreateCollectionStep.podcast => _PodcastSubscriptionPanel(
+        key: const ValueKey('podcast-subscription-form'),
+        controller: _podcastUrlController,
+        errorText: _errorText,
+        isSubmitting: _isSubmittingPodcast,
+        onBack: _goBackToType,
+        onSubmit: _submitPodcast,
+      ),
+    };
+  }
+
+  void _setStep(_CreateCollectionStep step) {
+    setState(() {
+      _step = step;
+      _errorText = null;
+    });
+  }
+
+  void _goBackToType() {
+    if (_isSubmittingPodcast) return;
+    _setStep(_CreateCollectionStep.chooseType);
+  }
+
+  void _submitLocalCollection() {
+    final l10n = AppLocalizations.of(context)!;
+    final name = _nameController.text.trim();
+    final error = _validateCollectionName(l10n, name);
+    if (error != null) {
+      setState(() => _errorText = error);
+      return;
     }
+    ref.read(collectionListProvider.notifier).createCollection(name);
+    Navigator.pop(context);
+  }
+
+  String? _validateCollectionName(AppLocalizations l10n, String name) {
+    if (name.isEmpty) return l10n.collectionNameEmpty;
+    final exists = ref
+        .read(collectionListProvider)
+        .collections
+        .any((c) => c.name.toLowerCase() == name.toLowerCase());
+    if (exists) return l10n.collectionNameExists;
+    return null;
+  }
+
+  Future<void> _submitPodcast() async {
+    final l10n = AppLocalizations.of(context)!;
+    final url = _podcastUrlController.text.trim();
+    final uri = Uri.tryParse(url);
+    if (url.isEmpty ||
+        uri == null ||
+        !uri.hasScheme ||
+        uri.host.isEmpty ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      setState(() => _errorText = l10n.audioUrlInvalid);
+      return;
+    }
+
+    setState(() {
+      _errorText = null;
+      _isSubmittingPodcast = true;
+    });
+    try {
+      await ref.read(podcastRepositoryProvider).createAndFetch(url);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmittingPodcast = false;
+        _errorText = _formatPodcastError(l10n, e);
+      });
+    }
+  }
+
+  String _formatPodcastError(AppLocalizations l10n, Object error) {
+    final raw = error.toString();
+    final message = raw
+        .replaceFirst('PodcastResolveException: ', '')
+        .replaceFirst('PodcastParseException: ', '')
+        .replaceFirst(RegExp(r'DioException \[[^\]]+\]:\s*'), '')
+        .trim();
+    return l10n.podcastSubscribeFailed(message.isEmpty ? raw : message);
+  }
+}
+
+class _CollectionSheetHeader extends StatelessWidget {
+  const _CollectionSheetHeader({
+    required this.title,
+    required this.showBack,
+    required this.onBack,
+    required this.onClose,
   });
+
+  final String title;
+  final bool showBack;
+  final VoidCallback onBack;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: showBack
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: onBack,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                  ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 40, height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionTypePanel extends StatelessWidget {
+  const _CollectionTypePanel({
+    super.key,
+    required this.onLocal,
+    required this.onPodcast,
+  });
+
+  final VoidCallback onLocal;
+  final VoidCallback onPodcast;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CollectionOptionTile(
+          key: const ValueKey('collection-option-local'),
+          icon: Icons.create_new_folder_outlined,
+          title: l10n.createCollection,
+          description: l10n.enterCollectionName,
+          onTap: onLocal,
+        ),
+        const SizedBox(height: 12),
+        _CollectionOptionTile(
+          key: const ValueKey('collection-option-podcast'),
+          icon: Icons.podcasts_rounded,
+          title: l10n.subscribePodcast,
+          description: l10n.podcastUrlLabel,
+          onTap: onPodcast,
+        ),
+      ],
+    );
+  }
+}
+
+class _CollectionOptionTile extends StatelessWidget {
+  const _CollectionOptionTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.36),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalCollectionPanel extends StatefulWidget {
+  const _LocalCollectionPanel({
+    super.key,
+    required this.controller,
+    required this.errorText,
+    required this.onBack,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final String? errorText;
+  final VoidCallback onBack;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_LocalCollectionPanel> createState() => _LocalCollectionPanelState();
+}
+
+class _LocalCollectionPanelState extends State<_LocalCollectionPanel> {
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final canSubmit = widget.controller.text.trim().isNotEmpty;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: l10n.collectionName,
+            hintText: l10n.enterCollectionName,
+            errorText: widget.errorText,
+            suffixIcon: widget.controller.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(widget.controller.clear),
+                  ),
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => widget.onSubmit(),
+        ),
+        const SizedBox(height: AppSpacing.l),
+        Row(
+          children: [
+            Expanded(
+              child: SecondaryActionButton(
+                onPressed: widget.onBack,
+                label: l10n.back,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton(
+                onPressed: canSubmit ? widget.onSubmit : null,
+                child: Text(l10n.add),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PodcastSubscriptionPanel extends StatefulWidget {
+  const _PodcastSubscriptionPanel({
+    super.key,
+    required this.controller,
+    required this.errorText,
+    required this.isSubmitting,
+    required this.onBack,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final String? errorText;
+  final bool isSubmitting;
+  final VoidCallback onBack;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_PodcastSubscriptionPanel> createState() =>
+      _PodcastSubscriptionPanelState();
+}
+
+class _PodcastSubscriptionPanelState extends State<_PodcastSubscriptionPanel> {
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final canSubmit =
+        widget.controller.text.trim().isNotEmpty && !widget.isSubmitting;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          enabled: !widget.isSubmitting,
+          autofocus: false,
+          keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: l10n.podcastUrlLabel,
+            hintText: l10n.podcastUrlHint,
+            suffixIcon: widget.controller.text.isEmpty || widget.isSubmitting
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(widget.controller.clear),
+                  ),
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: widget.isSubmitting ? null : (_) => widget.onSubmit(),
+        ),
+        if (widget.errorText != null) ...[
+          const SizedBox(height: AppSpacing.s),
+          _CollectionInlineError(message: widget.errorText!),
+        ],
+        if (widget.isSubmitting) ...[
+          const SizedBox(height: AppSpacing.m),
+          const LinearProgressIndicator(),
+          const SizedBox(height: AppSpacing.s),
+          Text(
+            l10n.podcastSubscribing,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.l),
+        Row(
+          children: [
+            Expanded(
+              child: SecondaryActionButton(
+                onPressed: widget.isSubmitting ? null : widget.onBack,
+                label: l10n.back,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton(
+                onPressed: canSubmit ? widget.onSubmit : null,
+                child: widget.isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(l10n.add),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CollectionInlineError extends StatelessWidget {
+  const _CollectionInlineError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.errorContainer.withValues(alpha: 0.32),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colorScheme.error.withValues(alpha: 0.55)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline, color: colorScheme.error, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 Widget _buildCollectionMenuItemRow(Widget icon, String label) {
@@ -288,7 +811,9 @@ class _CollectionListTile extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    itemBuilder: (context) => collection.isOfficial
+                    itemBuilder: (context) => collection.isPodcast
+                        ? _buildPodcastMenuItems(collection, l10n, theme)
+                        : collection.isOfficial
                         ? _buildOfficialMenuItems(collection, l10n, theme)
                         : _buildLocalMenuItems(collection, l10n, theme),
                     onSelected: (value) {
@@ -306,6 +831,10 @@ class _CollectionListTile extends ConsumerWidget {
                           ref,
                           collection,
                         );
+                      } else if (value == 'podcastDetails') {
+                        showPodcastFeedInfoSheet(context, collection);
+                      } else if (value == 'podcastUnsubscribe') {
+                        _showPodcastUnsubscribeDialog(context, ref, collection);
                       }
                     },
                   ),
@@ -335,6 +864,29 @@ class _CollectionListTile extends ConsumerWidget {
   Widget _buildLeadingIcon(ThemeData theme) {
     const size = 56.0;
     final coverUrl = collection.coverUrl;
+
+    // podcast 合集：有封面显示封面图，否则用 podcast 图标
+    if (collection.isPodcast) {
+      if (coverUrl != null && coverUrl.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CachedNetworkImage(
+            imageUrl: coverUrl,
+            cacheManager: AppNetworkImageCache.instance,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            // 缓存命中时立即显示，去掉默认 500ms 淡入造成的延迟感
+            fadeInDuration: Duration.zero,
+            placeholderFadeInDuration: Duration.zero,
+            placeholder: (_, __) => _podcastIconPlaceholder(theme, size),
+            errorWidget: (_, __, ___) => _podcastIconPlaceholder(theme, size),
+          ),
+        );
+      }
+      return _podcastIconPlaceholder(theme, size);
+    }
+
     final Widget icon =
         (collection.isOfficial && coverUrl != null && coverUrl.isNotEmpty)
         ? ClipRRect(
@@ -345,6 +897,9 @@ class _CollectionListTile extends ConsumerWidget {
               width: size,
               height: size,
               fit: BoxFit.contain,
+              // 缓存命中时立即显示，去掉默认 500ms 淡入造成的延迟感
+              fadeInDuration: Duration.zero,
+              placeholderFadeInDuration: Duration.zero,
               placeholder: (_, __) => _letterPlaceholder(theme, size),
               errorWidget: (_, __, ___) => _letterPlaceholder(theme, size),
             ),
@@ -367,6 +922,23 @@ class _CollectionListTile extends ConsumerWidget {
             child: OfficialCornerBadge(isDeprecated: collection.isDeprecated),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _podcastIconPlaceholder(ThemeData theme, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.secondaryContainer,
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.podcasts_rounded,
+        size: 28,
+        color: theme.colorScheme.onSecondaryContainer,
       ),
     );
   }
@@ -534,4 +1106,65 @@ List<PopupMenuEntry<String>> _buildOfficialMenuItems(
       ),
     ),
   ];
+}
+
+/// Podcast 合集菜单项：pin / 重命名 / 详情 / 退订（彻底清空）。
+List<PopupMenuEntry<String>> _buildPodcastMenuItems(
+  Collection collection,
+  AppLocalizations l10n,
+  ThemeData theme,
+) {
+  return [
+    PopupMenuItem(
+      value: 'togglePin',
+      child: _buildCollectionMenuItemRow(
+        _buildCollectionPinIcon(isPinned: collection.isPinned),
+        collection.isPinned ? l10n.unpinCollection : l10n.pinCollection,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'rename',
+      child: _buildCollectionMenuItemRow(
+        const Icon(Icons.edit),
+        l10n.renameCollection,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'podcastDetails',
+      child: _buildCollectionMenuItemRow(
+        const Icon(Icons.info_outline),
+        l10n.podcastDetails,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'podcastUnsubscribe',
+      child: _buildCollectionMenuItemRow(
+        Icon(Icons.remove_circle_outline, color: theme.colorScheme.error),
+        l10n.podcastUnsubscribe,
+      ),
+    ),
+  ];
+}
+
+/// 退订 podcast 合集（彻底清理单集记录、已下载文件与关联数据后删除合集）。
+void _showPodcastUnsubscribeDialog(
+  BuildContext context,
+  WidgetRef ref,
+  Collection collection,
+) async {
+  final l10n = AppLocalizations.of(context)!;
+  final confirmed = await showConfirmDialog(
+    context: context,
+    title: l10n.podcastUnsubscribeConfirmTitle(collection.name),
+    message: l10n.podcastUnsubscribeConfirmMessage,
+    icon: Icons.warning_amber_rounded,
+    isDestructive: true,
+    confirmLabel: l10n.podcastUnsubscribe,
+    cancelLabel: l10n.cancel,
+  );
+  if (confirmed == true) {
+    ref
+        .read(collectionListProvider.notifier)
+        .unsubscribePodcastCollection(collection.id);
+  }
 }

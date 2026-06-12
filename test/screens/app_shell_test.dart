@@ -162,6 +162,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 500));
 
+      // 新建合集弹窗先选择类型：点击「本地合集」进入命名步骤
+      await tester.tap(find.byKey(const ValueKey('collection-option-local')));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
       // 输入合集名称
       await tester.enterText(find.byType(TextField), 'My Collection');
       await tester.pump(const Duration(milliseconds: 300));

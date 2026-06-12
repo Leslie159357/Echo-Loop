@@ -1,7 +1,168 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-10
+> 最后更新：2026-06-12
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：修复 Podcast 合集三类 Bug（下载孤儿/进度条、信息不全、退订残留）
+
+Podcast 合集功能复用「直链导入」和「通用合集删除」两条通路，语义不匹配导致三类 bug，全部修复：
+
+1. **单集下载** —— 原 `_handlePodcastDownloadTap` 复用 `AudioImportController.importFromUrl`：① 会在资源库**新建一个孤儿 AudioItem** 又把文件写回原占位条目（两条记录共用同一文件）；② 走严格的直链 MIME/扩展名校验，真实 enclosure（octet-stream/重定向）在进入下载态前就被拒，进度条从不出现、只剩 60s snackbar。改为专用懒下载通路：下载到沙盒后**就地更新现有条目**，不新建、不做严格校验，行内进度条第一时间出现。
+2. **单集「更多信息」展示不全** —— 弹窗 `showArtwork:false` 隐藏封面、未展示时长。改为展示封面 + 「发布日期 · 时长」meta 行。
+3. **退订合集残留** —— `deleteCollection` 只删合集行，单集 AudioItem、已下载音频/字幕文件、学习进度全部成孤儿。新增 `unsubscribePodcastCollection`，逐个复用 `AudioLibrary.removeAudioItem` 完整清理后再删合集。
+
+### 实现
+- [x] `AudioImportService.downloadEpisodeToSandbox` —— 仅落盘、返回 `DownloadedAudio`，扩展名按 URL 后缀 → enclosureType → mp3 兜底
+- [x] `AudioImportController.downloadPodcastEpisode` —— 立即进入下载态承载进度条，成功后就地 `updateAudioItem`，不新建条目
+- [x] `audio_list_tile.dart` `_handlePodcastDownloadTap` 改用新通路，去掉 importFromUrl + 二次 update + 60s snackbar
+- [x] `podcast_info_sheet.dart` 单集弹窗补充封面 + 时长（meta 行）
+- [x] `collection_provider.dart` 新增 `unsubscribePodcastCollection`；`collection_screen.dart` 退订改调该方法
+
+### 验证
+- [x] `flutter analyze`（变更文件）：No issues found
+- [x] 新增/更新测试：`test/features/audio_import/podcast_episode_download_test.dart`（下载不产生孤儿/失败态/缺 URL）、`collection_provider_test.dart`（退订清理单集保留无关音频）、`audio_list_tile_test.dart`（行内进度条 + 弹窗封面/时长）、`app_shell_test.dart`（适配新建合集类型选择步骤）
+- [x] `flutter test`：2671 passed, 11 skipped
+- [ ] `flutter test integration_test -d macos`：未跑（需 macOS 设备，单元/Widget 测试已覆盖）
+
+**完成时间**: 2026-06-12
+
+## 已完成：修复 Podcast 订阅时 audio_items 缺列崩溃
+
+订阅 Podcast 写入 episode 占位音频时，如果本地数据库 `user_version` 已经是 38，但真实 `audio_items` / `collections` 表缺少 v38 podcast 列，会跳过升级迁移并在插入时抛出 `SqliteException(1): table audio_items has no column named...`。现在 v38 podcast 补列逻辑提取为幂等方法，并在数据库打开时再次执行，自动修复这类版本号与表结构不一致的本地库。
+
+### 实现
+- [x] v37→v38 podcast 补列逻辑收敛到 `_ensurePodcastColumns`
+- [x] `beforeOpen` 启动阶段幂等检查并补齐 podcast 列
+- [x] 补充回归测试：`user_version=38` 但缺 podcast 列时打开数据库自动自愈
+
+### 验证
+- [x] `dart format lib/database/app_database.dart test/database/v37_to_v38_migration_test.dart`：Formatted 2 files
+- [x] `flutter analyze lib/database/app_database.dart test/database/v37_to_v38_migration_test.dart`：No issues found
+- [x] `flutter test test/database/v37_to_v38_migration_test.dart`：2 passed
+- [ ] `scripts/check.sh`：本次为 Podcast 数据库 schema 局部自愈修复，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 19:01 +0800
+
+## 已完成：统一 AI 转录错误提示与 Podcast 下载文案
+
+Podcast 单集点击下载时只提示“正在下载音频”，不再误导为同时下载字幕。管理字幕弹窗内的 AI 转录预检查错误统一改为弹窗内联错误条，音频菜单入口和学习计划页“添加字幕”入口都复用同一机制；错误提示 5 秒后自动消失，避免底部弹窗遮罩挡住 SnackBar。
+
+### 实现
+- [x] Podcast 单集懒下载 SnackBar 文案改为只显示音频下载
+- [x] AI 转录时长、文件缺失、文件过大等预检查错误改为 `ManageSubtitlesSheet` 内联错误条
+- [x] 内联错误自动消失时间统一为 5 秒
+- [x] AI 转录入口等待登录态首值，避免 StreamProvider 初始 loading 时误判未登录
+- [x] 补充回归测试：管理字幕弹窗、音频菜单入口、学习计划添加字幕入口、Podcast 下载提示
+
+### 验证
+- [x] `flutter analyze lib/widgets/manage_subtitles_sheet.dart lib/widgets/audio_list_tile.dart lib/screens/learning_plan_screen.dart test/widgets/manage_subtitles_sheet_test.dart test/widgets/audio_list_tile_test.dart test/screens/learning_plan_screen_test.dart`：No issues found
+- [x] `flutter test test/widgets/manage_subtitles_sheet_test.dart`：12 passed
+- [x] `flutter test test/widgets/audio_list_tile_test.dart --plain-name '未下载单集点击时提示只下载音频'`：1 passed
+- [x] `flutter test test/widgets/audio_list_tile_test.dart --plain-name '菜单管理字幕 AI 转录音频过长时显示弹窗内错误提示'`：1 passed
+- [x] `flutter test test/screens/learning_plan_screen_test.dart --plain-name '添加字幕入口 AI 转录音频过长时显示弹窗内错误提示'`：1 passed
+- [ ] `scripts/check.sh`：本次为局部 UI/提示修复，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 17:44 +0800
+
+## 已完成：优化 Podcast 详情 UI 与单集信息展示
+
+根据截图反馈压缩 Podcast 合集详情页顶部信息区，并重做合集/单集信息底部弹窗。合集头部不再展示刷新时间和原地展开长简介，改为紧凑封面 + 标题/作者 + 两行简介，点击“更多”进入详情；合集详情展示标题、简介、图片、Apple Podcasts 链接（如有）、link/RSS 链接，不展示刷新时间；单集详情展示标题、描述、图片和网页 Link，不再展示音频链接和音频类型。
+
+### 后续修复
+- [x] 修复 Podcast 单集下载完成后，列表项仍使用旧 `audioPath=null` 对象导致再次点击触发下载 snackbar 的问题；点击和单集信息菜单现在会先按 id 读取 provider 中的最新音频对象
+- [x] 单集信息页去掉图片/图标区域，避免无图单集出现大块空白；同时展示单集网页 Link 和音频下载链接
+- [x] RSS 单集解析补齐 VOA 常见的 `description` / `itunes:summary` / `link`，确保单集简介和网页 Link 可展示
+
+### 实现
+- [x] Podcast 合集详情页头部改为 56px 封面紧凑布局，移除刷新时间和原地展开态
+- [x] 合集/单集详情 sheet 改为媒体详情布局：封面 + 标题/描述 + 紧凑链接行
+- [x] 单集 RSS 元信息贯通 description / image / link，入库后用于单集详情展示
+- [x] 单集详情隐藏 enclosure 音频链接、音频类型和 GUID 等低价值字段
+- [x] 补充迁移、RSS 解析、合集头部、单集详情回归测试
+
+### 验证
+- [x] `flutter analyze lib/models/audio_item.dart lib/features/podcast lib/database/tables/audio_items.dart lib/database/app_database.dart lib/providers/audio_library_provider.dart lib/screens/collection_detail_screen.dart lib/widgets/audio_list_tile.dart test/features/podcast/podcast_service_test.dart test/screens/collection_detail_screen_podcast_test.dart test/widgets/audio_list_tile_test.dart test/database/v37_to_v38_migration_test.dart`：No issues found
+- [x] `flutter test test/features/podcast/podcast_service_test.dart test/screens/collection_detail_screen_podcast_test.dart test/widgets/audio_list_tile_test.dart test/database/v37_to_v38_migration_test.dart`：34 passed
+- [x] `flutter analyze lib/widgets/audio_list_tile.dart lib/features/podcast/podcast_feed_parser.dart lib/features/podcast/podcast_info_sheet.dart test/features/podcast/podcast_service_test.dart test/widgets/audio_list_tile_test.dart`：No issues found
+- [x] `flutter test test/features/podcast/podcast_service_test.dart test/widgets/audio_list_tile_test.dart`：35 passed
+- [ ] `scripts/check.sh`：本次为 Podcast UI 与元信息字段局部优化，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 17:34 +0800
+
+## 已完成：优化 Podcast 菜单与信息展示
+
+Podcast 合集菜单去掉重复的“刷新 Feed”，新增“重命名”和更易懂的“详情”入口；详情页 AppBar 不再显示信息按钮，Podcast 简介支持“更多/收起”展开。合集和单集信息弹窗改为更清晰的分组展示，单集隐藏 GUID 等低价值字段，RSS/音频链接可点击到默认浏览器打开。
+
+### 实现
+- [x] Podcast 合集菜单改为置顶、重命名、详情、退订
+- [x] Podcast 详情页移除信息按钮，保留刷新入口
+- [x] Podcast 顶部简介支持更多/收起并优化作者、简介、刷新时间布局
+- [x] 合集详情弹窗展示标题、作者、简介、RSS 链接、刷新时间
+- [x] 单集信息弹窗隐藏 GUID，展示标题、发布日期、音频链接、音频类型
+- [x] RSS 链接和音频链接支持通过系统默认浏览器打开
+- [x] 补充菜单、详情页展开折叠、单集信息弹窗回归测试
+
+### 验证
+- [x] `flutter analyze lib/screens/collection_screen.dart lib/screens/collection_detail_screen.dart lib/features/podcast/podcast_info_sheet.dart lib/widgets/audio_list_tile.dart test/screens/collection_screen_test.dart test/screens/collection_detail_screen_podcast_test.dart test/widgets/audio_list_tile_test.dart`：No issues found
+- [x] `flutter test test/screens/collection_screen_test.dart test/screens/collection_detail_screen_podcast_test.dart test/widgets/audio_list_tile_test.dart`：33 passed
+- [ ] `scripts/check.sh`：本次为 Podcast UI 局部调整，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 16:59 +0800
+
+## 已完成：修复 Apple Podcasts URL 订阅失败
+
+订阅 Apple Podcasts 链接时，iTunes lookup API 在部分运行环境下返回原始 JSON 字符串，而不是 Dio 泛型声明期望的 `Map<String, dynamic>`，导致 `type 'String' is not a subtype of type 'Map<String, dynamic>'` 并把底层异常直接显示在 UI。现在 lookup 响应同时支持 `String` 和 `Map` 两种形态，Dio/类型异常统一包装成 `PodcastResolveException`；订阅 sheet 的错误展示也改为独立内联错误卡，避免长异常撑爆输入框。
+
+### 实现
+- [x] `PodcastUrlResolver` 的 iTunes lookup 改为读取 `Object?` 响应并统一解析
+- [x] 新增 `parseLookupFeedUrl`，兼容 String JSON / Map JSON
+- [x] lookup 异常统一包装为可读的 `PodcastResolveException`
+- [x] Podcast 订阅 sheet 错误从 `InputDecoration.errorText` 移到两行省略的内联错误卡
+- [x] 补充回归测试：iTunes lookup 返回 String JSON / Map JSON 都能解析 feedUrl
+
+### 验证
+- [x] `flutter analyze lib/features/podcast/podcast_url_resolver.dart test/features/podcast/podcast_service_test.dart lib/screens/collection_screen.dart test/screens/collection_screen_test.dart`：No issues found
+- [x] `flutter test test/features/podcast/podcast_service_test.dart test/screens/collection_screen_test.dart`：27 passed
+- [ ] `scripts/check.sh`：本次为 Podcast URL 解析和错误展示局部修复，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 16:32 +0800
+
+## 已完成：统一创建合集 / 订阅 Podcast 交互
+
+创建合集入口不再混用底部弹窗和中间弹窗，改为参考导入音频的单一底部 sheet 多步流程。点击 `+` 后先在底部 sheet 内选择“创建合集”或“订阅 Podcast”，随后在同一个 sheet 内完成合集名称或 Podcast URL 输入；Podcast 获取 feed 期间在 sheet 内显示进度和禁用返回/关闭，错误也内联显示在输入框下方。
+
+### 实现
+- [x] `showCreateCollectionDialog` 改为统一底部 sheet，不再先弹底部菜单再跳中间输入对话框
+- [x] 本地合集创建表单内嵌到 sheet，保留空名称和重名校验
+- [x] Podcast 订阅表单内嵌到 sheet，提交前校验 `http/https` 和 host
+- [x] Podcast 订阅中显示 sheet 内进度状态，失败时内联展示错误
+- [x] 更新合集创建 Widget 测试，覆盖统一底部 sheet、创建合集表单、Podcast 表单
+
+### 验证
+- [x] `flutter analyze lib/screens/collection_screen.dart test/screens/collection_screen_test.dart`：No issues found
+- [x] `flutter test test/screens/collection_screen_test.dart`：13 passed
+- [ ] `scripts/check.sh`：本次为资源库创建入口局部 UI 统一，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 16:25 +0800
+
+## 已完成：Podcast 合集详情 UI（T6）审阅与补齐
+
+在已有 T1-T5/T6 部分实现基础上，审阅 podcast 数据链路、URL 解析、RSS 解析、刷新去重与 UI 接入，补齐合集详情页和单集懒下载的 T6 缺口。Podcast 合集详情现在在音频列表上方展示 feed 封面、作者、描述和最后刷新时间，顶部保留强制刷新与 feed 信息入口；未下载单集在点击触发懒下载后，会在对应音频行内显示下载进度，并保留只读单集元信息菜单。
+
+### 实现
+- [x] 合集详情页为 `CollectionSource.podcast` 增加 feed 元信息头部（封面/描述/作者/最后刷新时间）
+- [x] podcast 合集详情顶部增加刷新和 Feed 信息入口，隐藏手动添加音频入口
+- [x] podcast 单集懒下载复用 `AudioImportController.importFromUrl()`，对应音频行内显示下载进度
+- [x] 合集/音频只读元信息入口保持可用：Feed 信息与单集 GUID/enclosure 信息
+- [x] URL resolver 增加 `http/https` host 校验，避免无效 URL 进入后续网络层
+- [x] 补充回归测试：podcast 详情头部渲染、单集懒下载进度、无 host URL 拒绝
+
+### 验证
+- [x] `flutter analyze lib/features/podcast lib/screens/collection_detail_screen.dart lib/widgets/audio_list_tile.dart test/features/podcast/podcast_service_test.dart test/widgets/audio_list_tile_test.dart test/screens/collection_detail_screen_podcast_test.dart`：No issues found
+- [x] `flutter test test/features/podcast/podcast_service_test.dart test/widgets/audio_list_tile_test.dart test/screens/collection_detail_screen_podcast_test.dart`：30 passed
+- [ ] `scripts/check.sh`：本次为 T6 局部 UI/服务防御性补齐，按收尾规范仅运行直接相关检查，未跑全量检查
+
+**完成时间**: 2026-06-12 16:10 +0800
 
 ## 待办：Android 离线 ASR 结束录音仍闪退
 

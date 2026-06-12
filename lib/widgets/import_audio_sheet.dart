@@ -27,6 +27,7 @@ Future<void> showImportAudioSheet(
     case _ImportAudioCompletionAction(:final audioItem):
       showModalBottomSheet(
         context: context,
+        isScrollControlled: true,
         builder: (_) => ManageSubtitlesSheet(audioItem: audioItem),
       );
   }

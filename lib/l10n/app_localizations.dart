@@ -6463,6 +6463,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel Download'**
   String get cancelDownload;
+
+  /// No description provided for @subscribePodcast.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe Podcast'**
+  String get subscribePodcast;
+
+  /// No description provided for @podcastUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apple Podcasts or RSS URL'**
+  String get podcastUrlLabel;
+
+  /// No description provided for @podcastUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://podcasts.apple.com/... or https://…/feed.xml'**
+  String get podcastUrlHint;
+
+  /// No description provided for @podcastSubscribing.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching podcast feed…'**
+  String get podcastSubscribing;
+
+  /// No description provided for @podcastSubscribeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to subscribe: {error}'**
+  String podcastSubscribeFailed(String error);
+
+  /// No description provided for @podcastRefreshFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh Feed'**
+  String get podcastRefreshFeed;
+
+  /// No description provided for @podcastUnsubscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsubscribe'**
+  String get podcastUnsubscribe;
+
+  /// No description provided for @podcastUnsubscribeConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsubscribe from {name}?'**
+  String podcastUnsubscribeConfirmTitle(String name);
+
+  /// No description provided for @podcastUnsubscribeConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'All episodes and downloaded audio files in this collection will be deleted.'**
+  String get podcastUnsubscribeConfirmMessage;
+
+  /// No description provided for @podcastFeedInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed Info'**
+  String get podcastFeedInfo;
+
+  /// No description provided for @podcastDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get podcastDetails;
+
+  /// No description provided for @podcastEpisodeMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Episode Info'**
+  String get podcastEpisodeMeta;
+
+  /// No description provided for @podcastShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get podcastShowMore;
+
+  /// No description provided for @podcastShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Less'**
+  String get podcastShowLess;
+
+  /// No description provided for @podcastTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get podcastTitle;
+
+  /// No description provided for @podcastAuthor.
+  ///
+  /// In en, this message translates to:
+  /// **'Author'**
+  String get podcastAuthor;
+
+  /// No description provided for @podcastDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get podcastDescription;
+
+  /// No description provided for @podcastFeedUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'RSS URL'**
+  String get podcastFeedUrl;
+
+  /// No description provided for @podcastAppleLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Apple Podcasts'**
+  String get podcastAppleLink;
+
+  /// No description provided for @podcastOriginalLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get podcastOriginalLink;
+
+  /// No description provided for @podcastAudioType.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio Type'**
+  String get podcastAudioType;
+
+  /// No description provided for @podcastOpenLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open link'**
+  String get podcastOpenLinkFailed;
+
+  /// No description provided for @podcastLastRefreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last refreshed: {time}'**
+  String podcastLastRefreshed(String time);
+
+  /// No description provided for @podcastEpisodeGuid.
+  ///
+  /// In en, this message translates to:
+  /// **'GUID'**
+  String get podcastEpisodeGuid;
+
+  /// No description provided for @podcastEnclosureUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio URL'**
+  String get podcastEnclosureUrl;
 }
 
 class _AppLocalizationsDelegate

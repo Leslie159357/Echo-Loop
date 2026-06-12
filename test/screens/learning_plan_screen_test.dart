@@ -18,7 +18,9 @@ import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
 import 'package:echo_loop/providers/time_provider.dart';
+import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -55,6 +57,23 @@ void main() {
     audioPath: 'audios/test.mp3',
     addedDate: DateTime(2026, 1, 1),
   );
+
+  Session signedInSession() {
+    final user = User(
+      id: 'user-1',
+      appMetadata: const {'provider': 'email'},
+      userMetadata: const {},
+      aud: 'authenticated',
+      email: 'learner@example.com',
+      createdAt: '2026-06-12T00:00:00.000Z',
+    );
+    return Session(
+      accessToken: 'token',
+      tokenType: 'bearer',
+      user: user,
+      refreshToken: 'refresh',
+    );
+  }
 
   /// 创建测试用句子列表（模拟字幕加载后的 LP 状态）
   List<Sentence> createTestSentences({int count = 5}) {
@@ -752,6 +771,85 @@ void main() {
         find.text('Audio file not found. The file may have been deleted.'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('添加字幕入口 AI 转录音频过长时显示弹窗内错误提示', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final longAudio = testAudioItemNoTranscript.copyWith(
+        totalDuration: 16 * 60,
+      );
+      await prefs.setBool('guide_v1_subtitle_sheet_transcription_seen', true);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            analyticsOverride(),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            ...learningSettingsOverrides(),
+            audioLibraryProvider.overrideWith(
+              () =>
+                  TestAudioLibrary(AudioLibraryState(audioItems: [longAudio])),
+            ),
+            listeningPracticeProvider.overrideWith(
+              () => TestListeningPractice(
+                ListeningPracticeState(currentAudioItem: longAudio),
+              ),
+            ),
+            audioEngineProvider.overrideWith(() => TestAudioEngine()),
+            learningProgressNotifierProvider.overrideWith(
+              () => TestLearningProgressNotifier(),
+            ),
+            learningSessionProvider.overrideWith(() => TestLearningSession()),
+            supabaseSessionProvider.overrideWith(
+              (ref) => Stream<Session?>.value(signedInSession()),
+            ),
+          ],
+          child: MaterialApp.router(
+            locale: const Locale('en'),
+            supportedLocales: const [Locale('en'), Locale('zh')],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: AppTheme.light(),
+            routerConfig: GoRouter(
+              initialLocation: '/collections/col-1/test-1/plan',
+              routes: [
+                GoRoute(
+                  path: '/collections/:collectionId/:audioId/plan',
+                  builder: (context, state) => LearningPlanScreen(
+                    collectionId: state.pathParameters['collectionId']!,
+                    audioItemId: state.pathParameters['audioId']!,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add Subtitle'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Start Transcription'),
+      );
+      await tester.pump();
+
+      expect(find.textContaining('Audio too long'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Audio too long'), findsNothing);
     });
 
     testWidgets('已完成盲听步骤可点击直接进入自由练习', (tester) async {

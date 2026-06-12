@@ -9,6 +9,7 @@ import '../../models/audio_item.dart';
 import '../../providers/audio_library_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../utils/app_data_dir.dart';
+import '../../utils/audio_duration.dart';
 import '../../utils/audio_fingerprint.dart';
 import 'audio_import_models.dart';
 import 'audio_registration_service.dart';
@@ -26,11 +27,13 @@ class AudioImportService {
     Uuid? uuid,
     Future<Directory> Function()? resolveDataDir,
     Future<String> Function(String absolutePath)? computeSha256,
+    Future<int> Function(String relativePath)? readDurationSeconds,
     AudioRegistrationService? registrationService,
   }) : _dio = dio ?? Dio(),
        _uuid = uuid ?? const Uuid(),
        _resolveDataDir = resolveDataDir ?? getAppDataDirectory,
        _computeSha256 = computeSha256 ?? computeAudioSha256,
+       _readDurationSeconds = readDurationSeconds ?? getAudioDurationSeconds,
        _registrationService =
            registrationService ?? AudioRegistrationService(uuid: uuid);
 
@@ -38,6 +41,7 @@ class AudioImportService {
   final Uuid _uuid;
   final Future<Directory> Function() _resolveDataDir;
   final Future<String> Function(String absolutePath) _computeSha256;
+  final Future<int> Function(String relativePath) _readDurationSeconds;
   final AudioRegistrationService _registrationService;
 
   static const supportedExtensions = {'mp3', 'wav', 'm4a', 'aac', 'flac'};
@@ -109,6 +113,62 @@ class AudioImportService {
           'Audio already exists: $name',
         );
     }
+  }
+
+  /// 下载 podcast 单集 enclosure 到沙盒，仅落盘并返回文件信息，**不创建 [AudioItem]**。
+  ///
+  /// 与 [importFromUrl] 的区别：跳过严格的直链 MIME/音频校验（podcast enclosure
+  /// 常返回 `application/octet-stream` 或经重定向域名分发），扩展名按
+  /// URL 后缀 → enclosureType → `mp3` 兜底确定。调用方拿到结果后自行更新已存在的
+  /// 占位条目（保留 podcast 元字段），避免在资源库产生重复孤儿条目。
+  Future<DownloadedAudio> downloadEpisodeToSandbox({
+    required String url,
+    String? enclosureType,
+    CancelToken? cancelToken,
+    AudioImportProgressCallback? onProgress,
+  }) async {
+    final trimmed = url.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      throw const AudioImportException(
+        AudioImportFailureCode.invalidUrl,
+        'Invalid audio URL',
+      );
+    }
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      throw const AudioImportException(
+        AudioImportFailureCode.unsupportedScheme,
+        'Only http and https URLs are supported',
+      );
+    }
+
+    final extension =
+        _extensionFromUri(uri) ?? _extensionFromMimeType(enclosureType) ?? 'mp3';
+    final safeBaseName = _safeFileBaseName(_baseNameFromUri(uri, extension));
+
+    final dataDir = await _resolveDataDir();
+    final audioId = _uuid.v4();
+    final relativeAudioPath = await _downloadToSandbox(
+      resolved: ResolvedAudioImport(
+        uri: uri,
+        displayName: safeBaseName,
+        fileName: '$safeBaseName.$extension',
+        extension: extension,
+      ),
+      audioId: audioId,
+      dataDir: dataDir,
+      cancelToken: cancelToken,
+      onProgress: onProgress,
+    );
+
+    final absoluteAudioPath = p.join(dataDir.path, relativeAudioPath);
+    final sha256 = await _tryComputeSha256(absoluteAudioPath);
+    final duration = await _tryReadDuration(relativeAudioPath);
+    return DownloadedAudio(
+      relativePath: relativeAudioPath,
+      durationSeconds: duration,
+      audioSha256: sha256,
+    );
   }
 
   Future<ResolvedAudioImport> resolveUrl(
@@ -273,6 +333,14 @@ class AudioImportService {
       return await _computeSha256(absolutePath);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<int> _tryReadDuration(String relativePath) async {
+    try {
+      return await _readDurationSeconds(relativePath);
+    } catch (_) {
+      return 0;
     }
   }
 

@@ -1,6 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/collection.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
+
+import '../helpers/mock_providers.dart';
 
 void main() {
   group('CollectionState', () {
@@ -335,6 +339,57 @@ void main() {
         expect(copied.isLoading, isTrue);
         expect(copied.sortType, CollectionSortType.nameAsc);
       });
+    });
+  });
+
+  group('CollectionList.unsubscribePodcastCollection', () {
+    test('退订清理合集独占的所有单集，保留无关音频并删除合集', () async {
+      final podcast = Collection(
+        id: 'pc-1',
+        name: 'My Podcast',
+        createdDate: DateTime(2026, 1, 1),
+        source: CollectionSource.podcast,
+      );
+      final ep1 = createTestAudioItem(id: 'ep-1', name: 'Ep 1');
+      final ep2 = createTestAudioItem(id: 'ep-2', name: 'Ep 2');
+      final other = createTestAudioItem(id: 'other', name: 'Other');
+
+      final container = ProviderContainer(
+        overrides: [
+          collectionListProvider.overrideWith(
+            () => TestCollectionList(
+              CollectionState(
+                rawCollections: [podcast],
+                audioIdsMap: {
+                  'pc-1': ['ep-1', 'ep-2'],
+                },
+              ),
+            ),
+          ),
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(
+              AudioLibraryState(audioItems: [ep1, ep2, other]),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(collectionListProvider.notifier)
+          .unsubscribePodcastCollection('pc-1');
+
+      // 合集独占的单集被清理，无关音频保留
+      final libIds = container
+          .read(audioLibraryProvider)
+          .audioItems
+          .map((e) => e.id)
+          .toList();
+      expect(libIds, ['other']);
+
+      // 合集本身被删除
+      final cols = container.read(collectionListProvider).rawCollections;
+      expect(cols.where((c) => c.id == 'pc-1'), isEmpty);
     });
   });
 }

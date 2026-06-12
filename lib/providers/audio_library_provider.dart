@@ -73,6 +73,12 @@ class AudioLibrary extends _$AudioLibrary {
                 row.importSourceType,
               ),
               importSourceUrl: row.importSourceUrl,
+              podcastEpisodeGuid: row.podcastEpisodeGuid,
+              podcastEnclosureUrl: row.podcastEnclosureUrl,
+              podcastEnclosureType: row.podcastEnclosureType,
+              podcastDescription: row.podcastDescription,
+              podcastImageUrl: row.podcastImageUrl,
+              podcastLink: row.podcastLink,
             ),
           )
           .toList();
@@ -377,6 +383,12 @@ class AudioLibrary extends _$AudioLibrary {
         originalDate: Value(item.originalDate),
         importSourceType: Value(item.importSourceType?.storageValue),
         importSourceUrl: Value(item.importSourceUrl),
+        podcastEpisodeGuid: Value(item.podcastEpisodeGuid),
+        podcastEnclosureUrl: Value(item.podcastEnclosureUrl),
+        podcastEnclosureType: Value(item.podcastEnclosureType),
+        podcastDescription: Value(item.podcastDescription),
+        podcastImageUrl: Value(item.podcastImageUrl),
+        podcastLink: Value(item.podcastLink),
         updatedAt: Value(DateTime.now()),
       ),
     );

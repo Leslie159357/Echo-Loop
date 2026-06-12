@@ -43,6 +43,20 @@ class Collections extends Table {
   /// source='local' 永远为 null。
   DateTimeColumn get deprecatedAt => dateTime().nullable()();
 
+  // ── Podcast 字段（source='podcast' 时有效）────────────────────────────
+
+  /// 用户输入的原始 URL（Apple Podcasts 链接或直接 RSS 链接）
+  TextColumn get podcastInputUrl => text().nullable()();
+
+  /// 解析后的 RSS Feed URL（Apple 链接经 iTunes lookup 后得到；直接 RSS 直通）
+  TextColumn get podcastFeedUrl => text().nullable()();
+
+  /// Feed 元信息 JSON（title / author / imageUrl / description 等）
+  TextColumn get podcastMetaJson => text().nullable()();
+
+  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  DateTimeColumn get podcastLastRefreshedAt => dateTime().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

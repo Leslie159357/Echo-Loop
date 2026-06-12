@@ -1765,5 +1765,40 @@
   "audioDownloadInProgress": "Downloading audio",
   "audioImportComplete": "Import complete",
   "audioImportCanceled": "Audio import canceled",
-  "cancelDownload": "Cancel Download"
+  "cancelDownload": "Cancel Download",
+
+  "subscribePodcast": "Subscribe Podcast",
+  "podcastUrlLabel": "Apple Podcasts or RSS URL",
+  "podcastUrlHint": "https://podcasts.apple.com/... or https://…/feed.xml",
+  "podcastSubscribing": "Fetching podcast feed…",
+  "podcastSubscribeFailed": "Failed to subscribe: {error}",
+  "@podcastSubscribeFailed": {
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "podcastRefreshFeed": "Refresh Feed",
+  "podcastUnsubscribe": "Unsubscribe",
+  "podcastUnsubscribeConfirmTitle": "Unsubscribe from {name}?",
+  "@podcastUnsubscribeConfirmTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "podcastUnsubscribeConfirmMessage": "All episodes and downloaded audio files in this collection will be deleted.",
+  "podcastFeedInfo": "Feed Info",
+  "podcastDetails": "Details",
+  "podcastEpisodeMeta": "Episode Info",
+  "podcastShowMore": "More",
+  "podcastShowLess": "Less",
+  "podcastTitle": "Title",
+  "podcastAuthor": "Author",
+  "podcastDescription": "Description",
+  "podcastFeedUrl": "RSS URL",
+  "podcastAppleLink": "Apple Podcasts",
+  "podcastOriginalLink": "Link",
+  "podcastAudioType": "Audio Type",
+  "podcastOpenLinkFailed": "Could not open link",
+  "podcastLastRefreshed": "Last refreshed: {time}",
+  "@podcastLastRefreshed": {
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "podcastEpisodeGuid": "GUID",
+  "podcastEnclosureUrl": "Audio URL"
 }

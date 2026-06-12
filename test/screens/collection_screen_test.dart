@@ -3,6 +3,7 @@
 // 测试资源库页面的合集视图渲染和交互。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/models/collection.dart';
 import 'package:echo_loop/screens/library_screen.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
@@ -158,8 +159,20 @@ void main() {
         await tester.tap(find.byIcon(Icons.add).first);
         await tester.pumpAndSettle();
 
-        // 应弹出创建对话框（"Create Collection" 同时出现在 CTA 按钮和对话框标题中）
-        expect(find.text('Create Collection'), findsNWidgets(2));
+        // 先进入统一底部 sheet 的类型选择页
+        expect(find.byIcon(Icons.close), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('collection-option-local')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('collection-option-podcast')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('collection-option-local')));
+        await tester.pumpAndSettle();
+
         expect(find.text('Collection Name'), findsOneWidget);
       });
 
@@ -169,6 +182,8 @@ void main() {
 
         // 打开创建对话框（AppBar 中的 + 按钮）
         await tester.tap(find.byIcon(Icons.add).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('collection-option-local')));
         await tester.pumpAndSettle();
 
         // Add 按钮应禁用（空输入）
@@ -185,6 +200,23 @@ void main() {
           find.widgetWithText(FilledButton, 'Add'),
         );
         expect(enabledButton.onPressed, isNotNull);
+      });
+
+      testWidgets('订阅 Podcast 使用同一个底部 sheet 表单', (tester) async {
+        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('collection-option-podcast')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+        expect(find.text('Apple Podcasts or RSS URL'), findsOneWidget);
+        expect(find.text('Subscribe Podcast'), findsOneWidget);
+        expect(find.byType(AlertDialog), findsNothing);
       });
 
       testWidgets('点击排序按钮显示排序选项', (tester) async {
@@ -252,6 +284,50 @@ void main() {
 
         final card = tester.widget<Card>(find.byType(Card).first);
         expect(card.color, isNotNull);
+      });
+
+      testWidgets('Podcast 合集菜单显示重命名和详情，不显示刷新', (tester) async {
+        final c =
+            createTestCollection(
+              id: 'podcast-1',
+              name: 'Podcast Collection',
+            ).copyWith(
+              source: CollectionSource.podcast,
+              podcastFeedUrl: 'https://example.com/feed.xml',
+            );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const LibraryScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(
+                () => TestCollectionList(CollectionState(rawCollections: [c])),
+              ),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('collection_list_menu_hit_area')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Rename'), findsOneWidget);
+        expect(find.text('Details'), findsOneWidget);
+        expect(find.text('Refresh Feed'), findsNothing);
+
+        await tester.tap(find.text('Details'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('RSS URL'), findsOneWidget);
+        expect(find.text('https://example.com/feed.xml'), findsOneWidget);
       });
     });
   });
