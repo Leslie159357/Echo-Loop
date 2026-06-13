@@ -17,6 +17,8 @@ import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/tag_provider.dart';
 import 'package:echo_loop/features/audio_import/audio_import_models.dart';
 import 'package:echo_loop/features/audio_import/audio_import_provider.dart';
+import 'package:echo_loop/features/official_collections/download/download_progress.dart';
+import 'package:echo_loop/features/official_collections/download/official_download_notifier.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/audio_list_tile.dart';
@@ -42,6 +44,21 @@ class _DownloadingAudioImportController extends AudioImportController {
   @override
   AudioImportState build() => const AudioImportDownloading(
     displayName: 'https://example.com/episode.mp3',
+    progress: 0.42,
+    receivedBytes: 42,
+    totalBytes: 100,
+  );
+}
+
+class _DownloadingOfficial extends OfficialDownload {
+  _DownloadingOfficial(this.audioItemId);
+
+  final String audioItemId;
+
+  @override
+  DownloadProgress build() => DownloadInProgress(
+    audioItemId: audioItemId,
+    displayName: 'Official Audio',
     progress: 0.42,
     receivedBytes: 42,
     totalBytes: 100,
@@ -239,7 +256,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('audio_list_tile_podcast_download_progress')),
+        find.byKey(const Key('audio_list_tile_download_progress')),
         findsOneWidget,
       );
       expect(find.textContaining('Downloading audio 42%'), findsOneWidget);
@@ -279,7 +296,7 @@ void main() {
 
       // 下载进度落在列表项行内（不定进度，无百分比），且仅下载音频。
       expect(
-        find.byKey(const Key('audio_list_tile_podcast_download_progress')),
+        find.byKey(const Key('audio_list_tile_download_progress')),
         findsOneWidget,
       );
       expect(find.text('Downloading audio'), findsOneWidget);
@@ -287,6 +304,226 @@ void main() {
 
       controller.complete();
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('未下载单集左侧显示下载图标而非进度环', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('单集下载中时左侧显示下载进度环', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: null,
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            audioImportControllerProvider.overrideWith(
+              _DownloadingAudioImportController.new,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('已下载单集左侧显示学习进度图标而非下载图标', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Podcast Episode',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: 'podcast/episode.m4a',
+            podcastEpisodeGuid: 'episode-guid-1',
+            podcastEnclosureUrl: 'https://example.com/episode.mp3',
+            podcastEnclosureType: 'audio/mpeg',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('未下载官方音频左侧显示下载图标而非进度环', (tester) async {
+      final item = createTestAudioItem(
+        name: 'Official Audio',
+        transcriptPath: null,
+        transcriptSource: null,
+      ).copyWith(audioPath: null, remoteAudioId: 'remote-audio-1');
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('官方音频下载中时左侧显示下载进度环', (tester) async {
+      final item = createTestAudioItem(
+        name: 'Official Audio',
+        transcriptPath: null,
+        transcriptSource: null,
+      ).copyWith(audioPath: null, remoteAudioId: 'remote-audio-1');
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            officialDownloadProvider.overrideWith(
+              () => _DownloadingOfficial(item.id),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsNothing,
+      );
+      // 官方下载与播客一致：行内进度条（无弹窗）。
+      expect(
+        find.byKey(const Key('audio_list_tile_download_progress')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Downloading audio 42%'), findsOneWidget);
+    });
+
+    testWidgets('已下载官方音频左侧显示学习进度图标而非下载图标', (tester) async {
+      final item =
+          createTestAudioItem(
+            name: 'Official Audio',
+            transcriptPath: null,
+            transcriptSource: null,
+          ).copyWith(
+            audioPath: 'official/audio.m4a',
+            remoteAudioId: 'remote-audio-1',
+          );
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(width: 420, child: AudioListTile(audioItem: item)),
+          ),
+          overrides: [
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_download_icon')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        findsNothing,
+      );
     });
 
     testWidgets('菜单管理字幕 AI 转录音频过长时显示弹窗内错误提示', (tester) async {

@@ -25,7 +25,6 @@ import '../theme/app_theme.dart';
 import '../features/official_collections/download/download_progress.dart';
 import '../features/official_collections/download/official_download_notifier.dart';
 import '../features/official_collections/data/official_collection_api.dart';
-import '../features/official_collections/widgets/prepare_learning_dialog.dart';
 import 'guide_flow.dart';
 import 'learning_progress_icon.dart';
 import '../providers/transcription_task_provider.dart';
@@ -116,9 +115,24 @@ class AudioListTile extends ConsumerWidget {
     final transcriptionTask = ref.watch(
       transcriptionTaskManagerProvider.select((map) => map[audioItem.id]),
     );
+    // 本单项的下载进度（播客单集 / 官方合集音频共用同一套行内进度展示）。
+    // double? 语义：null 表示未在下载本项；非 null（含 -1 不定态）表示正在下载。
     final podcastDownloadState = _podcastDownloadState(
       ref.watch(audioImportControllerProvider),
     );
+    // 官方下载进度：仅对未就绪官方音频订阅，避免其它 tile 无谓重建。
+    final officialDownloadProgress =
+        audioItem.remoteAudioId != null && !audioItem.isAudioReady
+        ? ref.watch(
+            officialDownloadProvider.select(
+              (s) => s is DownloadInProgress && s.audioItemId == audioItem.id
+                  ? s.progress
+                  : null,
+            ),
+          )
+        : null;
+    final double? downloadProgress =
+        podcastDownloadState?.progress ?? officialDownloadProgress;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -142,7 +156,7 @@ class AudioListTile extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           // 左侧进度图标，垂直居中
-                          LearningProgressIcon(progress: progress),
+                          _buildLeading(progress, downloadProgress),
                           const SizedBox(width: 16),
                           // 中间标题 + 副标题
                           Expanded(
@@ -166,7 +180,7 @@ class AudioListTile extends ConsumerWidget {
                                   collectionNames,
                                   tagData,
                                   transcriptionTask,
-                                  podcastDownloadState,
+                                  downloadProgress,
                                 ),
                               ],
                             ),
@@ -190,6 +204,26 @@ class AudioListTile extends ConsumerWidget {
         );
       },
     );
+  }
+
+  /// 构建左侧图标。
+  ///
+  /// 播客单集 / 官方合集音频在下载到本地前无法学习，因此其「未学习」态的环形进度
+  /// 图标是闲置的，此时改用下载态图标承载「未下载 / 下载中」，与已下载音频的学习
+  /// 进度环区分（业界 App 的标准做法）；下载完成后自动切回 [LearningProgressIcon]。
+  Widget _buildLeading(LearningProgress? progress, double? downloadProgress) {
+    // 播客单集 / 官方合集音频未下载：用下载态图标取代闲置的学习进度环。
+    final isDownloadable =
+        !audioItem.isAudioReady &&
+        (audioItem.podcastEnclosureUrl != null ||
+            audioItem.remoteAudioId != null);
+    if (isDownloadable) {
+      return _DownloadLeading(
+        downloading: downloadProgress != null,
+        progress: downloadProgress,
+      );
+    }
+    return LearningProgressIcon(progress: progress);
   }
 
   /// 当前卡片对应的 podcast 单集正在通过链接导入下载时，返回下载状态。
@@ -253,7 +287,7 @@ class AudioListTile extends ConsumerWidget {
     List<String> collectionNames,
     List<Tag> tagData,
     TranscriptionTaskState? transcriptionTask,
-    AudioImportDownloading? podcastDownloadState,
+    double? downloadProgress,
   ) {
     // 是否有进行中的转录任务
     final isTranscribing =
@@ -263,7 +297,9 @@ class AudioListTile extends ConsumerWidget {
 
     final metaParts = <String>[];
     if (audioItem.totalDuration > 0) {
-      metaParts.add(l10n.audioDuration(_formatDuration(audioItem.totalDuration)));
+      metaParts.add(
+        l10n.audioDuration(_formatDuration(audioItem.totalDuration)),
+      );
     }
     // 日期 meta：
     // - 用户自建普通音频：显示「添加于 X」（addedDate 是 import 时间，有意义）
@@ -287,7 +323,7 @@ class AudioListTile extends ConsumerWidget {
         (progress?.isStarted ?? false) ||
         collectionNames.isNotEmpty ||
         tagData.isNotEmpty ||
-        podcastDownloadState != null;
+        downloadProgress != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,12 +452,8 @@ class AudioListTile extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (podcastDownloadState != null)
-                _buildPodcastDownloadProgress(
-                  theme,
-                  l10n,
-                  podcastDownloadState,
-                ),
+              if (downloadProgress != null)
+                _buildDownloadProgress(theme, l10n, downloadProgress),
             ],
           ),
         ],
@@ -429,16 +461,18 @@ class AudioListTile extends ConsumerWidget {
     );
   }
 
-  /// Podcast 懒下载进度，显示在对应单集行内，避免只用短暂提示承载状态。
-  Widget _buildPodcastDownloadProgress(
+  /// 行内下载进度（播客单集 / 官方合集音频共用），避免只用短暂提示承载状态。
+  ///
+  /// [progress] 为 0..1；<0（或不定态）时显示无固定进度的进度条。
+  Widget _buildDownloadProgress(
     ThemeData theme,
     AppLocalizations l10n,
-    AudioImportDownloading state,
+    double progress,
   ) {
-    final value = state.progress < 0 ? null : state.progress.clamp(0.0, 1.0);
+    final value = progress < 0 ? null : progress.clamp(0.0, 1.0);
     final percent = value == null ? null : (value * 100).toStringAsFixed(0);
     return SizedBox(
-      key: const Key('audio_list_tile_podcast_download_progress'),
+      key: const Key('audio_list_tile_download_progress'),
       width: 180,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -756,10 +790,10 @@ class AudioListTile extends ConsumerWidget {
     }
   }
 
-  /// 官方合集未下载音频的点击行为：
+  /// 官方合集未下载音频的点击行为（与播客一致：行内进度，无弹窗）：
+  /// - 若该音频已在下载 → 不重复触发，进度已在行内展示
   /// - 若已有别的下载任务在跑 → snackbar 提示
-  /// - 若该音频已是"下载中" → 重新打开对话框显示当前进度
-  /// - 否则启动下载 + 打开对话框
+  /// - 否则启动下载，等待完成后跳转学习计划页
   Future<void> _handleOfficialDownloadTap(
     BuildContext context,
     WidgetRef ref,
@@ -768,15 +802,9 @@ class AudioListTile extends ConsumerWidget {
     final notifier = ref.read(officialDownloadProvider.notifier);
     final progress = ref.read(officialDownloadProvider);
 
-    // 已在下载该音频 → 直接打开对话框；只有弹窗在前台期间自然完成才跳转
+    // 已在下载该音频：行内进度条已展示，无需重复触发或弹窗
     if (progress is DownloadInProgress &&
         progress.audioItemId == audioItem.id) {
-      final completedInForeground = await _showDownloadDialog(
-        context,
-        audioItem.id,
-      );
-      if (!context.mounted || completedInForeground != true) return;
-      _pushPlan(context);
       return;
     }
 
@@ -787,12 +815,9 @@ class AudioListTile extends ConsumerWidget {
     if (!context.mounted) return;
     switch (result) {
       case StartResult.started:
-        final completedInForeground = await _showDownloadDialog(
-          context,
-          audioItem.id,
-        );
-        if (!context.mounted || completedInForeground != true) return;
-        _pushPlan(context);
+        // 行内进度条承载下载状态；下载成功后跳转学习计划页（与播客一致）
+        final ok = await notifier.awaitCompletion();
+        if (ok && context.mounted) _pushPlan(context);
       case StartResult.busy:
         final activeName =
             (ref.read(officialDownloadProvider) as DownloadInProgress?)
@@ -805,18 +830,6 @@ class AudioListTile extends ConsumerWidget {
         // 极端情况：点击间隙被其它路径标记为已下载；按已下载走常规路径
         _pushPlan(context);
     }
-  }
-
-  /// 返回值：见 [PrepareLearningDialog] 的 pop 结果约定。
-  /// - `true`  → 弹窗前台期间下载自然完成（应跳转学习计划页）
-  /// - `false` → 用户点取消按钮
-  /// - `null`  → 用户关 × / 点弹窗外（后台仍在下载）
-  Future<bool?> _showDownloadDialog(BuildContext context, String audioItemId) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => PrepareLearningDialog(audioItemId: audioItemId),
-    );
   }
 
   Future<void> _handleUpdateOfficialSubtitle(
@@ -1144,5 +1157,74 @@ class AudioListTile extends ConsumerWidget {
           .read(audioLibraryProvider.notifier)
           .updateAudioItem(audioItem.copyWith(name: name));
     }
+  }
+}
+
+/// 未下载音频（播客单集 / 官方合集音频）的左侧图标，承载「未下载 / 下载中」两态。
+///
+/// 尺寸与 [LearningProgressIcon] 默认值保持一致，确保切换时不抖动。
+class _DownloadLeading extends StatelessWidget {
+  const _DownloadLeading({required this.downloading, this.progress});
+
+  /// 是否正在下载：true 显示进度环，false 显示静态下载图标。
+  final bool downloading;
+
+  /// 下载进度 0..1；null 或 <0 表示不定态（旋转动画）。
+  final double? progress;
+
+  static const double _size = 40;
+  static const double _iconSize = 20;
+  static const double _strokeWidth = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // 下载中：进度环 + 中心下载图标（不定进度时环为旋转动画）。
+    if (downloading) {
+      final p = progress;
+      final value = (p == null || p < 0) ? null : p.clamp(0.0, 1.0);
+      return SizedBox(
+        key: const Key('audio_list_tile_downloading_icon'),
+        width: _size,
+        height: _size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: _size,
+              height: _size,
+              child: CircularProgressIndicator(
+                value: value,
+                strokeWidth: _strokeWidth,
+                color: theme.colorScheme.primary,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              ),
+            ),
+            Icon(
+              Icons.download_rounded,
+              size: _iconSize - 4,
+              color: theme.colorScheme.primary,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 未下载：可点击的下载图标（点击行即触发下载）。
+    return Container(
+      key: const Key('audio_list_tile_download_icon'),
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+      ),
+      child: Icon(
+        Icons.download_rounded,
+        size: _iconSize,
+        color: theme.colorScheme.primary,
+      ),
+    );
   }
 }

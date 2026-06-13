@@ -43,6 +43,9 @@ class OfficialDownload extends _$OfficialDownload {
   /// 正在下载的音频名称（用于 snackbar 文案）。
   String? _activeDisplayName;
 
+  /// 当前进行中的下载任务；供 UI 层 [awaitCompletion] 等待完成后跳转。
+  Future<bool>? _activeDownload;
+
   @override
   DownloadProgress build() => const DownloadIdle();
 
@@ -85,9 +88,16 @@ class OfficialDownload extends _$OfficialDownload {
     );
 
     // 异步执行下载主流程；不 await，避免卡住调用方。
-    unawaited(_runDownload(sid, audioItem, remoteAudioId));
+    // 同时记录任务 future，供 UI 层 [awaitCompletion] 在下载完成后跳转学习计划页。
+    final completion = _runDownload(sid, audioItem, remoteAudioId);
+    _activeDownload = completion;
+    unawaited(completion);
     return StartResult.started;
   }
+
+  /// 等待当前下载任务结束，返回是否成功落地（与播客下载行为一致）。
+  /// 无进行中任务时返回 false。
+  Future<bool> awaitCompletion() => _activeDownload ?? Future.value(false);
 
   /// 取消当前下载任务。
   Future<void> cancel() async {
@@ -220,7 +230,8 @@ class OfficialDownload extends _$OfficialDownload {
     }
   }
 
-  Future<void> _runDownload(
+  /// 执行下载主流程，返回是否成功落地（true = 音频已写入并刷新库）。
+  Future<bool> _runDownload(
     int sid,
     db.AudioItem audioItem,
     String remoteAudioId,
@@ -235,7 +246,7 @@ class OfficialDownload extends _$OfficialDownload {
     try {
       // 1) 拉 /content（SRT + wordTimestamps + audioUrl）
       final content = await api.getAudioContent(remoteAudioId);
-      if (sid != _sessionId) return; // 过期
+      if (sid != _sessionId) return false; // 过期
 
       // 2) 下载音频到 tmp
       await dio.download(
@@ -256,7 +267,7 @@ class OfficialDownload extends _$OfficialDownload {
           );
         },
       );
-      if (sid != _sessionId) return;
+      if (sid != _sessionId) return false;
 
       // 3) 字幕内容入 DB 列 + wordTimestamps + 移动 tmp → final
       //    audioPath 此时还是 NULL（enroll 时留白），由本次下载决定；
@@ -299,16 +310,17 @@ class OfficialDownload extends _$OfficialDownload {
           updatedAt: Value(DateTime.now()),
         ),
       );
-      if (sid != _sessionId) return;
+      if (sid != _sessionId) return false;
 
       // 5) 刷新 audioLibrary state，让学习计划页等 watcher 立即读到新路径
       await ref.read(audioLibraryProvider.notifier).loadLibrary();
-      if (sid != _sessionId) return;
+      if (sid != _sessionId) return false;
 
       // 6) 成功不提示，避免遮挡「开始学习」按钮；状态切回 idle 即可
       state = const DownloadIdle();
+      return true;
     } catch (e, st) {
-      if (sid != _sessionId) return;
+      if (sid != _sessionId) return false;
       AppLogger.log('OfficialDownload', 'failed: $e');
       AppLogger.log('OfficialDownload', st.toString());
       state = DownloadFailed(
@@ -333,6 +345,8 @@ class OfficialDownload extends _$OfficialDownload {
         } catch (_) {}
       }
     }
+    // 走到这里说明 catch 分支吞掉了异常（下载失败）。
+    return false;
   }
 
   AppLocalizations? _pickL10n() {
