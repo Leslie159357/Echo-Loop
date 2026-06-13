@@ -679,7 +679,9 @@ class AudioListTile extends ConsumerWidget {
                 l10n.updateOfficialSubtitle,
               ),
             ),
-          if (!isOfficial)
+          // 播客单集天然属于其 RSS 订阅合集，再加入本地自建合集属低频且易与
+          // 「管理订阅」语义混淆，故与官方音频一致隐藏此项。
+          if (!isOfficial && !isPodcastEpisode)
             PopupMenuItem(
               value: 'manage',
               child: _buildMenuItemRow(
