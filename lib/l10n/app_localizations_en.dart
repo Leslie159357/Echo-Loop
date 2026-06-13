@@ -2151,6 +2151,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your current version is no longer supported. Please update to continue.';
 
   @override
+  String get releaseNotesTitle => 'What\'s New';
+
+  @override
   String get copyDownloadLink => 'Copy Download Link';
 
   @override
@@ -2931,12 +2934,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This collection has been removed by the publisher. Your local copy remains available.';
 
   @override
-  String get preparingLearningMaterial => 'Preparing Learning Material';
-
-  @override
-  String get downloadingAudioAndSubtitle => 'Downloading audio and subtitle...';
-
-  @override
   String get downloadCancel => 'Cancel Download';
 
   @override
@@ -3636,6 +3633,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String podcastSubscribeFailed(String error) {
     return 'Failed to subscribe: $error';
+  }
+
+  @override
+  String podcastAlreadySubscribed(String name) {
+    return 'Already subscribed — see collection \"$name\"';
   }
 
   @override

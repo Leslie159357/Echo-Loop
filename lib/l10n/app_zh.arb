@@ -880,6 +880,7 @@
   "updateLater": "稍后提醒",
   "forceUpdateTitle": "需要更新",
   "forceUpdateMessage": "当前版本已不再受支持，请更新以继续使用。",
+  "releaseNotesTitle": "更新内容",
   "copyDownloadLink": "复制下载链接",
   "linkCopied": "已复制",
   "checkForUpdate": "检查更新",
@@ -1145,8 +1146,6 @@
   "removeOfficialConfirmMessage": "将删除本合集所有音频、字幕和相关学习记录，此操作不可恢复。",
   "removeOfficialConfirmConfirm": "确认移除",
   "officialCollectionDeprecated": "该合集已下架，本地副本仍可继续使用。",
-  "preparingLearningMaterial": "准备学习材料",
-  "downloadingAudioAndSubtitle": "正在下载音频和字幕…",
   "downloadCancel": "取消下载",
   "downloadLater": "先不管",
   "downloadCompleted": "《{name}》下载完成",
@@ -1408,6 +1407,10 @@
   "podcastSubscribeFailed": "订阅失败：{error}",
   "@podcastSubscribeFailed": {
     "placeholders": { "error": { "type": "String" } }
+  },
+  "podcastAlreadySubscribed": "已订阅该播客，合集名为「{name}」",
+  "@podcastAlreadySubscribed": {
+    "placeholders": { "name": { "type": "String" } }
   },
   "podcastRefreshFeed": "刷新 Feed",
   "podcastUnsubscribe": "退订",

@@ -2085,6 +2085,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get forceUpdateMessage => '当前版本已不再受支持，请更新以继续使用。';
 
   @override
+  String get releaseNotesTitle => '更新内容';
+
+  @override
   String get copyDownloadLink => '复制下载链接';
 
   @override
@@ -2822,12 +2825,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get officialCollectionDeprecated => '该合集已下架，本地副本仍可继续使用。';
 
   @override
-  String get preparingLearningMaterial => '准备学习材料';
-
-  @override
-  String get downloadingAudioAndSubtitle => '正在下载音频和字幕…';
-
-  @override
   String get downloadCancel => '取消下载';
 
   @override
@@ -3492,6 +3489,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String podcastSubscribeFailed(String error) {
     return '订阅失败：$error';
+  }
+
+  @override
+  String podcastAlreadySubscribed(String name) {
+    return '已订阅该播客，合集名为「$name」';
   }
 
   @override

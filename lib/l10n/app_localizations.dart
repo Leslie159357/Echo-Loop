@@ -3836,6 +3836,12 @@ abstract class AppLocalizations {
   /// **'Your current version is no longer supported. Please update to continue.'**
   String get forceUpdateMessage;
 
+  /// No description provided for @releaseNotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s New'**
+  String get releaseNotesTitle;
+
   /// No description provided for @copyDownloadLink.
   ///
   /// In en, this message translates to:
@@ -5186,18 +5192,6 @@ abstract class AppLocalizations {
   /// **'This collection has been removed by the publisher. Your local copy remains available.'**
   String get officialCollectionDeprecated;
 
-  /// No description provided for @preparingLearningMaterial.
-  ///
-  /// In en, this message translates to:
-  /// **'Preparing Learning Material'**
-  String get preparingLearningMaterial;
-
-  /// No description provided for @downloadingAudioAndSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Downloading audio and subtitle...'**
-  String get downloadingAudioAndSubtitle;
-
   /// No description provided for @downloadCancel.
   ///
   /// In en, this message translates to:
@@ -6493,6 +6487,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to subscribe: {error}'**
   String podcastSubscribeFailed(String error);
+
+  /// No description provided for @podcastAlreadySubscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already subscribed — see collection \"{name}\"'**
+  String podcastAlreadySubscribed(String name);
 
   /// No description provided for @podcastRefreshFeed.
   ///

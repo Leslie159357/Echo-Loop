@@ -1156,6 +1156,7 @@
   "updateLater": "Later",
   "forceUpdateTitle": "Update Required",
   "forceUpdateMessage": "Your current version is no longer supported. Please update to continue.",
+  "releaseNotesTitle": "What's New",
   "copyDownloadLink": "Copy Download Link",
   "linkCopied": "Link copied",
   "checkForUpdate": "Check for Updates",
@@ -1511,8 +1512,6 @@
   "removeOfficialConfirmMessage": "All audios, subtitles, and learning records in this collection will be deleted. This cannot be undone.",
   "removeOfficialConfirmConfirm": "Remove",
   "officialCollectionDeprecated": "This collection has been removed by the publisher. Your local copy remains available.",
-  "preparingLearningMaterial": "Preparing Learning Material",
-  "downloadingAudioAndSubtitle": "Downloading audio and subtitle...",
   "downloadCancel": "Cancel Download",
   "downloadLater": "Later",
   "downloadCompleted": "{name} downloaded",
@@ -1774,6 +1773,10 @@
   "podcastSubscribeFailed": "Failed to subscribe: {error}",
   "@podcastSubscribeFailed": {
     "placeholders": { "error": { "type": "String" } }
+  },
+  "podcastAlreadySubscribed": "Already subscribed — see collection \"{name}\"",
+  "@podcastAlreadySubscribed": {
+    "placeholders": { "name": { "type": "String" } }
   },
   "podcastRefreshFeed": "Refresh Feed",
   "podcastUnsubscribe": "Unsubscribe",
