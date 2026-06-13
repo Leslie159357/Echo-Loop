@@ -529,7 +529,7 @@ void main() {
     testWidgets('菜单管理字幕 AI 转录音频过长时显示弹窗内错误提示', (tester) async {
       final item = createTestAudioItem(
         name: 'Long Audio',
-        totalDuration: 16 * 60,
+        totalDuration: 31 * 60, // 超过 AI 转录 30 分钟上限
       ).copyWith(transcriptSource: TranscriptSource.local);
 
       await tester.pumpWidget(
@@ -618,8 +618,15 @@ void main() {
       expect(find.text('Audio Type'), findsNothing);
       expect(find.text('audio/mpeg'), findsNothing);
       expect(find.byIcon(Icons.open_in_new_rounded), findsNWidgets(2));
-      // 时长展示在弹窗 meta 行（精确 '30:30'；列表项是 '30:30 · …' 组合文案）。
-      expect(find.text('30:30'), findsOneWidget);
+      // 时长展示在弹窗 meta 行；audioDuration 文案带「Duration: 」前缀。
+      // 列表行同样渲染该时长，故限定在底部弹窗内断言唯一。
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Duration: 30:30'),
+        ),
+        findsOneWidget,
+      );
       // 单集封面区域渲染（无图时回退 podcasts 占位图标）。
       expect(find.byIcon(Icons.podcasts_rounded), findsWidgets);
     });
