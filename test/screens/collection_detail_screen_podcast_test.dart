@@ -108,8 +108,83 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Apple Podcasts'), findsOneWidget);
+    expect(
+      find.text('https://podcasts.apple.com/podcast/id123'),
+      findsOneWidget,
+    );
     expect(find.text('RSS URL'), findsOneWidget);
     expect(find.text('https://example.com/feed.xml'), findsOneWidget);
+  });
+
+  testWidgets('podcast 合集详情只有 RSS 输入时不重复展示为普通链接', (tester) async {
+    final collection = Collection(
+      id: 'podcast-1',
+      name: 'Speak English with ESLPod.com',
+      createdDate: DateTime(2026, 6, 15),
+      source: CollectionSource.podcast,
+      podcastInputUrl: 'https://www.eslpod.com/feed.xml',
+      podcastFeedUrl: 'https://www.eslpod.com/feed.xml',
+      podcastMetaJson: jsonEncode(
+        const PodcastFeedMeta(
+          title: 'Speak English with ESLPod.com',
+          author: 'ESLPod.com',
+          description: 'Learn English Fast',
+          feedUrl: 'https://www.eslpod.com/feed.xml',
+        ).toJson(),
+      ),
+      podcastLastRefreshedAt: DateTime(2026, 6, 15, 8, 12),
+    );
+    final item = AudioItem(
+      id: 'episode-1',
+      name: 'Episode One',
+      audioPath: null,
+      addedDate: DateTime(2026, 6, 15),
+      podcastEpisodeGuid: 'guid-1',
+      podcastEnclosureUrl: 'https://example.com/episode-1.mp3',
+      podcastEnclosureType: 'audio/mpeg',
+    );
+    final podcastRepo = _MockPodcastRepository();
+    when(
+      () => podcastRepo.refresh('podcast-1', force: any(named: 'force')),
+    ).thenAnswer((_) async {});
+
+    await tester.pumpWidget(
+      createTestScreen(
+        const CollectionDetailScreen(collectionId: 'podcast-1'),
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+          ),
+          collectionListProvider.overrideWith(
+            () => TestCollectionList(
+              CollectionState(
+                rawCollections: [collection],
+                audioIdsMap: const {
+                  'podcast-1': ['episode-1'],
+                },
+              ),
+            ),
+          ),
+          podcastRepositoryProvider.overrideWithValue(podcastRepo),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('RSS URL'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apple Podcasts'), findsNothing);
+    expect(find.text('Link'), findsNothing);
+    expect(find.text('RSS URL'), findsOneWidget);
+    expect(find.text('https://www.eslpod.com/feed.xml'), findsOneWidget);
   });
 
   testWidgets('podcast 合集详情下拉刷新强制刷新 feed', (tester) async {

@@ -1,7 +1,19 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-14
+> 最后更新：2026-06-15
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：Podcast 合集详情 RSS 链接去重
+
+**完成时间**: 2026-06-15 08:43 +0800
+
+Podcast 合集详情底部弹窗不再把 RSS 订阅输入重复展示为第一行普通「链接」。第一行仅在原始输入是 Apple Podcasts URL 时显示「Apple Podcasts」，RSS feed 统一只显示在「RSS URL」行；如果没有 Apple Podcasts 链接，则只显示 RSS 链接。
+
+- [x] `podcast_info_sheet.dart`：合集详情链接列表只保留 Apple Podcasts 主链接和 RSS 链接，避免 RSS 被重复标成普通链接
+- [x] `collection_detail_screen_podcast_test.dart`：补充 RSS-only 回归测试，并断言 Apple 输入时同时显示 Apple Podcasts 与 RSS URL
+- [x] `flutter analyze lib/features/podcast/podcast_info_sheet.dart test/screens/collection_detail_screen_podcast_test.dart`：No issues found
+- [x] `flutter test test/screens/collection_detail_screen_podcast_test.dart`：3 passed
+- [ ] `scripts/check.sh`：未跑；本次为 Podcast 合集详情底部弹窗局部显示修复，按规范仅运行直接相关检查
 
 ## 已完成：创建合集类型选择文案优化
 

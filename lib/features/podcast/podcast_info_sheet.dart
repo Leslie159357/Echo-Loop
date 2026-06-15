@@ -36,15 +36,10 @@ void showPodcastFeedInfoSheet(BuildContext context, Collection collection) {
         ? null
         : l10n.podcastLastRefreshed(_formatDateTime(lastRefreshed)),
     links: [
-      if (_hasText(collection.podcastInputUrl))
-        PodcastInfoLink(
-          _isApplePodcastUrl(collection.podcastInputUrl!)
-              ? l10n.podcastAppleLink
-              : l10n.podcastOriginalLink,
-          collection.podcastInputUrl!,
-        ),
-      if (_hasText(meta?.feedUrl) && meta!.feedUrl != collection.podcastFeedUrl)
-        PodcastInfoLink(l10n.podcastOriginalLink, meta.feedUrl),
+      // 合集级详情只把 Apple Podcasts 原始输入展示为主链接；RSS 订阅输入
+      // 统一展示在 RSS 链接行，避免同一个 feed 被重复标成普通链接。
+      if (_isApplePodcastUrl(collection.podcastInputUrl))
+        PodcastInfoLink(l10n.podcastAppleLink, collection.podcastInputUrl!),
       if (_hasText(collection.podcastFeedUrl))
         PodcastInfoLink(l10n.podcastFeedUrl, collection.podcastFeedUrl!),
     ],
@@ -134,8 +129,10 @@ String? _episodeLink(AudioItem item) {
   };
 }
 
-bool _isApplePodcastUrl(String value) {
-  final uri = Uri.tryParse(value);
+bool _isApplePodcastUrl(String? value) {
+  if (!_hasText(value)) return false;
+  final url = value!;
+  final uri = Uri.tryParse(url);
   final host = uri?.host.toLowerCase();
   return host == 'podcasts.apple.com' || host == 'itunes.apple.com';
 }
