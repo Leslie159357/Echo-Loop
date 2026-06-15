@@ -1882,6 +1882,17 @@ class $CollectionsTable extends Collections
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _podcastLastRefreshErrorMeta =
+      const VerificationMeta('podcastLastRefreshError');
+  @override
+  late final GeneratedColumn<String> podcastLastRefreshError =
+      GeneratedColumn<String>(
+        'podcast_last_refresh_error',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1900,6 +1911,7 @@ class $CollectionsTable extends Collections
     podcastFeedUrl,
     podcastMetaJson,
     podcastLastRefreshedAt,
+    podcastLastRefreshError,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2035,6 +2047,15 @@ class $CollectionsTable extends Collections
         ),
       );
     }
+    if (data.containsKey('podcast_last_refresh_error')) {
+      context.handle(
+        _podcastLastRefreshErrorMeta,
+        podcastLastRefreshError.isAcceptableOrUnknown(
+          data['podcast_last_refresh_error']!,
+          _podcastLastRefreshErrorMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2108,6 +2129,10 @@ class $CollectionsTable extends Collections
         DriftSqlType.dateTime,
         data['${effectivePrefix}podcast_last_refreshed_at'],
       ),
+      podcastLastRefreshError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_last_refresh_error'],
+      ),
     );
   }
 
@@ -2168,8 +2193,11 @@ class Collection extends DataClass implements Insertable<Collection> {
   /// Feed 元信息 JSON（title / author / imageUrl / description 等）
   final String? podcastMetaJson;
 
-  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  /// 最后一次刷新时间；成功/失败都会更新，用于节流和 UI 展示
   final DateTime? podcastLastRefreshedAt;
+
+  /// 最后一次刷新错误；成功刷新后清空
+  final String? podcastLastRefreshError;
   const Collection({
     required this.id,
     required this.name,
@@ -2187,6 +2215,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     this.podcastFeedUrl,
     this.podcastMetaJson,
     this.podcastLastRefreshedAt,
+    this.podcastLastRefreshError,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2225,6 +2254,11 @@ class Collection extends DataClass implements Insertable<Collection> {
     if (!nullToAbsent || podcastLastRefreshedAt != null) {
       map['podcast_last_refreshed_at'] = Variable<DateTime>(
         podcastLastRefreshedAt,
+      );
+    }
+    if (!nullToAbsent || podcastLastRefreshError != null) {
+      map['podcast_last_refresh_error'] = Variable<String>(
+        podcastLastRefreshError,
       );
     }
     return map;
@@ -2266,6 +2300,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       podcastLastRefreshedAt: podcastLastRefreshedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(podcastLastRefreshedAt),
+      podcastLastRefreshError: podcastLastRefreshError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastLastRefreshError),
     );
   }
 
@@ -2293,6 +2330,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       podcastLastRefreshedAt: serializer.fromJson<DateTime?>(
         json['podcastLastRefreshedAt'],
       ),
+      podcastLastRefreshError: serializer.fromJson<String?>(
+        json['podcastLastRefreshError'],
+      ),
     );
   }
   @override
@@ -2317,6 +2357,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       'podcastLastRefreshedAt': serializer.toJson<DateTime?>(
         podcastLastRefreshedAt,
       ),
+      'podcastLastRefreshError': serializer.toJson<String?>(
+        podcastLastRefreshError,
+      ),
     };
   }
 
@@ -2337,6 +2380,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     Value<String?> podcastFeedUrl = const Value.absent(),
     Value<String?> podcastMetaJson = const Value.absent(),
     Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
+    Value<String?> podcastLastRefreshError = const Value.absent(),
   }) => Collection(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -2362,6 +2406,9 @@ class Collection extends DataClass implements Insertable<Collection> {
     podcastLastRefreshedAt: podcastLastRefreshedAt.present
         ? podcastLastRefreshedAt.value
         : this.podcastLastRefreshedAt,
+    podcastLastRefreshError: podcastLastRefreshError.present
+        ? podcastLastRefreshError.value
+        : this.podcastLastRefreshError,
   );
   Collection copyWithCompanion(CollectionsCompanion data) {
     return Collection(
@@ -2397,6 +2444,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       podcastLastRefreshedAt: data.podcastLastRefreshedAt.present
           ? data.podcastLastRefreshedAt.value
           : this.podcastLastRefreshedAt,
+      podcastLastRefreshError: data.podcastLastRefreshError.present
+          ? data.podcastLastRefreshError.value
+          : this.podcastLastRefreshError,
     );
   }
 
@@ -2418,7 +2468,8 @@ class Collection extends DataClass implements Insertable<Collection> {
           ..write('podcastInputUrl: $podcastInputUrl, ')
           ..write('podcastFeedUrl: $podcastFeedUrl, ')
           ..write('podcastMetaJson: $podcastMetaJson, ')
-          ..write('podcastLastRefreshedAt: $podcastLastRefreshedAt')
+          ..write('podcastLastRefreshedAt: $podcastLastRefreshedAt, ')
+          ..write('podcastLastRefreshError: $podcastLastRefreshError')
           ..write(')'))
         .toString();
   }
@@ -2441,6 +2492,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     podcastFeedUrl,
     podcastMetaJson,
     podcastLastRefreshedAt,
+    podcastLastRefreshError,
   );
   @override
   bool operator ==(Object other) =>
@@ -2461,7 +2513,8 @@ class Collection extends DataClass implements Insertable<Collection> {
           other.podcastInputUrl == this.podcastInputUrl &&
           other.podcastFeedUrl == this.podcastFeedUrl &&
           other.podcastMetaJson == this.podcastMetaJson &&
-          other.podcastLastRefreshedAt == this.podcastLastRefreshedAt);
+          other.podcastLastRefreshedAt == this.podcastLastRefreshedAt &&
+          other.podcastLastRefreshError == this.podcastLastRefreshError);
 }
 
 class CollectionsCompanion extends UpdateCompanion<Collection> {
@@ -2481,6 +2534,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
   final Value<String?> podcastFeedUrl;
   final Value<String?> podcastMetaJson;
   final Value<DateTime?> podcastLastRefreshedAt;
+  final Value<String?> podcastLastRefreshError;
   final Value<int> rowid;
   const CollectionsCompanion({
     this.id = const Value.absent(),
@@ -2499,6 +2553,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.podcastFeedUrl = const Value.absent(),
     this.podcastMetaJson = const Value.absent(),
     this.podcastLastRefreshedAt = const Value.absent(),
+    this.podcastLastRefreshError = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CollectionsCompanion.insert({
@@ -2518,6 +2573,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.podcastFeedUrl = const Value.absent(),
     this.podcastMetaJson = const Value.absent(),
     this.podcastLastRefreshedAt = const Value.absent(),
+    this.podcastLastRefreshError = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -2540,6 +2596,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Expression<String>? podcastFeedUrl,
     Expression<String>? podcastMetaJson,
     Expression<DateTime>? podcastLastRefreshedAt,
+    Expression<String>? podcastLastRefreshError,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2560,6 +2617,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       if (podcastMetaJson != null) 'podcast_meta_json': podcastMetaJson,
       if (podcastLastRefreshedAt != null)
         'podcast_last_refreshed_at': podcastLastRefreshedAt,
+      if (podcastLastRefreshError != null)
+        'podcast_last_refresh_error': podcastLastRefreshError,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2581,6 +2640,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Value<String?>? podcastFeedUrl,
     Value<String?>? podcastMetaJson,
     Value<DateTime?>? podcastLastRefreshedAt,
+    Value<String?>? podcastLastRefreshError,
     Value<int>? rowid,
   }) {
     return CollectionsCompanion(
@@ -2601,6 +2661,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       podcastMetaJson: podcastMetaJson ?? this.podcastMetaJson,
       podcastLastRefreshedAt:
           podcastLastRefreshedAt ?? this.podcastLastRefreshedAt,
+      podcastLastRefreshError:
+          podcastLastRefreshError ?? this.podcastLastRefreshError,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2658,6 +2720,11 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
         podcastLastRefreshedAt.value,
       );
     }
+    if (podcastLastRefreshError.present) {
+      map['podcast_last_refresh_error'] = Variable<String>(
+        podcastLastRefreshError.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2683,6 +2750,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
           ..write('podcastFeedUrl: $podcastFeedUrl, ')
           ..write('podcastMetaJson: $podcastMetaJson, ')
           ..write('podcastLastRefreshedAt: $podcastLastRefreshedAt, ')
+          ..write('podcastLastRefreshError: $podcastLastRefreshError, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -12488,6 +12556,7 @@ typedef $$CollectionsTableCreateCompanionBuilder =
       Value<String?> podcastFeedUrl,
       Value<String?> podcastMetaJson,
       Value<DateTime?> podcastLastRefreshedAt,
+      Value<String?> podcastLastRefreshError,
       Value<int> rowid,
     });
 typedef $$CollectionsTableUpdateCompanionBuilder =
@@ -12508,6 +12577,7 @@ typedef $$CollectionsTableUpdateCompanionBuilder =
       Value<String?> podcastFeedUrl,
       Value<String?> podcastMetaJson,
       Value<DateTime?> podcastLastRefreshedAt,
+      Value<String?> podcastLastRefreshError,
       Value<int> rowid,
     });
 
@@ -12633,6 +12703,11 @@ class $$CollectionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get podcastLastRefreshError => $composableBuilder(
+    column: $table.podcastLastRefreshError,
+    builder: (column) => ColumnFilters(column),
+  );
+
   Expression<bool> collectionAudioItemsRefs(
     Expression<bool> Function($$CollectionAudioItemsTableFilterComposer f) f,
   ) {
@@ -12747,6 +12822,11 @@ class $$CollectionsTableOrderingComposer
     column: $table.podcastLastRefreshedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get podcastLastRefreshError => $composableBuilder(
+    column: $table.podcastLastRefreshError,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CollectionsTableAnnotationComposer
@@ -12822,6 +12902,11 @@ class $$CollectionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get podcastLastRefreshError => $composableBuilder(
+    column: $table.podcastLastRefreshError,
+    builder: (column) => column,
+  );
+
   Expression<T> collectionAudioItemsRefs<T extends Object>(
     Expression<T> Function($$CollectionAudioItemsTableAnnotationComposer a) f,
   ) {
@@ -12893,6 +12978,7 @@ class $$CollectionsTableTableManager
                 Value<String?> podcastFeedUrl = const Value.absent(),
                 Value<String?> podcastMetaJson = const Value.absent(),
                 Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
+                Value<String?> podcastLastRefreshError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CollectionsCompanion(
                 id: id,
@@ -12911,6 +12997,7 @@ class $$CollectionsTableTableManager
                 podcastFeedUrl: podcastFeedUrl,
                 podcastMetaJson: podcastMetaJson,
                 podcastLastRefreshedAt: podcastLastRefreshedAt,
+                podcastLastRefreshError: podcastLastRefreshError,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12931,6 +13018,7 @@ class $$CollectionsTableTableManager
                 Value<String?> podcastFeedUrl = const Value.absent(),
                 Value<String?> podcastMetaJson = const Value.absent(),
                 Value<DateTime?> podcastLastRefreshedAt = const Value.absent(),
+                Value<String?> podcastLastRefreshError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CollectionsCompanion.insert(
                 id: id,
@@ -12949,6 +13037,7 @@ class $$CollectionsTableTableManager
                 podcastFeedUrl: podcastFeedUrl,
                 podcastMetaJson: podcastMetaJson,
                 podcastLastRefreshedAt: podcastLastRefreshedAt,
+                podcastLastRefreshError: podcastLastRefreshError,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

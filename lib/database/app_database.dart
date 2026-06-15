@@ -85,7 +85,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 当前 schema 版本（静态访问，用于导入前版本检查）
-  static const currentSchemaVersion = 39;
+  static const currentSchemaVersion = 40;
 
   @override
   int get schemaVersion => currentSchemaVersion;
@@ -104,6 +104,10 @@ class AppDatabase extends _$AppDatabase {
         await _ensurePodcastColumns();
       },
       onUpgrade: (Migrator m, int from, int to) async {
+        // v39→v40：Podcast 合集新增最后一次刷新错误状态。
+        if (from < 40) {
+          await _ensurePodcastRefreshStatusColumns();
+        }
         // v38→v39：audio_items 加 audio_content_status（音频内容有效性，新下载时检测）
         if (from < 39) {
           await _addColumnIfNotExists(
@@ -799,6 +803,7 @@ class AppDatabase extends _$AppDatabase {
       'podcast_last_refreshed_at',
       'INTEGER',
     );
+    await _ensurePodcastRefreshStatusColumns();
     await _addColumnIfNotExists('audio_items', 'podcast_episode_guid', 'TEXT');
     await _addColumnIfNotExists('audio_items', 'podcast_enclosure_url', 'TEXT');
     await _addColumnIfNotExists(
@@ -809,6 +814,14 @@ class AppDatabase extends _$AppDatabase {
     await _addColumnIfNotExists('audio_items', 'podcast_description', 'TEXT');
     await _addColumnIfNotExists('audio_items', 'podcast_image_url', 'TEXT');
     await _addColumnIfNotExists('audio_items', 'podcast_link', 'TEXT');
+  }
+
+  Future<void> _ensurePodcastRefreshStatusColumns() async {
+    await _addColumnIfNotExists(
+      'collections',
+      'podcast_last_refresh_error',
+      'TEXT',
+    );
   }
 
   /// 创建自定义索引

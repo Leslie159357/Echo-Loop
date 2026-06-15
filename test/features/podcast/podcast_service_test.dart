@@ -6,8 +6,11 @@ import 'package:echo_loop/features/podcast/podcast_url_resolver.dart';
 import 'package:echo_loop/features/podcast/podcast_feed_parser.dart';
 import 'package:echo_loop/features/podcast/podcast_models.dart';
 import 'package:echo_loop/models/collection.dart';
+import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
 import 'package:mocktail/mocktail.dart';
+
+import '../../helpers/mock_providers.dart';
 
 class _CountingDio extends Fake implements Dio {
   int callCount = 0;
@@ -33,6 +36,38 @@ class _CountingDio extends Fake implements Dio {
   }
 }
 
+class _RoutingDio extends Fake implements Dio {
+  final Map<String, Object> responses;
+  final List<String> requestedPaths = <String>[];
+
+  _RoutingDio(this.responses);
+
+  @override
+  Future<Response<T>> get<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    requestedPaths.add(path);
+    final response = responses[path];
+    if (response is Exception) throw response;
+    if (response == null) {
+      throw DioException(
+        requestOptions: RequestOptions(path: path),
+        type: DioExceptionType.badResponse,
+      );
+    }
+    return Response<T>(
+      data: response as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
+}
+
 class _MockRef extends Mock implements Ref {}
 
 /// 用预置状态的 CollectionList override，避免依赖数据库。
@@ -41,6 +76,40 @@ class _SeededCollectionList extends CollectionList {
   final CollectionState _seed;
   @override
   CollectionState build() => _seed;
+
+  @override
+  Future<void> createPodcastCollection(Collection collection) async {
+    state = state.copyWith(
+      rawCollections: [...state.rawCollections, collection],
+      audioIdsMap: {...state.audioIdsMap, collection.id: []},
+    );
+  }
+
+  @override
+  Future<void> updatePodcastCollection(Collection updated) async {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == updated.id);
+    if (index == -1) return;
+    collections[index] = updated;
+    state = state.copyWith(rawCollections: collections);
+  }
+
+  @override
+  Future<void> addAudioToCollection(String collectionId, String audioId) async {
+    final current = List<String>.from(state.audioIdsMap[collectionId] ?? []);
+    if (!current.contains(audioId)) current.add(audioId);
+    state = state.copyWith(
+      audioIdsMap: {...state.audioIdsMap, collectionId: current},
+    );
+  }
+}
+
+class _FixedResolver extends PodcastUrlResolver {
+  _FixedResolver(this.feedUrl);
+  final String feedUrl;
+
+  @override
+  Future<String> resolve(String inputUrl) async => feedUrl;
 }
 
 void main() {
@@ -310,6 +379,8 @@ void main() {
 
   group('PodcastRepository.createAndFetch — 重复订阅判重', () {
     const feedUrl = 'https://feeds.example.com/voa/rss';
+    const appleUrl =
+        'https://podcasts.apple.com/us/podcast/voa-learning-english/id109522474';
 
     ProviderContainer makeContainer(List<Collection> collections) {
       return ProviderContainer(
@@ -319,6 +390,7 @@ void main() {
               CollectionState(rawCollections: collections),
             ),
           ),
+          audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
         ],
       );
     }
@@ -366,19 +438,75 @@ void main() {
         throwsA(isNot(isA<PodcastAlreadySubscribedException>())),
       );
     });
+
+    test('Apple 输入创建合集时保留 inputUrl，feedUrl 写入解析后的 RSS', () async {
+      const feed = '''<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>VOA Learning English</title>
+    <description>Slow-paced English learning programs.</description>
+  </channel>
+</rss>''';
+      final dio = _CountingDio(body: feed);
+      final repoProvider = Provider(
+        (ref) => PodcastRepository(
+          ref,
+          dio: dio,
+          urlResolver: _FixedResolver(feedUrl),
+          feedParser: PodcastFeedParser(),
+        ),
+      );
+      final container = makeContainer([]);
+      addTearDown(container.dispose);
+
+      final collection = await container
+          .read(repoProvider)
+          .createAndFetch(appleUrl);
+
+      expect(collection.podcastInputUrl, appleUrl);
+      expect(collection.podcastFeedUrl, feedUrl);
+      expect(dio.callCount, 1);
+      expect(
+        container.read(collectionListProvider).rawCollections.single,
+        isA<Collection>()
+            .having((c) => c.podcastInputUrl, 'podcastInputUrl', appleUrl)
+            .having((c) => c.podcastFeedUrl, 'podcastFeedUrl', feedUrl),
+      );
+    });
   });
 
   group('PodcastRepository.refresh — 刷新策略', () {
     const feedUrl = 'https://feeds.example.com/voa/rss';
+    const newFeedUrl = 'https://feeds.example.com/voa/new-rss';
+    const appleUrl =
+        'https://podcasts.apple.com/us/podcast/voa-learning-english/id109522474';
 
-    Collection podcast({required DateTime lastRefreshedAt}) {
+    Collection podcast({
+      required DateTime lastRefreshedAt,
+      String? inputUrl,
+      String feed = feedUrl,
+    }) {
       return Collection(
         id: 'podcast-1',
         name: 'VOA Learning English',
         createdDate: DateTime(2026, 6, 13),
         source: CollectionSource.podcast,
-        podcastFeedUrl: feedUrl,
+        podcastInputUrl: inputUrl,
+        podcastFeedUrl: feed,
         podcastLastRefreshedAt: lastRefreshedAt,
+      );
+    }
+
+    ProviderContainer makeContainer(Collection collection) {
+      return ProviderContainer(
+        overrides: [
+          collectionListProvider.overrideWith(
+            () => _SeededCollectionList(
+              CollectionState(rawCollections: [collection]),
+            ),
+          ),
+          audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+        ],
       );
     }
 
@@ -404,17 +532,137 @@ void main() {
 
     test('force=true 绕过节流并访问 RSS', () async {
       final dio = _CountingDio(body: '<rss></rss>');
-      final repo = PodcastRepository(
-        makeRef(podcast(lastRefreshedAt: DateTime.now())),
-        dio: dio,
+      final collection = podcast(lastRefreshedAt: DateTime.now());
+      final container = makeContainer(collection);
+      addTearDown(container.dispose);
+      final repoProvider = Provider(
+        (ref) =>
+            PodcastRepository(ref, dio: dio, feedParser: PodcastFeedParser()),
       );
 
       await expectLater(
-        repo.refresh('podcast-1', force: true),
+        container.read(repoProvider).refresh('podcast-1', force: true),
         throwsA(isA<PodcastParseException>()),
       );
 
       expect(dio.callCount, 1);
+      expect(
+        container.read(collectionListProvider).rawCollections.single,
+        isA<Collection>()
+            .having(
+              (c) => c.podcastLastRefreshedAt,
+              'podcastLastRefreshedAt',
+              isNotNull,
+            )
+            .having(
+              (c) => c.podcastLastRefreshError,
+              'podcastLastRefreshError',
+              contains('PodcastParseException'),
+            ),
+      );
+    });
+
+    test('RSS 失效且原始输入是 Apple URL 时重新 lookup 并更新 feedUrl', () async {
+      const feed = '''<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>VOA Learning English</title>
+    <description>New RSS feed.</description>
+  </channel>
+</rss>''';
+      final dio = _RoutingDio({
+        feedUrl: DioException(
+          requestOptions: RequestOptions(path: feedUrl),
+          type: DioExceptionType.badResponse,
+        ),
+        newFeedUrl: feed,
+      });
+      final collection = podcast(
+        lastRefreshedAt: DateTime(2026, 6, 13),
+        inputUrl: appleUrl,
+      );
+      final container = makeContainer(collection);
+      addTearDown(container.dispose);
+      final repoProvider = Provider(
+        (ref) => PodcastRepository(
+          ref,
+          dio: dio,
+          urlResolver: _FixedResolver(newFeedUrl),
+          feedParser: PodcastFeedParser(),
+        ),
+      );
+
+      await container.read(repoProvider).refresh('podcast-1', force: true);
+
+      expect(dio.requestedPaths, [feedUrl, newFeedUrl]);
+      expect(
+        container.read(collectionListProvider).rawCollections.single,
+        isA<Collection>()
+            .having((c) => c.podcastInputUrl, 'podcastInputUrl', appleUrl)
+            .having((c) => c.podcastFeedUrl, 'podcastFeedUrl', newFeedUrl)
+            .having(
+              (c) => c.podcastLastRefreshedAt,
+              'podcastLastRefreshedAt',
+              isNotNull,
+            )
+            .having(
+              (c) => c.podcastLastRefreshError,
+              'podcastLastRefreshError',
+              isNull,
+            )
+            .having(
+              (c) => c.description,
+              'description',
+              collection.description,
+            ),
+      );
+    });
+
+    test('RSS 和 Apple lookup 兜底都失败时写入最后刷新失败状态', () async {
+      final dio = _RoutingDio({
+        feedUrl: DioException(
+          requestOptions: RequestOptions(path: feedUrl),
+          type: DioExceptionType.badResponse,
+        ),
+        newFeedUrl: DioException(
+          requestOptions: RequestOptions(path: newFeedUrl),
+          type: DioExceptionType.badResponse,
+        ),
+      });
+      final collection = podcast(
+        lastRefreshedAt: DateTime(2026, 6, 13),
+        inputUrl: appleUrl,
+      );
+      final container = makeContainer(collection);
+      addTearDown(container.dispose);
+      final repoProvider = Provider(
+        (ref) => PodcastRepository(
+          ref,
+          dio: dio,
+          urlResolver: _FixedResolver(newFeedUrl),
+          feedParser: PodcastFeedParser(),
+        ),
+      );
+
+      await expectLater(
+        container.read(repoProvider).refresh('podcast-1', force: true),
+        throwsA(isA<DioException>()),
+      );
+
+      expect(
+        container.read(collectionListProvider).rawCollections.single,
+        isA<Collection>()
+            .having(
+              (c) => c.podcastLastRefreshedAt,
+              'podcastLastRefreshedAt',
+              isNot(collection.podcastLastRefreshedAt),
+            )
+            .having(
+              (c) => c.podcastLastRefreshError,
+              'podcastLastRefreshError',
+              contains('DioException'),
+            ),
+      );
     });
   });
 }

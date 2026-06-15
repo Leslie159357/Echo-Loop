@@ -131,23 +131,62 @@ class PodcastRepository {
     final feedUrl = collection.podcastFeedUrl;
     if (feedUrl == null) return;
 
-    final feedContent = await _fetchFeedContent(feedUrl);
-    final result = _feedParser.parse(feedContent, feedUrl: feedUrl);
+    final refreshedAt = DateTime.now();
+    try {
+      final feed = await _loadFeedWithAppleFallback(collection, feedUrl);
+      final result = feed.result;
 
-    // 更新 feed 元信息 + 刷新时间
-    final updated = collection.copyWith(
-      podcastLastRefreshedAt: DateTime.now(),
-      podcastMetaJson: jsonEncode(result.meta.toJson()),
-      coverUrl: result.meta.imageUrl ?? collection.coverUrl,
-    );
-    await _ref
-        .read(collectionListProvider.notifier)
-        .updatePodcastCollection(updated);
+      // 更新 feed 元信息 + 刷新状态。
+      final updated = collection.copyWith(
+        podcastLastRefreshedAt: refreshedAt,
+        clearPodcastLastRefreshError: true,
+        podcastMetaJson: jsonEncode(result.meta.toJson()),
+        coverUrl: result.meta.imageUrl ?? collection.coverUrl,
+        podcastFeedUrl: feed.url,
+      );
+      await _ref
+          .read(collectionListProvider.notifier)
+          .updatePodcastCollection(updated);
 
-    await _importEpisodes(result.episodes, collectionId: collection.id);
+      await _importEpisodes(result.episodes, collectionId: collection.id);
+    } catch (e) {
+      final failed = collection.copyWith(
+        podcastLastRefreshedAt: refreshedAt,
+        podcastLastRefreshError: e.toString(),
+      );
+      await _ref
+          .read(collectionListProvider.notifier)
+          .updatePodcastCollection(failed);
+      rethrow;
+    }
   }
 
   // ── 内部辅助 ─────────────────────────────────────────────────────────
+
+  Future<_PodcastFeedLoadResult> _loadFeedWithAppleFallback(
+    Collection collection,
+    String feedUrl,
+  ) async {
+    try {
+      return await _loadFeed(feedUrl);
+    } catch (_) {
+      final inputUrl = collection.podcastInputUrl;
+      if (inputUrl == null || !_isApplePodcastUrl(inputUrl)) rethrow;
+
+      final resolvedFeedUrl = await _urlResolver.resolve(inputUrl);
+      if (resolvedFeedUrl == feedUrl) rethrow;
+
+      return _loadFeed(resolvedFeedUrl);
+    }
+  }
+
+  Future<_PodcastFeedLoadResult> _loadFeed(String feedUrl) async {
+    final content = await _fetchFeedContent(feedUrl);
+    return _PodcastFeedLoadResult(
+      url: feedUrl,
+      result: _feedParser.parse(content, feedUrl: feedUrl),
+    );
+  }
 
   Future<String> _fetchFeedContent(String feedUrl) async {
     final response = await _dio.get<String>(
@@ -159,6 +198,14 @@ class PodcastRepository {
       throw const PodcastParseException('Feed 内容为空');
     }
     return content;
+  }
+
+  bool _isApplePodcastUrl(String inputUrl) {
+    final uri = Uri.tryParse(inputUrl.trim());
+    final host = uri?.host.toLowerCase();
+    return host != null &&
+        (host.contains('podcasts.apple.com') ||
+            host.contains('itunes.apple.com'));
   }
 
   /// 将 episodes 入库；只在同一合集内按 guid 去重。
@@ -204,4 +251,11 @@ class PodcastRepository {
       await collList.addAudioToCollection(collectionId, item.id);
     }
   }
+}
+
+class _PodcastFeedLoadResult {
+  final String url;
+  final PodcastFeedResult result;
+
+  const _PodcastFeedLoadResult({required this.url, required this.result});
 }

@@ -120,6 +120,7 @@ class CollectionList extends _$CollectionList {
               podcastFeedUrl: row.podcastFeedUrl,
               podcastMetaJson: row.podcastMetaJson,
               podcastLastRefreshedAt: row.podcastLastRefreshedAt,
+              podcastLastRefreshError: row.podcastLastRefreshError,
             ),
           )
           .toList();
@@ -317,6 +318,7 @@ class CollectionList extends _$CollectionList {
         podcastFeedUrl: Value(collection.podcastFeedUrl),
         podcastMetaJson: Value(collection.podcastMetaJson),
         podcastLastRefreshedAt: Value(collection.podcastLastRefreshedAt),
+        podcastLastRefreshError: Value(collection.podcastLastRefreshError),
         updatedAt: Value(DateTime.now()),
       ),
     );

@@ -16,6 +16,19 @@ import '../helpers/test_app.dart';
 
 class _MockPodcastRepository extends Mock implements PodcastRepository {}
 
+class _PodcastTestCollectionList extends TestCollectionList {
+  _PodcastTestCollectionList(super.initialState);
+
+  @override
+  Future<void> updatePodcastCollection(Collection updated) async {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == updated.id);
+    if (index == -1) return;
+    collections[index] = updated;
+    state = state.copyWith(rawCollections: collections);
+  }
+}
+
 void main() {
   testWidgets('podcast 合集详情头部紧凑展示 feed 元信息', (tester) async {
     const longDescription =
@@ -245,5 +258,79 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     verify(() => podcastRepo.refresh('podcast-1', force: true)).called(1);
+  });
+
+  testWidgets('podcast 合集强刷失败后详情弹窗展示刷新失败状态和时间', (tester) async {
+    final collection = Collection(
+      id: 'podcast-1',
+      name: 'Learning Podcast',
+      createdDate: DateTime(2026, 6, 12),
+      source: CollectionSource.podcast,
+      podcastInputUrl: 'https://podcasts.apple.com/podcast/id123',
+      podcastFeedUrl: 'https://example.com/feed.xml',
+      podcastMetaJson: jsonEncode(
+        const PodcastFeedMeta(
+          title: 'Learning Podcast',
+          feedUrl: 'https://example.com/feed.xml',
+        ).toJson(),
+      ),
+      podcastLastRefreshedAt: DateTime(2026, 6, 12, 8, 30),
+    );
+    final item = AudioItem(
+      id: 'episode-1',
+      name: 'Episode One',
+      audioPath: null,
+      addedDate: DateTime(2026, 6, 12),
+      podcastEpisodeGuid: 'guid-1',
+      podcastEnclosureUrl: 'https://example.com/episode-1.mp3',
+      podcastEnclosureType: 'audio/mpeg',
+    );
+    final podcastRepo = _MockPodcastRepository();
+    final collectionList = _PodcastTestCollectionList(
+      CollectionState(
+        rawCollections: [collection],
+        audioIdsMap: const {
+          'podcast-1': ['episode-1'],
+        },
+      ),
+    );
+    when(
+      () => podcastRepo.refresh('podcast-1', force: false),
+    ).thenAnswer((_) async {});
+    when(() => podcastRepo.refresh('podcast-1', force: true)).thenAnswer((
+      _,
+    ) async {
+      await collectionList.updatePodcastCollection(
+        collection.copyWith(
+          podcastLastRefreshedAt: DateTime(2026, 6, 15, 11, 22),
+          podcastLastRefreshError: 'Exception: rss failed',
+        ),
+      );
+      throw Exception('rss failed');
+    });
+
+    await tester.pumpWidget(
+      createTestScreen(
+        const CollectionDetailScreen(collectionId: 'podcast-1'),
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+          ),
+          collectionListProvider.overrideWith(() => collectionList),
+          podcastRepositoryProvider.overrideWithValue(podcastRepo),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('Episode One'), const Offset(0, 500));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Last refreshed: 2026-06-15 11:22'), findsNothing);
+    expect(find.text('Failed · 2026-06-15 11:22'), findsOneWidget);
   });
 }

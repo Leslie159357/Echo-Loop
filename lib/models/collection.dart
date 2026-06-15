@@ -41,7 +41,8 @@ enum CollectionSource {
 /// - [podcastInputUrl]：用户输入的原始 URL（Apple Podcasts 或 RSS 直链）
 /// - [podcastFeedUrl]：解析后的 RSS Feed URL
 /// - [podcastMetaJson]：Feed 元信息 JSON（title/author/imageUrl/description）
-/// - [podcastLastRefreshedAt]：最后一次成功刷新时间
+/// - [podcastLastRefreshedAt]：最后一次刷新时间
+/// - [podcastLastRefreshError]：最后一次刷新错误
 class Collection {
   final String id;
   final String name;
@@ -74,8 +75,11 @@ class Collection {
   /// Feed 元信息 JSON（title / author / imageUrl / description 等）
   final String? podcastMetaJson;
 
-  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  /// 最后一次刷新的时间；成功/失败都会更新，用于 10 分钟节流和 UI 展示
   final DateTime? podcastLastRefreshedAt;
+
+  /// 最后一次刷新错误；成功刷新后清空
+  final String? podcastLastRefreshError;
 
   Collection({
     required this.id,
@@ -91,6 +95,7 @@ class Collection {
     this.podcastFeedUrl,
     this.podcastMetaJson,
     this.podcastLastRefreshedAt,
+    this.podcastLastRefreshError,
   });
 
   /// 方便判断：是否为官方合集
@@ -121,6 +126,7 @@ class Collection {
     podcastLastRefreshedAt: json['podcastLastRefreshedAt'] != null
         ? DateTime.parse(json['podcastLastRefreshedAt'] as String)
         : null,
+    podcastLastRefreshError: json['podcastLastRefreshError'] as String?,
   );
 
   /// 从旧 JSON 中提取 audioItemIds（仅迁移用）
@@ -142,6 +148,8 @@ class Collection {
     String? podcastFeedUrl,
     String? podcastMetaJson,
     DateTime? podcastLastRefreshedAt,
+    String? podcastLastRefreshError,
+    bool clearPodcastLastRefreshError = false,
   }) {
     return Collection(
       id: id ?? this.id,
@@ -158,6 +166,9 @@ class Collection {
       podcastMetaJson: podcastMetaJson ?? this.podcastMetaJson,
       podcastLastRefreshedAt:
           podcastLastRefreshedAt ?? this.podcastLastRefreshedAt,
+      podcastLastRefreshError: clearPodcastLastRefreshError
+          ? null
+          : podcastLastRefreshError ?? this.podcastLastRefreshError,
     );
   }
 }

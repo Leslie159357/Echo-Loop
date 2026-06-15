@@ -403,6 +403,49 @@ void main() {
         expect(find.text('RSS URL'), findsOneWidget);
         expect(find.text('https://example.com/feed.xml'), findsOneWidget);
       });
+
+      testWidgets('Podcast 合集刷新失败时列表显示标记且菜单详情展示失败状态', (tester) async {
+        final c =
+            createTestCollection(
+              id: 'podcast-1',
+              name: '6 Minute English',
+            ).copyWith(
+              source: CollectionSource.podcast,
+              podcastFeedUrl: 'https://example.com/feed.xml',
+              podcastLastRefreshedAt: DateTime(2026, 6, 15, 11, 52),
+              podcastLastRefreshError: 'Exception: rss failed',
+            );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const LibraryScreen(),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
+              collectionListProvider.overrideWith(
+                () => TestCollectionList(CollectionState(rawCollections: [c])),
+              ),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Refresh failed'), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(const Key('collection_list_menu_hit_area')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Details'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Last refreshed: 2026-06-15 11:52'), findsNothing);
+        expect(find.text('Failed · 2026-06-15 11:52'), findsOneWidget);
+      });
     });
   });
 }

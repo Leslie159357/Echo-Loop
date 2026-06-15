@@ -796,6 +796,11 @@ class _CollectionListTile extends ConsumerWidget {
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
+                            if (collection.isPodcast &&
+                                podcastHasRefreshError(collection)) ...[
+                              const SizedBox(height: 6),
+                              _PodcastRefreshFailedChip(l10n: l10n),
+                            ],
                           ],
                         ),
                       ),
@@ -840,7 +845,14 @@ class _CollectionListTile extends ConsumerWidget {
                           collection,
                         );
                       } else if (value == 'podcastDetails') {
-                        showPodcastFeedInfoSheet(context, collection);
+                        showPodcastFeedInfoSheet(
+                          context,
+                          collection,
+                          refreshStatusText: podcastRefreshStatusText(
+                            l10n,
+                            collection,
+                          ),
+                        );
                       } else if (value == 'podcastUnsubscribe') {
                         _showPodcastUnsubscribeDialog(context, ref, collection);
                       }
@@ -976,6 +988,42 @@ class _CollectionListTile extends ConsumerWidget {
         style: theme.textTheme.titleLarge?.copyWith(
           color: theme.colorScheme.onPrimaryContainer,
           fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _PodcastRefreshFailedChip extends StatelessWidget {
+  final AppLocalizations l10n;
+
+  const _PodcastRefreshFailedChip({required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.error;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 13, color: color),
+              const SizedBox(width: 4),
+              Text(
+                podcastRefreshFailedLabel(l10n),
+                style: theme.textTheme.labelSmall?.copyWith(color: color),
+              ),
+            ],
+          ),
         ),
       ),
     );

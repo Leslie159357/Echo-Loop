@@ -17,7 +17,11 @@ import '../../theme/app_theme.dart';
 import 'podcast_models.dart';
 
 /// 展示 podcast 合集的详情（只读）。
-void showPodcastFeedInfoSheet(BuildContext context, Collection collection) {
+void showPodcastFeedInfoSheet(
+  BuildContext context,
+  Collection collection, {
+  String? refreshStatusText,
+}) {
   final l10n = AppLocalizations.of(context)!;
   final meta = _decodeMeta(collection.podcastMetaJson);
   final title = meta?.title ?? collection.name;
@@ -32,9 +36,10 @@ void showPodcastFeedInfoSheet(BuildContext context, Collection collection) {
     heroAuthor: meta?.author,
     heroDescription: description,
     imageUrl: imageUrl,
-    dateText: lastRefreshed == null
+    dateText: refreshStatusText != null || lastRefreshed == null
         ? null
         : l10n.podcastLastRefreshed(_formatDateTime(lastRefreshed)),
+    refreshStatusText: refreshStatusText,
     links: [
       // 合集级详情只把 Apple Podcasts 原始输入展示为主链接；RSS 订阅输入
       // 统一展示在 RSS 链接行，避免同一个 feed 被重复标成普通链接。
@@ -44,6 +49,35 @@ void showPodcastFeedInfoSheet(BuildContext context, Collection collection) {
         PodcastInfoLink(l10n.podcastFeedUrl, collection.podcastFeedUrl!),
     ],
   );
+}
+
+/// 生成 Podcast 合集刷新状态文案，供合集详情页和合集列表菜单共用。
+String? podcastRefreshStatusText(
+  AppLocalizations l10n,
+  Collection collection, {
+  DateTime? refreshingAt,
+}) {
+  final isZh = l10n.localeName.startsWith('zh');
+  if (refreshingAt != null) {
+    final time = _formatDateTime(refreshingAt);
+    return isZh ? '刷新中 · $time' : 'Refreshing · $time';
+  }
+
+  final refreshedAt = collection.podcastLastRefreshedAt;
+  if (refreshedAt == null) return null;
+  if (!podcastHasRefreshError(collection)) return null;
+  final time = _formatDateTime(refreshedAt);
+  return isZh ? '失败 · $time' : 'Failed · $time';
+}
+
+/// Podcast 合集是否存在最近一次刷新错误。
+bool podcastHasRefreshError(Collection collection) {
+  return collection.podcastLastRefreshError?.trim().isNotEmpty == true;
+}
+
+/// Podcast 合集列表上的刷新失败短标记。
+String podcastRefreshFailedLabel(AppLocalizations l10n) {
+  return l10n.localeName.startsWith('zh') ? '刷新失败' : 'Refresh failed';
 }
 
 /// 展示通用 Podcast 信息弹窗。
@@ -59,6 +93,7 @@ void showPodcastInfoSheet(
   String? heroDescription,
   String? imageUrl,
   String? dateText,
+  String? refreshStatusText,
 }) {
   showModalBottomSheet<void>(
     context: context,
@@ -70,6 +105,7 @@ void showPodcastInfoSheet(
       heroDescription: heroDescription,
       imageUrl: imageUrl,
       dateText: dateText,
+      refreshStatusText: refreshStatusText,
       links: links,
     ),
   );
@@ -173,6 +209,7 @@ class _InfoSheet extends StatelessWidget {
   final String? heroDescription;
   final String? imageUrl;
   final String? dateText;
+  final String? refreshStatusText;
   final List<PodcastInfoLink> links;
 
   const _InfoSheet({
@@ -183,6 +220,7 @@ class _InfoSheet extends StatelessWidget {
     this.heroDescription,
     this.imageUrl,
     this.dateText,
+    this.refreshStatusText,
   });
 
   @override
@@ -226,6 +264,7 @@ class _InfoSheet extends StatelessWidget {
                 description: heroDescription,
                 imageUrl: imageUrl,
                 dateText: dateText,
+                refreshStatusText: refreshStatusText,
               ),
               if (links.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.l),
@@ -245,6 +284,7 @@ class _InfoHero extends StatelessWidget {
   final String? description;
   final String? imageUrl;
   final String? dateText;
+  final String? refreshStatusText;
 
   const _InfoHero({
     required this.title,
@@ -252,6 +292,7 @@ class _InfoHero extends StatelessWidget {
     this.description,
     this.imageUrl,
     this.dateText,
+    this.refreshStatusText,
   });
 
   @override
@@ -281,6 +322,10 @@ class _InfoHero extends StatelessWidget {
             ),
           ),
         ],
+        if (_hasText(refreshStatusText)) ...[
+          const SizedBox(height: AppSpacing.xs),
+          _RefreshStatusLine(text: refreshStatusText!),
+        ],
       ],
     );
 
@@ -305,6 +350,34 @@ class _InfoHero extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _RefreshStatusLine extends StatelessWidget {
+  final String text;
+
+  const _RefreshStatusLine({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = text.contains('失败') || text.contains('Failed')
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 16, color: color),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(color: color),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

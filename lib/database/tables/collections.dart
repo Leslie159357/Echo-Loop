@@ -54,8 +54,11 @@ class Collections extends Table {
   /// Feed 元信息 JSON（title / author / imageUrl / description 等）
   TextColumn get podcastMetaJson => text().nullable()();
 
-  /// 最后一次成功刷新的时间；用于 10 分钟节流判断
+  /// 最后一次刷新时间；成功/失败都会更新，用于节流和 UI 展示
   DateTimeColumn get podcastLastRefreshedAt => dateTime().nullable()();
+
+  /// 最后一次刷新错误；成功刷新后清空
+  TextColumn get podcastLastRefreshError => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -37,6 +37,7 @@ class CollectionDetailScreen extends ConsumerStatefulWidget {
 class _CollectionDetailScreenState
     extends ConsumerState<CollectionDetailScreen> {
   final _keyUpload = GlobalKey();
+  _PodcastRefreshViewState? _podcastRefreshState;
 
   /// 官方合集的排序状态，页面内独立持有（不走全局 audioListSettingsProvider，
   /// 避免污染资源库 / 用户自建合集的排序偏好）。首次打开默认「官方编排顺序」。
@@ -131,6 +132,7 @@ class _CollectionDetailScreenState
                 audioItems: audioItems,
                 guideFirstAudioMenu: hasAudioItems,
                 guideLeadingItems: hasAudioItems,
+                refreshState: _podcastRefreshState,
                 onRefresh: () => _refreshPodcastFeed(force: true),
               )
             : AudioListView(
@@ -167,12 +169,26 @@ class _CollectionDetailScreenState
   /// 进入页面时走普通刷新，交给 repository 的通用刷新策略节流；
   /// 下拉时传 force=true 强制拉取 RSS。
   Future<void> _refreshPodcastFeed({required bool force}) async {
+    if (force && mounted) {
+      setState(() {
+        _podcastRefreshState = _PodcastRefreshViewState.refreshing(
+          DateTime.now(),
+        );
+      });
+    }
     try {
       await ref
           .read(podcastRepositoryProvider)
           .refresh(widget.collectionId, force: force);
+      if (!mounted || !force) return;
+      setState(() {
+        _podcastRefreshState = null;
+      });
     } catch (e) {
       if (!mounted || !force) return;
+      setState(() {
+        _podcastRefreshState = null;
+      });
       final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.podcastSubscribeFailed(e.toString()))),
@@ -181,12 +197,30 @@ class _CollectionDetailScreenState
   }
 }
 
+class _PodcastRefreshViewState {
+  final DateTime time;
+
+  const _PodcastRefreshViewState._(this.time);
+
+  factory _PodcastRefreshViewState.refreshing(DateTime time) =>
+      _PodcastRefreshViewState._(time);
+}
+
+String? _podcastRefreshStatusText(
+  AppLocalizations l10n,
+  Collection collection,
+  _PodcastRefreshViewState? state,
+) {
+  return podcastRefreshStatusText(l10n, collection, refreshingAt: state?.time);
+}
+
 /// Podcast 合集详情内容：顶部展示 Feed 元信息，下面复用音频列表。
 class _PodcastCollectionBody extends StatelessWidget {
   final Collection collection;
   final List<AudioItem> audioItems;
   final bool guideFirstAudioMenu;
   final bool guideLeadingItems;
+  final _PodcastRefreshViewState? refreshState;
   final Future<void> Function() onRefresh;
 
   const _PodcastCollectionBody({
@@ -194,6 +228,7 @@ class _PodcastCollectionBody extends StatelessWidget {
     required this.audioItems,
     required this.guideFirstAudioMenu,
     required this.guideLeadingItems,
+    required this.refreshState,
     required this.onRefresh,
   });
 
@@ -202,7 +237,7 @@ class _PodcastCollectionBody extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        _PodcastFeedHeader(collection: collection),
+        _PodcastFeedHeader(collection: collection, refreshState: refreshState),
         Expanded(
           child: RefreshIndicator(
             onRefresh: onRefresh,
@@ -235,8 +270,12 @@ class _PodcastCollectionBody extends StatelessWidget {
 
 class _PodcastFeedHeader extends StatefulWidget {
   final Collection collection;
+  final _PodcastRefreshViewState? refreshState;
 
-  const _PodcastFeedHeader({required this.collection});
+  const _PodcastFeedHeader({
+    required this.collection,
+    required this.refreshState,
+  });
 
   @override
   State<_PodcastFeedHeader> createState() => _PodcastFeedHeaderState();
@@ -254,7 +293,15 @@ class _PodcastFeedHeaderState extends State<_PodcastFeedHeader> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => showPodcastFeedInfoSheet(context, widget.collection),
+        onTap: () => showPodcastFeedInfoSheet(
+          context,
+          widget.collection,
+          refreshStatusText: _podcastRefreshStatusText(
+            l10n,
+            widget.collection,
+            widget.refreshState,
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.m,
