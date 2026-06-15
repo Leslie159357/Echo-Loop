@@ -56,10 +56,19 @@ class AudioItemDao extends DatabaseAccessor<AppDatabase>
     return into(audioItems).insertOnConflictUpdate(entry);
   }
 
-  /// 批量插入音频项（用于迁移）
+  /// 批量插入或更新音频项。
+  ///
+  /// 用 `insertOnConflictUpdate`（INSERT … ON CONFLICT DO UPDATE）语义：已存在行
+  /// 只更新 companion 中显式携带的列，**不触碰** companion 未包含的大字段
+  /// （`transcript_srt` / `word_timestamps_json`）。
+  ///
+  /// 不能用 `InsertMode.insertOrReplace`——它在 SQLite 是整行 DELETE+INSERT，会把
+  /// 模型层不携带的大字段重置为 NULL，导致"句数词数还在但字幕内容丢失"。
   Future<void> batchInsert(List<AudioItemsCompanion> entries) async {
     await batch((b) {
-      b.insertAll(audioItems, entries, mode: InsertMode.insertOrReplace);
+      for (final entry in entries) {
+        b.insert(audioItems, entry, onConflict: DoUpdate((_) => entry));
+      }
     });
   }
 

@@ -139,6 +139,52 @@ void main() {
       expect(items.length, 5);
     });
 
+    test('batchInsert 更新已有行时保留 transcript_srt / word_timestamps 大字段', () async {
+      final now = DateTime.now();
+      // 1) 先写入一行并填入字幕大字段（模拟下载/AI 转录落库）
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Original'),
+          audioPath: Value('audios/1.mp3'),
+          sentenceCount: Value(10),
+          wordCount: Value(100),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await db.audioItemDao.saveTranscriptContent(
+        'audio-1',
+        srt: 'srt-content',
+        wordTimestampsJson: '[{"word":"hi"}]',
+      );
+
+      // 2) 走 batchInsert 做一次"只带模型列"的回写（模拟 updateAudioItem/togglePin，
+      //    companion 不含 transcript_srt / word_timestamps_json）
+      await db.audioItemDao.batchInsert([
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Renamed'),
+          audioPath: Value('audios/1.mp3'),
+          sentenceCount: Value(10),
+          wordCount: Value(100),
+          isPinned: Value(true),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      ]);
+
+      // 3) 模型列已更新，但大字段必须原样保留（不被整行 replace 清空）
+      final item = await db.audioItemDao.getById('audio-1');
+      expect(item!.name, 'Renamed');
+      expect(item.isPinned, isTrue);
+      expect(await db.audioItemDao.getTranscriptSrt('audio-1'), 'srt-content');
+      expect(
+        await db.audioItemDao.getWordTimestamps('audio-1'),
+        '[{"word":"hi"}]',
+      );
+    });
+
     test('hardDeleteMany 批量删除并触发 junction cascade', () async {
       final now = DateTime.now();
       await db.collectionDao.upsert(
