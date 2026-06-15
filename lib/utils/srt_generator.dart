@@ -2,9 +2,6 @@
 //
 // 将后端返回的 sentences 数据转为标准 SRT 格式。
 // 后端负责分句逻辑，此工具仅做格式转换。
-import 'package:path/path.dart' as p;
-import 'app_data_dir.dart';
-import 'package:universal_io/io.dart';
 
 /// 转录句子数据
 class TranscriptSentence {
@@ -87,41 +84,4 @@ String _formatSrtTime(Duration d) {
       '${m.toString().padLeft(2, '0')}:'
       '${s.toString().padLeft(2, '0')},'
       '${ms.toString().padLeft(3, '0')}';
-}
-
-/// 保存 SRT 内容到 transcripts/ 目录
-///
-/// [audioId] 音频唯一 ID，用于确保文件名唯一。
-/// [srtContent] SRT 格式内容。
-/// 返回相对于应用文档目录的路径（如 `transcripts/{audioId}_ai.srt`）。
-Future<String> saveSrtFile(String audioId, String srtContent) async {
-  final docDir = await getAppDataDirectory();
-  final transcriptsDir = p.join(docDir.path, 'transcripts');
-  await _ensureDirectoryExists(transcriptsDir);
-
-  // 使用 audioId 确保文件名唯一，避免同名音频覆盖
-  final fileName = '${audioId}_ai.srt';
-  final relativePath = p.join('transcripts', fileName);
-  final fullPath = p.join(docDir.path, relativePath);
-
-  final file = await _writeFile(fullPath, srtContent);
-  // 确保文件写入成功
-  if (!await file.exists()) {
-    throw StateError('Failed to write SRT file: $fullPath');
-  }
-  return relativePath;
-}
-
-/// 确保目录存在
-Future<void> _ensureDirectoryExists(String path) async {
-  final dir = Directory(path);
-  if (!await dir.exists()) {
-    await dir.create(recursive: true);
-  }
-}
-
-/// 写入文件
-Future<File> _writeFile(String path, String content) async {
-  final file = File(path);
-  return file.writeAsString(content);
 }

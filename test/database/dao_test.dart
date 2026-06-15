@@ -185,6 +185,58 @@ void main() {
       );
     });
 
+    test('batchInsert 更新已有行不会级联删除合集 junction / 书签等子表', () async {
+      final now = DateTime.now();
+      // 音频 + 合集 + junction + 书签（模拟官方合集中已下载并加书签的音频）
+      await db.collectionDao.upsert(
+        CollectionsCompanion(
+          id: const Value('col-1'),
+          name: const Value('Official'),
+          createdDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await db.audioItemDao.upsert(
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Audio 1'),
+          audioPath: Value('audios/official/x.m4a'),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await db.collectionDao.addAudio('col-1', 'audio-1');
+      await db.bookmarkDao.addBookmark(
+        BookmarksCompanion(
+          audioItemId: Value('audio-1'),
+          sentenceIndex: Value(0),
+          sentenceText: Value('hi'),
+          startTime: Value(0.0),
+          endTime: Value(1.0),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // 元数据回写（togglePin/rename/checkAudioContent 等都走此路径）
+      await db.audioItemDao.batchInsert([
+        AudioItemsCompanion(
+          id: Value('audio-1'),
+          name: Value('Audio 1'),
+          audioPath: Value('audios/official/x.m4a'),
+          isPinned: Value(true),
+          addedDate: Value(now),
+          updatedAt: Value(now),
+        ),
+      ]);
+
+      // 整行替换会触发 onDelete cascade 删空子表；DO UPDATE 不会
+      expect(await db.collectionDao.getAudioIds('col-1'), ['audio-1']);
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), {0});
+      final item = await db.audioItemDao.getById('audio-1');
+      expect(item!.isPinned, isTrue);
+    });
+
     test('hardDeleteMany 批量删除并触发 junction cascade', () async {
       final now = DateTime.now();
       await db.collectionDao.upsert(
@@ -674,6 +726,44 @@ void main() {
       final bookmarks = await db.bookmarkDao.getByAudioId('audio-1');
       expect(bookmarks.length, 1);
       expect(bookmarks.first.sentenceText, 'Updated');
+    });
+
+    test('batchInsert 更新已有书签时保留未携带列（deletedAt 软删标记）', () async {
+      final now = DateTime.now();
+      // 先添加并软删除一个书签
+      await db.bookmarkDao.addBookmark(
+        BookmarksCompanion(
+          audioItemId: Value('audio-1'),
+          sentenceIndex: Value(5),
+          sentenceText: Value('old'),
+          startTime: Value(1.0),
+          endTime: Value(2.0),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      await db.bookmarkDao.removeBookmark('audio-1', 5); // 置 deletedAt
+
+      // batchInsert 同键、不携带 deletedAt（模拟迁移/回写）
+      await db.bookmarkDao.batchInsert([
+        BookmarksCompanion(
+          audioItemId: Value('audio-1'),
+          sentenceIndex: Value(5),
+          sentenceText: Value('new'),
+          startTime: Value(1.0),
+          endTime: Value(2.0),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      ]);
+
+      // 整行替换会清掉 deletedAt（书签复活）；DO UPDATE 应保留软删状态
+      expect(await db.bookmarkDao.getBookmarkedIndices('audio-1'), isEmpty);
+      final deleted = await db.bookmarkDao.getDeletedBookmarks(
+        sortMode: RecycleBinSortMode.timeDesc,
+      );
+      expect(deleted.length, 1);
+      expect(deleted.first.bookmark.sentenceText, 'new');
     });
 
     test('getDeletedBookmarks 返回已软删除的书签', () async {

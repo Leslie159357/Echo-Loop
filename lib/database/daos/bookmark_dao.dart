@@ -81,10 +81,23 @@ class BookmarkDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
-  /// 批量添加书签（用于迁移）
+  /// 批量插入或更新书签（用于迁移）。
+  ///
+  /// 用 ON CONFLICT DO UPDATE（冲突键 = 唯一键 `{audioItemId, sentenceIndex}`）：
+  /// 已存在行只更新 companion 携带的列，不触碰未携带列（如 `deletedAt` 软删标记）。
+  /// 不用 `InsertMode.insertOrReplace`——整行 DELETE+INSERT 会把未携带列重置。
   Future<void> batchInsert(List<BookmarksCompanion> entries) async {
     await batch((b) {
-      b.insertAll(bookmarks, entries, mode: InsertMode.insertOrReplace);
+      for (final entry in entries) {
+        b.insert(
+          bookmarks,
+          entry,
+          onConflict: DoUpdate(
+            (_) => entry,
+            target: [bookmarks.audioItemId, bookmarks.sentenceIndex],
+          ),
+        );
+      }
     });
   }
 
