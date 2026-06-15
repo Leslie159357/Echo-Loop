@@ -676,6 +676,7 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
             row.transcriptSource,
           ),
           audioSha256: row.audioSha256,
+          originalAudioSha256: row.originalAudioSha256,
           transcriptLanguage: row.transcriptLanguage,
         );
 
@@ -997,6 +998,7 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
           row.transcriptSource,
         ),
         audioSha256: row.audioSha256,
+        originalAudioSha256: row.originalAudioSha256,
         transcriptLanguage: row.transcriptLanguage,
       );
 
@@ -1248,6 +1250,7 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
           row.transcriptSource,
         ),
         audioSha256: row.audioSha256,
+        originalAudioSha256: row.originalAudioSha256,
         transcriptLanguage: row.transcriptLanguage,
       );
 

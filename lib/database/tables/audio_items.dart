@@ -40,6 +40,11 @@ class AudioItems extends Table {
   /// 音频文件 SHA256 指纹（缓存，避免重复计算）
   TextColumn get audioSha256 => text().nullable()();
 
+  /// 转码前原始音频 SHA256 指纹。
+  ///
+  /// AI 转录优先用该值作为后端字幕缓存 key；为空时回退 [audioSha256]。
+  TextColumn get originalAudioSha256 => text().nullable()();
+
   /// AI 转录使用的语言（'en' / 'multi'）
   TextColumn get transcriptLanguage => text().nullable()();
 

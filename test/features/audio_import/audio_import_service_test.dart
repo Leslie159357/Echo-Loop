@@ -336,8 +336,9 @@ void main() {
         dio: dio,
         resolveDataDir: () async => tmpDir,
         computeSha256: (path) async {
-          expect(path, endsWith('.m4a'));
-          return 'sha';
+          if (path.endsWith('.mp3')) return 'sha-original';
+          if (path.endsWith('.m4a')) return 'sha';
+          fail('unexpected hash path: $path');
         },
         registrationService: AudioRegistrationService(
           readDurationSeconds: (path) async {
@@ -362,6 +363,7 @@ void main() {
       expect(item.audioPath, 'audios/imported/sha.m4a');
       expect(item.totalDuration, 42);
       expect(item.audioSha256, 'sha');
+      expect(item.originalAudioSha256, 'sha-original');
       expect(item.importSourceType, AudioImportSourceType.directUrl);
       expect(item.importSourceUrl, 'https://example.com/lesson.mp3');
       expect(container.read(audioLibraryProvider).audioItems, [item]);
@@ -403,6 +405,7 @@ void main() {
       expect(item.audioPath, 'audios/imported/sha-original.mp3');
       expect(item.totalDuration, 24);
       expect(item.audioSha256, 'sha-original');
+      expect(item.originalAudioSha256, 'sha-original');
       expect(await File('${tmpDir.path}/${item.audioPath}').exists(), isTrue);
       expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
     });
@@ -490,8 +493,9 @@ void main() {
         dio: dio,
         resolveDataDir: () async => tmpDir,
         computeSha256: (path) async {
-          expect(path, endsWith('.m4a'));
-          return 'sha-episode';
+          if (path.endsWith('.mp3')) return 'sha-episode-original';
+          if (path.endsWith('.m4a')) return 'sha-episode';
+          fail('unexpected hash path: $path');
         },
         readDurationSeconds: (path) async {
           expect(path, endsWith('.m4a'));
@@ -508,6 +512,7 @@ void main() {
       expect(result.relativePath, 'audios/imported/sha-episode.m4a');
       expect(result.durationSeconds, 61);
       expect(result.audioSha256, 'sha-episode');
+      expect(result.originalAudioSha256, 'sha-episode-original');
       expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
     });
 

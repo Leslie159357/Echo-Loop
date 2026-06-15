@@ -46,6 +46,7 @@ class AudioRegistrationService {
       addedDate: DateTime.now(),
       totalDuration: duration,
       audioSha256: input.audioSha256,
+      originalAudioSha256: input.originalAudioSha256,
       importSourceType: input.importSourceType,
       importSourceUrl: input.importSourceUrl,
     );
@@ -101,6 +102,7 @@ class SandboxedAudioRegistrationInput {
     required this.importSourceType,
     this.audioSha256,
     this.importSourceUrl,
+    this.originalAudioSha256,
   });
 
   final String name;
@@ -108,6 +110,7 @@ class SandboxedAudioRegistrationInput {
   final AudioImportSourceType importSourceType;
   final String? audioSha256;
   final String? importSourceUrl;
+  final String? originalAudioSha256;
 }
 
 sealed class AudioRegistrationResult {

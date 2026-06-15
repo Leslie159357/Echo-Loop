@@ -821,6 +821,7 @@ class BookmarkReview extends _$BookmarkReview {
           row.transcriptSource,
         ),
         audioSha256: row.audioSha256,
+        originalAudioSha256: row.originalAudioSha256,
         transcriptLanguage: row.transcriptLanguage,
       );
 

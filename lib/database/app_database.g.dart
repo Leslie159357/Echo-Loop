@@ -133,6 +133,17 @@ class $AudioItemsTable extends AudioItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _originalAudioSha256Meta =
+      const VerificationMeta('originalAudioSha256');
+  @override
+  late final GeneratedColumn<String> originalAudioSha256 =
+      GeneratedColumn<String>(
+        'original_audio_sha256',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _transcriptLanguageMeta =
       const VerificationMeta('transcriptLanguage');
   @override
@@ -333,6 +344,7 @@ class $AudioItemsTable extends AudioItems
     isPinned,
     transcriptSource,
     audioSha256,
+    originalAudioSha256,
     transcriptLanguage,
     audioContentStatus,
     updatedAt,
@@ -444,6 +456,15 @@ class $AudioItemsTable extends AudioItems
         audioSha256.isAcceptableOrUnknown(
           data['audio_sha256']!,
           _audioSha256Meta,
+        ),
+      );
+    }
+    if (data.containsKey('original_audio_sha256')) {
+      context.handle(
+        _originalAudioSha256Meta,
+        originalAudioSha256.isAcceptableOrUnknown(
+          data['original_audio_sha256']!,
+          _originalAudioSha256Meta,
         ),
       );
     }
@@ -646,6 +667,10 @@ class $AudioItemsTable extends AudioItems
         DriftSqlType.string,
         data['${effectivePrefix}audio_sha256'],
       ),
+      originalAudioSha256: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_audio_sha256'],
+      ),
       transcriptLanguage: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}transcript_language'],
@@ -762,6 +787,11 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
   /// 音频文件 SHA256 指纹（缓存，避免重复计算）
   final String? audioSha256;
 
+  /// 转码前原始音频 SHA256 指纹。
+  ///
+  /// AI 转录优先用该值作为后端字幕缓存 key；为空时回退 [audioSha256]。
+  final String? originalAudioSha256;
+
   /// AI 转录使用的语言（'en' / 'multi'）
   final String? transcriptLanguage;
 
@@ -834,6 +864,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     required this.isPinned,
     this.transcriptSource,
     this.audioSha256,
+    this.originalAudioSha256,
     this.transcriptLanguage,
     this.audioContentStatus,
     required this.updatedAt,
@@ -873,6 +904,9 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     }
     if (!nullToAbsent || audioSha256 != null) {
       map['audio_sha256'] = Variable<String>(audioSha256);
+    }
+    if (!nullToAbsent || originalAudioSha256 != null) {
+      map['original_audio_sha256'] = Variable<String>(originalAudioSha256);
     }
     if (!nullToAbsent || transcriptLanguage != null) {
       map['transcript_language'] = Variable<String>(transcriptLanguage);
@@ -945,6 +979,9 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       audioSha256: audioSha256 == null && nullToAbsent
           ? const Value.absent()
           : Value(audioSha256),
+      originalAudioSha256: originalAudioSha256 == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalAudioSha256),
       transcriptLanguage: transcriptLanguage == null && nullToAbsent
           ? const Value.absent()
           : Value(transcriptLanguage),
@@ -1012,6 +1049,9 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       transcriptSource: serializer.fromJson<int?>(json['transcriptSource']),
       audioSha256: serializer.fromJson<String?>(json['audioSha256']),
+      originalAudioSha256: serializer.fromJson<String?>(
+        json['originalAudioSha256'],
+      ),
       transcriptLanguage: serializer.fromJson<String?>(
         json['transcriptLanguage'],
       ),
@@ -1058,6 +1098,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       'isPinned': serializer.toJson<bool>(isPinned),
       'transcriptSource': serializer.toJson<int?>(transcriptSource),
       'audioSha256': serializer.toJson<String?>(audioSha256),
+      'originalAudioSha256': serializer.toJson<String?>(originalAudioSha256),
       'transcriptLanguage': serializer.toJson<String?>(transcriptLanguage),
       'audioContentStatus': serializer.toJson<int?>(audioContentStatus),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1090,6 +1131,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     bool? isPinned,
     Value<int?> transcriptSource = const Value.absent(),
     Value<String?> audioSha256 = const Value.absent(),
+    Value<String?> originalAudioSha256 = const Value.absent(),
     Value<String?> transcriptLanguage = const Value.absent(),
     Value<int?> audioContentStatus = const Value.absent(),
     DateTime? updatedAt,
@@ -1123,6 +1165,9 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
         ? transcriptSource.value
         : this.transcriptSource,
     audioSha256: audioSha256.present ? audioSha256.value : this.audioSha256,
+    originalAudioSha256: originalAudioSha256.present
+        ? originalAudioSha256.value
+        : this.originalAudioSha256,
     transcriptLanguage: transcriptLanguage.present
         ? transcriptLanguage.value
         : this.transcriptLanguage,
@@ -1188,6 +1233,9 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       audioSha256: data.audioSha256.present
           ? data.audioSha256.value
           : this.audioSha256,
+      originalAudioSha256: data.originalAudioSha256.present
+          ? data.originalAudioSha256.value
+          : this.originalAudioSha256,
       transcriptLanguage: data.transcriptLanguage.present
           ? data.transcriptLanguage.value
           : this.transcriptLanguage,
@@ -1252,6 +1300,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           ..write('isPinned: $isPinned, ')
           ..write('transcriptSource: $transcriptSource, ')
           ..write('audioSha256: $audioSha256, ')
+          ..write('originalAudioSha256: $originalAudioSha256, ')
           ..write('transcriptLanguage: $transcriptLanguage, ')
           ..write('audioContentStatus: $audioContentStatus, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1286,6 +1335,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     isPinned,
     transcriptSource,
     audioSha256,
+    originalAudioSha256,
     transcriptLanguage,
     audioContentStatus,
     updatedAt,
@@ -1319,6 +1369,7 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           other.isPinned == this.isPinned &&
           other.transcriptSource == this.transcriptSource &&
           other.audioSha256 == this.audioSha256 &&
+          other.originalAudioSha256 == this.originalAudioSha256 &&
           other.transcriptLanguage == this.transcriptLanguage &&
           other.audioContentStatus == this.audioContentStatus &&
           other.updatedAt == this.updatedAt &&
@@ -1350,6 +1401,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
   final Value<bool> isPinned;
   final Value<int?> transcriptSource;
   final Value<String?> audioSha256;
+  final Value<String?> originalAudioSha256;
   final Value<String?> transcriptLanguage;
   final Value<int?> audioContentStatus;
   final Value<DateTime> updatedAt;
@@ -1380,6 +1432,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.isPinned = const Value.absent(),
     this.transcriptSource = const Value.absent(),
     this.audioSha256 = const Value.absent(),
+    this.originalAudioSha256 = const Value.absent(),
     this.transcriptLanguage = const Value.absent(),
     this.audioContentStatus = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1411,6 +1464,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.isPinned = const Value.absent(),
     this.transcriptSource = const Value.absent(),
     this.audioSha256 = const Value.absent(),
+    this.originalAudioSha256 = const Value.absent(),
     this.transcriptLanguage = const Value.absent(),
     this.audioContentStatus = const Value.absent(),
     required DateTime updatedAt,
@@ -1445,6 +1499,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Expression<bool>? isPinned,
     Expression<int>? transcriptSource,
     Expression<String>? audioSha256,
+    Expression<String>? originalAudioSha256,
     Expression<String>? transcriptLanguage,
     Expression<int>? audioContentStatus,
     Expression<DateTime>? updatedAt,
@@ -1476,6 +1531,8 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       if (isPinned != null) 'is_pinned': isPinned,
       if (transcriptSource != null) 'transcript_source': transcriptSource,
       if (audioSha256 != null) 'audio_sha256': audioSha256,
+      if (originalAudioSha256 != null)
+        'original_audio_sha256': originalAudioSha256,
       if (transcriptLanguage != null) 'transcript_language': transcriptLanguage,
       if (audioContentStatus != null)
         'audio_content_status': audioContentStatus,
@@ -1514,6 +1571,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Value<bool>? isPinned,
     Value<int?>? transcriptSource,
     Value<String?>? audioSha256,
+    Value<String?>? originalAudioSha256,
     Value<String?>? transcriptLanguage,
     Value<int?>? audioContentStatus,
     Value<DateTime>? updatedAt,
@@ -1545,6 +1603,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       isPinned: isPinned ?? this.isPinned,
       transcriptSource: transcriptSource ?? this.transcriptSource,
       audioSha256: audioSha256 ?? this.audioSha256,
+      originalAudioSha256: originalAudioSha256 ?? this.originalAudioSha256,
       transcriptLanguage: transcriptLanguage ?? this.transcriptLanguage,
       audioContentStatus: audioContentStatus ?? this.audioContentStatus,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1601,6 +1660,11 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     }
     if (audioSha256.present) {
       map['audio_sha256'] = Variable<String>(audioSha256.value);
+    }
+    if (originalAudioSha256.present) {
+      map['original_audio_sha256'] = Variable<String>(
+        originalAudioSha256.value,
+      );
     }
     if (transcriptLanguage.present) {
       map['transcript_language'] = Variable<String>(transcriptLanguage.value);
@@ -1677,6 +1741,7 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
           ..write('isPinned: $isPinned, ')
           ..write('transcriptSource: $transcriptSource, ')
           ..write('audioSha256: $audioSha256, ')
+          ..write('originalAudioSha256: $originalAudioSha256, ')
           ..write('transcriptLanguage: $transcriptLanguage, ')
           ..write('audioContentStatus: $audioContentStatus, ')
           ..write('updatedAt: $updatedAt, ')
@@ -11071,6 +11136,7 @@ typedef $$AudioItemsTableCreateCompanionBuilder =
       Value<bool> isPinned,
       Value<int?> transcriptSource,
       Value<String?> audioSha256,
+      Value<String?> originalAudioSha256,
       Value<String?> transcriptLanguage,
       Value<int?> audioContentStatus,
       required DateTime updatedAt,
@@ -11103,6 +11169,7 @@ typedef $$AudioItemsTableUpdateCompanionBuilder =
       Value<bool> isPinned,
       Value<int?> transcriptSource,
       Value<String?> audioSha256,
+      Value<String?> originalAudioSha256,
       Value<String?> transcriptLanguage,
       Value<int?> audioContentStatus,
       Value<DateTime> updatedAt,
@@ -11371,6 +11438,11 @@ class $$AudioItemsTableFilterComposer
 
   ColumnFilters<String> get audioSha256 => $composableBuilder(
     column: $table.audioSha256,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalAudioSha256 => $composableBuilder(
+    column: $table.originalAudioSha256,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11724,6 +11796,11 @@ class $$AudioItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get originalAudioSha256 => $composableBuilder(
+    column: $table.originalAudioSha256,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get transcriptLanguage => $composableBuilder(
     column: $table.transcriptLanguage,
     builder: (column) => ColumnOrderings(column),
@@ -11859,6 +11936,11 @@ class $$AudioItemsTableAnnotationComposer
 
   GeneratedColumn<String> get audioSha256 => $composableBuilder(
     column: $table.audioSha256,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get originalAudioSha256 => $composableBuilder(
+    column: $table.originalAudioSha256,
     builder: (column) => column,
   );
 
@@ -12194,6 +12276,7 @@ class $$AudioItemsTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> transcriptSource = const Value.absent(),
                 Value<String?> audioSha256 = const Value.absent(),
+                Value<String?> originalAudioSha256 = const Value.absent(),
                 Value<String?> transcriptLanguage = const Value.absent(),
                 Value<int?> audioContentStatus = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -12224,6 +12307,7 @@ class $$AudioItemsTableTableManager
                 isPinned: isPinned,
                 transcriptSource: transcriptSource,
                 audioSha256: audioSha256,
+                originalAudioSha256: originalAudioSha256,
                 transcriptLanguage: transcriptLanguage,
                 audioContentStatus: audioContentStatus,
                 updatedAt: updatedAt,
@@ -12256,6 +12340,7 @@ class $$AudioItemsTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> transcriptSource = const Value.absent(),
                 Value<String?> audioSha256 = const Value.absent(),
+                Value<String?> originalAudioSha256 = const Value.absent(),
                 Value<String?> transcriptLanguage = const Value.absent(),
                 Value<int?> audioContentStatus = const Value.absent(),
                 required DateTime updatedAt,
@@ -12286,6 +12371,7 @@ class $$AudioItemsTableTableManager
                 isPinned: isPinned,
                 transcriptSource: transcriptSource,
                 audioSha256: audioSha256,
+                originalAudioSha256: originalAudioSha256,
                 transcriptLanguage: transcriptLanguage,
                 audioContentStatus: audioContentStatus,
                 updatedAt: updatedAt,

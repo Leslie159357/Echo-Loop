@@ -67,6 +67,7 @@ class AudioLibrary extends _$AudioLibrary {
                 row.transcriptSource,
               ),
               audioSha256: row.audioSha256,
+              originalAudioSha256: row.originalAudioSha256,
               transcriptLanguage: row.transcriptLanguage,
               contentStatus: AudioContentStatus.fromIndex(
                 row.audioContentStatus,
@@ -409,6 +410,7 @@ class AudioLibrary extends _$AudioLibrary {
         isPinned: Value(item.isPinned),
         transcriptSource: Value(item.transcriptSource?.index),
         audioSha256: Value(item.audioSha256),
+        originalAudioSha256: Value(item.originalAudioSha256),
         transcriptLanguage: Value(item.transcriptLanguage),
         audioContentStatus: Value(item.contentStatus?.index),
         remoteAudioId: Value(item.remoteAudioId),

@@ -83,6 +83,7 @@ class AudioImportService {
         importSourceType: AudioImportSourceType.directUrl,
         importSourceUrl: resolved.uri.toString(),
         audioSha256: finalizedAudio.sha256,
+        originalAudioSha256: finalizedAudio.originalSha256,
       ),
       audioLibrary: audioLibrary,
       audioLibraryState: audioLibraryState,
@@ -170,6 +171,7 @@ class AudioImportService {
       relativePath: finalizedAudio.relativePath,
       durationSeconds: duration,
       audioSha256: finalizedAudio.sha256,
+      originalAudioSha256: finalizedAudio.originalSha256,
     );
   }
 
@@ -319,6 +321,8 @@ class AudioImportService {
     final audioDir = Directory(p.join(dataDir.path, 'audios', 'imported'));
     await audioDir.create(recursive: true);
 
+    final originalFile = File(p.join(dataDir.path, tempRelativePath));
+    final originalSha256 = await _computeFinalAudioSha256(originalFile);
     final transcodeResult = await _transcodeService.transcodeToM4a(
       dataDir: dataDir,
       relativePath: tempRelativePath,
@@ -340,6 +344,7 @@ class AudioImportService {
     return _FinalizedDownloadedAudio(
       relativePath: p.join('audios', 'imported', finalName),
       sha256: sha256,
+      originalSha256: originalSha256,
       created: created,
     );
   }
@@ -445,10 +450,12 @@ class _FinalizedDownloadedAudio {
   const _FinalizedDownloadedAudio({
     required this.relativePath,
     required this.sha256,
+    required this.originalSha256,
     required this.created,
   });
 
   final String relativePath;
   final String sha256;
+  final String originalSha256;
   final bool created;
 }

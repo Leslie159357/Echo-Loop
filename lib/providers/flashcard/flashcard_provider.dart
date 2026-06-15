@@ -761,6 +761,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
           row.transcriptSource,
         ),
         audioSha256: row.audioSha256,
+        originalAudioSha256: row.originalAudioSha256,
         transcriptLanguage: row.transcriptLanguage,
       );
 
@@ -870,6 +871,7 @@ class FlashcardNotifier extends _$FlashcardNotifier {
           row.transcriptSource,
         ),
         audioSha256: row.audioSha256,
+        originalAudioSha256: row.originalAudioSha256,
         transcriptLanguage: row.transcriptLanguage,
       );
 

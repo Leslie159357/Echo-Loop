@@ -146,16 +146,18 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
       _updateState(audioId, const TranscriptionHashing());
       final docDir = await fileOps.getDataDir();
       final fullPath = p.join(docDir.path, audioItem.audioPath);
-      final sha256 =
+      final finalAudioSha256 =
           audioItem.audioSha256 ?? await fileOps.computeSha256(fullPath);
+      final transcriptionSha256 =
+          audioItem.originalAudioSha256 ?? finalAudioSha256;
 
       if (cancelToken.isCancelled) return;
 
-      // 缓存 SHA256 到 AudioItem
+      // 缓存最终文件 SHA256 到 AudioItem；转录缓存 key 不覆盖本地文件指纹。
       if (audioItem.audioSha256 == null) {
         ref
             .read(audioLibraryProvider.notifier)
-            .updateAudioItem(audioItem.copyWith(audioSha256: sha256));
+            .updateAudioItem(audioItem.copyWith(audioSha256: finalAudioSha256));
       }
 
       // ── 步骤 2: 获取上传 URL + 上传 ──
@@ -164,11 +166,11 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
       final fileSize = await fileOps.getFileSize(fullPath);
       AppLogger.log(
         'Transcription',
-        'Step 2 上传 | sha256=$sha256 size=$fileSize mime=$mimeType',
+        'Step 2 上传 | sha256=$transcriptionSha256 size=$fileSize mime=$mimeType',
       );
 
       final uploadResp = await api.getUploadUrl(
-        sha256: sha256,
+        sha256: transcriptionSha256,
         mimeType: mimeType,
         fileSize: fileSize,
         accessToken: accessToken,
@@ -200,7 +202,7 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
       _updateState(audioId, const TranscriptionProcessing(jobId: ''));
 
       final submitResp = await api.submitTranscription(
-        sha256: sha256,
+        sha256: transcriptionSha256,
         fileName: _displayFileNameForTranscription(audioItem, fullPath),
         objectName: uploadResp.objectName,
         publicUrl: uploadResp.publicUrl,
@@ -220,7 +222,7 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
           audioItem,
           submitResp.transcript!,
           language,
-          sha256,
+          finalAudioSha256,
         );
         return;
       }
@@ -235,7 +237,8 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
       await _pollJobStatus(
         audioItem,
         submitResp.jobId!,
-        sha256,
+        transcriptionSha256,
+        finalAudioSha256,
         language,
         accessToken,
         cancelToken,
@@ -295,7 +298,8 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
   Future<void> _pollJobStatus(
     AudioItem audioItem,
     String jobId,
-    String sha256,
+    String transcriptionSha256,
+    String finalAudioSha256,
     String language,
     String accessToken,
     CancelToken cancelToken,
@@ -324,7 +328,7 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
 
         if (status.isCompleted) {
           final transcript = await api.getTranscript(
-            sha256,
+            transcriptionSha256,
             language,
             accessToken: accessToken,
           );
@@ -333,7 +337,7 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
             audioItem,
             transcript,
             language,
-            sha256,
+            finalAudioSha256,
           );
           return;
         }

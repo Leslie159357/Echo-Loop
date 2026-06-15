@@ -141,6 +141,7 @@ class AudioImportController extends _$AudioImportController {
               audioPath: result.relativePath,
               totalDuration: result.durationSeconds,
               audioSha256: result.audioSha256,
+              originalAudioSha256: result.originalAudioSha256,
             ),
           );
       state = const AudioImportIdle();

@@ -26,7 +26,7 @@ final audioImportServiceProvider =
 // ignore: unused_element
 typedef AudioImportServiceRef = AutoDisposeProviderRef<AudioImportService>;
 String _$audioImportControllerHash() =>
-    r'ffd18a4eac96511476bd7eb1e3a077aff85562a6';
+    r'b714c31bed8ed4d49acd97942f81ba2a49009086';
 
 /// See also [AudioImportController].
 @ProviderFor(AudioImportController)

@@ -56,11 +56,13 @@ class DownloadedAudio {
     required this.relativePath,
     required this.durationSeconds,
     this.audioSha256,
+    this.originalAudioSha256,
   });
 
   final String relativePath;
   final int durationSeconds;
   final String? audioSha256;
+  final String? originalAudioSha256;
 }
 
 enum AudioImportFailureCode {

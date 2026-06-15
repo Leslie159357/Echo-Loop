@@ -31,6 +31,7 @@ typedef _PickedAudio = ({
   String name,
   String fileName,
   String audioSha256,
+  String originalAudioSha256,
   bool created,
   int fileSize,
 });
@@ -39,6 +40,7 @@ typedef _SavedPickedAudio = ({
   String path,
   String fileName,
   String audioSha256,
+  String originalAudioSha256,
   bool created,
 });
 
@@ -591,6 +593,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
             name: path.basenameWithoutExtension(sourceName),
             fileName: saved.fileName,
             audioSha256: saved.audioSha256,
+            originalAudioSha256: saved.originalAudioSha256,
             created: saved.created,
             fileSize: file.size,
           ));
@@ -672,6 +675,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
     }
 
     final tmpRelativePath = path.join('tmp', 'audio_import', tmpName);
+    final originalSha256 = await computeAudioSha256(tmpPath);
     final transcodeResult = await AudioTranscodeService().transcodeToM4a(
       dataDir: dataDir,
       relativePath: tmpRelativePath,
@@ -697,6 +701,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
       path: path.join(subdir, finalName),
       fileName: finalName,
       audioSha256: sha256,
+      originalAudioSha256: originalSha256,
       created: created,
     );
   }
@@ -756,6 +761,7 @@ class _AddAudioDialogState extends ConsumerState<AddAudioDialog> {
           relativePath: file.path,
           importSourceType: widget.importSourceType,
           audioSha256: file.audioSha256,
+          originalAudioSha256: file.originalAudioSha256,
         ),
         audioLibrary: library,
         audioLibraryState: ref.read(audioLibraryProvider),

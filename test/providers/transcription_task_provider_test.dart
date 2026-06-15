@@ -57,6 +57,7 @@ AudioItem _testAudioItem({
   String name = 'Test Audio',
   String audioPath = 'audios/test.mp3',
   String? audioSha256,
+  String? originalAudioSha256,
 }) {
   return AudioItem(
     id: id,
@@ -67,6 +68,7 @@ AudioItem _testAudioItem({
     sentenceCount: 0,
     wordCount: 0,
     audioSha256: audioSha256,
+    originalAudioSha256: originalAudioSha256,
   );
 }
 
@@ -117,6 +119,8 @@ Future<void> _seedAudioRows(
             name: item.name,
             audioPath: Value(item.audioPath),
             addedDate: item.addedDate,
+            audioSha256: Value(item.audioSha256),
+            originalAudioSha256: Value(item.originalAudioSha256),
             updatedAt: DateTime(2026),
           ),
         );
@@ -475,6 +479,98 @@ void main() {
           accessToken: 'token',
         ),
       ).called(1);
+
+      container.dispose();
+    });
+
+    test('提交转录时优先使用原始 SHA 作为后端缓存 key', () async {
+      final audioItem = _testAudioItem(
+        audioSha256: 'final-sha',
+        originalAudioSha256: 'source-sha',
+      );
+
+      when(() => mockFileOps.getFileSize(any())).thenAnswer((_) async => 1024);
+      when(
+        () => mockApi.getUploadUrl(
+          sha256: any(named: 'sha256'),
+          mimeType: any(named: 'mimeType'),
+          fileSize: any(named: 'fileSize'),
+          accessToken: any(named: 'accessToken'),
+        ),
+      ).thenAnswer(
+        (_) async => const UploadUrlResponse(
+          audioExists: true,
+          objectName: 'user-audio/source-sha.mp3',
+          publicUrl: 'https://example.com/source-sha.mp3',
+        ),
+      );
+      when(
+        () => mockApi.submitTranscription(
+          sha256: any(named: 'sha256'),
+          fileName: any(named: 'fileName'),
+          objectName: any(named: 'objectName'),
+          publicUrl: any(named: 'publicUrl'),
+          mimeType: any(named: 'mimeType'),
+          fileSize: any(named: 'fileSize'),
+          language: any(named: 'language'),
+          accessToken: any(named: 'accessToken'),
+        ),
+      ).thenAnswer(
+        (_) async => SubmitTranscriptionResponse(
+          cached: true,
+          transcript: TranscriptResult(
+            sentences: [
+              TranscriptSentence(
+                text: 'Hello world',
+                startTime: Duration.zero,
+                endTime: const Duration(seconds: 2),
+              ),
+            ],
+            fullText: 'Hello world',
+          ),
+        ),
+      );
+
+      final container = _createContainer(
+        mockApi: mockApi,
+        mockFileOps: mockFileOps,
+        database: database,
+        audioItems: [audioItem],
+      );
+      await _seedAudioRows(database, [audioItem]);
+      final notifier = container.read(
+        transcriptionTaskManagerProvider.notifier,
+      );
+
+      await notifier.startTranscription(audioItem, 'en', accessToken: 'token');
+
+      verify(
+        () => mockApi.getUploadUrl(
+          sha256: 'source-sha',
+          mimeType: 'audio/mpeg',
+          fileSize: 1024,
+          accessToken: 'token',
+        ),
+      ).called(1);
+      verify(
+        () => mockApi.submitTranscription(
+          sha256: 'source-sha',
+          fileName: 'Test Audio',
+          objectName: 'user-audio/source-sha.mp3',
+          publicUrl: 'https://example.com/source-sha.mp3',
+          mimeType: 'audio/mpeg',
+          fileSize: 1024,
+          language: 'en',
+          accessToken: 'token',
+        ),
+      ).called(1);
+
+      final updated = container
+          .read(audioLibraryProvider)
+          .audioItems
+          .singleWhere((item) => item.id == audioItem.id);
+      expect(updated.audioSha256, 'final-sha');
+      expect(updated.originalAudioSha256, 'source-sha');
 
       container.dispose();
     });

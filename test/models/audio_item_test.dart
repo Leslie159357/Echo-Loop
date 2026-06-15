@@ -13,6 +13,7 @@ void main() {
       bool isPinned = false,
       TranscriptSource? transcriptSource,
       String? audioSha256,
+      String? originalAudioSha256,
       String? transcriptLanguage,
       AudioImportSourceType? importSourceType,
       String? importSourceUrl,
@@ -29,6 +30,7 @@ void main() {
         isPinned: isPinned,
         transcriptSource: transcriptSource,
         audioSha256: audioSha256,
+        originalAudioSha256: originalAudioSha256,
         transcriptLanguage: transcriptLanguage,
         importSourceType: importSourceType,
         importSourceUrl: importSourceUrl,
@@ -355,6 +357,35 @@ void main() {
       });
     });
 
+    group('originalAudioSha256 字段', () {
+      test('toJson / fromJson 往返一致', () {
+        final item = createSample(originalAudioSha256: 'source-sha');
+        final json = item.toJson();
+        expect(json['originalAudioSha256'], 'source-sha');
+
+        final restored = AudioItem.fromJson(json);
+        expect(restored.originalAudioSha256, 'source-sha');
+      });
+
+      test('copyWith 覆盖', () {
+        final item = createSample();
+        final copied = item.copyWith(originalAudioSha256: 'new-source-sha');
+        expect(copied.originalAudioSha256, 'new-source-sha');
+      });
+
+      test('copyWith 不传参保持原值', () {
+        final item = createSample(originalAudioSha256: 'keep-source');
+        final copied = item.copyWith();
+        expect(copied.originalAudioSha256, 'keep-source');
+      });
+
+      test('copyWith 显式传 null', () {
+        final item = createSample(originalAudioSha256: 'to-clear');
+        final copied = item.copyWith(originalAudioSha256: null);
+        expect(copied.originalAudioSha256, isNull);
+      });
+    });
+
     group('transcriptLanguage 字段', () {
       test('toJson / fromJson 往返一致', () {
         final item = createSample(transcriptLanguage: 'en');
@@ -379,7 +410,7 @@ void main() {
     });
 
     test(
-      'fromJson 处理缺失 transcriptSource/audioSha256/transcriptLanguage 字段',
+      'fromJson 处理缺失 transcriptSource/audioSha256/originalAudioSha256/transcriptLanguage 字段',
       () {
         final json = {
           'id': 'audio-1',
@@ -393,6 +424,7 @@ void main() {
         final item = AudioItem.fromJson(json);
         expect(item.transcriptSource, isNull);
         expect(item.audioSha256, isNull);
+        expect(item.originalAudioSha256, isNull);
         expect(item.transcriptLanguage, isNull);
       },
     );
@@ -406,6 +438,7 @@ void main() {
       );
       expect(item.transcriptSource, isNull);
       expect(item.audioSha256, isNull);
+      expect(item.originalAudioSha256, isNull);
       expect(item.transcriptLanguage, isNull);
     });
 

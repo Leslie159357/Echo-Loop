@@ -33,6 +33,7 @@ class _FakeEpisodeDownloadService extends AudioImportService {
       relativePath: 'audios/imported/episode.m4a',
       durationSeconds: 321,
       audioSha256: 'sha-xyz',
+      originalAudioSha256: 'source-sha-xyz',
     );
   }
 }
@@ -80,6 +81,7 @@ void main() {
       expect(updated.audioPath, 'audios/imported/episode.m4a');
       expect(updated.totalDuration, 321);
       expect(updated.audioSha256, 'sha-xyz');
+      expect(updated.originalAudioSha256, 'source-sha-xyz');
       // podcast 元字段保留
       expect(updated.podcastEpisodeGuid, 'guid-1');
       // 收尾回到 idle

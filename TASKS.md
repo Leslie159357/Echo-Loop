@@ -3,6 +3,20 @@
 > 最后更新：2026-06-15
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
 
+## 已完成：AI 转录使用原始音频 SHA 作为缓存 key
+
+**完成时间**: 2026-06-15 13:24 +0800
+
+用户导入/下载音频转码为 m4a 后，不再只依赖转码后文件 SHA 作为后端字幕缓存 key。本地新增记录转码前原始音频 SHA；AI 转录上传、提交和查询仍使用原有 `sha256` API 字段，但优先填入原始 SHA，旧数据或旧版 App 回退最终文件 SHA。后端 API 不需要改动。
+
+- [x] `AudioItem` / Drift `audio_items` schema v41：新增 `originalAudioSha256` / `original_audio_sha256`，旧数据保持 null
+- [x] 本地导入、直链导入、Podcast 单集下载：转码前计算原始 SHA，转码后继续用最终 SHA 命名和复用本地文件
+- [x] AI 转录链路：后端 `sha256` 参数优先使用原始 SHA；本地 `audioSha256` 仍保存最终文件 SHA，不被缓存 key 覆盖
+- [x] `dart run build_runner build --delete-conflicting-outputs`：成功生成 Drift/Riverpod 代码
+- [x] `flutter analyze lib/models/audio_item.dart lib/database/app_database.dart lib/database/app_database.g.dart lib/database/tables/audio_items.dart lib/providers/audio_library_provider.dart lib/features/audio_import/audio_import_models.dart lib/features/audio_import/audio_import_provider.dart lib/features/audio_import/audio_import_service.dart lib/features/audio_import/audio_registration_service.dart lib/providers/transcription_task_provider.dart lib/widgets/add_audio_dialog.dart lib/screens/sentence_detail_screen.dart lib/providers/learning_session/bookmark_review_provider.dart lib/providers/flashcard/flashcard_provider.dart lib/screens/favorites_screen.dart test/models/audio_item_test.dart test/features/audio_import/audio_import_service_test.dart test/features/audio_import/podcast_episode_download_test.dart test/providers/transcription_task_provider_test.dart`：No issues found
+- [x] `flutter test test/models/audio_item_test.dart test/features/audio_import/audio_import_service_test.dart test/features/audio_import/podcast_episode_download_test.dart test/providers/transcription_task_provider_test.dart`：94 passed
+- [ ] `scripts/check.sh`：未跑；本次为 App 侧 AI 转录 hash key 局部改动，按规范仅运行直接相关检查
+
 ## 已完成：AI 转录提交原始音频名称
 
 **完成时间**: 2026-06-15 12:49 +0800

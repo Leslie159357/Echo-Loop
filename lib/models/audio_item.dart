@@ -95,6 +95,12 @@ class AudioItem {
   /// 音频文件 SHA256 指纹（缓存，避免重复计算）
   final String? audioSha256;
 
+  /// 转码前原始音频 SHA256 指纹。
+  ///
+  /// 用户导入/下载音频会统一转码为 m4a；不同设备转码后的字节可能不同。
+  /// AI 转录请求优先使用该值作为后端字幕缓存 key，提升跨设备缓存命中率。
+  final String? originalAudioSha256;
+
   /// AI 转录使用的语言（'en' / 'multi'）
   final String? transcriptLanguage;
 
@@ -154,6 +160,7 @@ class AudioItem {
     this.isPinned = false,
     this.transcriptSource,
     this.audioSha256,
+    this.originalAudioSha256,
     this.transcriptLanguage,
     this.contentStatus,
     this.remoteAudioId,
@@ -206,6 +213,7 @@ class AudioItem {
     'isPinned': isPinned,
     'transcriptSource': transcriptSource?.index,
     'audioSha256': audioSha256,
+    'originalAudioSha256': originalAudioSha256,
     'transcriptLanguage': transcriptLanguage,
     'contentStatus': contentStatus?.index,
     'remoteAudioId': remoteAudioId,
@@ -232,6 +240,7 @@ class AudioItem {
     isPinned: json['isPinned'] ?? json['isStarred'] ?? false,
     transcriptSource: TranscriptSource.fromIndex(json['transcriptSource']),
     audioSha256: json['audioSha256'],
+    originalAudioSha256: json['originalAudioSha256'],
     transcriptLanguage: json['transcriptLanguage'],
     contentStatus: AudioContentStatus.fromIndex(json['contentStatus']),
     remoteAudioId: json['remoteAudioId'],
@@ -262,6 +271,7 @@ class AudioItem {
     bool? isPinned,
     Object? transcriptSource = _sentinel,
     Object? audioSha256 = _sentinel,
+    Object? originalAudioSha256 = _sentinel,
     Object? transcriptLanguage = _sentinel,
     Object? contentStatus = _sentinel,
     Object? remoteAudioId = _sentinel,
@@ -293,6 +303,9 @@ class AudioItem {
       audioSha256: audioSha256 == _sentinel
           ? this.audioSha256
           : audioSha256 as String?,
+      originalAudioSha256: originalAudioSha256 == _sentinel
+          ? this.originalAudioSha256
+          : originalAudioSha256 as String?,
       transcriptLanguage: transcriptLanguage == _sentinel
           ? this.transcriptLanguage
           : transcriptLanguage as String?,
