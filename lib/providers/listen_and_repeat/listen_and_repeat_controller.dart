@@ -227,6 +227,9 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
   /// 上一句
   Future<void> previousSentence() async => _engine.previousSentence();
 
+  /// 跳转到指定句子（0-based，供进度条拖动跳转使用）
+  Future<void> goToSentence(int index) async => _engine.goToSentence(index);
+
   /// 录音按钮点击
   Future<void> onRecordButtonTapped() async => _engine.onRecordButtonTapped();
 

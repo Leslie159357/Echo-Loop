@@ -586,6 +586,9 @@ class _IntensiveListenPlayerScreenState
                     ),
                     durationText: durationText,
                     showAudioSource: false,
+                    onSeek: (i) => ref
+                        .read(intensiveListenPlayerProvider.notifier)
+                        .goToSentence(i),
                   ),
 
                   // 主体内容

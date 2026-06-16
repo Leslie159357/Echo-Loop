@@ -298,14 +298,20 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     await _blindEngine.replayCurrentSentence();
   }
 
-  Future<void> goToNext() async {
-    if (state.currentSentenceIndex >= state.totalSentences - 1) return;
-    await _goToSentence(state.currentSentenceIndex + 1);
-  }
+  Future<void> goToNext() async => goToSentence(state.currentSentenceIndex + 1);
 
-  Future<void> goToPrevious() async {
-    if (state.currentSentenceIndex <= 0) return;
-    await _goToSentence(state.currentSentenceIndex - 1);
+  Future<void> goToPrevious() async =>
+      goToSentence(state.currentSentenceIndex - 1);
+
+  /// 跳转到指定句子（0-based）。
+  ///
+  /// 供进度条拖动跳转使用：越界自动 clamp，目标与当前相同时直接返回，
+  /// 避免冗余的 flow 重启。
+  Future<void> goToSentence(int index) async {
+    if (state.totalSentences <= 0) return;
+    final target = index.clamp(0, state.totalSentences - 1);
+    if (target == state.currentSentenceIndex) return;
+    await _goToSentence(target);
   }
 
   void enterAnnotationMode() {

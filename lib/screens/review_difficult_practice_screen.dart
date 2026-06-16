@@ -528,6 +528,9 @@ class _ReviewDifficultPracticeScreenState
                   ),
                   durationText: durationText,
                   showAudioSource: false,
+                  onSeek: (i) => ref
+                      .read(reviewDifficultPracticeProvider.notifier)
+                      .goToSentence(i),
                 ),
 
                 // 主体内容：盲听/跟读 双态切换

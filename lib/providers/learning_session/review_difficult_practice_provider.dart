@@ -517,35 +517,29 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   }
 
   /// 下一句
-  Future<void> goToNext() async {
-    if (state.currentSentenceIndex >= state.totalSentences - 1) return;
-    _engine.invalidateSession();
-    _exitAnnotationMode();
-    _blindEngine.stopSession();
-    state = state.copyWith(
-      currentSentenceIndex: state.currentSentenceIndex + 1,
-      currentPlayCount: 1,
-      isAnnotationMode: false,
-      isTextRevealed: false,
-      isPauseBetweenPlays: false,
-      isPauseBetweenSentences: false,
-      isCountdownPaused: false,
-      isCountdownFastForward: false,
-      isManualForSentence: false,
-      clearRepeatFlowState: true,
-      clearBlindFlowState: true,
-    );
-    await _startBlindFlow();
-  }
+  Future<void> goToNext() async => goToSentence(state.currentSentenceIndex + 1);
 
   /// 上一句
-  Future<void> goToPrevious() async {
-    if (state.currentSentenceIndex <= 0) return;
+  Future<void> goToPrevious() async =>
+      goToSentence(state.currentSentenceIndex - 1);
+
+  /// 跳转到指定句子（0-based）。
+  ///
+  /// 供进度条拖动跳转使用：越界自动 clamp，目标与当前相同时直接返回。
+  Future<void> goToSentence(int index) async {
+    if (state.totalSentences <= 0) return;
+    final target = index.clamp(0, state.totalSentences - 1);
+    if (target == state.currentSentenceIndex) return;
+    await _goToSentenceIndex(target);
+  }
+
+  /// 切换到指定句子并重启盲听 flow（goToNext/goToPrevious/goToSentence 共用）
+  Future<void> _goToSentenceIndex(int target) async {
     _engine.invalidateSession();
     _exitAnnotationMode();
     _blindEngine.stopSession();
     state = state.copyWith(
-      currentSentenceIndex: state.currentSentenceIndex - 1,
+      currentSentenceIndex: target,
       currentPlayCount: 1,
       isAnnotationMode: false,
       isTextRevealed: false,

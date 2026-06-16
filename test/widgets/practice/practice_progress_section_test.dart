@@ -1,0 +1,80 @@
+/// PracticeProgressSection 组件测试
+///
+/// 验证只读进度条与可拖动滑块两种形态的切换，以及拖动跳转回调的取值。
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/widgets/practice/practice_progress_section.dart';
+
+/// 创建简易测试 App（PracticeProgressSection 不依赖 Riverpod）
+Widget _buildTestWidget({
+  required int current,
+  required int total,
+  void Function(int targetIndex)? onSeek,
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: PracticeProgressSection(
+        current: current,
+        total: total,
+        progressText: '第 $current/$total 句',
+        onSeek: onSeek,
+      ),
+    ),
+  );
+}
+
+void main() {
+  group('PracticeProgressSection', () {
+    testWidgets('onSeek 为 null 时渲染只读进度条，无 Slider', (tester) async {
+      await tester.pumpWidget(_buildTestWidget(current: 3, total: 10));
+
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(Slider), findsNothing);
+    });
+
+    testWidgets('total <= 1 时即使有 onSeek 也退化为只读进度条', (tester) async {
+      await tester.pumpWidget(
+        _buildTestWidget(current: 1, total: 1, onSeek: (_) {}),
+      );
+
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(Slider), findsNothing);
+    });
+
+    testWidgets('onSeek 非 null 且 total > 1 时渲染可拖动滑块', (tester) async {
+      await tester.pumpWidget(
+        _buildTestWidget(current: 3, total: 10, onSeek: (_) {}),
+      );
+
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    testWidgets('拖动到末端松手回调 0-based 目标索引', (tester) async {
+      int? seeked;
+      await tester.pumpWidget(
+        _buildTestWidget(current: 1, total: 10, onSeek: (i) => seeked = i),
+      );
+
+      // 从滑块中心向右拖到尽头并松手，应跳到最后一句（0-based = total - 1）
+      await tester.drag(find.byType(Slider), const Offset(1000, 0));
+      await tester.pumpAndSettle();
+
+      expect(seeked, 9);
+    });
+
+    testWidgets('拖动到起点松手回调索引 0', (tester) async {
+      int? seeked;
+      await tester.pumpWidget(
+        _buildTestWidget(current: 10, total: 10, onSeek: (i) => seeked = i),
+      );
+
+      await tester.drag(find.byType(Slider), const Offset(-1000, 0));
+      await tester.pumpAndSettle();
+
+      expect(seeked, 0);
+    });
+  });
+}

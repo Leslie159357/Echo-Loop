@@ -634,6 +634,8 @@ class _BlindListenPlayerScreenState
               totalDuration: player.totalDuration,
               paragraphTotal: playerState.totalParagraphs,
             ),
+            onSeekToIndex: (i) =>
+                ref.read(blindListenPlayerProvider.notifier).seekToSentence(i),
             paragraphContent: ParagraphSentenceListCard(
               sentences: sentences,
               displayMode:

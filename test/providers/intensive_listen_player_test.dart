@@ -314,6 +314,66 @@ void main() {
     });
   });
 
+  group('goToSentence 任意跳转（进度条拖动）', () {
+    late ProviderContainer container;
+
+    setUp(() {
+      container = ProviderContainer(
+        overrides: [
+          audioEngineProvider.overrideWith(() => _ReplayTestAudioEngine()),
+          learningSessionProvider.overrideWith(() => TestLearningSession()),
+          analyticsOverride(),
+          ...studyTimeOverrides(),
+        ],
+      );
+    });
+
+    tearDown(() => container.dispose());
+
+    test('跳转到合法句子更新 currentSentenceIndex', () async {
+      final notifier = container.read(intensiveListenPlayerProvider.notifier);
+      await notifier.initialize(createTestSentences(count: 10));
+
+      await notifier.goToSentence(6);
+
+      expect(
+        container.read(intensiveListenPlayerProvider).currentSentenceIndex,
+        6,
+      );
+    });
+
+    test('越界索引被 clamp 到合法范围', () async {
+      final notifier = container.read(intensiveListenPlayerProvider.notifier);
+      await notifier.initialize(createTestSentences(count: 5));
+
+      await notifier.goToSentence(99);
+      expect(
+        container.read(intensiveListenPlayerProvider).currentSentenceIndex,
+        4,
+      );
+
+      await notifier.goToSentence(-3);
+      expect(
+        container.read(intensiveListenPlayerProvider).currentSentenceIndex,
+        0,
+      );
+    });
+
+    test('跳到当前句不变化（no-op）', () async {
+      final notifier = container.read(intensiveListenPlayerProvider.notifier);
+      await notifier.initialize(createTestSentences(count: 5));
+      await notifier.goToSentence(2);
+
+      // 制造一个可观察的临时状态，再跳到同一句应保持不变
+      await notifier.goToSentence(2);
+
+      expect(
+        container.read(intensiveListenPlayerProvider).currentSentenceIndex,
+        2,
+      );
+    });
+  });
+
   group('initialize 预填历史书签', () {
     late ProviderContainer container;
 

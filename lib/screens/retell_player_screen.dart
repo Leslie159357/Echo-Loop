@@ -1214,6 +1214,8 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                 totalDuration: player.totalDuration,
                 paragraphTotal: state.totalParagraphs,
               ),
+              onSeekToIndex: (i) =>
+                  ref.read(retellPlayerProvider.notifier).seekToSentence(i),
               paragraphContent: ParagraphSentenceListCard(
                 sentences: sentences,
                 displayMode: state.settings.keywordMethod != KeywordMethod.off

@@ -28,6 +28,9 @@ class ParagraphPracticeScaffold extends StatelessWidget {
   /// 段落时长文本（如 "32s"）
   final String? durationText;
 
+  /// 进度条拖动跳转回调（0-based 句索引）；非 null 时进度条可拖动
+  final void Function(int targetIndex)? onSeekToIndex;
+
   final Widget paragraphContent;
   final Widget? contentControls;
   final Widget? practiceControls;
@@ -52,6 +55,7 @@ class ParagraphPracticeScaffold extends StatelessWidget {
     required this.total,
     required this.progressText,
     this.durationText,
+    this.onSeekToIndex,
     required this.paragraphContent,
     this.contentControls,
     this.practiceControls,
@@ -86,6 +90,7 @@ class ParagraphPracticeScaffold extends StatelessWidget {
             total: total,
             progressText: progressText,
             durationText: durationText,
+            onSeek: onSeekToIndex,
           ),
           Expanded(child: paragraphContent),
           if (contentControls != null)

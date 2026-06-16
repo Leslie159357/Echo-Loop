@@ -512,4 +512,85 @@ void main() {
       expect(state.currentPlayCount, 1);
     });
   });
+
+  group('goToSentence 任意跳转（进度条拖动）', () {
+    List<Sentence> buildSentences(int count) => List.generate(
+      count,
+      (i) => Sentence(
+        index: i,
+        text: 'Sentence $i',
+        startTime: Duration(seconds: i * 2),
+        endTime: Duration(seconds: i * 2 + 1),
+      ),
+    );
+
+    ProviderContainer buildContainer() => ProviderContainer(
+      overrides: [
+        audioEngineProvider.overrideWith(() => _ReplayTestAudioEngine()),
+        learningProgressNotifierProvider.overrideWith(
+          () => _RecordingLearningProgressNotifier(
+            const LearningProgressState(progressMap: {}),
+          ),
+        ),
+        learningSessionProvider.overrideWith(
+          () => _PassiveLearningSession(
+            const LearningSessionState(
+              learningMode: LearningMode.reviewDifficultPractice,
+              audioItemId: 'audio-1',
+            ),
+          ),
+        ),
+        analyticsOverride(),
+        ...studyTimeOverrides(),
+      ],
+    );
+
+    test('跳转到合法句子更新 currentSentenceIndex', () async {
+      final container = buildContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(reviewDifficultPracticeProvider.notifier);
+      notifier.initialize(buildSentences(8));
+
+      await notifier.goToSentence(5);
+
+      expect(
+        container.read(reviewDifficultPracticeProvider).currentSentenceIndex,
+        5,
+      );
+    });
+
+    test('越界索引被 clamp 到合法范围', () async {
+      final container = buildContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(reviewDifficultPracticeProvider.notifier);
+      notifier.initialize(buildSentences(5));
+
+      await notifier.goToSentence(99);
+      expect(
+        container.read(reviewDifficultPracticeProvider).currentSentenceIndex,
+        4,
+      );
+
+      await notifier.goToSentence(-3);
+      expect(
+        container.read(reviewDifficultPracticeProvider).currentSentenceIndex,
+        0,
+      );
+    });
+
+    test('跳到当前句保持不变（no-op）', () async {
+      final container = buildContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(reviewDifficultPracticeProvider.notifier);
+      notifier.initialize(buildSentences(5));
+      await notifier.goToSentence(2);
+
+      await notifier.goToSentence(2);
+
+      expect(
+        container.read(reviewDifficultPracticeProvider).currentSentenceIndex,
+        2,
+      );
+    });
+  });
 }

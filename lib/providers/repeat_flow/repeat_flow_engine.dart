@@ -260,6 +260,16 @@ class RepeatFlowEngine {
     await _jumpToSentence(_state.sentenceIndex - 1);
   }
 
+  /// 跳转到指定句子（0-based）。
+  ///
+  /// 供进度条拖动跳转使用：越界自动 clamp，目标与当前相同时直接返回。
+  Future<void> goToSentence(int index) async {
+    if (_sentences.isEmpty) return;
+    final target = index.clamp(0, _sentences.length - 1);
+    if (target == _state.sentenceIndex) return;
+    await _jumpToSentence(target);
+  }
+
   /// 录音按钮点击
   Future<void> onRecordButtonTapped() async {
     final phase = _state.phase;

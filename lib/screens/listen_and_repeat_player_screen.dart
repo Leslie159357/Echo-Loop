@@ -466,6 +466,9 @@ class _ListenAndRepeatPlayerScreenState
                   ),
                   durationText: durationText,
                   showAudioSource: false,
+                  onSeek: (i) => ref
+                      .read(listenAndRepeatControllerProvider.notifier)
+                      .goToSentence(i),
                 ),
 
                 // 主体内容：书签行 + 标注内容

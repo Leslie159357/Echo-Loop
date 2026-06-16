@@ -498,4 +498,47 @@ void main() {
       expect(readState().isLastSentence, isTrue);
     });
   });
+
+  group('goToSentence 任意跳转（进度条拖动）', () {
+    test('跳转到合法句子更新 sentenceIndex', () async {
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 8),
+        config: _testConfig(),
+      );
+      await controller.startPlaying();
+
+      await controller.goToSentence(5);
+
+      expect(readState().sentenceIndex, 5);
+    });
+
+    test('越界索引被 clamp 到合法范围', () async {
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 5),
+        config: _testConfig(),
+      );
+      await controller.startPlaying();
+
+      await controller.goToSentence(99);
+      expect(readState().sentenceIndex, 4);
+
+      await controller.goToSentence(-3);
+      expect(readState().sentenceIndex, 0);
+    });
+
+    test('跳到当前句保持不变（no-op，flowToken 不变）', () async {
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 5),
+        config: _testConfig(),
+      );
+      await controller.startPlaying();
+      await controller.goToSentence(2);
+      final tokenAfterFirstJump = readState().flowToken;
+
+      await controller.goToSentence(2);
+
+      expect(readState().sentenceIndex, 2);
+      expect(readState().flowToken, tokenAfterFirstJump);
+    });
+  });
 }
