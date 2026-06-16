@@ -9,6 +9,8 @@ import '../../../providers/collection_provider.dart';
 import '../../../router/app_router.dart';
 import '../../auth/sign_in_required_dialog.dart';
 import '../../podcast/podcast_repository.dart';
+import '../data/official_catalog_service.dart';
+import '../data/trigger_official_sync.dart';
 import '../models/catalog.dart';
 import '../providers/discover_podcasts_provider.dart';
 
@@ -25,19 +27,47 @@ class _OfficialPodcastListScreenState
     extends ConsumerState<OfficialPodcastListScreen> {
   final Set<String> _subscribing = <String>{};
 
+  /// 触发全局唯一 catalog 同步；与 `DiscoverCollectionsScreen` 复用同一入口。
+  Future<CatalogRefreshOutcome?> _syncCatalog({bool force = false}) =>
+      triggerOfficialSync(ref, force: force);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final podcasts = ref.watch(discoverPodcastsProvider);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.discoverPodcastTitle)),
-      body: switch (podcasts) {
-        null => const Center(child: CircularProgressIndicator()),
-        final items when items.isEmpty => _EmptyPodcastList(
-          message: l10n.discoverPodcastEmpty,
-        ),
-        final items => _buildList(items),
-      },
+      // catalog 未初始化（null）→ 居中 spinner，此时无可下拉的滚动视图；
+      // 已初始化（空/有数据）→ 统一包进 RefreshIndicator 支持下拉刷新。
+      body: podcasts == null
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final outcome = await _syncCatalog(force: true);
+                if (!mounted) return;
+                if (outcome is CatalogUnchanged) {
+                  messenger.showSnackBar(const SnackBar(content: Text('已是最新')));
+                } else if (outcome is CatalogFailed) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(l10n.discoverLoadFailed)),
+                  );
+                }
+              },
+              child: podcasts.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.6,
+                          child: _EmptyPodcastList(
+                            message: l10n.discoverPodcastEmpty,
+                          ),
+                        ),
+                      ],
+                    )
+                  : _buildList(podcasts),
+            ),
     );
   }
 
