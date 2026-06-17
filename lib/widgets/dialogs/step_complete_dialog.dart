@@ -1,8 +1,12 @@
 /// 步骤完成通用对话框
 ///
 /// 合并了精听、跟读、复述、难句补练、盲听等多个播放器页面的完成对话框。
-/// 统一的布局：右上角关闭按钮、标题行（图标 + 标题）、步骤进度、自定义内容、
-/// 可选难度选择器、底部操作按钮。
+/// 统一的「成就卡」布局，自上而下：
+/// 1. 顶部英雄区（hero header）：柔和色带背景 + 圆形勾选徽章（入场缩放）+
+///    居中标题 + 居中步骤进度
+/// 2. 统计行（可选）：把关键数字抽成高亮 chip，数字大、品牌蓝
+/// 3. 自定义鼓励语（可选，居中）
+/// 4. 底部操作按钮
 ///
 /// 按钮布局根据上下文分三种情况：
 /// 1. 有下一步可继续：[完成] [继续：X]
@@ -15,9 +19,9 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../database/enums.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'completion_dialog_parts.dart';
 
 /// 用户在完成对话框中的选择
 enum StepCompleteAction {
@@ -31,11 +35,10 @@ enum StepCompleteAction {
 /// 步骤完成对话框返回结果
 ///
 /// [action] 用户选择的操作。
-/// [difficulty] 仅在 [showDifficultySelector] 为 true 时有值。
-typedef StepCompleteResult = ({
-  StepCompleteAction action,
-  DifficultyLevel? difficulty,
-});
+typedef StepCompleteResult = ({StepCompleteAction action});
+
+/// 单条完成统计项（复用 [CompletionStat]）
+typedef StepCompleteStat = CompletionStat;
 
 /// 显示步骤完成对话框
 ///
@@ -43,23 +46,23 @@ typedef StepCompleteResult = ({
 /// 返回 [StepCompleteResult] 表示用户点击了操作按钮。
 ///
 /// [title] 对话框标题文本。
-/// [contentBody] 自定义内容区域（如完成统计信息）。
+/// [stats] 高亮统计项（可选）；非空时渲染为统计 chip 行。
+/// [contentBody] 自定义内容区域（如鼓励语），居中显示。
 /// [stepIndex] 当前完成的步骤序号（0-based），null 表示不显示步骤进度。
 /// [totalSteps] 当前阶段总步骤数。
 /// [stageName] 当前阶段名称（如"首次学习"）。
 /// [nextStepName] 下一步名称（null 表示下一步不可用或不存在）。
 /// [isLastStep] 是否为当前阶段的最后一步。
-/// [showDifficultySelector] 是否显示 5 档难度选择器。
 Future<StepCompleteResult?> showStepCompleteDialog({
   required BuildContext context,
   required String title,
+  List<StepCompleteStat>? stats,
   Widget? contentBody,
   int? stepIndex,
   int? totalSteps,
   String? stageName,
   String? nextStepName,
   bool isLastStep = false,
-  bool showDifficultySelector = false,
 }) {
   return showDialog<StepCompleteResult>(
     context: context,
@@ -68,13 +71,13 @@ Future<StepCompleteResult?> showStepCompleteDialog({
     builder: (dialogContext) => StepCompleteDialog(
       onResult: (result) => Navigator.of(dialogContext).pop(result),
       title: title,
+      stats: stats,
       contentBody: contentBody,
       stepIndex: stepIndex,
       totalSteps: totalSteps,
       stageName: stageName,
       nextStepName: nextStepName,
       isLastStep: isLastStep,
-      showDifficultySelector: showDifficultySelector,
     ),
   );
 }
@@ -83,6 +86,9 @@ Future<StepCompleteResult?> showStepCompleteDialog({
 class StepCompleteDialog extends StatefulWidget {
   /// 对话框标题
   final String title;
+
+  /// 高亮统计项（null = 不显示统计行）
+  final List<StepCompleteStat>? stats;
 
   /// 自定义内容区域
   final Widget? contentBody;
@@ -102,9 +108,6 @@ class StepCompleteDialog extends StatefulWidget {
   /// 是否为最后一步
   final bool isLastStep;
 
-  /// 是否显示难度选择器
-  final bool showDifficultySelector;
-
   /// 结果回调
   final void Function(StepCompleteResult?) onResult;
 
@@ -112,13 +115,13 @@ class StepCompleteDialog extends StatefulWidget {
     super.key,
     required this.onResult,
     required this.title,
+    this.stats,
     this.contentBody,
     this.stepIndex,
     this.totalSteps,
     this.stageName,
     this.nextStepName,
     this.isLastStep = false,
-    this.showDifficultySelector = false,
   });
 
   @override
@@ -126,102 +129,68 @@ class StepCompleteDialog extends StatefulWidget {
 }
 
 class _StepCompleteDialogState extends State<StepCompleteDialog> {
-  /// 选中的难度等级（null = 未选择）
-  DifficultyLevel? _selectedDifficulty;
-
-  /// 操作按钮是否可用
-  ///
-  /// 显示难度选择器时必须选择难度后才可用，否则直接可用。
-  bool get _actionsEnabled =>
-      !widget.showDifficultySelector || _selectedDifficulty != null;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          // 主体内容
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.l,
-              AppSpacing.l,
-              AppSpacing.l,
-              AppSpacing.m,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 标题行
-                Row(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 顶部英雄区（徽章 + 标题 + 步骤进度）
+              CompletionHeroHeader(
+                title: widget.title,
+                subtitle: _progressSubtitle(l10n),
+              ),
+              // 主体内容（统计 + 鼓励语 + 按钮）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.l,
+                  AppSpacing.l,
+                  AppSpacing.l,
+                  AppSpacing.m,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: AppSpacing.s),
-                    Flexible(
-                      child: Text(
-                        widget.title,
-                        style: theme.textTheme.titleLarge,
+                    // 统计行
+                    if (widget.stats != null && widget.stats!.isNotEmpty) ...[
+                      CompletionStatsRow(stats: widget.stats!),
+                      const SizedBox(height: AppSpacing.m),
+                    ],
+                    // 自定义内容（居中鼓励语）
+                    if (widget.contentBody != null) ...[
+                      DefaultTextStyle.merge(
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium!.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                        child: widget.contentBody!,
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.l),
+                    ],
+                    // 底部操作按钮
+                    ..._buildActions(context, l10n),
                   ],
                 ),
-                // 步骤进度信息
-                if (widget.stepIndex != null &&
-                    widget.totalSteps != null &&
-                    widget.stageName != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    l10n.stepProgressLabel(
-                      widget.stepIndex! + 1,
-                      widget.totalSteps!,
-                      widget.stageName!,
-                    ),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                // 自定义内容
-                if (widget.contentBody != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  widget.contentBody!,
-                ],
-                // 难度选择器
-                if (widget.showDifficultySelector) ...[
-                  const SizedBox(height: AppSpacing.l),
-                  Text(
-                    l10n.selectDifficulty,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.s),
-                  _buildDifficultySelector(l10n),
-                ],
-                const SizedBox(height: AppSpacing.l),
-                // 底部操作按钮
-                ..._buildActions(context, l10n),
-              ],
-            ),
+              ),
+            ],
           ),
-          // 右上角关闭按钮
+          // 右上角关闭按钮（落在绿色色带上，用中性灰保证对比度且不抢眼）
           Positioned(
-            right: 4,
-            top: 4,
+            right: AppSpacing.xs,
+            top: AppSpacing.xs,
             child: IconButton(
               onPressed: () => widget.onResult(null),
-              icon: const Icon(Icons.close, size: 18),
-              color: theme.colorScheme.onSurfaceVariant,
+              icon: const Icon(Icons.close, size: 20),
+              color: cs.onSurfaceVariant,
               style: IconButton.styleFrom(
-                minimumSize: const Size(32, 32),
+                minimumSize: const Size(40, 40),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
@@ -231,73 +200,17 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
     );
   }
 
-  /// 构建 5 档难度选择器
-  ///
-  /// 风格与 App 整体协调：上方一根极细绿→红渐变线提示难度递进，
-  /// 下方 5 个等宽中性按钮；选中态使用主色（navy）实底白字，
-  /// 未选中为浅灰描边 + 主文字色。
-  Widget _buildDifficultySelector(AppLocalizations l10n) {
-    final difficultyLabels = {
-      DifficultyLevel.veryEasy: l10n.difficultyVeryEasy,
-      DifficultyLevel.easy: l10n.difficultyEasy,
-      DifficultyLevel.medium: l10n.difficultyMedium,
-      DifficultyLevel.hard: l10n.difficultyHard,
-      DifficultyLevel.veryHard: l10n.difficultyVeryHard,
-    };
-    // 选中时按档位使用对应渐变色，与上方指示条颜色对齐
-    final difficultyColors = {
-      DifficultyLevel.veryEasy: const Color(0xFF43A047),
-      DifficultyLevel.easy: const Color(0xFF9CCC65),
-      DifficultyLevel.medium: const Color(0xFFFFB300),
-      DifficultyLevel.hard: const Color(0xFFFB8C00),
-      DifficultyLevel.veryHard: const Color(0xFFE53935),
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // 极细渐变指示条：绿→红，提示难度从易到难
-        Container(
-          height: 3,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(2),
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xFF43A047), // 绿
-                Color(0xFF9CCC65),
-                Color(0xFFFFB300), // 黄
-                Color(0xFFFB8C00),
-                Color(0xFFE53935), // 红
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s),
-        // 5 等宽中性按钮
-        Row(
-          children: [
-            for (var i = 0; i < DifficultyLevel.values.length; i++) ...[
-              if (i > 0) const SizedBox(width: 3),
-              Expanded(
-                child: _DifficultyButton(
-                  label: difficultyLabels[DifficultyLevel.values[i]]!,
-                  selectedColor: difficultyColors[DifficultyLevel.values[i]]!,
-                  selected: _selectedDifficulty == DifficultyLevel.values[i],
-                  onTap: () {
-                    setState(() {
-                      final level = DifficultyLevel.values[i];
-                      _selectedDifficulty = _selectedDifficulty == level
-                          ? null
-                          : level;
-                    });
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
+  /// 步骤进度副标题文案（信息不全时返回 null）
+  String? _progressSubtitle(AppLocalizations l10n) {
+    if (widget.stepIndex == null ||
+        widget.totalSteps == null ||
+        widget.stageName == null) {
+      return null;
+    }
+    return l10n.stepProgressLabel(
+      widget.stepIndex! + 1,
+      widget.totalSteps!,
+      widget.stageName!,
     );
   }
 
@@ -316,12 +229,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
             Expanded(
               flex: 2,
               child: OutlinedButton(
-                onPressed: _actionsEnabled
-                    ? () => widget.onResult((
-                        action: StepCompleteAction.back,
-                        difficulty: _selectedDifficulty,
-                      ))
-                    : null,
+                onPressed: () =>
+                    widget.onResult((action: StepCompleteAction.back)),
                 child: Text(l10n.done),
               ),
             ),
@@ -329,12 +238,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
             Expanded(
               flex: 3,
               child: FilledButton(
-                onPressed: _actionsEnabled
-                    ? () => widget.onResult((
-                        action: StepCompleteAction.continueNext,
-                        difficulty: _selectedDifficulty,
-                      ))
-                    : null,
+                onPressed: () =>
+                    widget.onResult((action: StepCompleteAction.continueNext)),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(l10n.continueToStep(widget.nextStepName!)),
@@ -356,12 +261,8 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: _actionsEnabled
-                ? () => widget.onResult((
-                    action: StepCompleteAction.back,
-                    difficulty: _selectedDifficulty,
-                  ))
-                : null,
+            onPressed: () =>
+                widget.onResult((action: StepCompleteAction.back)),
             child: Text(completeText),
           ),
         ),
@@ -372,67 +273,12 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: _actionsEnabled
-                ? () => widget.onResult((
-                    action: StepCompleteAction.back,
-                    difficulty: _selectedDifficulty,
-                  ))
-                : null,
+            onPressed: () =>
+                widget.onResult((action: StepCompleteAction.back)),
             child: Text(l10n.done),
           ),
         ),
       ];
     }
-  }
-}
-
-/// 单个难度按钮：中性配色，选中态使用对应档位颜色实底白字
-class _DifficultyButton extends StatelessWidget {
-  final String label;
-  final Color selectedColor;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _DifficultyButton({
-    required this.label,
-    required this.selectedColor,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? selectedColor : scheme.outlineVariant,
-              width: selected ? 1.8 : 1,
-            ),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? selectedColor : scheme.onSurface,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

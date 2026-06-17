@@ -35,6 +35,12 @@ class AppTheme {
   /// 语义色：置顶图钉
   static const Color pinColor = Color(0xFFE53935);
 
+  /// 语义色：成功/完成（用于完成对话框的勾选徽章，清新绿）
+  static const Color successColor = Color(0xFF2E9E5B);
+
+  /// 语义色：成功/完成的浅色容器底（完成对话框英雄区色带，浅绿）
+  static const Color successContainer = Color(0xFFE3F4E9);
+
   /// 语义色：官方合集角标（深橙金色，对应"认证/精选"的通用视觉）
   /// 选 Material Orange 800：白字对比足够，区别于品牌蓝、不会与封面同色系混淆
   static const Color officialBadgeColor = Color(0xFFEF6C00);

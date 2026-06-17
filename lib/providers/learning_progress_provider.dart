@@ -16,6 +16,7 @@ import '../database/app_database.dart' as db;
 import '../models/learning_plan.dart';
 import '../models/learning_progress.dart';
 import '../services/app_logger.dart';
+import '../utils/difficulty_from_ratio.dart';
 import 'learning_plan_provider.dart';
 import 'learning_settings_provider.dart';
 import 'notification_permission_provider.dart';
@@ -235,8 +236,13 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
     final now = DateTime.now();
     // 新建 progress 时 stamp kLatestPlanVersions（dense baseline）→
     // 该 audio 的 plan 版本被永久锁定。未来 v3 上线时存量自动保留旧版本。
+    // 入口子步骤按当前计划派生：v2 首次学习从「逐句精听」开始，而非硬编码盲听。
+    final entrySubStage = LearningPlan.standard(
+      stagePlanVersions: kLatestPlanVersions,
+    ).subStagesFor(LearningStage.firstLearn).first;
     final progress = LearningProgress(
       audioItemId: audioItemId,
+      currentSubStage: entrySubStage,
       currentStageStartedAt: now,
       updatedAt: now,
       planVersionsByStage: Map.unmodifiable(kLatestPlanVersions),
@@ -246,7 +252,7 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
       db.LearningProgressesCompanion(
         audioItemId: Value(audioItemId),
         currentStage: Value(LearningStage.firstLearn.key),
-        currentSubStage: Value(SubStageType.blindListen.key),
+        currentSubStage: Value(entrySubStage.key),
         difficulty: const Value(2),
         firstLearnCompletedAt: const Value(null),
         lastStageCompletedAt: const Value(null),
@@ -588,6 +594,48 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
     newMap[audioItemId] = updated;
     state = state.copyWith(progressMap: newMap);
+  }
+
+  /// 按当前难句书签数实时重算难度并静默落库（不发埋点）。
+  ///
+  /// 与精听完成时的一次性判定（[setDifficulty] + [difficultyFromDifficultRatio]）
+  /// 同源，只是把判定时机从「精听完成」扩展到「每次进入练习入口」：难句熟练后
+  /// 用户取消收藏 → 难句比例下降 → 难度随之降低 → 后续步骤 / 复习轮次的默认
+  /// 播放速度据此回升（见 [defaultPlaybackSpeedFor]），不再被历史难度绑定。
+  ///
+  /// 静默更新（不上报 analytics）以区分用户显式定级；难度无变化时跳过写库。
+  /// 返回重算后的难度（无 progress 时返回 [DifficultyLevel.medium]）。
+  Future<DifficultyLevel> refreshDifficultyFromBookmarks(
+    String audioItemId,
+    int totalSentences,
+  ) async {
+    final progress = state.progressMap[audioItemId];
+    // 字幕未加载（totalSentences<=0）时不重算，避免把难度误清成 veryEasy
+    if (totalSentences <= 0) {
+      return progress?.difficulty ?? DifficultyLevel.medium;
+    }
+
+    final bookmarks = await ref
+        .read(bookmarkDaoProvider)
+        .getBookmarkedIndices(audioItemId);
+    final difficulty = difficultyFromDifficultRatio(
+      totalSentences,
+      bookmarks.length,
+    );
+
+    if (progress == null) return DifficultyLevel.medium;
+    if (progress.difficulty == difficulty) return difficulty;
+
+    final updated = progress.copyWith(
+      difficulty: difficulty,
+      updatedAt: DateTime.now(),
+    );
+    await _persistProgress(updated);
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = updated;
+    state = state.copyWith(progressMap: newMap);
+    return difficulty;
   }
 
   /// 增加盲听完成遍数并持久化

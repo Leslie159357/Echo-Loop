@@ -869,7 +869,9 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       await handleFreePlayComplete(
         context: context,
         title: l10n.retellCompleteTitle,
-        message: l10n.retellCompleteMessage(retellState.totalParagraphs),
+        stats: [
+          (value: '${retellState.totalParagraphs}', label: l10n.statParagraphs),
+        ],
         replayLabel: l10n.retellPracticeAgain,
         onStudyAgain: () async {
           await ref
@@ -898,9 +900,9 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     final result = await showStepCompleteDialog(
       context: context,
       title: l10n.retellCompleteTitle,
-      contentBody: Text(
-        l10n.retellCompleteMessage(retellState.totalParagraphs),
-      ),
+      stats: [
+        (value: '${retellState.totalParagraphs}', label: l10n.statParagraphs),
+      ],
       stepIndex: stepCtx.stepIndex,
       totalSteps: stepCtx.totalSteps,
       stageName: stepCtx.stageName,

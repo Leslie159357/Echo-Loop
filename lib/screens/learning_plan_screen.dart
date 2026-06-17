@@ -214,7 +214,10 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   ///
   /// 盲听和段落复述自带段落选择弹窗，无需再展示复习简报；
   /// 其余子阶段先展示复习简报弹窗。
-  void _startReviewSubStage(BuildContext context, LearningProgress progress) {
+  Future<void> _startReviewSubStage(
+    BuildContext context,
+    LearningProgress progress,
+  ) async {
     final subStage = progress.currentSubStage;
 
     // 段落复述自带时长选择弹窗，无需再展示复习简报
@@ -229,6 +232,17 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       return;
     }
 
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升
+    final lpState = await _ensureAudioLoaded();
+    if (!context.mounted) return;
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(
+          widget.audioItemId,
+          lpState?.sentences.length ?? 0,
+        );
+    if (!context.mounted) return;
+
     // 预估时长
     final estimatedDuration = _estimateReviewDuration(subStage);
 
@@ -238,7 +252,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       subStage: subStage,
       estimatedDuration: estimatedDuration,
       defaultPlaybackSpeed: defaultPlaybackSpeedFor(
-        progress.difficulty,
+        liveDifficulty,
         progress.currentStage,
       ),
       onStartPractice: (playbackSpeed, pauseMultiplier) {
@@ -318,6 +332,11 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     final progressForSpeed = ref
         .read(learningProgressNotifierProvider)
         .progressMap[widget.audioItemId];
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(widget.audioItemId, sentences.length);
+    if (!context.mounted) return;
     final skip = _buildSkipCallback();
     showBlindListenParagraphSheet(
       context: context,
@@ -325,7 +344,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       stageLabel: reviewStageLabel(l10n, stage),
       estimatedDurationText: estimatedText,
       defaultPlaybackSpeed: progressForSpeed != null
-          ? defaultPlaybackSpeedFor(progressForSpeed.difficulty, stage)
+          ? defaultPlaybackSpeedFor(liveDifficulty, stage)
           : 1.0,
       skipLabel: skip != null ? l10n.retellSkip : null,
       onSkip: skip,
@@ -497,6 +516,14 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         currentStage != null && currentStage != LearningStage.firstLearn;
 
     final effectiveStage = currentStage ?? LearningStage.firstLearn;
+    // 按当前难句书签数实时重算难度，难度降低后速度/可见词比例随之调整
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(
+          widget.audioItemId,
+          lpState.sentences.length,
+        );
+    if (!context.mounted) return;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
@@ -504,12 +531,12 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       stageLabel: isReview ? reviewStageLabel(l10n, currentStage) : null,
       defaultKeywordRatio: progress != null
           ? KeywordRatio.forDifficultyAndStage(
-              progress.difficulty,
+              liveDifficulty,
               effectiveStage,
             )
           : null,
       defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(progress.difficulty, effectiveStage)
+          ? defaultPlaybackSpeedFor(liveDifficulty, effectiveStage)
           : 1.0,
       onStartPractice:
           (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
@@ -571,6 +598,12 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
     if (sentences.isEmpty) return;
 
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升（与难句跟读/复述一致）
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(widget.audioItemId, sentences.length);
+    if (!context.mounted) return;
+
     final l10n = AppLocalizations.of(context)!;
     final estimatedDuration = estimateBlindListenSessionDuration(
       sentences: sentences,
@@ -586,6 +619,10 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
+      // 全文盲听属于首次学习步骤，按 firstLearn 阶段算默认速度
+      defaultPlaybackSpeed: progress != null
+          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+          : 1.0,
       skipLabel: skip != null ? l10n.retellSkip : null,
       onSkip: skip,
       onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
@@ -721,9 +758,16 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     final progress = ref
         .read(learningProgressNotifierProvider)
         .progressMap[widget.audioItemId];
-    final playCount = targetPlayCountForDifficulty(
-      progress?.difficulty.index ?? 2,
-    );
+    // 按当前难句书签数实时重算难度（难句跟读入口最关键：用户练熟取消收藏后
+    // 比例下降 → 难度降低 → 速度回升），同时用于跟读遍数 playCount。
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(
+          widget.audioItemId,
+          lpState.sentences.length,
+        );
+    if (!context.mounted) return;
+    final playCount = targetPlayCountForDifficulty(liveDifficulty.index);
 
     final difficultDuration = difficultIndices.fold<Duration>(
       Duration.zero,
@@ -742,7 +786,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
       estimatedDuration: repeatEstimate,
       defaultPlaybackSpeed: progress != null
           ? defaultPlaybackSpeedFor(
-              progress.difficulty,
+              liveDifficulty,
               LearningStage.firstLearn,
             )
           : 1.0,
@@ -800,19 +844,27 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         .progressMap[widget.audioItemId];
     final stageForDefault =
         progressForDefault?.currentStage ?? LearningStage.firstLearn;
+    // 按当前难句书签数实时重算难度，难度降低后速度/可见词比例随之调整
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(
+          widget.audioItemId,
+          lpState.sentences.length,
+        );
+    if (!context.mounted) return;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(stageForDefault),
       defaultKeywordRatio: progressForDefault != null
           ? KeywordRatio.forDifficultyAndStage(
-              progressForDefault.difficulty,
+              liveDifficulty,
               stageForDefault,
             )
           : null,
       defaultPlaybackSpeed: progressForDefault != null
           ? defaultPlaybackSpeedFor(
-              progressForDefault.difficulty,
+              liveDifficulty,
               stageForDefault,
             )
           : 1.0,
@@ -1650,26 +1702,10 @@ class _FirstStudySection extends ConsumerWidget {
               // 各步骤显示完成统计
               String? subtitle;
               if (subStage == SubStageType.blindListen) {
-                // 盲听：已听遍数 + 难度
+                // 盲听：仅显示已听遍数（难度在逐句精听完成时自动判定，盲听不再展示）
                 final passCount = progress?.blindListenPassCount ?? 0;
-                final parts = <String>[];
                 if (passCount > 0) {
-                  parts.add(l10n.blindListenPassInfo(passCount));
-                }
-                if (progress?.isSubStageCompleted(
-                      firstLearnStage,
-                      subStage,
-                      completedKeys,
-                    ) ??
-                    false) {
-                  parts.add(
-                    l10n.difficultyLabel(
-                      _difficultyName(l10n, progress!.difficulty),
-                    ),
-                  );
-                }
-                if (parts.isNotEmpty) {
-                  subtitle = parts.join(' · ');
+                  subtitle = l10n.blindListenPassInfo(passCount);
                 }
               } else if (subStage == SubStageType.intensiveListen) {
                 // 精听：仅当前或已完成步骤显示统计
@@ -1798,6 +1834,12 @@ class _FirstStudySection extends ConsumerWidget {
     final sentences = ref.read(listeningPracticeProvider).sentences;
     if (sentences.isEmpty) return;
 
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升（与难句跟读/复述一致）
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, sentences.length);
+    if (!context.mounted) return;
+
     final l10n = AppLocalizations.of(context)!;
     final estimatedDuration = estimateBlindListenSessionDuration(
       sentences: sentences,
@@ -1811,6 +1853,10 @@ class _FirstStudySection extends ConsumerWidget {
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
+      // 全文盲听属于首次学习步骤，按 firstLearn 阶段算默认速度
+      defaultPlaybackSpeed: progress != null
+          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+          : 1.0,
       onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
@@ -1910,9 +1956,13 @@ class _FirstStudySection extends ConsumerWidget {
       return;
     }
 
-    final playCount = targetPlayCountForDifficulty(
-      progress?.difficulty.index ?? 2,
-    );
+    // 按当前难句书签数实时重算难度（难句跟读入口最关键：用户练熟取消收藏后
+    // 比例下降 → 难度降低 → 速度回升），同时用于跟读遍数 playCount。
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
+    if (!context.mounted) return;
+    final playCount = targetPlayCountForDifficulty(liveDifficulty.index);
     final difficultDuration = difficultIndices.fold<Duration>(
       Duration.zero,
       (sum, idx) =>
@@ -1932,7 +1982,7 @@ class _FirstStudySection extends ConsumerWidget {
       // 与同 section 的复述自由练习保持一致。
       defaultPlaybackSpeed: progress != null
           ? defaultPlaybackSpeedFor(
-              progress!.difficulty,
+              liveDifficulty,
               LearningStage.firstLearn,
             )
           : 1.0,
@@ -1995,19 +2045,24 @@ class _FirstStudySection extends ConsumerWidget {
         .progressMap[audioItemId];
     final stageForDefault =
         progressForDefault?.currentStage ?? LearningStage.firstLearn;
+    // 按当前难句书签数实时重算难度，难度降低后速度/可见词比例随之调整
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
+    if (!context.mounted) return;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(stageForDefault),
       defaultKeywordRatio: progressForDefault != null
           ? KeywordRatio.forDifficultyAndStage(
-              progressForDefault.difficulty,
+              liveDifficulty,
               LearningStage.firstLearn,
             )
           : null,
       defaultPlaybackSpeed: progressForDefault != null
           ? defaultPlaybackSpeedFor(
-              progressForDefault.difficulty,
+              liveDifficulty,
               LearningStage.firstLearn,
             )
           : 1.0,
@@ -2438,6 +2493,12 @@ class _ReviewRoundSection extends ConsumerWidget {
     final sentences = ref.read(listeningPracticeProvider).sentences;
     if (sentences.isEmpty) return;
 
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, sentences.length);
+    if (!context.mounted) return;
+
     final l10n = AppLocalizations.of(context)!;
     final estimatedDuration = estimateBlindListenSessionDuration(
       sentences: sentences,
@@ -2451,10 +2512,9 @@ class _ReviewRoundSection extends ConsumerWidget {
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
-      defaultPlaybackSpeed: switch (progress) {
-        null => 1.0,
-        final p => defaultPlaybackSpeedFor(p.difficulty, review.stage),
-      },
+      defaultPlaybackSpeed: progress == null
+          ? 1.0
+          : defaultPlaybackSpeedFor(liveDifficulty, review.stage),
       onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
@@ -2501,10 +2561,14 @@ class _ReviewRoundSection extends ConsumerWidget {
     final estimated = difficultDuration == Duration.zero
         ? null
         : difficultDuration * 2;
-    final defaultSpeed = switch (progress) {
-      null => 1.0,
-      final p => defaultPlaybackSpeedFor(p.difficulty, review.stage),
-    };
+    // 按当前难句书签数实时重算难度，难度降低后速度随之回升
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
+    if (!context.mounted) return;
+    final defaultSpeed = progress == null
+        ? 1.0
+        : defaultPlaybackSpeedFor(liveDifficulty, review.stage);
     showReviewBriefingSheet(
       context: context,
       stage: review.stage,
@@ -2574,18 +2638,23 @@ class _ReviewRoundSection extends ConsumerWidget {
     final progressForRetell = ref
         .read(learningProgressNotifierProvider)
         .progressMap[audioItemId];
+    // 按当前难句书签数实时重算难度，难度降低后速度/可见词比例随之调整
+    final liveDifficulty = await ref
+        .read(learningProgressNotifierProvider.notifier)
+        .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
+    if (!context.mounted) return;
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
       defaultSeconds: retellDefaultSeconds(review.stage),
       defaultKeywordRatio: progressForRetell != null
           ? KeywordRatio.forDifficultyAndStage(
-              progressForRetell.difficulty,
+              liveDifficulty,
               review.stage,
             )
           : null,
       defaultPlaybackSpeed: progressForRetell != null
-          ? defaultPlaybackSpeedFor(progressForRetell.difficulty, review.stage)
+          ? defaultPlaybackSpeedFor(liveDifficulty, review.stage)
           : 1.0,
       onStartPractice:
           (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
@@ -3165,13 +3234,3 @@ List<SubStageType> _orderedSubStagesForDisplay({
       .toList(growable: false);
   return [...planned, ...extras];
 }
-
-/// 难度等级本地化名称
-String _difficultyName(AppLocalizations l10n, DifficultyLevel level) =>
-    switch (level) {
-      DifficultyLevel.veryEasy => l10n.difficultyVeryEasy,
-      DifficultyLevel.easy => l10n.difficultyEasy,
-      DifficultyLevel.medium => l10n.difficultyMedium,
-      DifficultyLevel.hard => l10n.difficultyHard,
-      DifficultyLevel.veryHard => l10n.difficultyVeryHard,
-    };

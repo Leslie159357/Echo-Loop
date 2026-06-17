@@ -250,7 +250,12 @@ class _ListenAndRepeatPlayerScreenState
       await handleFreePlayComplete(
         context: context,
         title: l10n.listenAndRepeatCompleteTitle,
-        message: l10n.listenAndRepeatCompleteMessage(ctrlState.totalSentences),
+        stats: [
+          (
+            value: '${ctrlState.totalSentences}',
+            label: l10n.statDifficultSentences,
+          ),
+        ],
         onStudyAgain: () async {
           // 重新开始（从第一句，复用当前 config）
           await ctrl.prepareSession(
@@ -282,9 +287,12 @@ class _ListenAndRepeatPlayerScreenState
     final result = await showStepCompleteDialog(
       context: context,
       title: l10n.listenAndRepeatCompleteTitle,
-      contentBody: Text(
-        l10n.listenAndRepeatCompleteMessage(ctrlState.totalSentences),
-      ),
+      stats: [
+        (
+          value: '${ctrlState.totalSentences}',
+          label: l10n.statDifficultSentences,
+        ),
+      ],
       stepIndex: stepCtx.stepIndex,
       totalSteps: stepCtx.totalSteps,
       stageName: stepCtx.stageName,

@@ -251,11 +251,6 @@ class _BlindListenPlayerScreenState
 
     final stepCtx = _getStepContext();
 
-    final progress = ref
-        .read(learningProgressNotifierProvider)
-        .progressMap[widget.audioItemId];
-    final isReview = progress?.isInReviewStage ?? false;
-
     final l10n = AppLocalizations.of(context)!;
     final result = await showStepCompleteDialog(
       context: context,
@@ -265,7 +260,6 @@ class _BlindListenPlayerScreenState
       stageName: stepCtx.stageName,
       nextStepName: stepCtx.nextStepName,
       isLastStep: stepCtx.isLastStep,
-      showDifficultySelector: !isReview,
     );
 
     if (!mounted || result == null) {
@@ -273,16 +267,8 @@ class _BlindListenPlayerScreenState
       return;
     }
 
-    // 用户确认后：保存难度 + 标记完成
+    // 用户确认后：标记完成（难度已在逐句精听完成时自动判定，盲听不再设难度）
     try {
-      if (!isReview) {
-        await ref
-            .read(learningProgressNotifierProvider.notifier)
-            .setDifficulty(
-              widget.audioItemId,
-              result.difficulty ?? DifficultyLevel.medium,
-            );
-      }
       await ref
           .read(learningProgressNotifierProvider.notifier)
           .saveBlindListenSentenceIndex(

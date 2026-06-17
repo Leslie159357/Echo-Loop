@@ -159,7 +159,9 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
     await handleFreePlayComplete(
       context: context,
       title: l10n.bookmarkReviewComplete,
-      message: l10n.bookmarkReviewCompleteMessage(playerState.totalSentences),
+      stats: [
+        (value: '${playerState.totalSentences}', label: l10n.statSentences),
+      ],
       replayLabel: l10n.bookmarkReviewAgain,
       onStudyAgain: () async {
         await ref.read(bookmarkReviewProvider.notifier).resetToStart();

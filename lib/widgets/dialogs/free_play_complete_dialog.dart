@@ -1,7 +1,9 @@
 /// 自由练习完成通用对话框
 ///
 /// 合并了盲听、精听、跟读、难句补练等多个页面的自由练习完成对话框。
-/// 简单的两按钮布局：「完成」和「再来一遍」。
+/// 与步骤完成对话框共用「成就卡」视觉（顶部英雄区 + 统计 chip，见
+/// [CompletionHeroHeader] / [CompletionStatsRow]）。底部两按钮布局：
+/// 「完成」和「再来一遍」。
 ///
 /// 使用 [showDialog] + `useRootNavigator: true` 显示弹窗，
 /// 弹窗挂到 root Navigator，与 GoRouter 路由栈隔离。
@@ -11,18 +13,21 @@ library;
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'completion_dialog_parts.dart';
 
 /// 显示自由练习完成对话框
 ///
 /// 返回 `true` 表示完成退出，`false` 表示再来一遍，`null` 表示关闭/dismiss。
 ///
 /// [title] 对话框标题。
-/// [message] 完成消息（可选，如句数统计）。
+/// [stats] 高亮统计项（可选）；非空时渲染为统计 chip 行。
+/// [message] 完成消息（可选，如鼓励语），居中显示。
 /// [replayLabel] 自定义"再来一遍"按钮文本（默认使用 l10n.listenAgain）。
 /// [doneLabel] 自定义"完成"按钮文本（默认使用 l10n.done）。
 Future<bool?> showFreePlayCompleteDialog({
   required BuildContext context,
   required String title,
+  List<CompletionStat>? stats,
   String? message,
   String? replayLabel,
   String? doneLabel,
@@ -43,6 +48,7 @@ Future<bool?> showFreePlayCompleteDialog({
           debugPrint('[FreePlayDialog] Navigator.pop($result) done');
         },
         title: title,
+        stats: stats,
         message: message,
         replayLabel: replayLabel,
         doneLabel: doneLabel,
@@ -59,6 +65,7 @@ Future<bool?> showFreePlayCompleteDialog({
 Future<void> handleFreePlayComplete({
   required BuildContext context,
   required String title,
+  List<CompletionStat>? stats,
   String? message,
   String? replayLabel,
   String? doneLabel,
@@ -69,6 +76,7 @@ Future<void> handleFreePlayComplete({
   final result = await showFreePlayCompleteDialog(
     context: context,
     title: title,
+    stats: stats,
     message: message,
     replayLabel: replayLabel,
     doneLabel: doneLabel,
@@ -99,6 +107,9 @@ class FreePlayCompleteDialog extends StatelessWidget {
   /// 对话框标题
   final String title;
 
+  /// 高亮统计项（null = 不显示统计行）
+  final List<CompletionStat>? stats;
+
   /// 完成消息（可选）
   final String? message;
 
@@ -115,6 +126,7 @@ class FreePlayCompleteDialog extends StatelessWidget {
     super.key,
     required this.onResult,
     required this.title,
+    this.stats,
     this.message,
     this.replayLabel,
     this.doneLabel,
@@ -124,84 +136,80 @@ class FreePlayCompleteDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          // 主体内容
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.l,
-              AppSpacing.l,
-              AppSpacing.l,
-              AppSpacing.m,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 标题行
-                Row(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 顶部英雄区（徽章 + 标题）
+              CompletionHeroHeader(title: title),
+              // 主体内容（统计 + 鼓励语 + 按钮）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.l,
+                  AppSpacing.l,
+                  AppSpacing.l,
+                  AppSpacing.m,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: AppSpacing.s),
-                    Flexible(
-                      child: Text(title, style: theme.textTheme.titleLarge),
+                    // 统计行
+                    if (stats != null && stats!.isNotEmpty) ...[
+                      CompletionStatsRow(stats: stats!),
+                      const SizedBox(height: AppSpacing.m),
+                    ],
+                    // 消息（居中鼓励语）
+                    if (message != null) ...[
+                      Text(
+                        message!,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.l),
+                    ],
+                    // 按钮行：左「再来一遍」次要(Outlined)，右「完成」主操作(Filled)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => onResult(false),
+                            child: Text(replayLabel ?? l10n.listenAgain),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.s),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => onResult(true),
+                            child: Text(doneLabel ?? l10n.done),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                // 消息
-                if (message != null) ...[
-                  const SizedBox(height: AppSpacing.s),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      message!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.l),
-                // 按钮行
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => onResult(true),
-                        child: Text(doneLabel ?? l10n.done),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.s),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => onResult(false),
-                        child: Text(replayLabel ?? l10n.listenAgain),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // 右上角关闭按钮
+          // 右上角关闭按钮（落在绿色色带上，用中性灰保证对比度且不抢眼）
           Positioned(
-            right: 4,
-            top: 4,
+            right: AppSpacing.xs,
+            top: AppSpacing.xs,
             child: IconButton(
               onPressed: () {
                 debugPrint('[FreePlayDialog] close button tapped');
                 onResult(null);
               },
-              icon: const Icon(Icons.close, size: 18),
-              color: theme.colorScheme.onSurfaceVariant,
+              icon: const Icon(Icons.close, size: 20),
+              color: cs.onSurfaceVariant,
               style: IconButton.styleFrom(
-                minimumSize: const Size(32, 32),
+                minimumSize: const Size(40, 40),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),

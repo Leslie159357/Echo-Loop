@@ -289,9 +289,12 @@ class _ReviewDifficultPracticeScreenState
       await handleFreePlayComplete(
         context: context,
         title: l10n.reviewDifficultPracticeCompleteTitle,
-        message: l10n.reviewDifficultPracticeCompleteMessage(
-          playerState.totalSentences,
-        ),
+        stats: [
+          (
+            value: '${playerState.totalSentences}',
+            label: l10n.statDifficultSentences,
+          ),
+        ],
         onStudyAgain: () async {
           await ref
               .read(reviewDifficultPracticeProvider.notifier)
@@ -318,10 +321,12 @@ class _ReviewDifficultPracticeScreenState
     final result = await showStepCompleteDialog(
       context: context,
       title: l10n.reviewDifficultPracticeCompleteTitle,
-      contentBody: Text(
-        l10n.reviewDifficultPracticeCompleteMessage(playerState.totalSentences),
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
+      stats: [
+        (
+          value: '${playerState.totalSentences}',
+          label: l10n.statDifficultSentences,
+        ),
+      ],
       stepIndex: stepCtx.stepIndex,
       totalSteps: stepCtx.totalSteps,
       stageName: stepCtx.stageName,

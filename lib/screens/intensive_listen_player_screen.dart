@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import '../router/app_router.dart';
 import '../database/enums.dart';
 import '../utils/wakelock_mixin.dart';
+import '../utils/difficulty_from_ratio.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/audio_engine/audio_engine_provider.dart';
@@ -373,10 +374,11 @@ class _IntensiveListenPlayerScreenState
       await handleFreePlayComplete(
         context: context,
         title: l10n.intensiveListenCompleteTitle,
-        message: l10n.intensiveListenCompleteMessage(
-          playerState.totalSentences,
-          totalDifficultCount,
-        ),
+        stats: [
+          (value: '${playerState.totalSentences}', label: l10n.statSentences),
+          (value: '$totalDifficultCount', label: l10n.statDifficultSentences),
+        ],
+        message: l10n.intensiveListenCompleteHint,
         onStudyAgain: () async {
           ref.read(intensiveListenPlayerProvider.notifier).resetToStart();
         },
@@ -416,13 +418,17 @@ class _IntensiveListenPlayerScreenState
     final result = await showStepCompleteDialog(
       context: context,
       title: l10nDialog.intensiveListenCompleteTitle,
-      contentBody: Text(
-        l10nDialog.intensiveListenCompleteMessage(
-          playerState.totalSentences,
-          totalDifficultCount,
+      stats: [
+        (
+          value: '${playerState.totalSentences}',
+          label: l10nDialog.statSentences,
         ),
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
+        (
+          value: '$totalDifficultCount',
+          label: l10nDialog.statDifficultSentences,
+        ),
+      ],
+      contentBody: Text(l10nDialog.intensiveListenCompleteHint),
       stepIndex: stepCtx.stepIndex,
       totalSteps: stepCtx.totalSteps,
       stageName: stepCtx.stageName,
@@ -435,8 +441,15 @@ class _IntensiveListenPlayerScreenState
       return;
     }
 
-    // 用户确认后：清除断点 + 标记完成
+    // 用户确认后：按难句比例自动判定难度 + 清除断点 + 标记完成
     try {
+      final autoDifficulty = difficultyFromDifficultRatio(
+        playerState.totalSentences,
+        totalDifficultCount,
+      );
+      await ref
+          .read(learningProgressNotifierProvider.notifier)
+          .setDifficulty(widget.audioItemId, autoDifficulty);
       await ref
           .read(learningProgressNotifierProvider.notifier)
           .saveIntensiveListenSentenceIndex(
