@@ -208,15 +208,15 @@ void main() {
     });
 
     group('交互', () {
-      testWidgets('点击设置按钮打开设置对话框', (tester) async {
+      testWidgets('点击设置按钮打开设置底部弹窗', (tester) async {
         await tester.pumpWidget(createTestScreen(const PlayerScreen()));
         await tester.pump();
 
         // 点击设置按钮
         await tester.tap(find.byIcon(Icons.tune));
-        await tester.pump();
+        await tester.pumpAndSettle();
 
-        // 应弹出 SettingsDialog
+        // 应弹出设置底部弹窗
         expect(find.text('Settings'), findsAtLeast(1));
         expect(find.text('Sentence Repeat'), findsOneWidget);
         await _disposeTree(tester);

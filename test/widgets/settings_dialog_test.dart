@@ -33,8 +33,8 @@ Widget _buildSettingsDialogTest({
   return createTestApp(
     Builder(
       builder: (context) {
-        // 直接渲染 Dialog 内容
-        return const SettingsDialog();
+        // 直接渲染设置面板内容
+        return const SettingsSheet();
       },
     ),
     overrides: overrides ?? defaultOverrides,
@@ -141,37 +141,39 @@ void main() {
         expect(find.text('Loop Count'), findsOneWidget);
       });
 
-      testWidgets('关闭按钮可以关闭对话框', (tester) async {
+      testWidgets('点击遮罩可以关闭底部弹窗', (tester) async {
         await tester.pumpWidget(
           createTestApp(
             Builder(
               builder: (context) {
                 return ElevatedButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => const SettingsDialog(),
-                    );
-                  },
+                  onPressed: () => showSettingsSheet(context),
                   child: const Text('Open'),
                 );
               },
             ),
+            overrides: [
+              appSettingsProvider.overrideWith(() => TestAppSettings()),
+              listeningPracticeProvider.overrideWith(
+                () => TestListeningPractice(const ListeningPracticeState()),
+              ),
+              audioEngineProvider.overrideWith(() => TestAudioEngine()),
+            ],
           ),
         );
         await tester.pumpAndSettle();
 
-        // 打开对话框
+        // 打开底部弹窗
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
         expect(find.text('Settings'), findsOneWidget);
 
-        // 点击关闭按钮
-        await tester.tap(find.byIcon(Icons.close));
+        // 点击遮罩区域（弹窗顶部以上）关闭
+        await tester.tapAt(const Offset(10, 10));
         await tester.pumpAndSettle();
 
-        // 对话框应已关闭
+        // 弹窗应已关闭
         expect(find.text('Sentence Repeat'), findsNothing);
       });
     });

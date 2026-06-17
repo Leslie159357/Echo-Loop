@@ -517,7 +517,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   void _showSettingsDialog(BuildContext context) {
-    showDialog(context: context, builder: (context) => const SettingsDialog());
+    showSettingsSheet(context);
   }
 
   Widget _buildControlPanel(
