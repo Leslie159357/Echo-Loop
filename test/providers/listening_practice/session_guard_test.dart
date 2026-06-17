@@ -25,11 +25,28 @@ class _SessionAudioEngine extends TestAudioEngine {
   final _positionController = StreamController<Duration>.broadcast();
   final _playerStateController = StreamController<ja.PlayerState>.broadcast();
 
+  /// 模拟引擎当前播放位置（用于 isResume 判定）
+  Duration position = Duration.zero;
+
+  /// 记录最后一次 seek 的目标位置
+  Duration? lastSeek;
+
+  @override
+  Duration get currentPosition => position;
+
+  @override
+  Future<void> seek(Duration pos) async {
+    lastSeek = pos;
+  }
+
   @override
   int newSession() {
     _sessionId += 1;
     return _sessionId;
   }
+
+  @override
+  int get currentSessionId => _sessionId;
 
   @override
   bool isActiveSession(int id) => id == _sessionId;
@@ -166,6 +183,32 @@ void main() {
     expect(container.read(listeningPracticeProvider).currentFullIndex, 1);
 
     // 推送完成态，让 _playContinuous 的 firstWhere 正常结束，避免悬挂
+    engine.emitPlayerState(
+      ja.PlayerState(false, ja.ProcessingState.completed),
+    );
+    await Future<void>.delayed(Duration.zero);
+  });
+
+  test('外来 session 驱动后再播放，按 currentFullIndex 重新定位而非续播引擎位置', () async {
+    lp.seed(
+      sentences: sentences,
+      settings: continuousSettings,
+      currentFullIndex: 2,
+    );
+    // LP 暂停：把当前 session 记为自己持有（模拟正常「暂停→继续」前置）
+    await container.read(listeningPracticeProvider.notifier).pause();
+    // 模拟讲解页旁路驱动：bump session + 引擎位置被改写到非零（若不校验 session，
+    // 这个非零位置会让 play() 误判为「续播」从而从被污染的位置播放）
+    engine.newSession();
+    engine.position = const Duration(seconds: 1);
+    engine.lastSeek = null;
+
+    unawaited(container.read(listeningPracticeProvider.notifier).play());
+    await Future<void>.delayed(Duration.zero);
+
+    // 应重新 seek 到第 2 句起点（6s），而不是续播引擎当前的 1s
+    expect(engine.lastSeek, const Duration(seconds: 6));
+
     engine.emitPlayerState(
       ja.PlayerState(false, ja.ProcessingState.completed),
     );
