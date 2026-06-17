@@ -32,8 +32,13 @@ void main() {
   }
 
   group('LearningProgress', () {
-    test('初始状态 — 未开始', () {
-      final progress = LearningProgress(audioItemId: 'audio-1', updatedAt: now);
+    test('初始状态 — 未开始（v2 入口为逐句精听）', () {
+      // v2 新建音频入口子步骤为精听；空 planVersions → 默认 v2。
+      final progress = LearningProgress(
+        audioItemId: 'audio-1',
+        currentSubStage: SubStageType.intensiveListen,
+        updatedAt: now,
+      );
       const noCompletions = <String>{};
 
       expect(progress.isStarted, false);
@@ -43,19 +48,20 @@ void main() {
       expect(progress.completedReviewStages, 0);
     });
 
-    test('canSkipCurrentSubStage — 仅首次学习的第一个盲听不可跳过', () {
-      // 首次学习盲听 → 不可跳过
+    test('canSkipCurrentSubStage — v2 仅首次学习入口（精听）不可跳过', () {
+      // v2 首次学习精听（入口）→ 不可跳过
       expect(
         LearningProgress(
           audioItemId: 'a1',
+          currentSubStage: SubStageType.intensiveListen,
           updatedAt: now,
         ).canSkipCurrentSubStage,
         false,
       );
-      // 首次学习其余子步骤 → 可跳过
+      // v2 首次学习其余子步骤（含后置盲听）→ 可跳过
       for (final sub in const [
-        SubStageType.intensiveListen,
         SubStageType.listenAndRepeat,
+        SubStageType.blindListen,
         SubStageType.retell,
       ]) {
         expect(
@@ -66,7 +72,7 @@ void main() {
             updatedAt: now,
           ).canSkipCurrentSubStage,
           true,
-          reason: 'firstLearn:$sub 应可跳过',
+          reason: 'firstLearn(v2):$sub 应可跳过',
         );
       }
       // 复习阶段的盲听 → 可跳过
@@ -81,15 +87,39 @@ void main() {
       );
     });
 
-    test('首次学习第 2 个子步骤进行中（已完成 blindListen）', () {
+    test('canSkipCurrentSubStage — v1 仍是首次学习盲听不可跳过', () {
+      const v1 = {LearningStage.firstLearn: 1};
+      // v1 首次学习盲听（入口）→ 不可跳过
+      expect(
+        LearningProgress(
+          audioItemId: 'a1',
+          currentSubStage: SubStageType.blindListen,
+          planVersionsByStage: v1,
+          updatedAt: now,
+        ).canSkipCurrentSubStage,
+        false,
+      );
+      // v1 首次学习精听 → 可跳过
+      expect(
+        LearningProgress(
+          audioItemId: 'a1',
+          currentSubStage: SubStageType.intensiveListen,
+          planVersionsByStage: v1,
+          updatedAt: now,
+        ).canSkipCurrentSubStage,
+        true,
+      );
+    });
+
+    test('首次学习第 2 个子步骤进行中（v2 已完成精听，现在跟读）', () {
       final progress = LearningProgress(
         audioItemId: 'audio-1',
         currentStage: LearningStage.firstLearn,
-        currentSubStage: SubStageType.intensiveListen,
+        currentSubStage: SubStageType.listenAndRepeat,
         updatedAt: now,
       );
       final completed = keys([
-        (LearningStage.firstLearn, SubStageType.blindListen),
+        (LearningStage.firstLearn, SubStageType.intensiveListen),
       ]);
 
       expect(progress.isStarted, true);
@@ -695,9 +725,9 @@ void main() {
 
     test('subStages 列表内容正确', () {
       expect(LearningStage.firstLearn.allSubStages, [
-        SubStageType.blindListen,
         SubStageType.intensiveListen,
         SubStageType.listenAndRepeat,
+        SubStageType.blindListen,
         SubStageType.retell,
       ]);
       // v1 ∪ v2 并集（真实 plan 由 LearningPlan 按 planVersionsByStage 派生）

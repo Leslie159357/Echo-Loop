@@ -48,6 +48,7 @@ import 'package:echo_loop/models/difficult_practice_settings.dart';
 import 'package:echo_loop/models/flashcard_item.dart';
 import 'package:echo_loop/models/flashcard_settings.dart';
 import 'package:echo_loop/models/intensive_listen_settings.dart';
+import 'package:echo_loop/models/learning_plan.dart';
 import 'package:echo_loop/models/learning_progress.dart';
 import 'package:echo_loop/models/playback_settings.dart';
 import 'package:echo_loop/models/retell_settings.dart';
@@ -512,8 +513,14 @@ class FakeLearningProgressNotifier extends LearningProgressNotifier {
   Future<LearningProgress> ensureProgress(String audioItemId) async {
     final existing = state.progressMap[audioItemId];
     if (existing != null) return existing;
+    // 与真实 ensureProgress 对齐：v2 入口子步骤为逐句精听，并 stamp 版本快照。
+    final entrySubStage = LearningPlan.standard(
+      stagePlanVersions: kLatestPlanVersions,
+    ).subStagesFor(LearningStage.firstLearn).first;
     final progress = LearningProgress(
       audioItemId: audioItemId,
+      currentSubStage: entrySubStage,
+      planVersionsByStage: Map.unmodifiable(kLatestPlanVersions),
       updatedAt: DateTime.now(),
     );
     final newMap = Map<String, LearningProgress>.from(state.progressMap);
@@ -590,6 +597,16 @@ class FakeLearningProgressNotifier extends LearningProgressNotifier {
       updatedAt: DateTime.now(),
     );
     state = state.copyWith(progressMap: newMap);
+  }
+
+  @override
+  Future<DifficultyLevel> refreshDifficultyFromBookmarks(
+    String audioItemId,
+    int totalSentences,
+  ) async {
+    // 测试 fake 不接 bookmarkDao，直接返回现有难度（不重算）。
+    // 实时重算逻辑由 learning_progress_provider_test 单测覆盖。
+    return state.progressMap[audioItemId]?.difficulty ?? DifficultyLevel.medium;
   }
 
   @override

@@ -43,11 +43,11 @@ void main() {
   });
 
   group('LearningStage.allSubStages', () {
-    test('firstLearn 4 个子步骤', () {
+    test('firstLearn 4 个子步骤（v2 规范顺序）', () {
       expect(LearningStage.firstLearn.allSubStages, [
-        SubStageType.blindListen,
         SubStageType.intensiveListen,
         SubStageType.listenAndRepeat,
+        SubStageType.blindListen,
         SubStageType.retell,
       ]);
     });

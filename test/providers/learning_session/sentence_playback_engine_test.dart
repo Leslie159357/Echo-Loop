@@ -69,44 +69,18 @@ void main() {
   // ============================================================
   // targetPlayCountForDifficulty
   // ============================================================
-  group('targetPlayCountForDifficulty', () {
-    test('veryEasy (0) => 2', () {
-      expect(targetPlayCountForDifficulty(0), 2);
+  group('targetPlayCountForDifficulty（当前各档统一 3 遍）', () {
+    test('各难度档均返回 3', () {
+      for (final v in [0, 1, 2, 3, 4]) {
+        expect(targetPlayCountForDifficulty(v), 3, reason: 'difficulty=$v');
+      }
     });
 
-    test('easy (1) => 2', () {
-      expect(targetPlayCountForDifficulty(1), 2);
-    });
-
-    test('medium (2) => 3', () {
-      expect(targetPlayCountForDifficulty(2), 3);
-    });
-
-    test('hard (3) => 4', () {
-      expect(targetPlayCountForDifficulty(3), 4);
-    });
-
-    test('veryHard (4) => 5', () {
-      expect(targetPlayCountForDifficulty(4), 5);
-    });
-
-    test('负数返回默认值 3', () {
+    test('越界 / 负数同样返回 3', () {
       expect(targetPlayCountForDifficulty(-1), 3);
       expect(targetPlayCountForDifficulty(-100), 3);
-    });
-
-    test('超出范围的正数返回默认值 3', () {
       expect(targetPlayCountForDifficulty(5), 3);
-      expect(targetPlayCountForDifficulty(10), 3);
       expect(targetPlayCountForDifficulty(999), 3);
-    });
-
-    test('遍数随难度递增（veryEasy <= easy < medium < hard < veryHard）', () {
-      final counts = List.generate(5, targetPlayCountForDifficulty);
-      // [2, 2, 3, 4, 5]
-      for (int i = 1; i < counts.length; i++) {
-        expect(counts[i], greaterThanOrEqualTo(counts[i - 1]));
-      }
     });
   });
 

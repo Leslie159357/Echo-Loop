@@ -36,7 +36,7 @@ void main() {
 
     test('当前版本快照', () {
       // 当前各 stage 的最新版本（这是 ground truth；改了请同步更新本期望）
-      expect(kLatestPlanVersions[LearningStage.firstLearn], 1);
+      expect(kLatestPlanVersions[LearningStage.firstLearn], 2);
       expect(kLatestPlanVersions[LearningStage.review0], 2);
       expect(kLatestPlanVersions[LearningStage.review1], 2);
       expect(kLatestPlanVersions[LearningStage.review2], 2);
@@ -50,8 +50,20 @@ void main() {
   group('LearningPlan.standard 默认（空 map → kLatestPlanVersions 全 v2）', () {
     final plan = LearningPlan.standard();
 
-    test('firstLearn = [盲听, 精听, 跟读, 段落复述]', () {
+    test('firstLearn v2 = [精听, 跟读, 盲听, 段落复述]', () {
       expect(plan.subStagesFor(LearningStage.firstLearn), [
+        SubStageType.intensiveListen,
+        SubStageType.listenAndRepeat,
+        SubStageType.blindListen,
+        SubStageType.retell,
+      ]);
+    });
+
+    test('firstLearn v1 = [盲听, 精听, 跟读, 段落复述]', () {
+      final v1 = LearningPlan.standard(
+        stagePlanVersions: const {LearningStage.firstLearn: 1},
+      );
+      expect(v1.subStagesFor(LearningStage.firstLearn), [
         SubStageType.blindListen,
         SubStageType.intensiveListen,
         SubStageType.listenAndRepeat,
@@ -196,10 +208,10 @@ void main() {
       );
     });
 
-    test('indexOf 返回 plan 内位置', () {
+    test('indexOf 返回 plan 内位置（v2: 精听0 跟读1 盲听2 复述3）', () {
       expect(
         plan.indexOf(LearningStage.firstLearn, SubStageType.listenAndRepeat),
-        2,
+        1,
       );
       expect(plan.indexOf(LearningStage.firstLearn, SubStageType.retell), 3);
     });

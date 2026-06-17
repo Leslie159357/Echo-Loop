@@ -144,16 +144,16 @@ void blindListenTests() {
       // 验证完成对话框弹出
       expect(find.byType(StepCompleteDialog), findsOneWidget);
       expect(find.text('Blind Listen Complete'), findsOneWidget);
-      // 验证难度选择存在
-      expect(find.text('How did it feel?'), findsOneWidget);
-      // 验证按钮："Done"和"Continue: Intensive Listening"
+      // 难度选择器已移除
+      expect(find.text('How did it feel?'), findsNothing);
+      // v2：盲听是第 3 步，下一步是段落复述
       expect(find.text('Done'), findsOneWidget);
-      expect(find.text('Continue: Intensive Listening'), findsOneWidget);
-      // 验证步骤进度
-      expect(find.textContaining('1/4'), findsOneWidget);
+      expect(find.text('Continue: Paragraph Retelling'), findsOneWidget);
+      // 验证步骤进度（盲听为 3/4）
+      expect(find.textContaining('3/4'), findsOneWidget);
     });
 
-    testWidgets('选择难度并退出', (tester) async {
+    testWidgets('完成盲听并退出', (tester) async {
       await tester.pumpWidget(createTestAppWithAudio());
       await navigateToBlindListen(tester);
 
@@ -186,11 +186,7 @@ void blindListenTests() {
       ));
       await _pumpUi(tester, 800);
 
-      // 选择 "Medium" 难度（原 "Okay" 已重命名为 5 档，取中间档）
-      await tester.tap(find.text('Medium'));
-      await _pumpUi(tester, 600);
-
-      // 点击"Done"返回计划
+      // 完成对话框已无难度选择器，直接点击"Done"返回计划
       await tester.tap(find.text('Done'));
       await _pumpUi(tester, 1000);
 

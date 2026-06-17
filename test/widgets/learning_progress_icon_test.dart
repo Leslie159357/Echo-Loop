@@ -38,10 +38,11 @@ void main() {
     });
 
     testWidgets('进行中 → 显示 CircularProgressIndicator + 进度值', (tester) async {
+      // v2：精听是入口（未开始）；跟读才算进行中
       final progress = LearningProgress(
         audioItemId: 'test-1',
         currentStage: LearningStage.firstLearn,
-        currentSubStage: SubStageType.intensiveListen,
+        currentSubStage: SubStageType.listenAndRepeat,
         updatedAt: DateTime(2026, 1, 1),
       );
 

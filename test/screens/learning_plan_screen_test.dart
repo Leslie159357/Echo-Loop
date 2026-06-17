@@ -175,6 +175,11 @@ void main() {
               const Scaffold(body: Text('Blind Listen')),
         ),
         GoRoute(
+          path: '/collections/:collectionId/:audioId/intensive-listen',
+          builder: (context, state) =>
+              const Scaffold(body: Text('Intensive Listen')),
+        ),
+        GoRoute(
           path: '/collections/:collectionId/:audioId/review-difficult-practice',
           builder: (context, state) =>
               const Scaffold(body: Text('Review Difficult Practice')),
@@ -675,7 +680,7 @@ void main() {
       expect(lpState.sentences, hasLength(reloadedSentences.length));
     });
 
-    testWidgets('简报弹窗点击开始练习后导航到盲听播放器', (tester) async {
+    testWidgets('简报弹窗点击开始练习后导航到精听播放器（v2 首步）', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
@@ -686,7 +691,7 @@ void main() {
       await tester.tap(find.text('Start Practice'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Blind Listen'), findsOneWidget);
+      expect(find.text('Intensive Listen'), findsOneWidget);
     });
 
     testWidgets('精听子步骤无字幕时显示提示对话框', (tester) async {
@@ -713,7 +718,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Continue Learning'));
+      // v2 精听是首步、未开始 → 底部按钮为「Start Learning」
+      await tester.tap(find.text('Start Learning'));
       await tester.pumpAndSettle();
 
       // LP 无句子时应弹出"无字幕"提示对话框
@@ -876,12 +882,13 @@ void main() {
     });
 
     testWidgets('已完成盲听步骤可点击直接进入自由练习', (tester) async {
+      // v2：盲听是第 3 步，currentSubStage=retell 时盲听已完成
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
-            currentSubStage: SubStageType.intensiveListen,
+            currentSubStage: SubStageType.retell,
             updatedAt: DateTime(2026, 1, 1),
           ),
         },
@@ -992,13 +999,14 @@ void main() {
       );
     });
 
-    testWidgets('盲听已完成时显示难度信息', (tester) async {
+    testWidgets('盲听已完成时仅显示遍数，不再显示难度', (tester) async {
+      // v2：盲听是第 3 步，currentSubStage=retell 时盲听已完成
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
-            currentSubStage: SubStageType.intensiveListen,
+            currentSubStage: SubStageType.retell,
             difficulty: DifficultyLevel.hard,
             blindListenPassCount: 2,
             updatedAt: DateTime(2026, 1, 1),
@@ -1009,9 +1017,9 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      // 盲听步骤已完成，应显示遍数 + 难度
+      // 盲听步骤已完成，仅显示遍数；难度在精听完成时自动判定，盲听不再展示
       expect(find.textContaining('Listened 2 time(s)'), findsOneWidget);
-      expect(find.textContaining('Difficulty:'), findsOneWidget);
+      expect(find.textContaining('Difficulty:'), findsNothing);
     });
 
     testWidgets('未来复习轮次显示固定间隔文案而非动态解锁倒计时', (tester) async {
@@ -1087,12 +1095,13 @@ void main() {
     });
 
     testWidgets('已完成步骤圆形背景使用较深绿色（非 shade50）', (tester) async {
+      // v2：currentSubStage=listenAndRepeat 时精听已完成（有完成步骤）
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
-            currentSubStage: SubStageType.intensiveListen,
+            currentSubStage: SubStageType.listenAndRepeat,
             updatedAt: DateTime(2026, 1, 1),
           ),
         },
@@ -1153,12 +1162,13 @@ void main() {
     // ====== Phase 2 Pilot：从 integration_test 下沉的 case ======
 
     testWidgets('无字幕音频显示警告横幅且开始学习按钮禁用', (tester) async {
+      // v2 入口为精听、未开始 → 底部按钮为「Start Learning」
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
-            currentSubStage: SubStageType.blindListen,
+            currentSubStage: SubStageType.intensiveListen,
             updatedAt: DateTime(2026, 5, 1),
           ),
         },
@@ -1182,18 +1192,18 @@ void main() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets('Phase 2 Pilot：盲听已完成时显示完成标记和继续学习', (tester) async {
+    testWidgets('Phase 2 Pilot：精听已完成时显示完成标记和继续学习', (tester) async {
+      // v2：精听是首步；完成精听后进行到跟读，此时已开始学习
       final completed = seedCompletedKeys(
         LearningStage.firstLearn,
-        SubStageType.intensiveListen,
+        SubStageType.listenAndRepeat,
       );
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
-            currentSubStage: SubStageType.intensiveListen,
-            blindListenPassCount: 2,
+            currentSubStage: SubStageType.listenAndRepeat,
             updatedAt: DateTime(2026, 5, 1),
           ),
         },
@@ -1203,7 +1213,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      // 验证盲听步骤显示完成标记（绿色勾图标）
+      // 验证精听步骤显示完成标记（绿色勾图标）
       expect(find.byIcon(Icons.check), findsWidgets);
 
       // 验证底部按钮文案为"Continue Learning"
@@ -1211,29 +1221,24 @@ void main() {
       expect(find.text('Start Learning'), findsNothing);
     });
 
-    testWidgets('精听阶段点击继续学习弹出精听简报', (tester) async {
-      final completed = seedCompletedKeys(
-        LearningStage.firstLearn,
-        SubStageType.intensiveListen,
-      );
+    testWidgets('精听阶段点击开始学习弹出精听简报', (tester) async {
+      // v2：精听是入口子步骤、未开始 → 底部按钮为「Start Learning」
       final progressState = LearningProgressState(
         progressMap: {
           'test-1': LearningProgress(
             audioItemId: 'test-1',
             currentStage: LearningStage.firstLearn,
             currentSubStage: SubStageType.intensiveListen,
-            blindListenPassCount: 2,
             updatedAt: DateTime(2026, 5, 1),
           ),
         },
-        completionsByAudio: {'test-1': completed},
       );
 
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      // 点击"Continue Learning"
-      await tester.tap(find.text('Continue Learning').last);
+      // 点击"Start Learning"
+      await tester.tap(find.text('Start Learning').last);
       await tester.pumpAndSettle();
 
       // 验证弹出的是精听简报（IntensiveListenBriefingSheet）

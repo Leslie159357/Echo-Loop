@@ -35,7 +35,9 @@ void main() {
       expect(find.text('Blind Listening'), findsOneWidget);
       expect(find.text('Initial Learning - Blind Listening'), findsOneWidget);
       expect(
-        find.text('Listen without subtitles, try to get the gist'),
+        find.text(
+          'Challenge yourself: listen without subtitles and grasp the main idea',
+        ),
         findsOneWidget,
       );
       expect(find.text('Start Practice'), findsOneWidget);

@@ -567,10 +567,9 @@ void main() {
       await tester.tap(find.byIcon(Icons.check_circle_rounded));
       await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('2 sentence(s) marked as difficult.'),
-        findsOneWidget,
-      );
+      // 难句统计 chip 显示数据库难句总数 2（而非本次会话的 1），标签为 Difficult
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('Difficult'), findsOneWidget);
     });
 
     testWidgets('点击设置按钮打开设置面板', (tester) async {

@@ -1,7 +1,43 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-17（修复清缓存误删系统 URLCache）
+> 最后更新：2026-06-17（难度实时化：按当前难句书签数重算驱动默认速度）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：难度实时化 —— 按当前难句书签数重算，驱动各入口默认速度
+
+原难度在精听完成时一次性按难句比例判定并冻结落库，后续步骤/复习只读这个冻结值。导致用户练熟后取消难句收藏（如 9 句只剩 1 句难句）时，难句跟读等入口仍按历史 veryHard 显示 0.75x。改为「每次进入练习入口时按当前难句书签数实时重算难度并静默回写」：难句比例下降 → 难度降低 → 默认播放速度随之回升，不再被历史难度绑定。
+
+- [x] `learning_progress_provider.dart`：新增 `refreshDifficultyFromBookmarks(audioItemId, totalSentences)`——查 bookmarkDao 当前难句数 → `difficultyFromDifficultRatio` 重算 → 静默落库（不发埋点，区别于用户显式 `setDifficulty`）；难度无变化跳过写库；`totalSentences<=0`（字幕未加载）不重算，避免误清成 veryEasy；无 progress 返回 medium。
+- [x] `learning_plan_screen.dart`：各练习入口在弹引导前调用 `refreshDifficultyFromBookmarks`，用返回的实时难度算 `defaultPlaybackSpeedFor` / `KeywordRatio` / 跟读 `playCount`。覆盖：难句跟读、段落复述、复习盲听、复习难句补练、复习段落复述，及对应自由练习路径。
+- [x] `learning_plan_screen.dart`：首学全文盲听（第三步）`_startBlindListen` 原本未传 `defaultPlaybackSpeed`（恒 1x），补为按 firstLearn 阶段的实时难度速度，与难句跟读/复述一致。
+- [x] `fake_notifiers.dart`：`FakeLearningProgressNotifier` 覆盖 `refreshDifficultyFromBookmarks` 为纯内存返回现有难度（测试不接 bookmarkDao）。
+- [x] 测试：`learning_progress_provider_test` 新增 `refreshDifficultyFromBookmarks` group（1/9→medium、0→veryEasy、4/9→veryHard、无变化跳过写库、totalSentences=0 不重算、无 progress 返回 medium）；修正 `blind_listen_briefing_sheet_test` 过期文案断言。全量测试通过，`flutter analyze` 0 error。
+
+  **完成时间**: 2026-06-17
+
+---
+
+## 已完成：学习流程调整 —— 盲听后置 + 取消手动选难度 + 难度自动判定
+
+依据 DAU 下降分析报告：盲听作为首次学习第一步让新用户困惑、延后 aha 时刻。首次学习流程由
+`盲听→精听→跟读→复述` 调整为 `逐句精听→难句跟读→盲听(可跳过)→段落复述`，并取消手动难度选择、
+难句跟读统一默认 3 遍、精听完成弹窗增加间隔复习引导。仅对新建音频生效（计划版本 firstLearn v2）。
+
+- [x] `learning_plan.dart`：`kLatestPlanVersions[firstLearn]=2`；`LearningPlan.standard` firstLearn 按版本分支，v2=`[intensive, listenAndRepeat, blind, retell]`，v1 保留旧顺序。
+- [x] `enums.dart`：`LearningStage.allSubStages` firstLearn 改为 v2 规范顺序。
+- [x] `learning_progress.dart`：新增 `firstLearnEntrySubStage`（按 plan 版本派生）；`isStarted` / `canSkipCurrentSubStage` 改为按入口子步骤判定（v1 盲听不可跳过、v2 精听不可跳过盲听可跳过）。
+- [x] `learning_progress_provider.dart`：`ensureProgress` 新建进度入口子步骤改为 v2 的逐句精听。
+- [x] `step_complete_dialog.dart`：删除 5 档难度选择器（含 `StepCompleteResult.difficulty`、`showDifficultySelector`）。
+- [x] `blind_listen_player_screen.dart`：盲听完成不再弹难度选择 / 写难度。
+- [x] 新增 `utils/difficulty_from_ratio.dart`：精听后按「难句比例=收藏难句/总句数」自动判定难度（0/≤5%/≤15%/≤30%/>30% → veryEasy/easy/medium/hard/veryHard）。
+- [x] `intensive_listen_player_screen.dart`：精听完成时自动 `setDifficulty`。难度仍驱动 `defaultPlaybackSpeedFor(难度×阶段)` 默认速度（整表不变）。
+- [x] `sentence_playback_engine.dart`：`targetPlayCountForDifficulty` 各档统一返回 3（保留接口便于以后差异化）。
+- [x] l10n：`intensiveListenCompleteMessage` 改为「你已精听全部 X 个句子，收藏了 Y 个难句。坚持间隔复习，就能彻底掌握这些难句。」（中英）。
+- [x] 测试：新增 `difficulty_from_ratio_test`；更新 plan/progress/enums/dialog/provider/screen/engine/fake_notifiers 及 integration 测试（v2 顺序、入口跳过规则、难度自动判定、新文案）。全量 2818 单元/widget 测试通过，`flutter analyze` 0 error。
+
+  **完成时间**: 2026-06-17
+
+---
 
 ## 已完成：修复「清除缓存」误删系统 URLCache 致 disk I/O error
 

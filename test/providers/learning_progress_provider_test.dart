@@ -199,12 +199,12 @@ void main() {
   // ========== Group 1: completeCurrentSubStage — 子步骤推进 ==========
 
   group('completeCurrentSubStage', () {
-    test('首次学习阶段内推进：blindListen → intensiveListen', () async {
+    test('首次学习阶段内推进（v2）：intensiveListen → listenAndRepeat', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
       final progress = LearningProgress(
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
-        currentSubStage: SubStageType.blindListen,
+        currentSubStage: SubStageType.intensiveListen,
         currentStageStartedAt: now,
         updatedAt: now,
       );
@@ -218,7 +218,7 @@ void main() {
 
       final after = readProgress(container, 'a1')!;
       expect(after.currentStage, LearningStage.firstLearn);
-      expect(after.currentSubStage, SubStageType.intensiveListen);
+      expect(after.currentSubStage, SubStageType.listenAndRepeat);
       expect(after.firstLearnCompletedAt, isNull);
       expect(after.lastStageCompletedAt, isNull);
     });
@@ -716,13 +716,15 @@ void main() {
     // 到 retell 位置后 hook 自动连续 skip，直到跳出 retell 区。
 
     test(
-      'autoSkipRetell=true：firstLearn 跟读完成 → review0（自动跳过 retell）',
+      'autoSkipRetell=true：firstLearn(v2) 盲听完成 → review0（自动跳过 retell）',
       () async {
         final now = DateTime(2026, 3, 1, 10, 0);
+        // v2 plan = [intensive, listenAndRepeat, blindListen, retell]
+        // 盲听是 retell 前的最后一步，完成后自动跳过 retell 推进到 review0。
         final progress = LearningProgress(
           audioItemId: 'a1',
           currentStage: LearningStage.firstLearn,
-          currentSubStage: SubStageType.listenAndRepeat,
+          currentSubStage: SubStageType.blindListen,
           currentStageStartedAt: now,
           updatedAt: now,
         );
@@ -864,8 +866,33 @@ void main() {
   // ========== Group 1b: skipCurrentSubStage — 手动跳过护栏 ==========
 
   group('skipCurrentSubStage', () {
-    test('首次学习的第一个盲听不可跳过：无操作', () async {
+    test('首次学习(v2) 入口精听不可跳过：无操作', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
+      final progress = LearningProgress(
+        audioItemId: 'a1',
+        currentStage: LearningStage.firstLearn,
+        currentSubStage: SubStageType.intensiveListen,
+        currentStageStartedAt: now,
+        updatedAt: now,
+      );
+
+      final container = createContainer(
+        LearningProgressState(progressMap: {'a1': progress}),
+        nowGetter: () => now,
+      );
+
+      await notifier(container).skipCurrentSubStage('a1');
+
+      final after = readProgress(container, 'a1')!;
+      // 位置不变，且未写入跳过集合
+      expect(after.currentStage, LearningStage.firstLearn);
+      expect(after.currentSubStage, SubStageType.intensiveListen);
+      expect(after.skippedSubStageKeys, isEmpty);
+    });
+
+    test('首次学习(v2) 盲听可跳过：blindListen → retell', () async {
+      final now = DateTime(2026, 3, 1, 10, 0);
+      // v2 plan = [intensive, listenAndRepeat, blindListen, retell]
       final progress = LearningProgress(
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
@@ -882,18 +909,22 @@ void main() {
       await notifier(container).skipCurrentSubStage('a1');
 
       final after = readProgress(container, 'a1')!;
-      // 位置不变，且未写入跳过集合
       expect(after.currentStage, LearningStage.firstLearn);
-      expect(after.currentSubStage, SubStageType.blindListen);
-      expect(after.skippedSubStageKeys, isEmpty);
+      expect(after.currentSubStage, SubStageType.retell);
+      expect(
+        after.skippedSubStageKeys.contains('firstLearn:blindListen'),
+        isTrue,
+      );
     });
 
-    test('首次学习精听可跳过（有难句时停在跟读）：intensiveListen → listenAndRepeat', () async {
+    test('首次学习(v1) 精听可跳过（有难句时停在跟读）：intensiveListen → listenAndRepeat', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
+      // v1 plan = [blindListen, intensive, listenAndRepeat, retell]，入口是盲听，精听可跳过
       final progress = LearningProgress(
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
         currentSubStage: SubStageType.intensiveListen,
+        planVersionsByStage: const {LearningStage.firstLearn: 1},
         currentStageStartedAt: now,
         updatedAt: now,
       );
@@ -916,12 +947,13 @@ void main() {
       );
     });
 
-    test('跳过精听且无难句时连带跳过跟读：intensiveListen → retell', () async {
+    test('首次学习(v1) 跳过精听且无难句时连带跳过跟读：intensiveListen → retell', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
       final progress = LearningProgress(
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
         currentSubStage: SubStageType.intensiveListen,
+        planVersionsByStage: const {LearningStage.firstLearn: 1},
         currentStageStartedAt: now,
         updatedAt: now,
       );
@@ -1247,7 +1279,8 @@ void main() {
 
       expect(result.audioItemId, 'new-audio');
       expect(result.currentStage, LearningStage.firstLearn);
-      expect(result.currentSubStage, SubStageType.blindListen);
+      // v2 入口子步骤为逐句精听
+      expect(result.currentSubStage, SubStageType.intensiveListen);
       expect(result.difficulty, DifficultyLevel.medium);
 
       // 验证持久化
@@ -1686,10 +1719,11 @@ void main() {
 
     test('autoSkipRetell=true 时手动跳过非 retell 会触发自动续跳到非 retell 位置', () async {
       final now = DateTime(2026, 3, 1, 10, 0);
+      // v2 plan = [intensive, listenAndRepeat, blindListen, retell]
       final progress = LearningProgress(
         audioItemId: 'a1',
         currentStage: LearningStage.firstLearn,
-        currentSubStage: SubStageType.listenAndRepeat,
+        currentSubStage: SubStageType.blindListen,
         currentStageStartedAt: now,
         updatedAt: now,
       );
@@ -1703,12 +1737,12 @@ void main() {
       await notifier(container).skipCurrentSubStage('a1');
 
       final after = readProgress(container, 'a1')!;
-      // listenAndRepeat 被手动跳过；下一个是 retell → 自动续跳 → review0
+      // blindListen 被手动跳过；下一个是 retell → 自动续跳 → review0
       expect(after.currentStage, LearningStage.review0);
       expect(
         after.skippedSubStageKeys,
         containsAll(<String>[
-          'firstLearn:listenAndRepeat',
+          'firstLearn:blindListen',
           'firstLearn:retell',
         ]),
       );
@@ -2130,6 +2164,120 @@ void main() {
       expect(after.currentSubStage, SubStageType.reviewDifficultPractice);
       // 整个 snapshot 不变
       expect(after.planVersionsByStage, baseline);
+    });
+  });
+
+  // ========== Group: refreshDifficultyFromBookmarks — 难句比例实时重算难度 ==========
+
+  group('refreshDifficultyFromBookmarks', () {
+    LearningProgress seedProgress(DifficultyLevel difficulty) {
+      final now = DateTime(2026, 3, 1, 10, 0);
+      return LearningProgress(
+        audioItemId: 'a1',
+        currentStage: LearningStage.firstLearn,
+        currentSubStage: SubStageType.listenAndRepeat,
+        currentStageStartedAt: now,
+        updatedAt: now,
+        difficulty: difficulty,
+      );
+    }
+
+    test('1/9 难句 → medium（比例 0.11 落在 (0.05, 0.15]）', () async {
+      final container = createContainer(
+        LearningProgressState(
+          progressMap: {'a1': seedProgress(DifficultyLevel.veryHard)},
+        ),
+        bookmarks: {3},
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('a1', 9);
+
+      expect(result, DifficultyLevel.medium);
+      expect(readProgress(container, 'a1')!.difficulty, DifficultyLevel.medium);
+      verify(() => mockDao.upsert(any())).called(1);
+    });
+
+    test('0 难句 → veryEasy', () async {
+      final container = createContainer(
+        LearningProgressState(
+          progressMap: {'a1': seedProgress(DifficultyLevel.veryHard)},
+        ),
+        bookmarks: <int>{},
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('a1', 9);
+
+      expect(result, DifficultyLevel.veryEasy);
+      expect(
+        readProgress(container, 'a1')!.difficulty,
+        DifficultyLevel.veryEasy,
+      );
+    });
+
+    test('4/9 难句（>0.30）→ veryHard', () async {
+      final container = createContainer(
+        LearningProgressState(
+          progressMap: {'a1': seedProgress(DifficultyLevel.medium)},
+        ),
+        bookmarks: {0, 1, 2, 3},
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('a1', 9);
+
+      expect(result, DifficultyLevel.veryHard);
+    });
+
+    test('难度无变化时跳过写库', () async {
+      final container = createContainer(
+        LearningProgressState(
+          progressMap: {'a1': seedProgress(DifficultyLevel.medium)},
+        ),
+        bookmarks: {3}, // 1/9 → medium，与现有一致
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('a1', 9);
+
+      expect(result, DifficultyLevel.medium);
+      verifyNever(() => mockDao.upsert(any()));
+    });
+
+    test('字幕未加载（totalSentences=0）时不重算、不写库，返回现有难度', () async {
+      final container = createContainer(
+        LearningProgressState(
+          progressMap: {'a1': seedProgress(DifficultyLevel.hard)},
+        ),
+        bookmarks: <int>{},
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('a1', 0);
+
+      expect(result, DifficultyLevel.hard);
+      expect(readProgress(container, 'a1')!.difficulty, DifficultyLevel.hard);
+      verifyNever(() => mockDao.upsert(any()));
+    });
+
+    test('无 progress 时返回 medium，不写库', () async {
+      final container = createContainer(
+        const LearningProgressState(progressMap: {}),
+        bookmarks: {0, 1, 2, 3},
+      );
+
+      final result = await notifier(
+        container,
+      ).refreshDifficultyFromBookmarks('missing', 9);
+
+      expect(result, DifficultyLevel.medium);
+      verifyNever(() => mockDao.upsert(any()));
     });
   });
 }

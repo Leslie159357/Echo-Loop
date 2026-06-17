@@ -261,8 +261,8 @@ void intensiveListenTests() {
 
       // 验证完成对话框弹出
       expect(find.text('Intensive Listening Complete'), findsOneWidget);
-      // 验证步骤进度信息
-      expect(find.textContaining('2/4'), findsOneWidget);
+      // v2：精听是第 1 步
+      expect(find.textContaining('1/4'), findsOneWidget);
       // 精听后的步骤（listenAndRepeat）有播放器，显示"完成"和"继续"两个按钮
       expect(find.text('Done'), findsOneWidget);
       expect(find.textContaining('Continue'), findsOneWidget);

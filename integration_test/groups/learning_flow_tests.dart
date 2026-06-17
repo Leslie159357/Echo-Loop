@@ -40,7 +40,15 @@ Future<void> _pumpUntilFound(
 void learningFlowTests() {
   group('流程 7：跨页面学习闭环', () {
     testWidgets('盲听完成 → 返回学习计划页 → 进度更新', (tester) async {
-      await tester.pumpWidget(createTestAppWithAudio());
+      // v2：盲听是第 3 步。把进度置于盲听步骤（已开始学习），验证盲听完成闭环。
+      final progress = createTestLearningProgress(
+        currentStage: LearningStage.firstLearn,
+        currentSubStage: SubStageType.blindListen,
+        currentStageStartedAt: DateTime.now(),
+      );
+      await tester.pumpWidget(
+        createTestAppWithAudio(progressOverride: progress),
+      );
       await _pumpUi(tester, 1000);
 
       // === 1. 导航到学习计划页 ===
@@ -49,14 +57,14 @@ void learningFlowTests() {
       appContainer
           .read(appRouterProvider)
           .push('/collections/test-collection-1/test-audio-1/plan');
-      final startLearningButton = find.text('Start Learning');
-      await _pumpUntilFound(tester, startLearningButton);
+      // v2 盲听步骤已开始 → 底部按钮显示"Continue Learning"
+      final continueLearningButton = find.text('Continue Learning');
+      await _pumpUntilFound(tester, continueLearningButton);
 
-      // 验证盲听步骤为当前（底部按钮显示"Start Learning"）
-      expect(startLearningButton, findsWidgets);
+      expect(continueLearningButton, findsWidgets);
 
-      // === 2. 点击"开始学习" → 弹出盲听简报 ===
-      await tester.tap(startLearningButton);
+      // === 2. 点击"继续学习" → 弹出盲听简报 ===
+      await tester.tap(continueLearningButton.last);
       // 简报可能需要更长时间，多泵几次
       for (var i = 0; i < 10; i++) {
         await _pumpUi(tester, 300);
@@ -112,12 +120,8 @@ void learningFlowTests() {
       ));
       await safeSettle(tester);
 
-      // === 5. 完成对话框 → 选择难度 → 点击"返回计划" ===
+      // === 5. 完成对话框（已无难度选择器）→ 点击"返回计划" ===
       expect(find.byType(StepCompleteDialog), findsWidgets);
-
-      // 选择 "Medium" 难度（原 "Okay" 已重命名为 5 档难度，取中间档代替）
-      await tester.tap(find.text('Medium'));
-      await _pumpUi(tester, 800);
 
       // 点击 "Done"（返回计划页查看进度更新）
       await tester.tap(find.text('Done').last);
@@ -127,11 +131,10 @@ void learningFlowTests() {
       // 盲听页面已退出
       expect(find.byType(BlindListenPlayerScreen), findsNothing);
 
-      // 验证进度更新：盲听完成 → 当前步骤应推进到精听
-      // 底部按钮应变为"Continue Learning"
+      // 验证进度更新：盲听完成后仍在首次学习（推进到复述），底部按钮为"Continue Learning"
       expect(find.text('Continue Learning'), findsWidgets);
 
-      // 验证完成标记（绿色勾）出现在盲听步骤
+      // 验证完成标记（绿色勾）出现在已完成步骤
       expect(find.byIcon(Icons.check), findsWidgets);
     });
 
@@ -158,8 +161,8 @@ void learningFlowTests() {
           .push('/collections/test-collection-1/test-audio-1/plan');
       await safeSettle(tester);
 
-      // 验证底部按钮显示"Continue Learning"
-      expect(find.text('Continue Learning'), findsOneWidget);
+      // v2：精听是入口子步骤，底部按钮显示"Start Learning"（点按从断点续播）
+      expect(find.text('Start Learning'), findsOneWidget);
 
       // === 3. 验证断点进度数据正确保存 ===
       // 通过读取 Provider state 验证断点值（复用上方 container）

@@ -1085,7 +1085,8 @@ void main() {
             progressMap: {
               audioItem.id: LearningProgress(
                 audioItemId: audioItem.id,
-                currentSubStage: SubStageType.intensiveListen,
+                // v2：精听是入口（未开始）；跟读表示已开始学习
+                currentSubStage: SubStageType.listenAndRepeat,
                 updatedAt: DateTime(2026, 1, 1),
               ),
             },
@@ -1099,8 +1100,10 @@ void main() {
         progressNotifier: TestLearningProgressNotifier(
           LearningProgressState(
             progressMap: {
+              // v2 默认起点行 currentSubStage = 入口子步骤（逐句精听）
               audioItem.id: LearningProgress(
                 audioItemId: audioItem.id,
+                currentSubStage: SubStageType.intensiveListen,
                 updatedAt: DateTime(2026, 1, 1),
               ),
             },
