@@ -96,14 +96,26 @@ void main() {
         expect(result, 2);
       });
 
-      test('落在两个句子间隙返回下一个句子', () {
+      test('落在两个句子间隙归属上一句（尾部静音）', () {
         final sentences = createSentencesWithGaps();
-        // 位置 4s 在句子 0（0-3s）和句子 1（5-8s）之间
+        // 位置 4s 在句子 0（0-3s）和句子 1（5-8s）之间的间隙；归属上一句 0，
+        // 避免静音段高亮提前跳到下一句。
         final result = SentenceTracker.findSentenceIndexByPosition(
           sentences,
           const Duration(seconds: 4),
         );
-        expect(result, 1); // 下一个句子
+        expect(result, 0); // 上一句（间隙是其尾部静音）
+      });
+
+      test('恰好落在某句 endTime（区间右开）归属上一句', () {
+        final sentences = createSentencesWithGaps();
+        // 位置 3s = 句子 0 的 endTime，区间 [start, end) 右开，3s 不属于句子 0；
+        // 处于句子 0 与 1 之间的间隙，归属上一句 0。
+        final result = SentenceTracker.findSentenceIndexByPosition(
+          sentences,
+          const Duration(seconds: 3),
+        );
+        expect(result, 0);
       });
 
       test('单个句子的情况', () {

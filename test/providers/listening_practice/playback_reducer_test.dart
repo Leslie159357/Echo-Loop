@@ -1,7 +1,8 @@
 /// playback_reducer 纯函数单元测试
 ///
-/// 覆盖 decideNext 在「整篇循环」「单句循环」两组独立开关的全部组合分支，确保播放
-/// 推进逻辑可独立验证，不依赖音频引擎。同时断言每个动作携带的 pauseBefore 间隔。
+/// 覆盖 decideNext（越过当前句尾后该做什么）在「整篇循环」「单句循环」两组独立开关的
+/// 全部组合分支，以及 shouldLoopWhole（gapless 整段自然播完判定）。确保播放推进逻辑
+/// 可独立验证，不依赖音频引擎。同时断言每个动作携带的 pauseBefore 间隔。
 library;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -11,9 +12,8 @@ void main() {
   const sInterval = Duration(seconds: 2);
   const wInterval = Duration(seconds: 5);
 
-  /// 便捷构造：默认两个循环都关、clip 模式。
+  /// 便捷构造：默认两个循环都关。
   NextAction next({
-    bool isClipMode = true,
     bool loopSentence = false,
     int sentenceLoopCount = 3,
     bool loopWhole = false,
@@ -24,7 +24,6 @@ void main() {
     int playableCount = 5,
   }) {
     return decideNext(
-      isClipMode: isClipMode,
       loopSentence: loopSentence,
       sentenceLoopCount: sentenceLoopCount,
       sentenceInterval: sInterval,
@@ -38,52 +37,7 @@ void main() {
     );
   }
 
-  group('decideNext - gapless（整段无缝，单句循环必关）', () {
-    test('整篇循环关闭：整篇播完即停止', () {
-      final a = next(isClipMode: false, loopWhole: false, currentPos: 4);
-      expect(a, isA<StopPlayback>());
-    });
-
-    test('整篇循环 ∞：永远回卷到开头', () {
-      for (final done in [0, 1, 100]) {
-        final a = next(
-          isClipMode: false,
-          loopWhole: true,
-          wholeLoopCount: 0,
-          wholeLoopsDone: done,
-          currentPos: 4,
-        );
-        expect(a, isA<GoToPosition>());
-        expect((a as GoToPosition).position, 0);
-        expect(a.pauseBefore, wInterval);
-      }
-    });
-
-    test('整篇循环有限：未达遍数回卷，间隔为整篇间隔', () {
-      final a = next(
-        isClipMode: false,
-        loopWhole: true,
-        wholeLoopCount: 3,
-        wholeLoopsDone: 2,
-        currentPos: 4,
-      );
-      expect((a as GoToPosition).position, 0);
-      expect(a.pauseBefore, wInterval);
-    });
-
-    test('整篇循环有限：达到遍数则停止', () {
-      final a = next(
-        isClipMode: false,
-        loopWhole: true,
-        wholeLoopCount: 3,
-        wholeLoopsDone: 3,
-        currentPos: 4,
-      );
-      expect(a, isA<StopPlayback>());
-    });
-  });
-
-  group('decideNext - clip 单句循环', () {
+  group('decideNext - 单句循环', () {
     test('∞：永远重播当前句，间隔为单句间隔', () {
       for (final r in [1, 5, 100]) {
         final a = next(
@@ -130,14 +84,14 @@ void main() {
     });
   });
 
-  group('decideNext - clip 仅整篇循环（如收藏模式）', () {
+  group('decideNext - 单句循环关、逐句推进（如收藏跳播）', () {
     test('句间推进无停顿（Duration.zero）', () {
-      final a = next(loopWhole: true, currentPos: 1);
+      final a = next(currentPos: 1);
       expect((a as GoToPosition).position, 2);
       expect(a.pauseBefore, Duration.zero);
     });
 
-    test('末尾按整篇间隔回卷', () {
+    test('末尾、仅整篇循环开：按整篇间隔回卷', () {
       final a = next(
         loopWhole: true,
         wholeLoopCount: 2,
@@ -149,7 +103,7 @@ void main() {
     });
   });
 
-  group('decideNext - clip 两者同开（全程 trace）', () {
+  group('decideNext - 单句+整篇两者同开（全程 trace）', () {
     // 3 句，单句循环 2 次，整篇循环 2 遍。
     test('当前句未重复够：重播', () {
       final a = next(
@@ -224,6 +178,23 @@ void main() {
     test('两者全关、末尾：停止', () {
       final a = next(currentPos: 4);
       expect(a, isA<StopPlayback>());
+    });
+  });
+
+  group('shouldLoopWhole - gapless 整段自然播完判定', () {
+    test('整篇循环关闭：不回卷', () {
+      expect(shouldLoopWhole(false, 3, 0), isFalse);
+    });
+
+    test('整篇循环 ∞：永远回卷', () {
+      for (final done in [0, 1, 100]) {
+        expect(shouldLoopWhole(true, 0, done), isTrue);
+      }
+    });
+
+    test('整篇循环有限：未达遍数回卷，达到则停止', () {
+      expect(shouldLoopWhole(true, 3, 2), isTrue);
+      expect(shouldLoopWhole(true, 3, 3), isFalse);
     });
   });
 }

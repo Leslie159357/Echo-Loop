@@ -1,7 +1,20 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-18（修复待解锁任务误显"学习中"）
+> 最后更新：2026-06-18（Free Player 进度条重构为 gapless + 边界监听）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：Free Player 进度条重构（gapless + 边界监听，业界标准任意 seek）
+
+Free Player 进度条两个 bug——①位置与句子有时不匹配、②只能按句子寻址不能任意位置——根因都在 **clip 播放形态**：单句循环/收藏 tab 下用 `just_audio.setClip` 把播放限制在当前句区间，导致整段进度条只在小区间内移动、拖动吸附句首重起播。彻底重构为**永不 setClip 的 gapless 播放 + positionStream 边界监听**：进度条始终是整段连续时间轴、可任意位置 seek；单句循环/收藏跳播/整篇循环改由「越过当前监听句尾」检测驱动（接受 ~200ms 标准 overshoot）。
+
+- [x] `audio_engine_provider.dart`：新增 `pauseKeepSession()`（暂停但不递增 sessionId），供边界处理/任意 seek 续播同一 session。`setClip`/`playClipOnce`/`playRangeOnce` 保持不动（学习模式仍用）。
+- [x] `sentence_tracker.dart`：`findSentenceIndexByPosition` 间隙归属由「下一句」改为「上一句」（尾部静音），修高亮在静音段提前跳。
+- [x] `playback_reducer.dart`：`decideNext` 删除 `isClipMode`，语义改为「越过当前句尾后该做什么」；新增 public `shouldLoopWhole`（供 gapless 整段自然播完判定）。
+- [x] `listening_practice_provider.dart`：删 `_isClipMode`/`_playPosition`/`_advanceAfterCompletion`/`_advancing`；`_isClipMode`→`_watchBoundaries`；新增 `_watchPos`/`_watchEndTime`/`_boundaryGen`/`_handlingBoundary` 与 `_maybeCrossBoundary`/`_advance`/`_resumeAt`/`_setWatch`/`_alignEngineToCurrent`；`_onPositionChanged` 拆「越界检测 + 高亮」；`seekAbsolute` 重写为任意 seek 从落点续播（收藏模式吸附最近收藏句）。
+- [x] 测试：`playback_reducer_test` 删 isClipMode 用例、补 `shouldLoopWhole`；`sentence_tracker_test` 间隙归属改上一句 + 补 endTime 边界；`session_guard_test` 单句循环改 gapless 断言、新增「越过句尾位置流重播」「任意拖动从落点续播」；`fake_notifiers` 补 `pauseKeepSession`。
+- [x] 验证：`flutter analyze` 改动文件 0 issue；`flutter test` 全套 2866 例通过。
+
+  **完成时间**: 2026-06-18
 
 ## 已完成：修复学习首页「待解锁」任务卡片误显"学习中"
 

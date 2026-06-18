@@ -34,10 +34,12 @@ class SentenceTracker {
       }
     }
 
-    // 如果没有精确匹配（在句子间隙），返回最接近的句子
-    // 优先返回即将播放的下一个句子
-    if (left < sentences.length) return left;
+    // 在句子间隙（无精确匹配）：归属上一句。
+    // 间隙是上一句结束后的尾部静音，播放头尚未到达下一句起点；归属上一句可避免
+    // 高亮在静音段提前跳到下一句（thumb 还在上一句附近，高亮就已切走）。
+    // 二分退出时 right = left - 1，指向「endTime <= position 的最大句」，即上一句。
     if (right >= 0) return right;
+    if (left < sentences.length) return left;
 
     return -1;
   }

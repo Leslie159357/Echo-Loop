@@ -62,8 +62,7 @@ class _SessionAudioEngine extends TestAudioEngine {
   Stream<Duration> get absolutePositionStream => _positionController.stream;
 
   @override
-  Stream<ja.PlayerState> get playerStateStream =>
-      _playerStateController.stream;
+  Stream<ja.PlayerState> get playerStateStream => _playerStateController.stream;
 
   void emitPosition(Duration position) => _positionController.add(position);
 
@@ -137,8 +136,9 @@ void main() {
         ),
       ],
     );
-    lp = container.read(listeningPracticeProvider.notifier)
-        as _TestableListeningPractice;
+    lp =
+        container.read(listeningPracticeProvider.notifier)
+            as _TestableListeningPractice;
     // 等待 build 内 _setupListeners 的 microtask 完成订阅
     await Future<void>.delayed(Duration.zero);
   });
@@ -213,18 +213,69 @@ void main() {
       currentFullIndex: 2,
     );
 
-    // 起播：clip 模式应 setClip 到第 2 句（6s 起）
+    // 起播：gapless 永不 setClip，应 seek 到第 2 句句首（6s）并监听其句尾。
     unawaited(container.read(listeningPracticeProvider.notifier).play());
     await Future<void>.delayed(Duration.zero);
-    expect(engine.lastClipStart, const Duration(seconds: 6));
+    expect(engine.lastSeek, const Duration(seconds: 6));
+    expect(engine.lastClipStart, isNull); // 不再 setClip
 
-    // 模拟该句播放完成 → 单句循环应重播当前句，而非跳到第 0 句
-    engine.lastClipStart = null;
+    // 模拟越过句尾（completed 兜底）→ 单句循环应重播当前句，而非跳到第 0 句。
+    engine.lastSeek = null;
     engine.emitPlayerState(ja.PlayerState(false, ja.ProcessingState.completed));
+    await Future<void>.delayed(Duration.zero);
     await Future<void>.delayed(Duration.zero);
     await Future<void>.delayed(Duration.zero);
 
     expect(container.read(listeningPracticeProvider).currentFullIndex, 2);
-    expect(engine.lastClipStart, const Duration(seconds: 6));
+    expect(engine.lastSeek, const Duration(seconds: 6)); // 重播回句首
+  });
+
+  test('单句循环：越过句尾（位置流）重播当前句', () async {
+    lp.seed(
+      sentences: sentences,
+      settings: const PlaybackSettings(
+        loopSentence: true,
+        sentenceLoopCount: 0,
+        sentenceInterval: Duration.zero,
+      ),
+      currentFullIndex: 1, // 第 1 句 3-6s
+    );
+
+    unawaited(container.read(listeningPracticeProvider.notifier).play());
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.lastSeek, const Duration(seconds: 3));
+    engine.isPlaying = true;
+
+    // 播放头越过第 1 句句尾（6s）→ 应 seek 回句首 3s 重播，不进第 2 句。
+    engine.lastSeek = null;
+    engine.emitPosition(const Duration(seconds: 6));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(listeningPracticeProvider).currentFullIndex, 1);
+    expect(engine.lastSeek, const Duration(seconds: 3));
+  });
+
+  test('进度条任意位置拖动：从落点续播，不吸附句首', () async {
+    lp.seed(
+      sentences: sentences,
+      settings: continuousSettings, // gapless，不监听句尾
+      currentFullIndex: 0,
+    );
+    // 起播建立 LP 自己的 session
+    unawaited(container.read(listeningPracticeProvider.notifier).play());
+    await Future<void>.delayed(Duration.zero);
+    engine.isPlaying = true;
+
+    // 拖到 7.5s（落在第 2 句 6-9s 内的任意位置）
+    engine.lastSeek = null;
+    await container
+        .read(listeningPracticeProvider.notifier)
+        .seekAbsolute(const Duration(milliseconds: 7500));
+
+    // seek 到落点本身（不是句首 6s），高亮更新到第 2 句
+    expect(engine.lastSeek, const Duration(milliseconds: 7500));
+    expect(container.read(listeningPracticeProvider).currentFullIndex, 2);
   });
 }

@@ -130,6 +130,16 @@ class AudioEngine extends _$AudioEngine {
     await _audioPlayer.pause();
   }
 
+  /// 暂停但不递增 sessionId。
+  ///
+  /// 用于「暂停后仍要从同一 LP session 续播」的场景（边界监听回卷、进度条任意
+  /// 拖动续播）。普通 [pause] 会 `sessionId++` 使调用方持有的 session 失效，
+  /// 续播时会被误判为「被外来 session 顶掉」而走重新起播逻辑；本方法保留 session，
+  /// 让调用方能从精确位置继续。
+  Future<void> pauseKeepSession() async {
+    await _audioPlayer.pause();
+  }
+
   Future<void> stop() async {
     final oldId = state.sessionId;
     state = state.copyWith(sessionId: state.sessionId + 1);

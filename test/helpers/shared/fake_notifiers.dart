@@ -1751,6 +1751,11 @@ class FakeAudioEngine extends AudioEngine {
   }
 
   @override
+  Future<void> pauseKeepSession() async {
+    playingState = false;
+  }
+
+  @override
   Future<void> stop() async {
     playingState = false;
   }

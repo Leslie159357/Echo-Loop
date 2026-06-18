@@ -47,13 +47,28 @@ class ListeningPractice extends _$ListeningPractice {
 
   /// 整篇已完成的遍数。换音频/重新起播时归零。
   ///
-  /// gapless 模式下每次整篇 completed 即 +1；clip 模式下仅在真正整篇回卷
-  /// （走到末尾并回到第 0 句）时 +1。
+  /// gapless 整段自然播完即 +1；监听句尾模式下走到末尾并回到第 0 句时 +1。
   int _wholeLoopsDone = 0;
 
-  /// 完成事件归约重入保护：切 clip/seek 期间可能吐出多余 completed 事件，
-  /// 该标志确保同一时刻只处理一次推进，避免递归推进。
-  bool _advancing = false;
+  /// 当前监听句在 [_playable] 中的位置（0-based）。null=不监听句尾。
+  ///
+  /// 永不 setClip 的 gapless 模式下，单句循环/收藏跳播靠监听 positionStream，
+  /// 当播放头越过 [_watchEndTime] 时触发推进。
+  int? _watchPos;
+
+  /// 当前监听句的 endTime（绝对时间）。播放头越过即触发边界处理。
+  ///
+  /// 缓存为字段而非每次从 state 重算：pause→seek→resume 期间真相源 index 可能尚未
+  /// 更新，用缓存值判断「是否已离开旧边界」更确定。
+  Duration? _watchEndTime;
+
+  /// 边界处理代际计数器。每次新边界/新起播 +1；在途处理协程跨 await 校验代际，
+  /// 被顶掉则丢弃，避免旧协程错误地推进或重置闸门。
+  int _boundaryGen = 0;
+
+  /// 边界处理单飞闸门：position 流约 200ms 一帧，处理期间丢弃后续位置事件，
+  /// 避免一次越界触发多次推进。也用于隔离整段 completed 与边界路径的竞争。
+  bool _handlingBoundary = false;
 
   /// LP 自己发起播放时持有的 AudioEngine sessionId。
   ///
@@ -130,13 +145,32 @@ class ListeningPractice extends _$ListeningPractice {
       ? state.bookmarkedSentences
       : state.sentences;
 
-  /// 是否使用 clip（逐句）播放形态。
+  /// 是否需要监听句尾边界。
   ///
-  /// 单句循环需要逐句精确循环；收藏句不连续也必须逐句 seek。其余（全文 +
-  /// 仅整篇循环/不循环）走整段无缝（gapless）播放。
-  bool get _isClipMode =>
+  /// 永不 setClip，全部 gapless 播放；但以下两种情形需要监听 positionStream、
+  /// 在句尾处停下/跳转：
+  /// - 单句循环（[PlaybackSettings.loopSentence]）：每句重复够再进下一句；
+  /// - 收藏模式：收藏句不连续，播完一句需跳过中间非收藏句到下一收藏句。
+  /// 其余（全文 + 仅整篇循环/不循环）整段连续播放，靠整段 completed 推进。
+  bool get _watchBoundaries =>
       state.playlistMode == PlaylistMode.bookmarks ||
       state.settings.loopSentence;
+
+  /// 设置当前监听句（仅在 [_watchBoundaries] 为真时生效，否则清空）。
+  void _setWatch(int pos) {
+    final playable = _playable;
+    if (!_watchBoundaries || pos < 0 || pos >= playable.length) {
+      _clearWatch();
+      return;
+    }
+    _watchPos = pos;
+    _watchEndTime = playable[pos].endTime;
+  }
+
+  void _clearWatch() {
+    _watchPos = null;
+    _watchEndTime = null;
+  }
 
   /// 当前句在播放列表中的序号（0-based）。列表为空返回 null。
   int? get _currentPos {
@@ -159,33 +193,73 @@ class ListeningPractice extends _$ListeningPractice {
   // ===========================================================================
 
   void _onPositionChanged(Duration absolutePosition) {
-    _updateCurrentSentence(absolutePosition);
+    if (!_engine.isActiveSession(_playbackSessionId)) return;
+    if (!_engine.isPlaying) return;
+    // 先检测越界：越界时 _handlingBoundary 同步置位，随后跳过高亮更新，避免高亮在
+    // 句尾瞬间跳到下一句又被回卷拉回。
+    _maybeCrossBoundary(absolutePosition);
+    if (_handlingBoundary) return;
+    _updateHighlight(absolutePosition);
   }
 
-  /// 整段（gapless）播放时由位置流推进当前句高亮。clip 模式下当前句只由
-  /// 完成事件归约器修改，这里直接跳过。
-  void _updateCurrentSentence(Duration position) {
-    if (!_engine.isActiveSession(_playbackSessionId)) return;
-    if (_isClipMode) return;
-    if (!_engine.isPlaying) return;
+  /// 按实际播放位置刷新当前句高亮（gapless 下连续）。
+  ///
+  /// 全文模式直接按位置二分查找更新 currentFullIndex。收藏模式只在落点正好是收藏句
+  /// 时更新 currentBookmarkIndex；落在非收藏区间（跳播 overshoot）保持当前高亮，
+  /// 避免滑过非收藏间隙时高亮闪烁。
+  void _updateHighlight(Duration position) {
     if (state.sentences.isEmpty) return;
-
-    final newIndex = SentenceTracker.findSentenceIndexByPosition(
+    final idx = SentenceTracker.findSentenceIndexByPosition(
       state.sentences,
       position,
     );
-    if (newIndex != -1 && newIndex != state.currentFullIndex) {
-      state = state.copyWith(currentFullIndex: newIndex);
+    if (idx == -1) return;
+
+    if (state.playlistMode == PlaylistMode.bookmarks) {
+      if (state.bookmarkedIndices.contains(idx) &&
+          idx != state.currentBookmarkIndex) {
+        state = state.copyWith(currentBookmarkIndex: idx);
+      }
+    } else {
+      if (idx != state.currentFullIndex) {
+        state = state.copyWith(currentFullIndex: idx);
+      }
     }
+  }
+
+  /// 检测播放头是否越过当前监听句尾，越过则触发边界处理。
+  ///
+  /// 防竞态四道闸：[_handlingBoundary] 单飞、[_boundaryGen] 代际、
+  /// session 校验（在 [_advance] 内）、调用方 [_onPositionChanged] 已校验 isPlaying。
+  void _maybeCrossBoundary(Duration absolutePosition) {
+    final end = _watchEndTime;
+    if (end == null || _handlingBoundary || absolutePosition < end) return;
+    _handlingBoundary = true;
+    final gen = ++_boundaryGen;
+    final sid = _playbackSessionId;
+    unawaited(
+      _advance(gen, sid, sentenceBoundary: true).whenComplete(() {
+        if (gen == _boundaryGen) _handlingBoundary = false;
+      }),
+    );
   }
 
   void _onPlayerStateChanged(ja.PlayerState playerState) {
     if (playerState.processingState == ja.ProcessingState.completed) {
-      // 仅处理 LP 自己 session 的完成事件；重入保护避免切 clip 期间递归推进。
-      if (_engine.isActiveSession(_playbackSessionId) && !_advancing) {
-        _advancing = true;
+      // 仅处理 LP 自己 session 的完成事件；与边界路径互斥（单飞）。
+      if (_engine.isActiveSession(_playbackSessionId) && !_handlingBoundary) {
+        _handlingBoundary = true;
+        final gen = ++_boundaryGen;
+        final sid = _playbackSessionId;
+        // 监听句尾时整段 completed 是「末句 endTime 超出轨道」的兜底，当作越过末句尾；
+        // 否则是 gapless 整段自然播完，按整篇循环判定。
+        final sentenceBoundary = _watchBoundaries;
         unawaited(
-          _advanceAfterCompletion().whenComplete(() => _advancing = false),
+          _advance(gen, sid, sentenceBoundary: sentenceBoundary).whenComplete(
+            () {
+              if (gen == _boundaryGen) _handlingBoundary = false;
+            },
+          ),
         );
       }
     }
@@ -193,56 +267,88 @@ class ListeningPractice extends _$ListeningPractice {
     state = state.copyWith();
   }
 
-  /// 一句/整段播放完成后的推进：调用纯函数决策，再驱动引擎。
-  Future<void> _advanceAfterCompletion() async {
-    final sessionId = _playbackSessionId;
+  /// 越过监听句尾 / 整段播完后的推进：先停下播放头，再调用纯函数决策驱动引擎。
+  ///
+  /// [sentenceBoundary] 为 true 表示「越过当前句尾」（单句循环/收藏跳播）；false 表示
+  /// 「gapless 整段自然播完」（仅整篇循环判定）。[gen]/[sid] 用于跨 await 校验本次
+  /// 处理未被新边界或外来 session 顶掉。
+  Future<void> _advance(
+    int gen,
+    int sid, {
+    required bool sentenceBoundary,
+  }) async {
+    // 越界时音频仍在播；先停下播放头，避免越界后继续漂入下一句。
+    await _engine.pauseKeepSession();
+    if (gen != _boundaryGen || !_engine.isActiveSession(sid)) return;
+
     final playable = _playable;
     if (playable.isEmpty) return;
-    final pos = _currentPos;
+    final pos = _watchPos ?? _currentPos;
     if (pos == null) return;
 
     final s = state.settings;
-    final isClip = _isClipMode;
-    final isLast = pos >= playable.length - 1;
-
-    if (isClip) {
+    final NextAction action;
+    if (sentenceBoundary) {
       _sentenceRepeatsDone += 1;
+      action = decideNext(
+        loopSentence: s.loopSentence,
+        sentenceLoopCount: s.sentenceLoopCount,
+        sentenceInterval: s.sentenceInterval,
+        loopWhole: s.loopWhole,
+        wholeLoopCount: s.wholeLoopCount,
+        wholeInterval: s.wholeInterval,
+        sentenceRepeatsDone: _sentenceRepeatsDone,
+        wholeLoopsDone: _wholeLoopsDone,
+        currentPos: pos,
+        playableCount: playable.length,
+      );
     } else {
-      // gapless：每次 completed 即完成一遍整篇。
+      // gapless 整段自然播完 = 完成一遍整篇。
       _wholeLoopsDone += 1;
+      action = shouldLoopWhole(s.loopWhole, s.wholeLoopCount, _wholeLoopsDone)
+          ? GoToPosition(0, pauseBefore: s.wholeInterval)
+          : const StopPlayback();
     }
-
-    final action = decideNext(
-      isClipMode: isClip,
-      loopSentence: s.loopSentence,
-      sentenceLoopCount: s.sentenceLoopCount,
-      sentenceInterval: s.sentenceInterval,
-      loopWhole: s.loopWhole,
-      wholeLoopCount: s.wholeLoopCount,
-      wholeInterval: s.wholeInterval,
-      sentenceRepeatsDone: _sentenceRepeatsDone,
-      wholeLoopsDone: _wholeLoopsDone,
-      currentPos: pos,
-      playableCount: playable.length,
-    );
 
     switch (action) {
       case StopPlayback():
         await _engine.stop();
       case ReplayCurrent(:final pauseBefore):
         await _delayInterval(pauseBefore);
-        if (!_engine.isActiveSession(sessionId)) return;
-        await _playPosition(pos);
+        if (gen != _boundaryGen || !_engine.isActiveSession(sid)) return;
+        await _resumeAt(pos);
       case GoToPosition(:final position, :final pauseBefore):
         await _delayInterval(pauseBefore);
-        if (!_engine.isActiveSession(sessionId)) return;
-        // clip 模式下，从末尾回卷到第 0 句意味着完成了一遍整篇。
-        if (isClip && isLast && position == 0) {
+        if (gen != _boundaryGen || !_engine.isActiveSession(sid)) return;
+        // 监听句尾下从末尾回卷到第 0 句意味着完成了一遍整篇。
+        final wasLast = pos >= playable.length - 1;
+        if (sentenceBoundary && wasLast && position == 0) {
           _wholeLoopsDone += 1;
         }
         _sentenceRepeatsDone = 0;
-        await _playPosition(position);
+        await _resumeAt(position);
     }
+  }
+
+  /// 从播放列表第 [pos] 条起播（gapless）：更新真相源 index + 监听句，seek 到句首后播放。
+  Future<void> _resumeAt(int pos) async {
+    final playable = _playable;
+    if (pos < 0 || pos >= playable.length) return;
+    final target = playable[pos];
+    if (state.playlistMode == PlaylistMode.bookmarks) {
+      state = state.copyWith(
+        currentBookmarkIndex: target.index,
+        lastPlayedBookmarkIndex: target.index,
+      );
+    } else {
+      state = state.copyWith(
+        currentFullIndex: target.index,
+        lastPlayedFullIndex: target.index,
+      );
+    }
+    _setWatch(pos);
+    await _engine.seek(target.startTime);
+    await _engine.play();
   }
 
   /// 按给定间隔停顿（来自 reducer 的决策，区分单句/整篇间隔）。
@@ -277,6 +383,12 @@ class ListeningPractice extends _$ListeningPractice {
 
     try {
       await stop();
+      // 换音频：清空监听句与循环计数，作废在途边界处理。
+      _clearWatch();
+      _sentenceRepeatsDone = 0;
+      _wholeLoopsDone = 0;
+      _boundaryGen++;
+      _handlingBoundary = false;
 
       state = state.copyWith(
         currentAudioItem: audioItem,
@@ -416,11 +528,12 @@ class ListeningPractice extends _$ListeningPractice {
       return;
     }
 
-    // 暂停后恢复：引擎仍停在 LP 自己的 session、gapless 形态、未播完、且有非零位置
-    // → 从精确暂停位置续播。若期间被讲解页等外来 session 顶掉（clip/position 已被
-    // 改写或已 stop），认领失效，按真相源 index 重新起播，而非续播被污染的位置。
-    // 先校验 session 再读取引擎播放状态，避免无谓触达底层 player。
-    if (_engine.isActiveSession(_playbackSessionId) && !_isClipMode) {
+    // 暂停后恢复：引擎仍停在 LP 自己的 session、未播完、且有非零位置 → 从精确暂停
+    // 位置续播（监听句已在起播时设好，循环/跳播继续生效）。若期间被讲解页等外来
+    // session 顶掉（position 已被改写或已 stop），或需监听句尾却尚未设监听句（如刚
+    // 恢复播放状态），认领失效，按真相源 index 重新起播。
+    if (_engine.isActiveSession(_playbackSessionId) &&
+        (!_watchBoundaries || _watchPos != null)) {
       final ps = _engine.audioPlayer.processingState;
       final resumable =
           ps != ja.ProcessingState.completed &&
@@ -435,47 +548,19 @@ class ListeningPractice extends _$ListeningPractice {
     await _startCurrent();
   }
 
-  /// 从当前真相源 index 起播（全新 session）。
+  /// 从当前真相源 index 起播（全新 session，gapless）。
   Future<void> _startCurrent() async {
     final playable = _playable;
     if (playable.isEmpty) return;
 
-    _advancing = false;
+    _handlingBoundary = false;
+    _boundaryGen++; // 作废在途边界处理
     _sentenceRepeatsDone = 0;
     _wholeLoopsDone = 0;
     _playbackSessionId = _engine.newSession();
 
-    final pos = _currentPos ?? 0;
-    await _playPosition(pos);
-  }
-
-  /// 播放列表中第 [pos] 条：更新真相源 index 后按 clip/gapless 形态起播。
-  Future<void> _playPosition(int pos) async {
-    final playable = _playable;
-    if (pos < 0 || pos >= playable.length) return;
-    final s = playable[pos];
-
-    if (state.playlistMode == PlaylistMode.bookmarks) {
-      state = state.copyWith(
-        currentBookmarkIndex: s.index,
-        lastPlayedBookmarkIndex: s.index,
-      );
-    } else {
-      state = state.copyWith(
-        currentFullIndex: s.index,
-        lastPlayedFullIndex: s.index,
-      );
-    }
-
-    if (_isClipMode) {
-      await _engine.setClip(s.startTime, s.endTime);
-      await _engine.seek(Duration.zero);
-      await _engine.play();
-    } else {
-      await _engine.clearClip();
-      await _engine.seek(s.startTime);
-      await _engine.play();
-    }
+    await _engine.clearClip();
+    await _resumeAt(_currentPos ?? 0);
   }
 
   void _ensureValidIndex() {
@@ -517,16 +602,16 @@ class ListeningPractice extends _$ListeningPractice {
   /// 而不依赖对引擎残留位置的启发式判断。
   Future<void> restorePosition() async {
     if (state.currentAudioItem == null) return;
-    final pos = _currentPos;
-    if (pos == null) return;
-    final s = _playable[pos];
-    await _engine.clearClip();
-    await _engine.seek(s.startTime);
-    _playbackSessionId = _engine.currentSessionId;
-    _sentenceRepeatsDone = 0;
+    if (_currentPos == null) return;
+    await _alignEngineToCurrent();
     _wholeLoopsDone = 0;
   }
 
+  /// 进度条任意位置拖动：seek 到任意时间并从落点继续（业界标准）。
+  ///
+  /// gapless 永不 setClip，直接绝对 seek。监听句尾的模式（单句循环/收藏）下重设监听句：
+  /// 全文模式监听落点所在句；收藏模式若落点在收藏句内则监听该句，落在非收藏区间则吸附
+  /// 到最近收藏句并从其句首播放（收藏模式无法播放非收藏内容）。
   Future<void> seekAbsolute(Duration absolutePosition) async {
     if (state.sentences.isEmpty) {
       await _engine.clearClip();
@@ -535,53 +620,74 @@ class ListeningPractice extends _$ListeningPractice {
     }
 
     final wasPlaying = _engine.isPlaying;
-    if (wasPlaying) await pause();
-
+    if (wasPlaying) await _engine.pauseKeepSession();
     await _engine.clearClip();
-    await _engine.seek(absolutePosition);
 
-    final newIndex = SentenceTracker.findSentenceIndexByPosition(
-      state.sentences,
-      absolutePosition,
-    );
-    if (newIndex != -1) {
-      if (state.playlistMode == PlaylistMode.bookmarks) {
-        if (state.bookmarkedIndices.contains(newIndex)) {
-          state = state.copyWith(currentBookmarkIndex: newIndex);
-        } else {
-          final closest = SentenceTracker.findClosestBookmark(
-            state.bookmarkedSentences,
+    // 计算最终落点 target 与监听句 pos（不监听句尾的模式 target=落点、不设监听句）。
+    Duration target = absolutePosition;
+    if (_watchBoundaries) {
+      final playable = _playable;
+      if (playable.isNotEmpty) {
+        int pos;
+        if (state.playlistMode == PlaylistMode.bookmarks) {
+          final globalIdx = SentenceTracker.findSentenceIndexByPosition(
+            state.sentences,
             absolutePosition,
           );
-          if (closest != null) {
-            state = state.copyWith(currentBookmarkIndex: closest);
+          pos = playable.indexWhere((s) => s.index == globalIdx);
+          if (pos == -1) {
+            // 落在非收藏区间：吸附到最近收藏句并从其句首播放。
+            final closest = SentenceTracker.findClosestBookmark(
+              playable,
+              absolutePosition,
+            );
+            pos = closest == null
+                ? 0
+                : playable.indexWhere((s) => s.index == closest);
+            if (pos < 0) pos = 0;
+            target = playable[pos].startTime;
           }
+        } else {
+          pos = SentenceTracker.findSentenceIndexByPosition(
+            state.sentences,
+            absolutePosition,
+          );
+          if (pos < 0) pos = 0;
         }
-      } else {
-        state = state.copyWith(currentFullIndex: newIndex);
-      }
-    }
-
-    if (wasPlaying) {
-      if (_isClipMode) {
-        // clip 模式：从吸附到的目标句重新起播
-        await _startCurrent();
-      } else {
-        // gapless：从拖动位置继续连续播放
-        _advancing = false;
-        _sentenceRepeatsDone = 0;
-        _wholeLoopsDone = 0;
-        _playbackSessionId = _engine.newSession();
-        await _engine.play();
+        _setWatch(pos);
       }
     } else {
-      // 未播放时，把引擎对齐到目标句起点便于显示
-      final pos = _currentPos;
-      if (pos != null) {
-        await _engine.seek(_playable[pos].startTime);
-      }
+      _clearWatch();
+    }
+
+    await _engine.seek(target);
+    _updateHighlight(target);
+    _sentenceRepeatsDone = 0;
+
+    if (wasPlaying) {
+      // 作废在途边界处理，全新 session 从落点继续连续播放（不吸附句首）。
+      _boundaryGen++;
+      _handlingBoundary = false;
+      _playbackSessionId = _engine.newSession();
+      await _engine.play();
+    } else {
       _playbackSessionId = _engine.currentSessionId;
     }
+  }
+
+  /// 未播放时把引擎对齐到当前真相源句的起点，并设好监听句（gapless），使随后
+  /// [play] 能从该句正确续播（监听句尾的模式下也能立即生效）。
+  Future<void> _alignEngineToCurrent() async {
+    _handlingBoundary = false;
+    _boundaryGen++;
+    _sentenceRepeatsDone = 0;
+    final pos = _currentPos;
+    await _engine.clearClip();
+    _setWatch(pos ?? 0);
+    if (pos != null) {
+      await _engine.seek(_playable[pos].startTime);
+    }
+    _playbackSessionId = _engine.currentSessionId;
   }
 
   Future<void> selectFullSentence(int index, {bool autoPlay = true}) async {
@@ -592,9 +698,7 @@ class ListeningPractice extends _$ListeningPractice {
     if (autoPlay) {
       await _startCurrent();
     } else {
-      await _engine.clearClip();
-      await _engine.seek(state.sentences[index].startTime);
-      _playbackSessionId = _engine.currentSessionId;
+      await _alignEngineToCurrent();
     }
   }
 
@@ -612,9 +716,7 @@ class ListeningPractice extends _$ListeningPractice {
     if (autoPlay) {
       await _startCurrent();
     } else {
-      await _engine.clearClip();
-      await _engine.seek(state.sentences[index].startTime);
-      _playbackSessionId = _engine.currentSessionId;
+      await _alignEngineToCurrent();
     }
   }
 
@@ -712,9 +814,7 @@ class ListeningPractice extends _$ListeningPractice {
     if (wasPlaying) {
       await _startCurrent();
     } else {
-      await _engine.clearClip();
-      await _engine.seek(state.sentences[newIndex].startTime);
-      _playbackSessionId = _engine.currentSessionId;
+      await _alignEngineToCurrent();
     }
   }
 
@@ -838,15 +938,15 @@ class ListeningPractice extends _$ListeningPractice {
 
   Future<void> updateSettings(PlaybackSettings newSettings) async {
     final wasPlaying = _engine.isPlaying;
-    final wasClip = _isClipMode;
+    final wasWatch = _watchBoundaries;
 
     state = state.copyWith(settings: newSettings);
     await _engine.setSpeed(newSettings.playbackSpeed);
     await StorageService.saveSettings(newSettings);
 
-    // clip/gapless 形态切换（如开/关单句循环、切收藏模式）需要从当前句重新起播；
-    // 仅速度/次数/间隔等不改变形态的设置无需打断播放。
-    if (wasPlaying && wasClip != _isClipMode) {
+    // 句尾监听需求切换（开/关单句循环）需要从当前句重新起播以设/清监听句；
+    // 仅速度/次数/间隔等不改变监听需求的设置无需打断播放（在下次边界生效）。
+    if (wasPlaying && wasWatch != _watchBoundaries) {
       await _startCurrent();
     }
   }
@@ -881,12 +981,7 @@ class ListeningPractice extends _$ListeningPractice {
     if (wasPlaying) {
       await _startCurrent();
     } else {
-      final pos = _currentPos;
-      await _engine.clearClip();
-      if (pos != null) {
-        await _engine.seek(_playable[pos].startTime);
-      }
-      _playbackSessionId = _engine.currentSessionId;
+      await _alignEngineToCurrent();
     }
   }
 
