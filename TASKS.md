@@ -1,7 +1,28 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-18（循环设置浮层定位与布局优化）
+> 最后更新：2026-06-18（播放控制栏视觉优化）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：播放控制栏视觉优化
+
+自由播放器底部控制栏的 UI 打磨，按用户多轮反馈逐项调整：
+
+- [x] `player_screen.dart`：移动端底部状态栏也显示（原仅桌面端），居中于播放按钮下方且保留播放按钮原有下边距；状态栏顺序调整为「模式 · 倍速 · 整篇循环 · 单句循环」；整体弱化为低对比灰（`onSurface` 0.45），避免与控制按钮抢注意力。
+- [x] `playback_controls.dart`：切换按钮激活态改用 MD3 tonal 风格（`primaryContainer` 浅色调底 + 主色图标），替代原蓝/灰图标（对比太弱、又不与主播放按钮抢焦点）；移动端切换按钮间距 4 → 12；倍速文字弱化（灰、w600）。
+- [x] 验证：`flutter analyze` 改动文件 0 issue；`playback_controls_test` / `player_screen_test` 全绿。
+
+  **完成时间**: 2026-06-18
+
+## 已完成：循环开关改为不全局持久化（随加载新音频重置）
+
+自由播放器底部四个按钮原本全部全局持久化（SharedPreferences）。按业界惯例区分「偏好」与「意图」：播放速度 / 字幕显隐 / 单句视图属偏好，保持全局持久化；**循环开关是「现在想刷这条」的临时意图，不应被全局记忆**。改为：循环开关纯内存、不落任何盘，加载新音频时一律重置为关；循环参数（次数/间隔）仍作为全局偏好保留。已与用户确认采用「不持久化 / 永远忘记」方案，不改数据库 schema。
+
+- [x] `playback_settings.dart`：`toJson` 移除 `loopWhole`/`loopSentence` 两个开关键（参数键照常写）；`fromJson` 新 schema 判据改按循环参数键识别（避免误入 legacy 迁移），开关一律还原为 `false`，仅恢复参数/速度/视图/字幕；旧字段（`repeatMode`/`loopEnabled`/`loopAudioEnabled`）的开关迁移逻辑去除，只保留旧 `loopCount`/`pauseInterval`→单句参数的迁移。
+- [x] `listening_practice_provider.dart`：`loadAudio` 真正加载新音频路径上 `state.copyWith(settings: settings.copyWith(loopWhole:false, loopSentence:false))`，仅改内存、不持久化；同音频早返回则保持不变。
+- [x] 测试：重写 `playback_settings_test` 往返/旧字段/范围校验三组断言（开关不往返、参数保留）；新增 `loop_reset_on_load_test`（内存 DB + 测试引擎，验证加载新音频重置开关、同音频早返回不重置）。
+- [x] 验证：`flutter analyze` 改动文件 0 issue；`playback_settings_test` / `listening_practice/` / `settings_dialog_test` / `playback_controls_test` 全绿。
+
+  **完成时间**: 2026-06-18
 
 ## 已完成：循环设置浮层定位修复 + 布局优化
 
