@@ -524,7 +524,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildProgressBar(playerState, isMobile),
+                _buildProgressBar(playerState),
                 const PlaybackControls(),
                 _buildInfoBar(playerState, centered: isMobile),
               ],
@@ -535,18 +535,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
-  Widget _buildProgressBar(ListeningPracticeState playerState, bool isMobile) {
+  Widget _buildProgressBar(ListeningPracticeState playerState) {
     final engineNotifier = ref.read(audioEngineProvider.notifier);
     final controller = ref.read(listeningPracticeProvider.notifier);
     final engine = ref.watch(audioEngineProvider);
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        isMobile ? 16 : 12,
-        16,
-        isMobile ? 4 : 8,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: StreamBuilder<Duration>(
         stream: engineNotifier.absolutePositionStream,
         builder: (context, snapshot) {
@@ -561,7 +556,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 total: total,
                 onSeek: (duration) => controller.seekAbsolute(duration),
                 barHeight: 3,
-                thumbRadius: 5,
+                thumbRadius: 8,
+                thumbGlowRadius: 14,
                 timeLabelTextStyle: AppTextStyles.caption(context),
                 timeLabelLocation: TimeLabelLocation.none,
               ),
