@@ -79,6 +79,9 @@ class ListeningPractice extends _$ListeningPractice {
   /// 返回后主播放按钮就从那一句（常表现为第一句）重新开始。
   int _playbackSessionId = -1;
 
+  /// 跨句自动保存进度的并发护栏：上一次写库未完成时跳过本次，避免堆积写入。
+  bool _autoSaving = false;
+
   @override
   ListeningPracticeState build() {
     _setupListeners();
@@ -219,10 +222,12 @@ class ListeningPractice extends _$ListeningPractice {
       if (state.bookmarkedIndices.contains(idx) &&
           idx != state.currentBookmarkIndex) {
         state = state.copyWith(currentBookmarkIndex: idx);
+        _autoSaveProgress();
       }
     } else {
       if (idx != state.currentFullIndex) {
         state = state.copyWith(currentFullIndex: idx);
+        _autoSaveProgress();
       }
     }
   }
@@ -349,6 +354,8 @@ class ListeningPractice extends _$ListeningPractice {
     _setWatch(pos);
     await _engine.seek(target.startTime);
     await _engine.play();
+    // seek 后再保存，使持久化的位置落在新句首而非上一句句尾。
+    _autoSaveProgress();
   }
 
   /// 按给定间隔停顿（来自 reducer 的决策，区分单句/整篇间隔）。
@@ -992,7 +999,7 @@ class ListeningPractice extends _$ListeningPractice {
     }
   }
 
-  Future<void> saveCurrentPlaybackState() async {
+  Future<void> saveCurrentPlaybackState({bool silent = false}) async {
     if (state.currentAudioItem == null) return;
 
     final playbackStateDao = ref.read(playbackStateDaoProvider);
@@ -1001,6 +1008,21 @@ class ListeningPractice extends _$ListeningPractice {
       _engine.audioPlayer,
       state,
       dao: playbackStateDao,
+      silent: silent,
     );
+  }
+
+  /// 跨句时触发的轻量进度保存（fire-and-forget，不阻塞位置流回调）。
+  ///
+  /// 与 [deactivate] 时的保存共用同一持久化路径，把保存频率从「仅退出页面一次」
+  /// 提升到「每跨一句」，使进程被系统强杀/崩溃时最多丢一句的进度。
+  /// [_autoSaving] 护栏避免上一次写入未完成时重复写库。
+  void _autoSaveProgress() {
+    if (_autoSaving) return;
+    if (state.currentAudioItem == null) return;
+    _autoSaving = true;
+    saveCurrentPlaybackState(silent: true)
+        .catchError((Object e) => AppLogger.log('Player', '⚠ 跨句自动保存进度失败: $e'))
+        .whenComplete(() => _autoSaving = false);
   }
 }

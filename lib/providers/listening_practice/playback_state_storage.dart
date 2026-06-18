@@ -14,6 +14,7 @@ class PlaybackStateStorage {
     ja.AudioPlayer audioPlayer,
     ListeningPracticeState state, {
     required PlaybackStateDao dao,
+    bool silent = false,
   }) async {
     await dao.saveState(
       PlaybackStatesCompanion(
@@ -23,7 +24,10 @@ class PlaybackStateStorage {
         savedAt: Value(DateTime.now()),
       ),
     );
-    AppLogger.log('Player', '✓ 保存播放状态: ${audioItem.name}');
+    // 跨句自动保存为高频路径，静默以免日志刷屏；仅页面退出时的保存留日志。
+    if (!silent) {
+      AppLogger.log('Player', '✓ 保存播放状态: ${audioItem.name}');
+    }
   }
 
   static Future<PlaybackStateRestoreResult?> loadPlaybackState(

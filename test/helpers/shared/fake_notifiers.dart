@@ -469,7 +469,7 @@ class FakeListeningPractice extends ListeningPractice {
   }
 
   @override
-  Future<void> saveCurrentPlaybackState() async {}
+  Future<void> saveCurrentPlaybackState({bool silent = false}) async {}
 
   @override
   void suspendListeners() {}
