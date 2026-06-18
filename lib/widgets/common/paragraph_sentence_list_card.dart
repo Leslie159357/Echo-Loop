@@ -30,6 +30,25 @@ double autoFollowAlignment({required bool targetVisible}) {
   return targetVisible ? 0.5 : 0.0;
 }
 
+/// 自动跟随的「居中容差带」半宽（占视口比例）。
+///
+/// 目标句的 leading edge 落在 `[0.5 - 容差, 0.5 + 容差]` 内即视为已大致居中。
+const double kAutoFollowCenterTolerance = 0.18;
+
+/// 目标句当前是否已大致居中，居中则无需再滚动。
+///
+/// 纯函数，便于单元测试。仅用 leading edge 判断：随播放逐句推进，下一句的 leading
+/// edge 会比当前句更靠下；一旦越出容差带就重新居中，避免「当前句逐句下移直到贴底、
+/// 再突然跳回顶部」的漂移（参见 [_ParagraphSentenceListCardState._focusPlayingSentence]）。
+///
+/// [leadingEdge] 为目标 item 顶边相对视口的比例（[ItemPosition.itemLeadingEdge]）。
+bool isTargetWellCentered({
+  required double leadingEdge,
+  double tolerance = kAutoFollowCenterTolerance,
+}) {
+  return (leadingEdge - 0.5).abs() <= tolerance;
+}
+
 /// 段落句子列表卡片
 class ParagraphSentenceListCard extends StatefulWidget {
   final List<Sentence> sentences;
@@ -161,39 +180,43 @@ class _ParagraphSentenceListCardState extends State<ParagraphSentenceListCard> {
           !_itemScrollController.isAttached) {
         return;
       }
-      if (_isTargetSentenceFullyVisible(targetIndex)) {
+      final position = _targetPosition(targetIndex);
+      if (position == null) {
+        // 目标尚未渲染（首次进入恢复进度 / 大跳转）。此时不能直接 scrollTo 居中：
+        // 不可见分支会把底层 anchor 设为 alignment，居中会在边界留白。改为先即时
+        // jumpTo 到 clamp 安全的 anchor=0 位置把目标渲染出来，下一帧再走可见分支
+        // 居中，避免恢复进度时把当前句卡在顶部。
+        _itemScrollController.jumpTo(
+          index: targetIndex,
+          alignment: autoFollowAlignment(targetVisible: false),
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _focusPlayingSentence();
+        });
+        return;
+      }
+      // 已大致居中则不动，否则重新居中——边界句滚到自然边缘被 clamp 硬停。
+      if (isTargetWellCentered(leadingEdge: position.itemLeadingEdge)) {
         return;
       }
       _itemScrollController.scrollTo(
         index: targetIndex,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        alignment: autoFollowAlignment(
-          targetVisible: _isTargetVisible(targetIndex),
-        ),
+        alignment: autoFollowAlignment(targetVisible: true),
       );
     });
   }
 
-  /// 目标元素是否完全在视口内（含上下边界），是则无需滚动。
-  bool _isTargetSentenceFullyVisible(int targetIndex) {
-    final positions = _itemPositionsListener.itemPositions.value;
-    return positions.any(
-      (position) =>
-          position.index == targetIndex &&
-          position.itemLeadingEdge >= 0 &&
-          position.itemTrailingEdge <= 1,
-    );
-  }
-
-  /// 目标元素是否在当前可见集合中（含部分可见）。
+  /// 目标元素当前的可见位置；不在可见集合中（大跳转/未渲染）时返回 null。
   ///
-  /// 决定 [scrollTo] 走「可见分支」（不改底层 anchor）还是「跳转分支」，
-  /// 据此选择 alignment，见 [autoFollowAlignment]。
-  bool _isTargetVisible(int targetIndex) {
-    return _itemPositionsListener.itemPositions.value.any(
-      (position) => position.index == targetIndex,
-    );
+  /// 用于：① 判断是否已居中（[isTargetWellCentered]）；② 决定 [scrollTo] 走
+  /// 「可见分支」还是「跳转分支」，据此选 alignment（见 [autoFollowAlignment]）。
+  ItemPosition? _targetPosition(int targetIndex) {
+    for (final position in _itemPositionsListener.itemPositions.value) {
+      if (position.index == targetIndex) return position;
+    }
+    return null;
   }
 
   int? _playingSentenceLocalIndex() {

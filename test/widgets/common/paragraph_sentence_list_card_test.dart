@@ -27,6 +27,24 @@ void main() {
     });
   });
 
+  group('isTargetWellCentered', () {
+    test('leading edge 居中 → 已居中', () {
+      expect(isTargetWellCentered(leadingEdge: 0.5), isTrue);
+    });
+
+    test('leading edge 在容差带内 → 已居中', () {
+      expect(isTargetWellCentered(leadingEdge: 0.5 + 0.1), isTrue);
+      expect(isTargetWellCentered(leadingEdge: 0.5 - 0.1), isTrue);
+    });
+
+    test('leading edge 越出容差带 → 需重新居中', () {
+      // 逐句下移漂移到底部：leading edge 偏大，应触发重新居中。
+      expect(isTargetWellCentered(leadingEdge: 0.9), isFalse);
+      // 贴顶：leading edge 接近 0，应触发重新居中。
+      expect(isTargetWellCentered(leadingEdge: 0.0), isFalse);
+    });
+  });
+
   group('ParagraphSentenceListCard 自动跟随', () {
     const sentenceCount = 24;
 
@@ -92,6 +110,29 @@ void main() {
       final first = tileRect(tester, 0);
       expect(first.top, closeTo(list.top, edgeTol), reason: '第一句应贴顶，上方无留白');
       expect(first.top, greaterThanOrEqualTo(list.top - 1));
+    });
+
+    testWidgets('首次进入恢复进度：中部句居中，不卡在顶部', (tester) async {
+      // 直接以中部句进入（模拟恢复进度），目标句首帧未渲染。
+      const restored = sentenceCount ~/ 2;
+      await tester.pumpWidget(buildHost(playingIndex: restored));
+      await tester.pumpAndSettle();
+
+      final list = viewportRect(tester);
+      final tile = tileRect(tester, restored);
+      final viewportCenter = list.center.dy;
+      final tileCenter = tile.center.dy;
+      // 中部句应落在视口中段，而非贴顶。
+      expect(
+        tile.top,
+        greaterThan(list.top + 24),
+        reason: '恢复进度的中部句不应贴在顶部',
+      );
+      expect(
+        (tileCenter - viewportCenter).abs(),
+        lessThan(list.height / 2),
+        reason: '中部句中心应靠近视口中心',
+      );
     });
 
     testWidgets('自动跟随到末句过程中：滚动位置始终不越界（防回弹回归）', (tester) async {
