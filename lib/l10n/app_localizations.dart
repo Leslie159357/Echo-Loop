@@ -4925,7 +4925,7 @@ abstract class AppLocalizations {
   /// No description provided for @guidePlanFreePlayTitle.
   ///
   /// In en, this message translates to:
-  /// **'Free Practice'**
+  /// **'Free Play'**
   String get guidePlanFreePlayTitle;
 
   /// No description provided for @guidePlanFreePlayDescription.
