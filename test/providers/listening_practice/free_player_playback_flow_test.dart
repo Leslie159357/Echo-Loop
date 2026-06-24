@@ -21,8 +21,12 @@ import '../../helpers/mock_providers.dart';
 /// 可控 AudioEngine：真实 session 计数 + position/playerState 流 + 调用记录。
 class _FlowAudioEngine extends TestAudioEngine {
   int _sessionId = 0;
-  final _positionController = StreamController<Duration>.broadcast();
-  final _playerStateController = StreamController<ja.PlayerState>.broadcast();
+  int positionListenCount = 0;
+  int positionCancelCount = 0;
+  int playerStateListenCount = 0;
+  int playerStateCancelCount = 0;
+  late final StreamController<Duration> _positionController;
+  late final StreamController<ja.PlayerState> _playerStateController;
 
   Duration position = Duration.zero;
   Duration? lastSeek;
@@ -33,6 +37,17 @@ class _FlowAudioEngine extends TestAudioEngine {
   int stopCount = 0;
   int clearClipCount = 0;
   Completer<void>? _clipCompleter;
+
+  _FlowAudioEngine() {
+    _positionController = StreamController<Duration>.broadcast(
+      onListen: () => positionListenCount += 1,
+      onCancel: () => positionCancelCount += 1,
+    );
+    _playerStateController = StreamController<ja.PlayerState>.broadcast(
+      onListen: () => playerStateListenCount += 1,
+      onCancel: () => playerStateCancelCount += 1,
+    );
+  }
 
   @override
   Duration get currentPosition => position;
@@ -316,6 +331,29 @@ void main() {
     await flushBoundary();
 
     expect(container.read(listeningPracticeProvider).isPlaying, isTrue);
+  });
+
+  test('resumeListeners 重复调用保持幂等：只恢复一套订阅', () async {
+    // build 后首轮 setup 已在 microtask 中挂好 1 套监听。
+    await flushBoundary();
+    expect(engine.positionListenCount, 1);
+    expect(engine.playerStateListenCount, 1);
+
+    lp.suspendListeners();
+    await flushBoundary();
+    expect(engine.positionCancelCount, 1);
+    expect(engine.playerStateCancelCount, 1);
+
+    lp.resumeListeners();
+    lp.resumeListeners();
+    await flushBoundary();
+
+    expect(engine.positionListenCount, 2, reason: '重复 resume 只应新增 1 套订阅');
+    expect(
+      engine.playerStateListenCount,
+      2,
+      reason: '重复 resume 只应新增 1 套 playerState 订阅',
+    );
   });
 
   test('全文与收藏 tab 各自保存独立设置', () async {
@@ -655,7 +693,11 @@ void main() {
     final paused = container.read(listeningPracticeProvider);
     expect(paused.isPlaying, isFalse, reason: '跨句边界后暂停');
     expect(paused.currentFullIndex, 1, reason: '停留在刚播完的第 1 句，不滑到第 2 句');
-    expect(engine.lastSeek, const Duration(milliseconds: 2600), reason: '回到第 1 句句首');
+    expect(
+      engine.lastSeek,
+      const Duration(milliseconds: 2600),
+      reason: '回到第 1 句句首',
+    );
   });
 
   test('未播放时 pauseAfterCurrentSentence 退化为立即暂停', () async {

@@ -41,6 +41,8 @@ part 'listening_practice_provider.g.dart';
 class ListeningPractice extends _$ListeningPractice {
   StreamSubscription? _positionSub;
   StreamSubscription<ja.PlayerState>? _playerStateSub;
+  bool _listenersAttached = false;
+  int _listenerSetupToken = 0;
 
   /// 追踪正在进行的音频加载，避免重复调用时跳过未完成的加载
   Completer<void>? _loadingCompleter;
@@ -152,12 +154,17 @@ class ListeningPractice extends _$ListeningPractice {
   }
 
   void _setupListeners() {
+    if (_listenersAttached) return;
     // 在 build/resume 阶段（ref 可读）缓存引擎引用，供 dispose 时清空回调。
     _cachedEngineForSkip = _engine;
-    // defer listener setup to after first build
+    // defer listener setup to after first build；token 用于作废 suspend/dispose 之后尚未执行
+    // 的旧 microtask，避免“先 suspend 再 resume”时旧任务回流重复挂订阅。
+    final setupToken = ++_listenerSetupToken;
     Future.microtask(() {
+      if (setupToken != _listenerSetupToken || _listenersAttached) return;
       _positionSub = _engine.absolutePositionStream.listen(_onPositionChanged);
       _playerStateSub = _engine.playerStateStream.listen(_onPlayerStateChanged);
+      _listenersAttached = true;
       // 接管共享引擎时注册锁屏切句 + 播放/暂停回调，使锁屏控件走 controller 同一套
       // 业务逻辑（出现上一句/下一句按钮、播放/暂停含播完重播与续播语义）。
       _engine.setSkipHandlers(
@@ -169,8 +176,12 @@ class ListeningPractice extends _$ListeningPractice {
   }
 
   void _disposeListeners() {
+    _listenerSetupToken += 1;
     _positionSub?.cancel();
+    _positionSub = null;
     _playerStateSub?.cancel();
+    _playerStateSub = null;
+    _listenersAttached = false;
     // 用缓存引用清空，避免在 provider 销毁阶段 ref.read 抛 already disposed。
     _cachedEngineForSkip?.setSkipHandlers(onPrevious: null, onNext: null);
     _cachedEngineForSkip?.setTransportHandlers(onPlay: null, onPause: null);
@@ -178,10 +189,12 @@ class ListeningPractice extends _$ListeningPractice {
 
   /// 暂停 stream 监听（学习模式期间调用，避免 LP 接管共享引擎）。
   void suspendListeners() {
+    _listenerSetupToken += 1;
     _positionSub?.cancel();
     _positionSub = null;
     _playerStateSub?.cancel();
     _playerStateSub = null;
+    _listenersAttached = false;
     // LP 不再驱动引擎时一并撤销锁屏回调，避免学习模式下误触。
     _engine.setSkipHandlers(onPrevious: null, onNext: null);
     _engine.setTransportHandlers(onPlay: null, onPause: null);
