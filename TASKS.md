@@ -1,7 +1,31 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-23（Free Player iOS 后台播放标准化迁移）
+> 最后更新：2026-06-24（锁屏播放控件定制：封面图 / 合集名 / 上一句下一句）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：锁屏播放控件定制（封面图 / 合集名 / 上一句下一句）
+
+iOS 锁屏 Now Playing 组件的布局不可改，只定制可控的内容与命令。本次三项：①锁屏封面图显示 app 图标；②标题下方（artist 行）由硬编码 `Echo Loop` 改为所属合集名（取第一个，与顶栏副标题同源）；③上一首/下一首改接 Free Player 的上一句/下一句（复用 `nextSentence`/`previousSentence`）。切句控制随 Free Player controller 接管引擎而出现、挂起/释放而消失，避免学习模式等场景误触。
+
+- [x] `lib/services/background_audio_handler.dart`：新增 `prepareArtwork()`（app 图标 asset 拷为本地文件并缓存 file:// URI，`loadFile` 设 `artUri`）；`loadFile` 加 `subtitle` 参数 → `MediaItem.artist`；新增 `setSkipHandlers` + `skipToNext`/`skipToPrevious` override；`setMediaControls` 在可切句时拼成「上一句/播放暂停/下一句」，`systemActions` 增加 skip。`initEchoLoopAudioHandler` 启动时调 `prepareArtwork`。
+- [x] `lib/providers/audio_engine/audio_engine_provider.dart`：`loadAudio` 加可选 `subtitle` 透传；新增 `setSkipHandlers` 转发给 handler。
+- [x] `lib/providers/listening_practice/listening_practice_provider.dart`：新增 `_resolveCollectionName`（按 `collectionListProvider` 反查首个合集名）并传入 `loadAudio`；`_setupListeners` 注册切句回调、`suspendListeners`/`_disposeListeners` 清空（dispose 用缓存引擎引用，避免销毁阶段 `ref.read`）。
+- [x] 测试：新增 `test/services/background_audio_handler_test.dart`（skip 回调触发/no-op、控制列表与 systemActions 随注册变化）；`fake_notifiers.dart` / `loop_reset_on_load_test.dart` 同步新签名。
+- [x] 验证：改动文件 `flutter analyze` 0 问题；`flutter test`（含 listening_practice / audio_engine / handler）通过。锁屏视觉效果（封面图/合集名/切句按钮）需真机或模拟器人工确认。
+
+  **完成时间**: 2026-06-24
+
+### 追加：播完后保留锁屏控件 + 锁屏播放/暂停经业务逻辑
+
+原行为：整篇/列表自然播完（不循环）时 controller 调 `_engine.stop()` → `super.stop()` → iOS 清空 Now Playing → **锁屏控件直接消失**。改为播完保留媒体会话、停在暂停态，符合 Apple Music/Podcasts 习惯，用户可在锁屏直接重播。同时把锁屏播放/暂停按钮接入 controller 业务逻辑（此前直接打到底层 player，绕过「播完从头重播 / 保留遍数续播」）。
+
+- [x] `background_audio_handler.dart`：新增 `playPlayer`/`pausePlayer`（直接驱动播放器）与 `setTransportHandlers`；`play`/`pause` override 改为「有回调走回调，否则回退 playPlayer/pausePlayer」，避免 controller→engine→handler→controller 回环。
+- [x] `audio_engine_provider.dart`：内部协程（playClipOnce/playToEnd/playRangeOnce）与 `play`/`pause`/`pauseKeepSession` 一律改用 `playPlayer`/`pausePlayer`；新增 `setTransportHandlers` 转发。
+- [x] `listening_practice_provider.dart`：natural-end 的两处 `_engine.stop()` 改为 `pauseKeepSession()`（保留会话）；`_setupListeners` 注册 `setTransportHandlers(onPlay: play, onPause: pause)`，suspend/dispose 清空；`_onPlayerStateChanged` 增加 completed 守卫——completed 时 just_audio 的 `playing` 仍为 true，保留会话后该事件会到达监听，不排除会把逻辑播放态误翻回 true（图标错显）。
+- [x] 测试：`background_audio_handler_test.dart` 增 play/pause 路由组；`free_player_playback_flow_test.dart` 6 处 natural-end 断言由 `stopCount==1` 改为 `pauseKeepSessionCount==1 && stopCount==0`；`fake_notifiers.dart` 增 `setTransportHandlers` no-op。
+- [x] 验证：改动文件 `flutter analyze` 0 问题；全量 `flutter test` 通过。锁屏「播完控件保留 + 锁屏重播」需真机/模拟器人工确认。
+
+  **完成时间**: 2026-06-24
 
 ## 已完成：Free Player iOS 后台播放标准化迁移
 
