@@ -38,7 +38,8 @@ class DifficultPracticeSettings {
   /// 入口弹窗使用的离散速度选项
   ///
   /// 与 [BlindListenSettings.briefingPlaybackSpeedOptions] / [RetellSettings.briefingPlaybackSpeedOptions] 保持一致。
-  static const List<double> briefingPlaybackSpeedOptions = kUnifiedPlaybackSpeeds;
+  static const List<double> briefingPlaybackSpeedOptions =
+      kUnifiedPlaybackSpeeds;
 
   const DifficultPracticeSettings({
     this.controlMode = ShadowingControlMode.auto,

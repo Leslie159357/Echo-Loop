@@ -68,11 +68,7 @@ class PlaybackControls extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(
-          centerIcon,
-          size: 28,
-          color: theme.colorScheme.onPrimary,
-        ),
+        child: Icon(centerIcon, size: 28, color: theme.colorScheme.onPrimary),
       ),
     );
 

@@ -49,7 +49,8 @@ double defaultPlaybackSpeedFor(
         LearningStage.review4 ||
         LearningStage.review7 => 0.9,
         LearningStage.review14 ||
-        LearningStage.review28 || LearningStage.completed => 1.0,
+        LearningStage.review28 ||
+        LearningStage.completed => 1.0,
       };
   }
 }

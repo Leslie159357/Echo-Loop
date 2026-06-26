@@ -227,9 +227,7 @@ void main() {
     expect(disabledButtons, findsAtLeast(1));
   });
 
-  testWidgets('待解锁任务（v2 首步难句补练、无完成记录）显示倒计时而非"学习中"', (
-    tester,
-  ) async {
+  testWidgets('待解锁任务（v2 首步难句补练、无完成记录）显示倒计时而非"学习中"', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
       AudioItem(

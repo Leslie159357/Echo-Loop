@@ -962,7 +962,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenPauseMultiplierMode => '句长倍数';
 
   @override
-  String get intensiveListenSettingsTemporaryHint => '设置仅对本次精听有效';
+  String get intensiveListenSettingsTemporaryHint => '设置会被记住，下次自动沿用';
 
   @override
   String get intensiveListenPauseSmartDesc => '根据难度、句子长度和学习阶段自动调整';
@@ -980,7 +980,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String intensiveListenPauseMultiplierValue(String value) {
-    return '$value倍';
+    return '${value}x';
   }
 
   @override

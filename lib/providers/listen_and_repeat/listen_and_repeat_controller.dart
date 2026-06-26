@@ -16,6 +16,7 @@ import '../../analytics/audio_event_params.dart';
 import '../../analytics/models/event_names.dart';
 import '../../features/usage/usage_event.dart';
 import '../../features/usage/usage_providers.dart';
+import '../../database/enums.dart' show LearningStage;
 import '../../database/providers.dart';
 import '../../models/intensive_listen_settings.dart';
 import '../../models/sentence.dart';
@@ -28,6 +29,8 @@ import '../repeat_flow/repeat_flow_engine.dart';
 import '../repeat_flow/repeat_flow_phase.dart';
 import '../speech/speech_recording_controller.dart';
 import '../listening_practice/bookmark_manager.dart';
+import '../intensive_listen_prefs_provider.dart';
+import '../../models/stage_settings_overrides.dart';
 import '../study_task_controller_mixin.dart';
 import 'listen_and_repeat_session_state.dart';
 import 'listen_and_repeat_settings_provider.dart';
@@ -93,15 +96,14 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
 
   /// 初始化跟读任务（从 DB 读数据 + 启动学习计时 + 准备会话）
   ///
-  /// [playbackSpeed] 入口 briefing 中用户选择的初始播放速度，默认 1.0x。
-  /// [pauseMultiplier] 入口 briefing 中选择的句间停顿；-1.0 = 自动（smart 模式），
-  ///   其余正数走 multiplier 模式。
+  /// [smartSpeed] 按当前难度/阶段算出的动态默认速度;用户未在偏好里设过速度时用它。
+  /// 句间停顿/遍数等其余设置由按槽位偏好 [intensiveListenPrefsProvider] resolve 出。
   Future<void> initialize({
     required String audioItemId,
     required List<Sentence> allSentences,
     required bool isFreePlay,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    double smartSpeed = 1.0,
+    LearningStage? stage,
   }) async {
     _isFreePlay = isFreePlay;
 
@@ -125,19 +127,28 @@ class ListenAndRepeatController extends _$ListenAndRepeatController
       startIndex = progress.shadowingSentenceIndex ?? 0;
     }
 
-    // 根据难度计算目标遍数
+    // 根据难度计算目标遍数(动态默认遍数)
     final targetPlayCount = targetPlayCountForDifficulty(
       progress.difficulty.value,
     );
 
-    // 初始化设置（含入口选择的播放速度 + 句间停顿）
+    // 难句跟读仅在首学,槽位固定;自由练习与按计划共用同一份偏好记忆。
+    final slot = stageSlotKey(
+      StageSettingsSlots.listenAndRepeat,
+      stage ?? LearningStage.firstLearn,
+    );
+    final settings = ref
+        .read(intensiveListenPrefsProvider.notifier)
+        .resolve(
+          slot,
+          smartSpeed: smartSpeed,
+          smartRepeatCount: targetPlayCount,
+        );
+
+    // 初始化设置(完整设置 = 偏好叠加智能默认/动态遍数)
     ref
         .read(listenAndRepeatSettingsProvider.notifier)
-        .initialize(
-          repeatCount: targetPlayCount,
-          playbackSpeed: playbackSpeed,
-          pauseMultiplier: pauseMultiplier,
-        );
+        .initialize(settings, slot);
 
     // 学习任务通用初始化（计时、LP、音频、analytics、recorder 注入）
     await initStudyTask(

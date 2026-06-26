@@ -292,6 +292,21 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
+
+      // Slider 主题:
+      // M3 默认的 inactive track 颜色 ≈ surfaceContainerHighest，在纯黑页面/弹出层上
+      // 对比度极低，几乎不可见（深色模式下滑块轨道像凭空消失）。
+      // 显式用 onSurface 的低透明度做 inactive（浅色=近黑、深色=近白，两种模式对比方向都正确），
+      // active/thumb 统一用品牌蓝，确保所有未单独配色的 Slider 在深色下清晰可见。
+      sliderTheme: SliderThemeData(
+        activeTrackColor: colorScheme.primary,
+        inactiveTrackColor: colorScheme.onSurface.withValues(
+          alpha: isLight ? 0.18 : 0.34,
+        ),
+        thumbColor: colorScheme.primary,
+        valueIndicatorColor: colorScheme.primary,
+        valueIndicatorTextStyle: TextStyle(color: colorScheme.onPrimary),
+      ),
     );
   }
 }

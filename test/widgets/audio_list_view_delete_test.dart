@@ -23,10 +23,7 @@ void main() {
 
     test('其他条目共享同一 audioPath 时返回 true', () {
       final target = _item(id: 'a1', audioPath: 'audios/shared.m4a');
-      final items = [
-        target,
-        _item(id: 'a2', audioPath: 'audios/shared.m4a'),
-      ];
+      final items = [target, _item(id: 'a2', audioPath: 'audios/shared.m4a')];
 
       expect(isAudioFileSharedByOthers(items, target), isTrue);
     });

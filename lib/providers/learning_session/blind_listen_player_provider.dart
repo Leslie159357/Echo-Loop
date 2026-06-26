@@ -29,6 +29,7 @@ import '../../utils/word_counter.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
+import '../blind_listen_prefs_provider.dart';
 import '../listening_practice/bookmark_manager.dart';
 import '../notification_permission_provider.dart';
 import '../settings_provider.dart';
@@ -168,6 +169,9 @@ class BlindListenPlayer extends _$BlindListenPlayer {
   /// 段落列表
   List<List<Sentence>> _paragraphs = [];
 
+  /// 设置记忆 slot(子阶段×轮次);null 表示本次不记忆。
+  String? _settingsSlot;
+
   /// 断点恢复的段内本地句子 index（仅首次播放该段时生效）。
   ///
   /// `initializeParagraphs` 写入；`_playCurrentParagraph` 消费一次后清零。
@@ -248,7 +252,9 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     BlindListenSettings settings, {
     int startParagraphIndex = 0,
     int startSentenceLocalIndex = 0,
+    String? settingsSlot,
   }) {
+    _settingsSlot = settingsSlot;
     _cleanup();
     _paragraphs = paragraphs;
 
@@ -270,6 +276,7 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     state = BlindListenPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
+      // [settings] 已由调用方从按槽位偏好 resolve 出(默认+记忆),直接 seed。
       settings: settings,
       bookmarkedSentenceIndices: preBookmarked,
     );
@@ -565,10 +572,23 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     AppLogger.log('BlindListenPlayer', '-> WaitingForUser');
   }
 
-  /// 更新设置
-  ///
-  /// 切换到手动模式时，停在当前段落，取消一切异步操作。
+  /// 把 🔧 面板改动按槽位写穿到盲听偏好(只记手动改动)。
+  void _recordSettingsChange(
+    BlindListenSettings oldSettings,
+    BlindListenSettings newSettings,
+  ) {
+    final slot = _settingsSlot;
+    if (slot == null) return;
+    persistBlindSettingsDiff(
+      ref.read(blindListenPrefsProvider.notifier),
+      slot,
+      oldSettings,
+      newSettings,
+    );
+  }
+
   void updateSettings(BlindListenSettings newSettings) {
+    _recordSettingsChange(state.settings, newSettings);
     final modeChanged = newSettings.isManualMode != state.settings.isManualMode;
     final speedChanged =
         newSettings.playbackSpeed != state.settings.playbackSpeed;

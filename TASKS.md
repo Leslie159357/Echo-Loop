@@ -1,7 +1,60 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-06-25（锁屏整篇循环进度条偶发卡结尾修复）
+> 最后更新：2026-06-26（全部学习子阶段设置改用按槽位 typed 偏好，清退 stage_settings_overrides）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：全部学习子阶段设置持久化改用「按槽位 typed 偏好」
+
+把逐句精听的标准持久化推广到所有学习子阶段 + 收藏句/收藏词复习,并保持「每个复习轮次的设置各自独立」。设置的真正单位是**槽位**=子阶段×复习轮次(盲听/复述跨首学+各复习轮、难句补练跨各复习轮),故按槽位 key 存、轮次独立。
+
+- [x] 通用底座 `lib/models/slot_prefs.dart`（`SlotPrefs<P>` 槽位→可空偏好表）+ `lib/providers/slot_prefs_notifier.dart`（`SlotPrefsNotifier<P>` 基类:按槽位读写 + 启动期注入 + 写 SP）。
+- [x] 各 Settings 模型对应的可空偏好 + Provider:`IntensiveListenPrefs`（精听+跟读共用,槽位区分）、`BlindListenPrefs`、`RetellPrefs`（含 keywordRatio/targetSeconds 动态默认）、`DifficultPracticePrefs`（难句补练+收藏句复习共用）。`resolve(槽位, 智能默认)` 出生效设置。
+- [x] 各 player/controller/session：`initialize`/`enter*Mode` 收完整 settings（屏幕 resolve 出）、`updateSettings` 写穿偏好；删除 `_applyOverride`/有损 `pauseMultiplier` 通道。
+- [x] 屏幕各入口（按计划 + 自由练习 + 复习各轮）：预填 `prefs.resolve`、记于开始练习（精听/跟读为改完即记）；自由练习与按计划共用同一轮次槽位。
+- [x] 清退 `stage_settings_overrides` 存储：删 Provider + `StageSettingsOverrides`/`settingsJsonDiff`/`toOverride`/`overrideToBriefingPauseChoice`；`stage_settings_overrides.dart` 仅保留通用的 `StageSettingsSlots`/`stageSlotKey`/`BriefingPauseChoice`。
+- [x] 收藏词复习（闪卡）：已有独立单 store 持久化（`flashcard_settings`），核验正常,本次不动。
+- [x] 测试：各子阶段 prefs 模型/Provider 单测 + 桥接/流程测试;`flutter analyze` 0、`flutter test` 全过。
+
+  **完成时间**: 2026-06-26
+
+## 已完成：逐句精听设置持久化改用标准「单 store + 可空覆盖」
+
+逐句精听设固定停顿后关弹窗重开/进播放器仍显示「自动」。根因是旧 `stage_settings_overrides` 方案踩坑：两处真相源（会话 settings + 稀疏覆盖表，靠 `BriefingPauseChoice↔Map↔fromJson` 翻译）、停顿经 `legacyPauseMultiplier` 折成 `-1.0` 的有损通道（固定值只能靠覆盖表读回）、自由练习入口三处接线全断。改为业界标准的偏好持久化：**单一 typed、全字段可空的 `IntensiveListenPrefs`**（null=用默认，含动态智能速度默认），入口弹窗 / 🔧 面板 / 播放器初始化都读写这一份，无第二份拷贝、无翻译、无有损通道。两个入口（按计划 / 自由练习）共用同一逻辑，行为一致。本次仅 intensive；跟读/复述/盲听/复习暂仍用旧覆盖表。
+
+- [x] `lib/models/intensive_listen_prefs.dart`：全字段可空模型 + `resolve(smartSpeed)` 叠加默认 + 稀疏 `toJson`/防御性 `fromJson`/`fromPrefsSync`。
+- [x] `lib/providers/intensive_listen_prefs_provider.dart`：手写 Notifier + 启动期 override 注入；细粒度 setter 为唯一写路径（只把改动字段从 null 变非空，不冻结智能默认）。
+- [x] `lib/main.dart`：`fromPrefsSync` 预读 + ProviderScope 注入。
+- [x] `learning_plan_screen.dart`：两入口 `_startIntensiveListen` / `_startFreePlayIntensiveListen` 改读 prefs.resolve 预填 + `intensivePrefsRecorder` 改完即记；删除已无人用的 `_briefingPauseRecorder`。
+- [x] 播放器：`enterIntensiveListenMode`/`initialize` 改收完整 `IntensiveListenSettings`（删 `pauseMultiplier`/`settingsSlot`/`_applyOverride`）；`updateSettings` 写穿到 prefs（🔧 面板从「临时」改「持久」，更新文案）。
+- [x] 测试：`intensive_listen_prefs_test`（13）、`intensive_listen_prefs_provider_test`（5）、`intensive_listen_pause_flow_test`（4，两入口端到端锁 bug）；更新 fake_notifiers / settings_sheet 断言。
+- [x] 验证：`flutter analyze` 0 问题；`flutter test` 全通过。
+
+  **完成时间**: 2026-06-26
+
+## 已完成：修复刚完成大阶段不实时显示「完成于XX」
+
+学习计划页中刚完成的大阶段会立即显示 ✅，但右侧「完成于XX」相对完成时间需重启 App 才出现。根因：`reviewStageCompletionTimesProvider` 是 `FutureProvider`，结果永久缓存，`stage_completions` 写入后不失效。改为基于 drift `.watch()` 的 `StreamProvider`，表变更自动发射，无需手动 invalidate（对齐同文件 `audioBookmarkCountProvider` 既有模式）。天然覆盖首次学习完成、跳过后补做、重置删除等所有写入场景。
+
+- [x] `lib/database/daos/stage_completion_dao.dart`：新增 `watchStageCompletedAtByAudioId`（流式），抽出共用查询 `_stageCompletedAtQuery` 与折叠函数 `_foldStageCompletedAt`，Future 版复用。
+- [x] `lib/screens/learning_plan_screen.dart`：`reviewStageCompletionTimesProvider` 由 `FutureProvider.family` 改为 `StreamProvider.family`；消费端零改动（`.valueOrNull` 对 Stream/Future 一致）。
+- [x] 测试：`stage_completion_dao_test.dart` 新增 `watchStageCompletedAtByAudioId` 用例（插入后流自动发射、同 stage 取最后完成时间）。
+- [x] 验证：改动文件 `flutter analyze` 0 问题；`flutter test test/database/daos/stage_completion_dao_test.dart` 全通过（14）。
+
+  **完成时间**: 2026-06-25
+
+## 已完成：学习子阶段设置跨音频持久化
+
+6 个听说子阶段（盲听/精听/跟读/复述/难句补练/收藏句复习）的设置此前仅会话级，退出即丢。现按「子阶段 × 复习轮次」跨音频记住用户**手动改动过**的全部设置（含播放器内 🔧 面板的 controlMode/repeatCount/pauseMode 等，以及入口弹窗的速度/停顿/复述可见词比例/目标时长）。入口弹窗预填记忆值，与进入页面后的设置等效。仅记手动改动、不冻结按难度/轮次递进的智能默认；分轮独立；自由练习不记；闪卡沿用既有持久化。
+
+- [x] `lib/models/stage_settings_overrides.dart`：稀疏字段覆盖存储模型（slot=`子阶段:轮次`）、`stageSlotKey`/`settingsJsonDiff`/`briefingPauseToOverride`/`overrideToBriefingPause` 等纯函数。复用各 Settings 模型现成 `toJson/fromJson`，不写镜像类。
+- [x] `lib/providers/stage_settings_overrides_provider.dart`：手写 Notifier + 启动期 override 注入（对齐 learning_settings_provider）；`overridesFor`/`recordOverride`。
+- [x] `lib/main.dart`：`fromPrefsSync` 预读 + ProviderScope 注入。
+- [x] 6 个 provider（含 `ListenAndRepeatSettings` / `BookmarkReview` / 共用 `DifficultPracticeSettings` 的公共 helper）：`initialize` 增 `settingsSlot` 并 seed（override-wins）、`updateSettings` 开头 diff 记录。session 的 `enter*Mode` 透传 `LearningStage? stage`，自由练习传 null（不记）。
+- [x] 入口弹窗：3 个专用 sheet（精听/跟读/难句）+ 共用 `paragraph_selection_sheet`（盲听/复述）新增 `defaultPauseMultiplier` 并自校验；`learning_plan_screen` 各在途站点预填 + record-before-enter。
+- [x] 测试：`stage_settings_overrides_test`（21）、`stage_settings_overrides_provider_test`（6）、`listen_and_repeat_settings_memory_test`（4，端到端 seed/record/分轮独立/不冻结）。
+- [x] 验证：`flutter analyze` 改动文件 0 问题；`flutter test` 全通过（3066）。
+
+  **完成时间**: 2026-06-25
 
 ## 已完成：锁屏整篇循环进度条偶发卡在结尾
 

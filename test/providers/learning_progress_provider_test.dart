@@ -1741,10 +1741,7 @@ void main() {
       expect(after.currentStage, LearningStage.review0);
       expect(
         after.skippedSubStageKeys,
-        containsAll(<String>[
-          'firstLearn:blindListen',
-          'firstLearn:retell',
-        ]),
+        containsAll(<String>['firstLearn:blindListen', 'firstLearn:retell']),
       );
     });
   });

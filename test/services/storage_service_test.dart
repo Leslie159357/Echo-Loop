@@ -79,8 +79,9 @@ void main() {
           'fullSettings': const PlaybackSettings(playbackSpeed: 1.0).toJson()
             ..['playbackSpeed'] = 1.25,
           // 3.0 超出支持范围 → 回退 1.0
-          'bookmarkSettings': const PlaybackSettings(playbackSpeed: 0.8).toJson()
-            ..['playbackSpeed'] = 3.0,
+          'bookmarkSettings': const PlaybackSettings(
+            playbackSpeed: 0.8,
+          ).toJson()..['playbackSpeed'] = 3.0,
         }),
       );
 

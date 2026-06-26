@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import '../common/app_dropdown.dart';
+import '../common/pause_choice_dropdown.dart';
 import '../common/setting_labeled_row.dart';
 
 import '../../database/enums.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/difficult_practice_settings.dart';
+import '../../models/intensive_listen_settings.dart'
+    show IntensiveListenSettings;
+import '../../models/stage_settings_overrides.dart' show BriefingPauseChoice;
 import '../../theme/app_theme.dart';
 import '../../utils/playback_speed.dart';
 import '../common/briefing_action_row.dart';
@@ -13,10 +17,10 @@ import '../common/briefing_action_row.dart';
 ///
 /// 交互与首次学习保持一致：先展示当前步骤说明，再点击“开始练习”进入页面。
 /// [defaultPlaybackSpeed] 默认播放速度（按难度+轮次映射），用户可在弹窗里改。
-/// [onStartPractice] 点击"开始练习"时回调，参数为用户最终选定的速度
-///   以及句间停顿倍数（-1.0 = 自动/smart，>0 = multiplier 模式）。
+/// [defaultPause] 默认句间停顿(自动/固定间隔/句长倍数)，用于回显已记忆值。
+/// [onStartPractice] 点击"开始练习"时回调，参数为用户最终选定的速度 + 句间停顿。
 ///   句间停顿下拉仅在 [SubStageType.reviewDifficultPractice] 子步骤显示，
-///   其余子步骤回调 pauseMultiplier 固定为 -1.0。
+///   其余子步骤回调停顿固定为自动。
 /// [onSkip] 可选，提供时在"开始练习"左侧显示「跳过」按钮，点击直接跳过当前任务。
 Future<void> showReviewBriefingSheet({
   required BuildContext context,
@@ -24,8 +28,11 @@ Future<void> showReviewBriefingSheet({
   required SubStageType subStage,
   Duration? estimatedDuration,
   double defaultPlaybackSpeed = 1.0,
-  required void Function(double playbackSpeed, double pauseMultiplier)
+  BriefingPauseChoice defaultPause = const BriefingPauseChoice.smart(),
+  required void Function(double playbackSpeed, BriefingPauseChoice pause)
   onStartPractice,
+  void Function(double playbackSpeed, BriefingPauseChoice pause)?
+  onSelectionChanged,
   VoidCallback? onSkip,
 }) {
   return showModalBottomSheet(
@@ -39,22 +46,24 @@ Future<void> showReviewBriefingSheet({
       subStage: subStage,
       estimatedDuration: estimatedDuration,
       defaultPlaybackSpeed: defaultPlaybackSpeed,
+      defaultPause: defaultPause,
       onStartPractice: onStartPractice,
+      onSelectionChanged: onSelectionChanged,
       onSkip: onSkip,
     ),
   );
 }
-
-/// 句间停顿下拉选项：-1.0 = 自动（smart 模式），其余为段长倍数。
-const List<double> _kPauseMultiplierOptions = [-1.0, 1.0, 2.0, 3.0, 4.0, 5.0];
 
 class _ReviewBriefingSheet extends StatefulWidget {
   final LearningStage stage;
   final SubStageType subStage;
   final Duration? estimatedDuration;
   final double defaultPlaybackSpeed;
-  final void Function(double playbackSpeed, double pauseMultiplier)
+  final BriefingPauseChoice defaultPause;
+  final void Function(double playbackSpeed, BriefingPauseChoice pause)
   onStartPractice;
+  final void Function(double playbackSpeed, BriefingPauseChoice pause)?
+  onSelectionChanged;
   final VoidCallback? onSkip;
 
   const _ReviewBriefingSheet({
@@ -62,7 +71,9 @@ class _ReviewBriefingSheet extends StatefulWidget {
     required this.subStage,
     this.estimatedDuration,
     required this.defaultPlaybackSpeed,
+    this.defaultPause = const BriefingPauseChoice.smart(),
     required this.onStartPractice,
+    this.onSelectionChanged,
     this.onSkip,
   });
 
@@ -72,7 +83,7 @@ class _ReviewBriefingSheet extends StatefulWidget {
 
 class _ReviewBriefingSheetState extends State<_ReviewBriefingSheet> {
   late double _playbackSpeed = widget.defaultPlaybackSpeed;
-  double _pauseMultiplier = -1.0;
+  late BriefingPauseChoice _pause = widget.defaultPause;
 
   /// 格式化预估时长
   String _formatEstimatedDuration(AppLocalizations l10n, Duration duration) {
@@ -163,24 +174,13 @@ class _ReviewBriefingSheetState extends State<_ReviewBriefingSheet> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              trailing: AppDropdown<double>(
-                value: _pauseMultiplier,
-                isExpanded: true,
-                isDense: true,
-                items: _kPauseMultiplierOptions
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(
-                          value < 0
-                              ? l10n.intensiveListenPauseSmart
-                              : '${value.toInt()}x',
-                        ),
-                      ),
-                    )
-                    .toList(),
+              trailing: PauseChoiceDropdown(
+                value: _pause,
+                fixedOptions: IntensiveListenSettings.fixedPauseOptions,
+                multiplierOptions: IntensiveListenSettings.multiplierOptions,
                 onChanged: (v) {
-                  if (v != null) setState(() => _pauseMultiplier = v);
+                  setState(() => _pause = v);
+                  widget.onSelectionChanged?.call(_playbackSpeed, _pause);
                 },
               ),
             ),
@@ -207,7 +207,10 @@ class _ReviewBriefingSheetState extends State<_ReviewBriefingSheet> {
                   )
                   .toList(),
               onChanged: (v) {
-                if (v != null) setState(() => _playbackSpeed = v);
+                if (v != null) {
+                  setState(() => _playbackSpeed = v);
+                  widget.onSelectionChanged?.call(_playbackSpeed, _pause);
+                }
               },
             ),
           ),
@@ -236,7 +239,7 @@ class _ReviewBriefingSheetState extends State<_ReviewBriefingSheet> {
             startLabel: l10n.startPractice,
             onStart: () {
               Navigator.of(context).pop();
-              widget.onStartPractice(_playbackSpeed, _pauseMultiplier);
+              widget.onStartPractice(_playbackSpeed, _pause);
             },
             skipLabel: widget.onSkip != null ? l10n.retellSkip : null,
             onSkip: widget.onSkip == null

@@ -31,7 +31,8 @@ class StorageService {
 
       final fullRaw = jsonMap['fullSettings'];
       final bookmarkRaw = jsonMap['bookmarkSettings'];
-      if (fullRaw is Map<String, dynamic> && bookmarkRaw is Map<String, dynamic>) {
+      if (fullRaw is Map<String, dynamic> &&
+          bookmarkRaw is Map<String, dynamic>) {
         return ListeningPracticeSettingsStore(
           full: PlaybackSettings.fromJson(fullRaw),
           bookmark: withBookmarkLoopDefaults(
@@ -52,7 +53,9 @@ class StorageService {
     }
   }
 
-  static Future<void> saveSettings(ListeningPracticeSettingsStore settings) async {
+  static Future<void> saveSettings(
+    ListeningPracticeSettingsStore settings,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = json.encode({
       'fullSettings': settings.full.toJson(),

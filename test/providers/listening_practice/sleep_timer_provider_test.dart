@@ -29,9 +29,7 @@ void main() {
   ProviderContainer makeContainer() {
     listening = _TestListeningPractice();
     final c = ProviderContainer(
-      overrides: [
-        listeningPracticeProvider.overrideWith(() => listening),
-      ],
+      overrides: [listeningPracticeProvider.overrideWith(() => listening)],
     );
     // autoDispose：保持一个常驻监听，避免无 listener 时被回收（对齐真实页面里
     // AppBar 按钮的 ref.watch）。
@@ -49,13 +47,17 @@ void main() {
       notifier.start(const Duration(minutes: 5));
       expect(container.read(sleepTimerProvider).isActive, true);
       expect(container.read(sleepTimerProvider).presetMinutes, 5);
-      expect(container.read(sleepTimerProvider).remaining,
-          const Duration(minutes: 5));
+      expect(
+        container.read(sleepTimerProvider).remaining,
+        const Duration(minutes: 5),
+      );
 
       async.elapse(const Duration(minutes: 1));
       expect(container.read(sleepTimerProvider).presetMinutes, 5);
-      expect(container.read(sleepTimerProvider).remaining,
-          const Duration(minutes: 4));
+      expect(
+        container.read(sleepTimerProvider).remaining,
+        const Duration(minutes: 4),
+      );
     });
   });
 
@@ -86,8 +88,10 @@ void main() {
       // 在旧计时到点前重设为新的 10 分钟。
       notifier.start(const Duration(minutes: 10));
       expect(container.read(sleepTimerProvider).presetMinutes, 10);
-      expect(container.read(sleepTimerProvider).remaining,
-          const Duration(minutes: 10));
+      expect(
+        container.read(sleepTimerProvider).remaining,
+        const Duration(minutes: 10),
+      );
 
       // 越过旧计时原本的到点时刻（再 2 分钟），不应触发暂停。
       async.elapse(const Duration(minutes: 2));

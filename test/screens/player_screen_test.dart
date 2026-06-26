@@ -180,7 +180,9 @@ List<Override> _restoreProgressOverrides({
   appSettingsProvider.overrideWith(() => TestAppSettings()),
   audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
   collectionListProvider.overrideWith(() => TestCollectionList()),
-  listeningPracticeProvider.overrideWith(() => TestListeningPractice(practiceState)),
+  listeningPracticeProvider.overrideWith(
+    () => TestListeningPractice(practiceState),
+  ),
   audioEngineProvider.overrideWith(
     () => _RestorePositionAudioEngine(
       restoredPosition: restoredPosition,
@@ -341,7 +343,9 @@ void main() {
         );
         await tester.pump();
 
-        final progressBar = tester.widget<ProgressBar>(find.byType(ProgressBar));
+        final progressBar = tester.widget<ProgressBar>(
+          find.byType(ProgressBar),
+        );
         expect(progressBar.progress, const Duration(seconds: 45));
         expect(progressBar.total, const Duration(seconds: 120));
         await _disposeTree(tester);

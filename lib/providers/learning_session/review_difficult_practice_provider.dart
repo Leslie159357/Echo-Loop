@@ -9,6 +9,7 @@
 library;
 
 import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/audio_event_params.dart';
@@ -17,7 +18,6 @@ import '../../features/usage/usage_event.dart';
 import '../../features/usage/usage_providers.dart';
 import '../../database/providers.dart';
 import '../../models/difficult_practice_settings.dart';
-import '../../models/intensive_listen_settings.dart' show PauseMode;
 import '../../models/sentence.dart';
 import '../../models/study_stage.dart';
 import '../../services/learned_vocabulary_tracker.dart';
@@ -29,6 +29,7 @@ import '../blind_flow/blind_practice_flow_phase.dart';
 import '../blind_flow/blind_practice_flow_state.dart';
 import '../learned_vocabulary_tracker_provider.dart';
 import '../learning_progress_provider.dart';
+import '../difficult_practice_prefs_provider.dart';
 import '../listening_practice/bookmark_manager.dart';
 import '../repeat_flow/repeat_flow_engine.dart';
 import '../repeat_flow/repeat_flow_phase.dart';
@@ -38,6 +39,25 @@ import 'learning_session_provider.dart';
 import 'sentence_playback_engine.dart';
 
 part 'review_difficult_practice_provider.g.dart';
+
+/// 记录用户对 [DifficultPracticeSettings] 的手动改动到 [slot] 偏好(按槽位)。
+///
+/// 难句补练 / 收藏句复习共用 [DifficultPracticeSettings] 与同一份偏好 store。
+/// 仅写变化字段;[slot] 为 null 时跳过。
+void recordDifficultPracticeChange(
+  Ref ref,
+  String? slot,
+  DifficultPracticeSettings oldSettings,
+  DifficultPracticeSettings newSettings,
+) {
+  if (slot == null) return;
+  persistDifficultSettingsDiff(
+    ref.read(difficultPracticePrefsProvider.notifier),
+    slot,
+    oldSettings,
+    newSettings,
+  );
+}
 
 /// 难句补练状态
 ///
@@ -188,6 +208,9 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// 难句列表
   List<Sentence> _sentences = [];
 
+  /// 设置记忆 slot(子阶段×轮次);null 表示本次不记忆。
+  String? _settingsSlot;
+
   /// 学习事件记录器
   late StudyEventRecorder _recorder;
 
@@ -250,9 +273,10 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   void initialize(
     List<Sentence> sentences, {
     int startIndex = 0,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    DifficultPracticeSettings settings = const DifficultPracticeSettings(),
+    String? settingsSlot,
   }) {
+    _settingsSlot = settingsSlot;
     _engine.cleanup();
     _blindEngine.dispose();
     _blindEngine = _createBlindEngine();
@@ -264,19 +288,11 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
         ? 0
         : startIndex.clamp(0, _sentences.length - 1);
 
-    // pauseMultiplier < 0 → 走 smart 模式（model 默认）；否则切到 multiplier 模式。
-    final initialSettings = pauseMultiplier < 0
-        ? DifficultPracticeSettings(playbackSpeed: playbackSpeed)
-        : DifficultPracticeSettings(
-            playbackSpeed: playbackSpeed,
-            pauseMode: PauseMode.multiplier,
-            pauseMultiplier: pauseMultiplier,
-          );
-
     state = ReviewDifficultPracticeState(
       currentSentenceIndex: validIndex,
       totalSentences: _sentences.length,
-      settings: initialSettings,
+      // [settings] 已由调用方从按槽位偏好 resolve 出(默认+记忆),直接 seed。
+      settings: settings,
     );
     _prepareBlindFlow(startIndex: validIndex);
     ref.read(analyticsServiceProvider).track(Events.difficultPracticeStart, {
@@ -292,6 +308,12 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
   /// 更新设置并重新开始当前句
   Future<void> updateSettings(DifficultPracticeSettings newSettings) async {
+    recordDifficultPracticeChange(
+      ref,
+      _settingsSlot,
+      state.settings,
+      newSettings,
+    );
     // 速度变化无需重启会话：直接推给 AudioEngine 即可。
     // 其它字段变化沿用现有重启逻辑。
     final old = state.settings;

@@ -6,11 +6,13 @@ library;
 
 import 'package:flutter/material.dart';
 import 'app_dropdown.dart';
+import 'pause_choice_dropdown.dart';
 import 'setting_labeled_row.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/blind_listen_settings.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/stage_settings_overrides.dart' show BriefingPauseChoice;
 import '../../theme/app_theme.dart';
 import '../../utils/playback_speed.dart';
 import '../../utils/paragraph_grouping.dart';
@@ -49,6 +51,8 @@ Future<void> showParagraphSelectionSheet({
   List<double>? playbackSpeedOptions,
   double defaultPlaybackSpeed = 1.0,
   List<double>? pauseMultiplierOptions,
+  List<int>? fixedPauseOptions,
+  BriefingPauseChoice defaultPause = const BriefingPauseChoice.smart(),
   String? stageLabel,
   String? estimatedDurationText,
   Duration Function(int targetSeconds, double pauseMultiplier)?
@@ -56,17 +60,24 @@ Future<void> showParagraphSelectionSheet({
   KeywordRatio? defaultKeywordRatio,
   required void Function(
     Duration targetDuration,
-    double pauseMultiplier,
+    BriefingPauseChoice pause,
     KeywordRatio? keywordRatio,
   )
   onStartPractice,
   void Function(
     Duration targetDuration,
-    double pauseMultiplier,
+    BriefingPauseChoice pause,
     KeywordRatio? keywordRatio,
     double playbackSpeed,
   )?
   onStartPracticeWithPlaybackSpeed,
+  void Function(
+    Duration targetDuration,
+    BriefingPauseChoice pause,
+    KeywordRatio? keywordRatio,
+    double playbackSpeed,
+  )?
+  onSelectionChanged,
   String? skipLabel,
   VoidCallback? onSkip,
   String? skipGuideFlowId,
@@ -90,12 +101,15 @@ Future<void> showParagraphSelectionSheet({
       playbackSpeedOptions: playbackSpeedOptions,
       defaultPlaybackSpeed: defaultPlaybackSpeed,
       pauseMultiplierOptions: pauseMultiplierOptions,
+      fixedPauseOptions: fixedPauseOptions,
+      defaultPause: defaultPause,
       stageLabel: stageLabel,
       estimatedDurationText: estimatedDurationText,
       estimateDurationBuilder: estimateDurationBuilder,
       defaultKeywordRatio: defaultKeywordRatio,
       onStartPractice: onStartPractice,
       onStartPracticeWithPlaybackSpeed: onStartPracticeWithPlaybackSpeed,
+      onSelectionChanged: onSelectionChanged,
       skipLabel: skipLabel,
       onSkip: onSkip,
       skipGuideFlowId: skipGuideFlowId,
@@ -116,6 +130,8 @@ class _ParagraphSelectionSheet extends StatefulWidget {
   final List<double>? playbackSpeedOptions;
   final double defaultPlaybackSpeed;
   final List<double>? pauseMultiplierOptions;
+  final List<int>? fixedPauseOptions;
+  final BriefingPauseChoice defaultPause;
   final String? stageLabel;
   final String? estimatedDurationText;
   final Duration Function(int targetSeconds, double pauseMultiplier)?
@@ -123,17 +139,24 @@ class _ParagraphSelectionSheet extends StatefulWidget {
   final KeywordRatio? defaultKeywordRatio;
   final void Function(
     Duration targetDuration,
-    double pauseMultiplier,
+    BriefingPauseChoice pause,
     KeywordRatio? keywordRatio,
   )
   onStartPractice;
   final void Function(
     Duration targetDuration,
-    double pauseMultiplier,
+    BriefingPauseChoice pause,
     KeywordRatio? keywordRatio,
     double playbackSpeed,
   )?
   onStartPracticeWithPlaybackSpeed;
+  final void Function(
+    Duration targetDuration,
+    BriefingPauseChoice pause,
+    KeywordRatio? keywordRatio,
+    double playbackSpeed,
+  )?
+  onSelectionChanged;
   final String? skipLabel;
   final VoidCallback? onSkip;
   final String? skipGuideFlowId;
@@ -151,12 +174,15 @@ class _ParagraphSelectionSheet extends StatefulWidget {
     this.playbackSpeedOptions,
     required this.defaultPlaybackSpeed,
     this.pauseMultiplierOptions,
+    this.fixedPauseOptions,
+    this.defaultPause = const BriefingPauseChoice.smart(),
     this.stageLabel,
     this.estimatedDurationText,
     this.estimateDurationBuilder,
     this.defaultKeywordRatio,
     required this.onStartPractice,
     this.onStartPracticeWithPlaybackSpeed,
+    this.onSelectionChanged,
     this.skipLabel,
     this.onSkip,
     this.skipGuideFlowId,
@@ -172,13 +198,27 @@ class _ParagraphSelectionSheet extends StatefulWidget {
 class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
   late int _targetSeconds = widget.defaultSeconds;
 
-  /// -1.0 = 自动（智能模式）
-  double _pauseMultiplier = -1.0;
+  /// 句间停顿选择(自动/固定间隔/句长倍数),初值来自 [widget.defaultPause]。
+  late BriefingPauseChoice _pause = widget.defaultPause;
+
   late double _playbackSpeed = widget.defaultPlaybackSpeed;
   late KeywordRatio? _keywordRatio = widget.defaultKeywordRatio;
 
   /// 用于「跳过」按钮新手引导的 showcase key；仅在调用方传入 flow id 时使用。
   final GlobalKey _skipGuideKey = GlobalKey();
+
+  /// 任一控件改动后即时回调当前完整选择(改完即记,无需「开始练习」)。
+  void _notifyChanged() {
+    final duration = _targetSeconds < 0
+        ? const Duration(hours: 24)
+        : Duration(seconds: _targetSeconds);
+    widget.onSelectionChanged?.call(
+      duration,
+      _pause,
+      _keywordRatio,
+      _playbackSpeed,
+    );
+  }
 
   int get _paragraphCount {
     if (_targetSeconds == 0) return widget.sentences.length;
@@ -280,7 +320,10 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
                   return DropdownMenuItem(value: s, child: Text(label));
                 }).toList(),
                 onChanged: (v) {
-                  if (v != null) setState(() => _targetSeconds = v);
+                  if (v != null) {
+                    setState(() => _targetSeconds = v);
+                    _notifyChanged();
+                  }
                 },
               ),
             ),
@@ -295,29 +338,15 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                trailing: AppDropdown<double>(
-                  value: _pauseMultiplier,
-                  isExpanded: true,
-                  isDense: true,
-                  items: [
-                    DropdownMenuItem(
-                      value: -1.0,
-                      child: Text(l10n.pauseModeSmart),
-                    ),
-                    ...(widget.pauseMultiplierOptions ??
-                            BlindListenSettings.multiplierOptions)
-                        .map((m) {
-                          final label = m == m.roundToDouble()
-                              ? '${m.toInt()}x'
-                              : '${m}x';
-                          return DropdownMenuItem(
-                            value: m,
-                            child: Text(label),
-                          );
-                        }),
-                  ],
+                trailing: PauseChoiceDropdown(
+                  value: _pause,
+                  fixedOptions: widget.fixedPauseOptions ?? const [],
+                  multiplierOptions:
+                      widget.pauseMultiplierOptions ??
+                      BlindListenSettings.multiplierOptions,
                   onChanged: (v) {
-                    if (v != null) setState(() => _pauseMultiplier = v);
+                    setState(() => _pause = v);
+                    _notifyChanged();
                   },
                 ),
               ),
@@ -349,6 +378,7 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
                   onChanged: (v) {
                     if (v != null) {
                       setState(() => _playbackSpeed = v);
+                      _notifyChanged();
                     }
                   },
                 ),
@@ -378,7 +408,10 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
                       )
                       .toList(),
                   onChanged: (v) {
-                    if (v != null) setState(() => _keywordRatio = v);
+                    if (v != null) {
+                      setState(() => _keywordRatio = v);
+                      _notifyChanged();
+                    }
                   },
                 ),
               ),
@@ -394,7 +427,9 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
                         l10n,
                         widget.estimateDurationBuilder!(
                           _targetSeconds,
-                          _pauseMultiplier,
+                          // 固定/自动 走 smart 估算(-1);仅倍数模式用真实倍数。
+                          // 固定模式的精确预估为次要,显示近似值可接受。
+                          _pause.legacyPauseMultiplier,
                         ),
                       )
                     : null;
@@ -508,14 +543,9 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
             : Duration(seconds: _targetSeconds);
         final speedCallback = widget.onStartPracticeWithPlaybackSpeed;
         if (speedCallback != null) {
-          speedCallback(
-            duration,
-            _pauseMultiplier,
-            _keywordRatio,
-            _playbackSpeed,
-          );
+          speedCallback(duration, _pause, _keywordRatio, _playbackSpeed);
         } else {
-          widget.onStartPractice(duration, _pauseMultiplier, _keywordRatio);
+          widget.onStartPractice(duration, _pause, _keywordRatio);
         }
       },
       child: Text(l10n.startPractice),

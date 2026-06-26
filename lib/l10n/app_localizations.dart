@@ -1853,7 +1853,7 @@ abstract class AppLocalizations {
   /// No description provided for @intensiveListenSettingsTemporaryHint.
   ///
   /// In en, this message translates to:
-  /// **'Settings apply to this session only'**
+  /// **'Settings are remembered for next time'**
   String get intensiveListenSettingsTemporaryHint;
 
   /// No description provided for @intensiveListenPauseSmartDesc.

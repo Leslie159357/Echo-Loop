@@ -56,6 +56,15 @@ void main() {
       // PopupMenuButton 走 popupMenuTheme
       expect(dark.popupMenuTheme.color, const Color(0xFF1E1E20));
     });
+
+    test('Slider inactive track 显式配色，确保在纯黑上可见', () {
+      // M3 默认 inactive ≈ surfaceContainerHighest，在纯黑上几乎不可见；
+      // 必须显式提高对比度（onSurface 近白 + 足够 alpha）
+      final inactive = dark.sliderTheme.inactiveTrackColor;
+      expect(inactive, isNotNull);
+      expect(inactive!.a, greaterThanOrEqualTo(0.3));
+      expect(dark.sliderTheme.activeTrackColor, dark.colorScheme.primary);
+    });
   });
 
   group('AppTheme.light — 回归保护', () {

@@ -26,6 +26,7 @@ import '../blind_flow/blind_practice_flow_state.dart';
 import '../intensive_annotation/intensive_annotation_phase.dart';
 import '../intensive_annotation/intensive_annotation_state.dart';
 import '../learned_vocabulary_tracker_provider.dart';
+import '../intensive_listen_prefs_provider.dart';
 import '../learning_progress_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
@@ -182,6 +183,10 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
   bool _refreshBlindConfigWhenWaiting = false;
   bool _annotationWaitAfterCurrentPlayback = false;
 
+  /// 当前会话的偏好槽位(子阶段×轮次);🔧 面板改动按此槽位持久化。
+  /// 逐句精听=`intensiveListen:firstLearn`、难句跟读=`listenAndRepeat:firstLearn`。
+  String? _settingsSlot;
+
   BlindPracticeFlowEngine _createBlindEngine() {
     return BlindPracticeFlowEngine(
       onStateChanged: _onBlindFlowStateChanged,
@@ -219,9 +224,10 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
   Future<void> initialize(
     List<Sentence> sentences, {
     int startIndex = 0,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    IntensiveListenSettings settings = const IntensiveListenSettings(),
+    String? settingsSlot,
   }) async {
+    _settingsSlot = settingsSlot;
     _blindEngine.dispose();
     _blindEngine = _createBlindEngine();
     _cleanupAnnotationSession();
@@ -235,20 +241,13 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
         if (s.isBookmarked) i,
     };
 
-    // pauseMultiplier < 0 → 走 smart 模式（model 默认）；否则切到 multiplier 模式。
-    final initialSettings = pauseMultiplier < 0
-        ? IntensiveListenSettings(playbackSpeed: playbackSpeed)
-        : IntensiveListenSettings(
-            playbackSpeed: playbackSpeed,
-            pauseMode: PauseMode.multiplier,
-            pauseMultiplier: pauseMultiplier,
-          );
-
+    // [settings] 已由调用方从 intensiveListenPrefs.resolve(smartSpeed) 得出
+    // (默认 + 用户记忆覆盖),这里直接 seed,不再有第二份覆盖通道。
     state = IntensiveListenState(
       currentSentenceIndex: safeIndex,
       totalSentences: _sentences.length,
       difficultSentences: preBookmarked,
-      settings: initialSettings,
+      settings: settings,
     );
     _prepareBlindFlow(startIndex: safeIndex);
     ref.read(analyticsServiceProvider).track(Events.intensiveListenStart, {
@@ -557,7 +556,26 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     await _blindEngine.replayCurrentSentence();
   }
 
+  /// 把 🔧 面板的改动持久化到用户偏好(与入口弹窗同一份 store)。
+  ///
+  /// 只把相对旧设置**真正变化**的字段写进偏好:每个面板交互只改一个字段,
+  /// 故只会把该字段从「未设(用默认)」变成具体值,不冻结未碰过的智能默认。
+  void _persistChangedPrefs(
+    IntensiveListenSettings oldSettings,
+    IntensiveListenSettings newSettings,
+  ) {
+    final slot = _settingsSlot;
+    if (slot == null) return;
+    persistIntensiveSettingsDiff(
+      ref.read(intensiveListenPrefsProvider.notifier),
+      slot,
+      oldSettings,
+      newSettings,
+    );
+  }
+
   void updateSettings(IntensiveListenSettings newSettings) {
+    _persistChangedPrefs(state.settings, newSettings);
     var clampedPlayCount = state.currentPlayCount;
     if (clampedPlayCount > newSettings.repeatCount) {
       clampedPlayCount = newSettings.repeatCount;

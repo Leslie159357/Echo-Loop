@@ -261,8 +261,7 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: () =>
-                widget.onResult((action: StepCompleteAction.back)),
+            onPressed: () => widget.onResult((action: StepCompleteAction.back)),
             child: Text(completeText),
           ),
         ),
@@ -273,8 +272,7 @@ class _StepCompleteDialogState extends State<StepCompleteDialog> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: () =>
-                widget.onResult((action: StepCompleteAction.back)),
+            onPressed: () => widget.onResult((action: StepCompleteAction.back)),
             child: Text(l10n.done),
           ),
         ),

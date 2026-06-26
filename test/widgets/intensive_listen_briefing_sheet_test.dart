@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/models/stage_settings_overrides.dart'
+    show BriefingPauseChoice;
 import 'package:echo_loop/widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
 
 import '../helpers/test_app.dart';
@@ -98,8 +100,8 @@ void main() {
     expect(selectedSpeed, 1.5);
   });
 
-  testWidgets('句间停顿默认为「自动」(-1.0)，点击开始练习时回传', (tester) async {
-    double? selectedPause;
+  testWidgets('句间停顿默认为「自动」，点击开始练习时回传', (tester) async {
+    BriefingPauseChoice? selectedPause;
     await tester.pumpWidget(
       createTestApp(
         Builder(
@@ -128,7 +130,7 @@ void main() {
     await tester.tap(find.text('Start Practice'));
     await tester.pumpAndSettle();
 
-    expect(selectedPause, -1.0);
+    expect(selectedPause, const BriefingPauseChoice.smart());
   });
 
   testWidgets('不传 onSkip 时不显示跳过按钮', (tester) async {
@@ -186,8 +188,8 @@ void main() {
     expect(skipped, isTrue);
   });
 
-  testWidgets('选择 3x 后回传 3.0', (tester) async {
-    double? selectedPause;
+  testWidgets('选择 3x 后回传 multiplier(3.0)', (tester) async {
+    BriefingPauseChoice? selectedPause;
     await tester.pumpWidget(
       createTestApp(
         Builder(
@@ -212,11 +214,58 @@ void main() {
 
     await tester.tap(find.text('Auto'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('3x').last);
+    // 分组下拉项较多(固定间隔 15 档 + 句长倍数 7 档),倍数在底部,需滚动到可见。
+    await tester.scrollUntilVisible(
+      find.text('3x'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3x'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Start Practice'));
     await tester.pumpAndSettle();
 
-    expect(selectedPause, 3.0);
+    expect(selectedPause, const BriefingPauseChoice.multiplier(3.0));
+  });
+
+  testWidgets('改动停顿即时回调 onSelectionChanged(改完即记,不必开始练习)', (tester) async {
+    BriefingPauseChoice? changedPause;
+    await tester.pumpWidget(
+      createTestApp(
+        Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () {
+              showIntensiveListenBriefingSheet(
+                context: context,
+                sentenceCount: 10,
+                onStartPractice: (_, _) {},
+                onSelectionChanged: (_, pause) {
+                  changedPause = pause;
+                },
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    // 打开停顿下拉,选「固定间隔 5s」——未点「开始练习」也应即时回调。
+    await tester.tap(find.text('Auto'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('5s'),
+      80,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('5s'));
+    await tester.pumpAndSettle();
+
+    expect(changedPause, const BriefingPauseChoice.fixed(5));
   });
 }

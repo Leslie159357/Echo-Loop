@@ -362,10 +362,7 @@ void main() {
       expect(added.item.id, 'a1');
       expect(container.read(audioLibraryProvider).audioItems, [existing]);
       // 已有条目被关联到目标合集
-      expect(
-        container.read(collectionListProvider).getAudioIds('c2'),
-        ['a1'],
-      );
+      expect(container.read(collectionListProvider).getAudioIds('c2'), ['a1']);
     });
 
     test('已 AI 转录（audioSha256 已变）后再导入同一文件仍按原始 hash 去重', () async {

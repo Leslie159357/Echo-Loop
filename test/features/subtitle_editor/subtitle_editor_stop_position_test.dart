@@ -127,7 +127,11 @@ class _StopResetEngine extends AudioEngine {
   bool isActiveSession(int id) => id == _session;
 
   @override
-  Future<Duration?> loadAudio(AudioItem item, double speed, {String? subtitle}) async => duration;
+  Future<Duration?> loadAudio(
+    AudioItem item,
+    double speed, {
+    String? subtitle,
+  }) async => duration;
 
   @override
   Future<List<Sentence>> loadTranscript(AudioItem audioItem) async => sentences;

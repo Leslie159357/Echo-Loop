@@ -19,6 +19,11 @@ import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/time_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
+import '../models/stage_settings_overrides.dart';
+import '../providers/intensive_listen_prefs_provider.dart';
+import '../providers/blind_listen_prefs_provider.dart';
+import '../providers/retell_prefs_provider.dart';
+import '../providers/difficult_practice_prefs_provider.dart';
 import '../providers/listen_and_repeat/listen_and_repeat_controller.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/new_user_guide_provider.dart';
@@ -28,8 +33,10 @@ import '../router/app_router.dart';
 import '../services/subtitle_parser.dart';
 import '../theme/app_theme.dart';
 import '../models/blind_listen_settings.dart';
-import '../models/intensive_listen_settings.dart' show PauseMode;
-import '../models/retell_settings.dart' show KeywordRatio;
+import '../models/difficult_practice_settings.dart';
+import '../models/intensive_listen_settings.dart'
+    show PauseMode, IntensiveListenSettings;
+import '../models/retell_settings.dart' show KeywordRatio, RetellSettings;
 import '../utils/blind_listen_duration_estimator.dart';
 import '../utils/paragraph_grouping.dart';
 import '../utils/playback_speed_default.dart';
@@ -39,7 +46,8 @@ import '../widgets/blind_listen_paragraph_sheet.dart';
 import '../widgets/common/audio_app_bar_title.dart';
 import '../widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart';
-import '../providers/learning_session/retell_player_provider.dart';
+import '../widgets/common/paragraph_selection_sheet.dart'
+    show paragraphDurationOptions;
 import '../widgets/retell/retell_briefing_sheet.dart';
 import '../widgets/review/review_briefing_sheet.dart';
 import '../widgets/speech_permission_dialog.dart';
@@ -66,9 +74,9 @@ final _bookmarkCountProvider = StreamProvider.family.autoDispose<int, String>((
 ///
 /// 学习计划页据此为已完成的大阶段显示“X 天前”一类相对完成时间。
 final reviewStageCompletionTimesProvider =
-    FutureProvider.family<Map<String, DateTime>, String>((ref, audioItemId) {
+    StreamProvider.family<Map<String, DateTime>, String>((ref, audioItemId) {
       final dao = ref.watch(stageCompletionDaoProvider);
-      return dao.getStageCompletedAtByAudioId(audioItemId);
+      return dao.watchStageCompletedAtByAudioId(audioItemId);
     });
 
 /// 已完成大阶段标题文案。
@@ -81,6 +89,246 @@ String formatCompletedStageTimeLabel(
   final ago = formatTimeAgo(context, completedAt);
   final isZh = Localizations.localeOf(context).languageCode == 'zh';
   return isZh ? '完成于$ago' : 'Completed $ago';
+}
+
+/// 逐句精听入口弹窗的「停顿下拉显示值」← 已解析设置。
+///
+/// 仅作下拉的 UI 显示值,不承担持久化/传输(真相源是 [intensiveListenPrefsProvider])。
+BriefingPauseChoice intensivePauseChoiceFromSettings(
+  IntensiveListenSettings s,
+) => switch (s.pauseMode) {
+  PauseMode.smart => const BriefingPauseChoice.smart(),
+  PauseMode.fixed => BriefingPauseChoice.fixed(s.fixedPauseSeconds),
+  PauseMode.multiplier => BriefingPauseChoice.multiplier(s.pauseMultiplier),
+};
+
+/// 生成逐句精听入口弹窗的「改完即记」回调:用户在弹窗改速度/停顿时即时写入
+/// [intensiveListenPrefsProvider](与 🔧 面板同一份 store,改完即持久,无需开始练习)。
+///
+/// 闭包跟踪上次值,仅写**真正变化的那个字段**:既支持来回改,又不会因改一个字段而
+/// 把另一个未碰过的字段(智能默认)冻结。两个入口(按计划/自由练习)共用,行为一致。
+void Function(double, BriefingPauseChoice) intensivePrefsRecorder(
+  IntensiveListenPrefsNotifier notifier,
+  String slot,
+  IntensiveListenSettings resolved,
+) {
+  var lastSpeed = resolved.playbackSpeed;
+  var lastPause = intensivePauseChoiceFromSettings(resolved);
+  return (speed, pause) {
+    if (speed != lastSpeed) {
+      notifier.setPlaybackSpeed(slot, speed);
+      lastSpeed = speed;
+    }
+    if (pause != lastPause) {
+      switch (pause.mode) {
+        case PauseMode.smart:
+          notifier.setPauseMode(slot, PauseMode.smart);
+        case PauseMode.fixed:
+          notifier.setPauseMode(slot, PauseMode.fixed);
+          notifier.setFixedPauseSeconds(slot, pause.fixedSeconds);
+        case PauseMode.multiplier:
+          notifier.setPauseMode(slot, PauseMode.multiplier);
+          notifier.setPauseMultiplier(slot, pause.multiplier);
+      }
+      lastPause = pause;
+    }
+  };
+}
+
+/// 盲听入口弹窗的「停顿下拉显示值」← 已解析设置。
+BriefingPauseChoice blindPauseChoiceFromSettings(BlindListenSettings s) =>
+    switch (s.pauseMode) {
+      PauseMode.smart => const BriefingPauseChoice.smart(),
+      PauseMode.fixed => BriefingPauseChoice.fixed(s.fixedPauseSeconds),
+      PauseMode.multiplier => BriefingPauseChoice.multiplier(s.pauseMultiplier),
+    };
+
+/// 难句补练 / 收藏句复习 入口的「停顿下拉显示值」← 已解析设置。
+BriefingPauseChoice difficultPauseChoiceFromSettings(
+  DifficultPracticeSettings s,
+) => switch (s.pauseMode) {
+  PauseMode.smart => const BriefingPauseChoice.smart(),
+  PauseMode.fixed => BriefingPauseChoice.fixed(s.fixedPauseSeconds),
+  PauseMode.multiplier => BriefingPauseChoice.multiplier(s.pauseMultiplier),
+};
+
+/// 段落复述 入口的「停顿下拉显示值」← 已解析设置。
+BriefingPauseChoice retellPauseChoiceFromSettings(RetellSettings s) =>
+    switch (s.pauseMode) {
+      PauseMode.smart => const BriefingPauseChoice.smart(),
+      PauseMode.fixed => BriefingPauseChoice.fixed(s.fixedPauseSeconds),
+      PauseMode.multiplier => BriefingPauseChoice.multiplier(s.pauseMultiplier),
+    };
+
+/// 复述段落入口弹窗的预填:从按槽位偏好 resolve 出 速度/停顿/可见词比例/目标段长。
+({
+  int seconds,
+  KeywordRatio ratio,
+  double speed,
+  BriefingPauseChoice pause,
+  RetellSettings settings,
+})
+retellBriefingDefaults(
+  WidgetRef ref,
+  String slot, {
+  required double smartSpeed,
+  required KeywordRatio smartRatio,
+  required int smartSeconds,
+}) {
+  final rp = ref.read(retellPrefsProvider.notifier);
+  final settings = rp.resolve(
+    slot,
+    smartSpeed: smartSpeed,
+    smartRatio: smartRatio,
+  );
+  final rawSeconds = rp.resolveTargetSeconds(slot, smartSeconds: smartSeconds);
+  // 目标段长须落在合法档位内,否则下拉 value 不在 items 会断言。
+  final seconds = paragraphDurationOptions.contains(rawSeconds)
+      ? rawSeconds
+      : smartSeconds;
+  return (
+    seconds: seconds,
+    ratio: settings.keywordRatio,
+    speed: settings.playbackSpeed,
+    pause: retellPauseChoiceFromSettings(settings),
+    settings: settings,
+  );
+}
+
+/// 盲听入口「改完即记」回调:改速度/停顿即时写按槽位偏好(跟踪上次值,仅写变化字段,
+/// 支持回退到默认)。供按计划/自由练习各入口共用。
+void Function(Duration, BriefingPauseChoice, double) blindPrefsRecorder(
+  WidgetRef ref,
+  String slot,
+  BlindListenSettings defaults,
+  int defaultSeconds,
+) {
+  final n = ref.read(blindListenPrefsProvider.notifier);
+  var lastPause = blindPauseChoiceFromSettings(defaults);
+  var lastSpeed = defaults.playbackSpeed;
+  var lastSeconds = defaultSeconds;
+  return (duration, pause, speed) {
+    if (speed != lastSpeed) {
+      n.setPlaybackSpeed(slot, speed);
+      lastSpeed = speed;
+    }
+    if (pause != lastPause) {
+      switch (pause.mode) {
+        case PauseMode.smart:
+          n.setPauseMode(slot, PauseMode.smart);
+        case PauseMode.fixed:
+          n.setPauseMode(slot, PauseMode.fixed);
+          n.setFixedPauseSeconds(slot, pause.fixedSeconds);
+        case PauseMode.multiplier:
+          n.setPauseMode(slot, PauseMode.multiplier);
+          n.setPauseMultiplier(slot, pause.multiplier);
+      }
+      lastPause = pause;
+    }
+    final seconds = duration.inHours >= 24 ? -1 : duration.inSeconds;
+    if (seconds != lastSeconds && paragraphDurationOptions.contains(seconds)) {
+      n.setTargetSeconds(slot, seconds);
+      lastSeconds = seconds;
+    }
+  };
+}
+
+/// 难句补练入口「改完即记」回调(速度/停顿)。
+void Function(double, BriefingPauseChoice) difficultPrefsRecorder(
+  WidgetRef ref,
+  String slot,
+  DifficultPracticeSettings defaults,
+) {
+  final n = ref.read(difficultPracticePrefsProvider.notifier);
+  var lastPause = difficultPauseChoiceFromSettings(defaults);
+  var lastSpeed = defaults.playbackSpeed;
+  return (speed, pause) {
+    if (speed != lastSpeed) {
+      n.setPlaybackSpeed(slot, speed);
+      lastSpeed = speed;
+    }
+    if (pause != lastPause) {
+      switch (pause.mode) {
+        case PauseMode.smart:
+          n.setPauseMode(slot, PauseMode.smart);
+        case PauseMode.fixed:
+          n.setPauseMode(slot, PauseMode.fixed);
+          n.setFixedPauseSeconds(slot, pause.fixedSeconds);
+        case PauseMode.multiplier:
+          n.setPauseMode(slot, PauseMode.multiplier);
+          n.setPauseMultiplier(slot, pause.multiplier);
+      }
+      lastPause = pause;
+    }
+  };
+}
+
+/// 全文复述(复习简报)「改完即记」回调(仅速度/停顿)。
+void Function(double, BriefingPauseChoice) retellPauseSpeedRecorder(
+  WidgetRef ref,
+  String slot,
+  RetellSettings defaults,
+) {
+  final n = ref.read(retellPrefsProvider.notifier);
+  var lastPause = retellPauseChoiceFromSettings(defaults);
+  var lastSpeed = defaults.playbackSpeed;
+  return (speed, pause) {
+    if (speed != lastSpeed) {
+      n.setPlaybackSpeed(slot, speed);
+      lastSpeed = speed;
+    }
+    if (pause != lastPause) {
+      switch (pause.mode) {
+        case PauseMode.smart:
+          n.setPauseMode(slot, PauseMode.smart);
+        case PauseMode.fixed:
+          n.setPauseMode(slot, PauseMode.fixed);
+          n.setFixedPauseSeconds(slot, pause.fixedSeconds);
+        case PauseMode.multiplier:
+          n.setPauseMode(slot, PauseMode.multiplier);
+          n.setPauseMultiplier(slot, pause.multiplier);
+      }
+      lastPause = pause;
+    }
+  };
+}
+
+/// 复述入口「改完即记」回调(目标段长/停顿/可见词比例/速度)。
+void Function(Duration, BriefingPauseChoice, KeywordRatio?, double)
+retellPrefsRecorder(WidgetRef ref, String slot, RetellSettings defaults) {
+  final n = ref.read(retellPrefsProvider.notifier);
+  var lastPause = retellPauseChoiceFromSettings(defaults);
+  var lastSpeed = defaults.playbackSpeed;
+  var lastRatio = defaults.keywordRatio;
+  int? lastSeconds;
+  return (duration, pause, ratio, speed) {
+    if (speed != lastSpeed) {
+      n.setPlaybackSpeed(slot, speed);
+      lastSpeed = speed;
+    }
+    if (pause != lastPause) {
+      switch (pause.mode) {
+        case PauseMode.smart:
+          n.setPauseMode(slot, PauseMode.smart);
+        case PauseMode.fixed:
+          n.setPauseMode(slot, PauseMode.fixed);
+          n.setFixedPauseSeconds(slot, pause.fixedSeconds);
+        case PauseMode.multiplier:
+          n.setPauseMode(slot, PauseMode.multiplier);
+          n.setPauseMultiplier(slot, pause.multiplier);
+      }
+      lastPause = pause;
+    }
+    if (ratio != null && ratio != lastRatio) {
+      n.setKeywordRatio(slot, ratio);
+      lastRatio = ratio;
+    }
+    final seconds = duration.inHours >= 24 ? -1 : duration.inSeconds;
+    if (seconds != lastSeconds && paragraphDurationOptions.contains(seconds)) {
+      n.setTargetSeconds(slot, seconds);
+      lastSeconds = seconds;
+    }
+  };
 }
 
 /// 学习计划表页面
@@ -274,33 +522,62 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     // 预估时长
     final estimatedDuration = _estimateReviewDuration(subStage);
 
+    final reviewStage = progress.currentStage;
+    final smartSpeed = defaultPlaybackSpeedFor(liveDifficulty, reviewStage);
+
+    // 难句补练:按槽位 typed 偏好(轮次独立)。
+    if (subStage == SubStageType.reviewDifficultPractice) {
+      final slot = stageSlotKey(
+        StageSettingsSlots.reviewDifficultPractice,
+        reviewStage,
+      );
+      final dp = ref.read(difficultPracticePrefsProvider.notifier);
+      final defaults = dp.resolve(slot, smartSpeed: smartSpeed);
+      showReviewBriefingSheet(
+        context: context,
+        stage: reviewStage,
+        subStage: subStage,
+        estimatedDuration: estimatedDuration,
+        defaultPlaybackSpeed: defaults.playbackSpeed,
+        defaultPause: difficultPauseChoiceFromSettings(defaults),
+        onSelectionChanged: difficultPrefsRecorder(ref, slot, defaults),
+        onStartPractice: (playbackSpeed, pause) {
+          final settings = ref
+              .read(difficultPracticePrefsProvider.notifier)
+              .resolve(slot, smartSpeed: smartSpeed);
+          _startReviewDifficultPractice(
+            context,
+            settings: settings,
+            stage: reviewStage,
+          );
+        },
+        onSkip: _buildSkipCallback(),
+      );
+      return;
+    }
+
+    // 全文复述(reviewRetellSummary):按槽位 typed 偏好。
+    final slot = stageSlotKey(StageSettingsSlots.retell, reviewStage);
+    final rp = ref.read(retellPrefsProvider.notifier);
+    final smartRatio = KeywordRatio.forDifficultyAndStage(
+      liveDifficulty,
+      reviewStage,
+    );
+    final defaults = rp.resolve(
+      slot,
+      smartSpeed: smartSpeed,
+      smartRatio: smartRatio,
+    );
     showReviewBriefingSheet(
       context: context,
-      stage: progress.currentStage,
+      stage: reviewStage,
       subStage: subStage,
       estimatedDuration: estimatedDuration,
-      defaultPlaybackSpeed: defaultPlaybackSpeedFor(
-        liveDifficulty,
-        progress.currentStage,
-      ),
-      onStartPractice: (playbackSpeed, pauseMultiplier) {
-        switch (subStage) {
-          case SubStageType.reviewDifficultPractice:
-            _startReviewDifficultPractice(
-              context,
-              playbackSpeed: playbackSpeed,
-              pauseMultiplier: pauseMultiplier,
-            );
-          case SubStageType.reviewRetellSummary:
-            _startReviewRetell(
-              context,
-              isSummary: true,
-              playbackSpeed: playbackSpeed,
-            );
-          default:
-            // 不应到达，回退到计划页
-            break;
-        }
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: retellPauseChoiceFromSettings(defaults),
+      onSelectionChanged: retellPauseSpeedRecorder(ref, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) {
+        _startReviewRetell(context, isSummary: true);
       },
       onSkip: _buildSkipCallback(),
     );
@@ -366,30 +643,42 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         .refreshDifficultyFromBookmarks(widget.audioItemId, sentences.length);
     if (!context.mounted) return;
     final skip = _buildSkipCallback();
+    final smartSpeed = progressForSpeed != null
+        ? defaultPlaybackSpeedFor(liveDifficulty, stage)
+        : 1.0;
+    final slot = stageSlotKey(StageSettingsSlots.blindListen, stage);
+    final blindPrefs = ref.read(blindListenPrefsProvider.notifier);
+    final defaults = blindPrefs.resolve(slot, smartSpeed: smartSpeed);
+    final blindSeconds = blindPrefs.resolveTargetSeconds(
+      slot,
+      smartSeconds: -1,
+    );
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
       stageLabel: reviewStageLabel(l10n, stage),
       estimatedDurationText: estimatedText,
-      defaultPlaybackSpeed: progressForSpeed != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, stage)
-          : 1.0,
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultSeconds: blindSeconds,
+      defaultPause: blindPauseChoiceFromSettings(defaults),
+      onSelectionChanged: blindPrefsRecorder(ref, slot, defaults, blindSeconds),
       skipLabel: skip != null ? l10n.retellSkip : null,
       onSkip: skip,
-      onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
+      onStartPractice: (targetDuration, pause, playbackSpeed) async {
+        final settings = ref
+            .read(blindListenPrefsProvider.notifier)
+            .resolve(slot, smartSpeed: smartSpeed);
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
           targetDuration,
         );
-        final settings = BlindListenSettings.fromMultiplier(
-          pauseMultiplier,
-        ).copyWith(playbackSpeed: playbackSpeed);
         await ref
             .read(learningSessionProvider.notifier)
             .enterBlindListenMode(
               widget.audioItemId,
               paragraphs: paragraphs,
               settings: settings,
+              stage: stage,
             );
         if (!context.mounted) return;
         context.push(
@@ -404,8 +693,8 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   /// 先检查书签数量，无难句时自动完成并跳到下一复述子阶段。
   Future<void> _startReviewDifficultPractice(
     BuildContext context, {
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    DifficultPracticeSettings settings = const DifficultPracticeSettings(),
+    LearningStage? stage,
   }) async {
     final allowed = await ensureSpeechReadyForRecording(context, ref);
     if (!allowed || !context.mounted) return;
@@ -451,8 +740,8 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         .enterReviewDifficultPracticeMode(
           widget.audioItemId,
           lpState.sentences,
-          playbackSpeed: playbackSpeed,
-          pauseMultiplier: pauseMultiplier,
+          settings: settings,
+          stage: stage,
         );
     if (!context.mounted) return;
     context.push(
@@ -497,7 +786,6 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   Future<void> _startReviewRetell(
     BuildContext context, {
     required bool isSummary,
-    double playbackSpeed = 1.0,
   }) async {
     final allowed = await ensureSpeechReadyForRecording(context, ref);
     if (!allowed || !context.mounted) return;
@@ -519,11 +807,11 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     }
 
     if (isSummary) {
-      // reviewRetellSummary：全文作为单个段落，无需选择时长；速度沿用 briefing 选定值。
+      // reviewRetellSummary：全文作为单个段落；停顿/速度已由复习简报落入偏好,
+      // enterRetellMode 内部按槽位 resolve 出完整设置。
       await ref.read(learningSessionProvider.notifier).enterRetellMode(
         widget.audioItemId,
         [lpState.sentences],
-        playbackSpeed: playbackSpeed,
       );
       if (!context.mounted) return;
       context.push(
@@ -552,32 +840,38 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
           lpState.sentences.length,
         );
     if (!context.mounted) return;
+    final smartRatio = KeywordRatio.forDifficultyAndStage(
+      liveDifficulty,
+      effectiveStage,
+    );
+    final slot = stageSlotKey(StageSettingsSlots.retell, effectiveStage);
+    final prefill = retellBriefingDefaults(
+      ref,
+      slot,
+      smartSpeed: progress != null
+          ? defaultPlaybackSpeedFor(liveDifficulty, effectiveStage)
+          : 1.0,
+      smartRatio: smartRatio,
+      smartSeconds: retellDefaultSeconds(currentStage),
+    );
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(currentStage),
+      defaultSeconds: prefill.seconds,
       stageLabel: isReview ? reviewStageLabel(l10n, currentStage) : null,
-      defaultKeywordRatio: progress != null
-          ? KeywordRatio.forDifficultyAndStage(liveDifficulty, effectiveStage)
-          : null,
-      defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, effectiveStage)
-          : 1.0,
+      defaultKeywordRatio: progress != null ? prefill.ratio : null,
+      defaultPlaybackSpeed: prefill.speed,
+      defaultPause: prefill.pause,
+      onSelectionChanged: retellPrefsRecorder(ref, slot, prefill.settings),
       onStartPractice:
-          (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
+          (targetDuration, pause, keywordRatio, playbackSpeed) async {
             final paragraphs = groupSentencesIntoParagraphs(
               lpState.sentences,
               targetDuration,
             );
             await ref
                 .read(learningSessionProvider.notifier)
-                .enterRetellMode(
-                  widget.audioItemId,
-                  paragraphs,
-                  overrideKeywordRatio: keywordRatio,
-                  playbackSpeed: playbackSpeed,
-                );
-            _applyRetellPauseMultiplier(pauseMultiplier);
+                .enterRetellMode(widget.audioItemId, paragraphs);
             if (!context.mounted) return;
             context.push(
               AppRoutes.retellPlayer(widget.collectionId, widget.audioItemId),
@@ -590,22 +884,6 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
             .skipCurrentSubStage(widget.audioItemId);
       },
     );
-  }
-
-  /// 将弹窗选择的停顿倍数应用到 RetellPlayer 的初始设置
-  ///
-  /// -1.0 = 智能模式（默认），>0 = 段长倍数模式
-  void _applyRetellPauseMultiplier(double pauseMultiplier) {
-    if (pauseMultiplier >= 0) {
-      final player = ref.read(retellPlayerProvider.notifier);
-      final current = ref.read(retellPlayerProvider).settings;
-      player.updateSettings(
-        current.copyWith(
-          pauseMode: PauseMode.multiplier,
-          pauseMultiplier: pauseMultiplier,
-        ),
-      );
-    }
   }
 
   /// 进入全文盲听
@@ -638,32 +916,45 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
     // 首次学习的第一个盲听不可跳过，_buildSkipCallback 在此返回 null（无跳过按钮）
     final skip = _buildSkipCallback();
+    // 全文盲听属于首次学习步骤，按 firstLearn 阶段算默认速度
+    const stage = LearningStage.firstLearn;
+    final smartSpeed = progress != null
+        ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+        : 1.0;
+    final slot = stageSlotKey(StageSettingsSlots.blindListen, stage);
+    final blindPrefs = ref.read(blindListenPrefsProvider.notifier);
+    final defaults = blindPrefs.resolve(slot, smartSpeed: smartSpeed);
+    final blindSeconds = blindPrefs.resolveTargetSeconds(
+      slot,
+      smartSeconds: -1,
+    );
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
-      // 全文盲听属于首次学习步骤，按 firstLearn 阶段算默认速度
-      defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
-          : 1.0,
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultSeconds: blindSeconds,
+      defaultPause: blindPauseChoiceFromSettings(defaults),
+      onSelectionChanged: blindPrefsRecorder(ref, slot, defaults, blindSeconds),
       skipLabel: skip != null ? l10n.retellSkip : null,
       onSkip: skip,
-      onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
+      onStartPractice: (targetDuration, pause, playbackSpeed) async {
+        final settings = ref
+            .read(blindListenPrefsProvider.notifier)
+            .resolve(slot, smartSpeed: smartSpeed);
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
           targetDuration,
         );
-        final settings = BlindListenSettings.fromMultiplier(
-          pauseMultiplier,
-        ).copyWith(playbackSpeed: playbackSpeed);
         await ref
             .read(learningSessionProvider.notifier)
             .enterBlindListenMode(
               widget.audioItemId,
               paragraphs: paragraphs,
               settings: settings,
+              stage: stage,
             );
         if (!context.mounted) return;
         context.push(
@@ -704,19 +995,30 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     );
     final intensiveEstimate = totalSentenceDuration * 2;
 
+    // 单一真相源:逐句精听仅在首学,槽位 intensiveListen:firstLearn。
+    final slot = stageSlotKey(
+      StageSettingsSlots.intensiveListen,
+      LearningStage.firstLearn,
+    );
+    final prefs = ref.read(intensiveListenPrefsProvider.notifier);
+    final defaults = prefs.resolve(slot, smartSpeed: 1.0);
     showIntensiveListenBriefingSheet(
       context: context,
       sentenceCount: lpState.sentences.length,
       estimatedDuration: intensiveEstimate,
-      defaultPlaybackSpeed: 1.0,
-      onStartPractice: (playbackSpeed, pauseMultiplier) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: intensivePauseChoiceFromSettings(defaults),
+      // 改完即记(与 🔧 面板一致):无论是否「开始练习」、即使关闭弹窗都已持久化。
+      onSelectionChanged: intensivePrefsRecorder(prefs, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) async {
         await ref
             .read(learningSessionProvider.notifier)
             .enterIntensiveListenMode(
               widget.audioItemId,
               lpState.sentences,
-              playbackSpeed: playbackSpeed,
-              pauseMultiplier: pauseMultiplier,
+              // onSelectionChanged 已把改动落入偏好,这里重新 resolve 取最新完整设置。
+              settings: prefs.resolve(slot, smartSpeed: 1.0),
+              settingsSlot: slot,
             );
         if (!context.mounted) return;
         context.push(
@@ -804,23 +1106,31 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
     );
     final repeatEstimate = difficultDuration * playCount * 2;
 
+    const stage = LearningStage.firstLearn;
+    final smartSpeed = progress != null
+        ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+        : 1.0;
+    // 难句跟读与逐句精听共用 IntensiveListenPrefs store,槽位 listenAndRepeat:firstLearn。
+    final slot = stageSlotKey(StageSettingsSlots.listenAndRepeat, stage);
+    final prefs = ref.read(intensiveListenPrefsProvider.notifier);
+    final defaults = prefs.resolve(slot, smartSpeed: smartSpeed);
     showListenAndRepeatBriefingSheet(
       context: context,
       difficultCount: difficultIndices.length,
       playCount: playCount,
       estimatedDuration: repeatEstimate,
-      defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
-          : 1.0,
-      onStartPractice: (playbackSpeed, pauseMultiplier) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: intensivePauseChoiceFromSettings(defaults),
+      onSelectionChanged: intensivePrefsRecorder(prefs, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) async {
         await ref
             .read(listenAndRepeatControllerProvider.notifier)
             .initialize(
               audioItemId: widget.audioItemId,
               allSentences: lpState.sentences,
               isFreePlay: false,
-              playbackSpeed: playbackSpeed,
-              pauseMultiplier: pauseMultiplier,
+              smartSpeed: smartSpeed,
+              stage: stage,
             );
         if (!context.mounted) return;
         context.push(
@@ -874,18 +1184,31 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
           lpState.sentences.length,
         );
     if (!context.mounted) return;
+    final hasProgress = progressForDefault != null;
+    final smartRatio = KeywordRatio.forDifficultyAndStage(
+      liveDifficulty,
+      stageForDefault,
+    );
+    final slot = stageSlotKey(StageSettingsSlots.retell, stageForDefault);
+    final prefill = retellBriefingDefaults(
+      ref,
+      slot,
+      smartSpeed: hasProgress
+          ? defaultPlaybackSpeedFor(liveDifficulty, stageForDefault)
+          : 1.0,
+      smartRatio: smartRatio,
+      smartSeconds: retellDefaultSeconds(stageForDefault),
+    );
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(stageForDefault),
-      defaultKeywordRatio: progressForDefault != null
-          ? KeywordRatio.forDifficultyAndStage(liveDifficulty, stageForDefault)
-          : null,
-      defaultPlaybackSpeed: progressForDefault != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, stageForDefault)
-          : 1.0,
+      defaultSeconds: prefill.seconds,
+      defaultKeywordRatio: hasProgress ? prefill.ratio : null,
+      defaultPlaybackSpeed: prefill.speed,
+      defaultPause: prefill.pause,
+      onSelectionChanged: retellPrefsRecorder(ref, slot, prefill.settings),
       onStartPractice:
-          (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
+          (targetDuration, pause, keywordRatio, playbackSpeed) async {
             final paragraphs = groupSentencesIntoParagraphs(
               lpState.sentences,
               targetDuration,
@@ -893,13 +1216,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
 
             await ref
                 .read(learningSessionProvider.notifier)
-                .enterRetellMode(
-                  widget.audioItemId,
-                  paragraphs,
-                  overrideKeywordRatio: keywordRatio,
-                  playbackSpeed: playbackSpeed,
-                );
-            _applyRetellPauseMultiplier(pauseMultiplier);
+                .enterRetellMode(widget.audioItemId, paragraphs);
             if (!context.mounted) return;
             context.push(
               AppRoutes.retellPlayer(widget.collectionId, widget.audioItemId),
@@ -1887,30 +2204,43 @@ class _FirstStudySection extends ConsumerWidget {
       skipSilenceEnabled: ref.read(appSettingsProvider).skipSilenceEnabled,
     );
 
+    // 全文盲听属于首次学习步骤,按 firstLearn 算默认速度;与按计划共用同一槽位偏好。
+    const stage = LearningStage.firstLearn;
+    final smartSpeed = progress != null
+        ? defaultPlaybackSpeedFor(liveDifficulty, stage)
+        : 1.0;
+    final slot = stageSlotKey(StageSettingsSlots.blindListen, stage);
+    final blindPrefs = ref.read(blindListenPrefsProvider.notifier);
+    final defaults = blindPrefs.resolve(slot, smartSpeed: smartSpeed);
+    final blindSeconds = blindPrefs.resolveTargetSeconds(
+      slot,
+      smartSeconds: -1,
+    );
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
-      // 全文盲听属于首次学习步骤，按 firstLearn 阶段算默认速度
-      defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
-          : 1.0,
-      onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultSeconds: blindSeconds,
+      defaultPause: blindPauseChoiceFromSettings(defaults),
+      onSelectionChanged: blindPrefsRecorder(ref, slot, defaults, blindSeconds),
+      onStartPractice: (targetDuration, pause, playbackSpeed) async {
+        final settings = ref
+            .read(blindListenPrefsProvider.notifier)
+            .resolve(slot, smartSpeed: smartSpeed);
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
           targetDuration,
         );
-        final settings = BlindListenSettings.fromMultiplier(
-          pauseMultiplier,
-        ).copyWith(playbackSpeed: playbackSpeed);
         final notifier = ref.read(learningSessionProvider.notifier);
         await notifier.enterBlindListenMode(
           audioItemId,
           isFreePlay: true,
           paragraphs: paragraphs,
           settings: settings,
+          stage: stage,
         );
         // 补做语义：首次学习盲听不可跳过，传 firstLearn:blindListen 仅作幂等占位
         notifier.setCatchUp(LearningStage.firstLearn, SubStageType.blindListen);
@@ -1936,19 +2266,28 @@ class _FirstStudySection extends ConsumerWidget {
     );
     final intensiveEstimate = totalSentenceDuration * 2;
 
+    // 与按计划入口同一份偏好真相源、同一槽位:预填、改完即记、进入设置完全一致。
+    final slot = stageSlotKey(
+      StageSettingsSlots.intensiveListen,
+      LearningStage.firstLearn,
+    );
+    final prefs = ref.read(intensiveListenPrefsProvider.notifier);
+    final defaults = prefs.resolve(slot, smartSpeed: 1.0);
     showIntensiveListenBriefingSheet(
       context: context,
       sentenceCount: lpState.sentences.length,
       estimatedDuration: intensiveEstimate,
-      defaultPlaybackSpeed: 1.0,
-      onStartPractice: (playbackSpeed, pauseMultiplier) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: intensivePauseChoiceFromSettings(defaults),
+      onSelectionChanged: intensivePrefsRecorder(prefs, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) async {
         final notifier = ref.read(learningSessionProvider.notifier);
         await notifier.enterIntensiveListenMode(
           audioItemId,
           lpState.sentences,
           isFreePlay: true,
-          playbackSpeed: playbackSpeed,
-          pauseMultiplier: pauseMultiplier,
+          settings: prefs.resolve(slot, smartSpeed: 1.0),
+          settingsSlot: slot,
         );
         // 补做语义：跳过的精听完成后回收为已完成
         notifier.setCatchUp(
@@ -2013,25 +2352,32 @@ class _FirstStudySection extends ConsumerWidget {
     );
     final repeatEstimate = difficultDuration * playCount * 2;
 
+    // 难句跟读只属于"首次学习"步骤,自由练习与按计划共用同一槽位偏好。
+    final smartSpeed = progress != null
+        ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+        : 1.0;
+    final slot = stageSlotKey(
+      StageSettingsSlots.listenAndRepeat,
+      LearningStage.firstLearn,
+    );
+    final prefs = ref.read(intensiveListenPrefsProvider.notifier);
+    final defaults = prefs.resolve(slot, smartSpeed: smartSpeed);
     showListenAndRepeatBriefingSheet(
       context: context,
       difficultCount: difficultIndices.length,
       playCount: playCount,
       estimatedDuration: repeatEstimate,
-      // 难句跟读只属于"首次学习"步骤，自由练习也按 firstLearn 算默认速度，
-      // 与同 section 的复述自由练习保持一致。
-      defaultPlaybackSpeed: progress != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
-          : 1.0,
-      onStartPractice: (playbackSpeed, pauseMultiplier) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: intensivePauseChoiceFromSettings(defaults),
+      onSelectionChanged: intensivePrefsRecorder(prefs, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) async {
         await ref
             .read(listenAndRepeatControllerProvider.notifier)
             .initialize(
               audioItemId: audioItemId,
               allSentences: lpState.sentences,
               isFreePlay: true,
-              playbackSpeed: playbackSpeed,
-              pauseMultiplier: pauseMultiplier,
+              smartSpeed: smartSpeed,
             );
         // 补做语义：跳过的难句跟读完成后回收为已完成
         ref
@@ -2087,21 +2433,33 @@ class _FirstStudySection extends ConsumerWidget {
         .read(learningProgressNotifierProvider.notifier)
         .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
     if (!context.mounted) return;
+    // 自由练习复述属 firstLearn 补练,槽位 retell:firstLearn,与按计划共用偏好。
+    final slot = stageSlotKey(
+      StageSettingsSlots.retell,
+      LearningStage.firstLearn,
+    );
+    final prefill = retellBriefingDefaults(
+      ref,
+      slot,
+      smartSpeed: progressForDefault != null
+          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
+          : 1.0,
+      smartRatio: KeywordRatio.forDifficultyAndStage(
+        liveDifficulty,
+        LearningStage.firstLearn,
+      ),
+      smartSeconds: retellDefaultSeconds(stageForDefault),
+    );
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(stageForDefault),
-      defaultKeywordRatio: progressForDefault != null
-          ? KeywordRatio.forDifficultyAndStage(
-              liveDifficulty,
-              LearningStage.firstLearn,
-            )
-          : null,
-      defaultPlaybackSpeed: progressForDefault != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, LearningStage.firstLearn)
-          : 1.0,
+      defaultSeconds: prefill.seconds,
+      defaultKeywordRatio: progressForDefault != null ? prefill.ratio : null,
+      defaultPlaybackSpeed: prefill.speed,
+      defaultPause: prefill.pause,
+      onSelectionChanged: retellPrefsRecorder(ref, slot, prefill.settings),
       onStartPractice:
-          (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
+          (targetDuration, pause, keywordRatio, playbackSpeed) async {
             final paragraphs = groupSentencesIntoParagraphs(
               lpState.sentences,
               targetDuration,
@@ -2115,19 +2473,7 @@ class _FirstStudySection extends ConsumerWidget {
                   isFreePlay: true,
                   catchUpStage: LearningStage.firstLearn,
                   catchUpSubStage: SubStageType.retell,
-                  overrideKeywordRatio: keywordRatio,
-                  playbackSpeed: playbackSpeed,
                 );
-            if (pauseMultiplier >= 0) {
-              final player = ref.read(retellPlayerProvider.notifier);
-              final current = ref.read(retellPlayerProvider).settings;
-              player.updateSettings(
-                current.copyWith(
-                  pauseMode: PauseMode.multiplier,
-                  pauseMultiplier: pauseMultiplier,
-                ),
-              );
-            }
             if (context.mounted) {
               context.push(AppRoutes.retellPlayer(collectionId, audioItemId));
             }
@@ -2669,29 +3015,41 @@ class _ReviewRoundSection extends ConsumerWidget {
       skipSilenceEnabled: ref.read(appSettingsProvider).skipSilenceEnabled,
     );
 
+    final smartSpeed = progress == null
+        ? 1.0
+        : defaultPlaybackSpeedFor(liveDifficulty, review.stage);
+    final slot = stageSlotKey(StageSettingsSlots.blindListen, review.stage);
+    final blindPrefs = ref.read(blindListenPrefsProvider.notifier);
+    final defaults = blindPrefs.resolve(slot, smartSpeed: smartSpeed);
+    final blindSeconds = blindPrefs.resolveTargetSeconds(
+      slot,
+      smartSeconds: -1,
+    );
     showBlindListenParagraphSheet(
       context: context,
       sentences: sentences,
       estimatedDurationText: estimatedDuration != null
           ? formatEstimatedDuration(l10n, estimatedDuration)
           : null,
-      defaultPlaybackSpeed: progress == null
-          ? 1.0
-          : defaultPlaybackSpeedFor(liveDifficulty, review.stage),
-      onStartPractice: (targetDuration, pauseMultiplier, playbackSpeed) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultSeconds: blindSeconds,
+      defaultPause: blindPauseChoiceFromSettings(defaults),
+      onSelectionChanged: blindPrefsRecorder(ref, slot, defaults, blindSeconds),
+      onStartPractice: (targetDuration, pause, playbackSpeed) async {
+        final settings = ref
+            .read(blindListenPrefsProvider.notifier)
+            .resolve(slot, smartSpeed: smartSpeed);
         final paragraphs = groupSentencesIntoParagraphs(
           sentences,
           targetDuration,
         );
-        final settings = BlindListenSettings.fromMultiplier(
-          pauseMultiplier,
-        ).copyWith(playbackSpeed: playbackSpeed);
         final notifier = ref.read(learningSessionProvider.notifier);
         await notifier.enterBlindListenMode(
           audioItemId,
           isFreePlay: true,
           paragraphs: paragraphs,
           settings: settings,
+          stage: review.stage,
         );
         // 补做语义：复习盲听可被跳过，完成后回收为已完成
         notifier.setCatchUp(review.stage, SubStageType.blindListen);
@@ -2729,23 +3087,34 @@ class _ReviewRoundSection extends ConsumerWidget {
         .read(learningProgressNotifierProvider.notifier)
         .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
     if (!context.mounted) return;
-    final defaultSpeed = progress == null
+    final smartSpeed = progress == null
         ? 1.0
         : defaultPlaybackSpeedFor(liveDifficulty, review.stage);
+    final slot = stageSlotKey(
+      StageSettingsSlots.reviewDifficultPractice,
+      review.stage,
+    );
+    final dp = ref.read(difficultPracticePrefsProvider.notifier);
+    final defaults = dp.resolve(slot, smartSpeed: smartSpeed);
     showReviewBriefingSheet(
       context: context,
       stage: review.stage,
       subStage: SubStageType.reviewDifficultPractice,
       estimatedDuration: estimated,
-      defaultPlaybackSpeed: defaultSpeed,
-      onStartPractice: (playbackSpeed, pauseMultiplier) async {
+      defaultPlaybackSpeed: defaults.playbackSpeed,
+      defaultPause: difficultPauseChoiceFromSettings(defaults),
+      onSelectionChanged: difficultPrefsRecorder(ref, slot, defaults),
+      onStartPractice: (playbackSpeed, pause) async {
+        final settings = ref
+            .read(difficultPracticePrefsProvider.notifier)
+            .resolve(slot, smartSpeed: smartSpeed);
         final notifier = ref.read(learningSessionProvider.notifier);
         await notifier.enterReviewDifficultPracticeMode(
           audioItemId,
           lpState.sentences,
           isFreePlay: true,
-          playbackSpeed: playbackSpeed,
-          pauseMultiplier: pauseMultiplier,
+          settings: settings,
+          stage: review.stage,
         );
         // 补做语义：跳过的复习难句补练完成后回收为已完成
         notifier.setCatchUp(review.stage, SubStageType.reviewDifficultPractice);
@@ -2806,18 +3175,29 @@ class _ReviewRoundSection extends ConsumerWidget {
         .read(learningProgressNotifierProvider.notifier)
         .refreshDifficultyFromBookmarks(audioItemId, lpState.sentences.length);
     if (!context.mounted) return;
+    final slot = stageSlotKey(StageSettingsSlots.retell, review.stage);
+    final prefill = retellBriefingDefaults(
+      ref,
+      slot,
+      smartSpeed: progressForRetell != null
+          ? defaultPlaybackSpeedFor(liveDifficulty, review.stage)
+          : 1.0,
+      smartRatio: KeywordRatio.forDifficultyAndStage(
+        liveDifficulty,
+        review.stage,
+      ),
+      smartSeconds: retellDefaultSeconds(review.stage),
+    );
     showRetellBriefingSheet(
       context: context,
       sentences: lpState.sentences,
-      defaultSeconds: retellDefaultSeconds(review.stage),
-      defaultKeywordRatio: progressForRetell != null
-          ? KeywordRatio.forDifficultyAndStage(liveDifficulty, review.stage)
-          : null,
-      defaultPlaybackSpeed: progressForRetell != null
-          ? defaultPlaybackSpeedFor(liveDifficulty, review.stage)
-          : 1.0,
+      defaultSeconds: prefill.seconds,
+      defaultKeywordRatio: progressForRetell != null ? prefill.ratio : null,
+      defaultPlaybackSpeed: prefill.speed,
+      defaultPause: prefill.pause,
+      onSelectionChanged: retellPrefsRecorder(ref, slot, prefill.settings),
       onStartPractice:
-          (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) async {
+          (targetDuration, pause, keywordRatio, playbackSpeed) async {
             final paragraphs = groupSentencesIntoParagraphs(
               lpState.sentences,
               targetDuration,
@@ -2830,19 +3210,7 @@ class _ReviewRoundSection extends ConsumerWidget {
                   isFreePlay: true,
                   catchUpStage: review.stage,
                   catchUpSubStage: catchUpSub,
-                  overrideKeywordRatio: keywordRatio,
-                  playbackSpeed: playbackSpeed,
                 );
-            if (pauseMultiplier >= 0) {
-              final player = ref.read(retellPlayerProvider.notifier);
-              final current = ref.read(retellPlayerProvider).settings;
-              player.updateSettings(
-                current.copyWith(
-                  pauseMode: PauseMode.multiplier,
-                  pauseMultiplier: pauseMultiplier,
-                ),
-              );
-            }
             if (context.mounted) {
               context.push(AppRoutes.retellPlayer(collectionId, audioItemId));
             }

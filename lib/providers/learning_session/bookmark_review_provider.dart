@@ -44,6 +44,8 @@ import '../listening_practice/bookmark_manager.dart';
 import '../repeat_flow/repeat_flow_engine.dart';
 import '../repeat_flow/repeat_flow_phase.dart';
 import '../repeat_flow/repeat_flow_state.dart';
+import '../difficult_practice_prefs_provider.dart';
+import '../../models/stage_settings_overrides.dart';
 import '../study_stats_provider.dart';
 import 'review_difficult_practice_provider.dart';
 import 'sentence_playback_engine.dart';
@@ -61,6 +63,12 @@ typedef BookmarkReviewAudioLoader = Future<db.AudioItem?> Function(String);
 class BookmarkReview extends _$BookmarkReview {
   /// 收藏句子列表（乱序后）
   List<BookmarkSentence> _sentences = [];
+
+  /// 设置记忆 slot:收藏句复习不绑学习流程、无轮次,固定 `bookmarkReview:none`。
+  final String _settingsSlot = stageSlotKey(
+    StageSettingsSlots.bookmarkReview,
+    null,
+  );
 
   /// 播放引擎
   late SentencePlaybackEngine _engine;
@@ -254,6 +262,10 @@ class BookmarkReview extends _$BookmarkReview {
     state = ReviewDifficultPracticeState(
       currentSentenceIndex: 0,
       totalSentences: _sentences.length,
+      // 收藏句复习不绑学习流程,无难度速度,智能默认速度取 1.0;偏好按固定槽位记忆。
+      settings: ref
+          .read(difficultPracticePrefsProvider.notifier)
+          .resolve(_settingsSlot, smartSpeed: 1.0),
     );
     _prepareBlindFlow();
 
@@ -273,6 +285,12 @@ class BookmarkReview extends _$BookmarkReview {
   ///
   /// 设置更新后立即应用到当前句。速度变化只推给 AudioEngine，不重启会话。
   Future<void> updateSettings(DifficultPracticeSettings newSettings) async {
+    recordDifficultPracticeChange(
+      ref,
+      _settingsSlot,
+      state.settings,
+      newSettings,
+    );
     final old = state.settings;
     final speedOnly =
         newSettings.playbackSpeed != old.playbackSpeed &&
@@ -631,6 +649,10 @@ class BookmarkReview extends _$BookmarkReview {
     state = ReviewDifficultPracticeState(
       currentSentenceIndex: 0,
       totalSentences: _sentences.length,
+      // 收藏句复习不绑学习流程,无难度速度,智能默认速度取 1.0;偏好按固定槽位记忆。
+      settings: ref
+          .read(difficultPracticePrefsProvider.notifier)
+          .resolve(_settingsSlot, smartSpeed: 1.0),
     );
     _prepareBlindFlow();
 

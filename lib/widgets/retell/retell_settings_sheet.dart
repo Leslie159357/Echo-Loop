@@ -443,7 +443,7 @@ class _RetellSettingsSheet extends ConsumerWidget {
   ) {
     final options = RetellSettings.fixedPauseOptions;
     var idx = options.indexOf(settings.fixedPauseSeconds);
-    if (idx < 0) idx = 2; // 回退到 30s
+    if (idx < 0) idx = options.indexOf(30); // 回退到默认 30s
     return Row(
       children: [
         Expanded(

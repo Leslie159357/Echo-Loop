@@ -15,6 +15,8 @@ import '../../analytics/audio_event_params.dart';
 import '../../analytics/models/event_names.dart';
 import '../../database/enums.dart';
 import '../../models/blind_listen_settings.dart';
+import '../../models/difficult_practice_settings.dart';
+import '../../models/intensive_listen_settings.dart';
 import '../../models/playback_settings.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
@@ -28,6 +30,9 @@ import '../study_stats_provider.dart';
 import '../../services/app_logger.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import '../learning_progress_provider.dart';
+import '../retell_prefs_provider.dart';
+import '../../models/stage_settings_overrides.dart';
+import '../../utils/playback_speed_default.dart';
 import '../speech/speech_recording_controller.dart';
 import '../retell_recording_controller_provider.dart';
 import '../listening_practice/listening_practice_provider.dart';
@@ -162,9 +167,7 @@ class LearningSessionState {
       shadowingStartIndex: shadowingStartIndex ?? this.shadowingStartIndex,
       shadowingTargetPlayCount:
           shadowingTargetPlayCount ?? this.shadowingTargetPlayCount,
-      catchUpStage: clearCatchUp
-          ? null
-          : (catchUpStage ?? this.catchUpStage),
+      catchUpStage: clearCatchUp ? null : (catchUpStage ?? this.catchUpStage),
       catchUpSubStage: clearCatchUp
           ? null
           : (catchUpSubStage ?? this.catchUpSubStage),
@@ -398,6 +401,7 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
     required List<List<Sentence>> paragraphs,
     BlindListenSettings? settings,
+    LearningStage? stage,
   }) async {
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
@@ -465,6 +469,8 @@ class LearningSession extends _$LearningSession {
       settings ?? const BlindListenSettings(),
       startParagraphIndex: startParagraphIndex,
       startSentenceLocalIndex: startSentenceLocalIndex,
+      // 按槽位记忆;自由练习与按计划共用同一轮次槽位(stage 由入口传入)。
+      settingsSlot: stageSlotKey(StageSettingsSlots.blindListen, stage),
     );
     _trackSessionStart();
   }
@@ -489,8 +495,8 @@ class LearningSession extends _$LearningSession {
     String audioItemId,
     List<Sentence> sentences, {
     bool isFreePlay = false,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    IntensiveListenSettings settings = const IntensiveListenSettings(),
+    String? settingsSlot,
   }) async {
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
@@ -530,13 +536,13 @@ class LearningSession extends _$LearningSession {
       firstSentenceText: sentences.isNotEmpty ? sentences.first.text : null,
     );
 
-    // 初始化精听播放器
+    // 初始化精听播放器([settings] 已由调用方从用户偏好 resolve 出,含默认+记忆)。
     final intensivePlayer = ref.read(intensiveListenPlayerProvider.notifier);
     await intensivePlayer.initialize(
       sentences,
       startIndex: startIndex,
-      playbackSpeed: playbackSpeed,
-      pauseMultiplier: pauseMultiplier,
+      settings: settings,
+      settingsSlot: settingsSlot,
     );
     _trackSessionStart();
   }
@@ -631,8 +637,6 @@ class LearningSession extends _$LearningSession {
     bool isFreePlay = false,
     LearningStage? catchUpStage,
     SubStageType? catchUpSubStage,
-    KeywordRatio? overrideKeywordRatio,
-    double playbackSpeed = 1.0,
   }) async {
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
@@ -675,19 +679,30 @@ class LearningSession extends _$LearningSession {
           : null,
     );
 
-    // 初始化复述播放器：优先用调用方覆盖值（briefing 弹窗里用户手动选的档位），
-    // 否则按音频难度 + 学习阶段联合算可见词比例。
-    // 补练场景按 catchUpStage 算（补练 firstLearn 就走 firstLearn 的曲线）。
+    // 复述按 子阶段×轮次 记忆(轮次取本次会话的有效阶段);自由练习与按计划共用同槽位。
+    // 补练场景按 catchUpStage 算曲线(补练 firstLearn 走 firstLearn)。briefing 选择已由
+    // 屏幕落入偏好,这里按动态默认(速度/可见词比例)resolve 出完整设置(单一真相源)。
     final effectiveStage = catchUpStage ?? progress.currentStage;
-    final autoRatio =
-        overrideKeywordRatio ??
-        KeywordRatio.forDifficultyAndStage(progress.difficulty, effectiveStage);
+    final slot = stageSlotKey(StageSettingsSlots.retell, effectiveStage);
+    final settings = ref
+        .read(retellPrefsProvider.notifier)
+        .resolve(
+          slot,
+          smartSpeed: defaultPlaybackSpeedFor(
+            progress.difficulty,
+            effectiveStage,
+          ),
+          smartRatio: KeywordRatio.forDifficultyAndStage(
+            progress.difficulty,
+            effectiveStage,
+          ),
+        );
     final player = ref.read(retellPlayerProvider.notifier);
     player.initialize(
       paragraphs,
       startSentenceIndex: startSentenceIndex,
-      autoRatio: autoRatio,
-      playbackSpeed: playbackSpeed,
+      settings: settings,
+      settingsSlot: slot,
     );
     _trackSessionStart();
   }
@@ -702,8 +717,8 @@ class LearningSession extends _$LearningSession {
     String audioItemId,
     List<Sentence> allSentences, {
     bool isFreePlay = false,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    DifficultPracticeSettings settings = const DifficultPracticeSettings(),
+    LearningStage? stage,
   }) async {
     _startStudyTimer();
     final practice = ref.read(listeningPracticeProvider.notifier);
@@ -758,8 +773,12 @@ class LearningSession extends _$LearningSession {
     player.initialize(
       difficultSentences,
       startIndex: startIndex,
-      playbackSpeed: playbackSpeed,
-      pauseMultiplier: pauseMultiplier,
+      settings: settings,
+      // 按槽位记忆;自由练习与按计划共用同一轮次槽位(stage 由入口传入)。
+      settingsSlot: stageSlotKey(
+        StageSettingsSlots.reviewDifficultPractice,
+        stage,
+      ),
     );
     _trackSessionStart();
   }

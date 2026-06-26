@@ -34,6 +34,7 @@ import '../learning_settings_provider.dart';
 import '../notification_permission_provider.dart';
 import '../retell_recording_controller_provider.dart';
 import '../settings_provider.dart';
+import '../retell_prefs_provider.dart';
 import 'countdown_controller.dart';
 import '../learning_progress_provider.dart';
 import 'learning_session_provider.dart';
@@ -176,6 +177,9 @@ class RetellPlayer extends _$RetellPlayer {
   /// 段落列表
   List<List<Sentence>> _paragraphs = [];
 
+  /// 设置记忆 slot(子阶段×轮次);null 表示本次不记忆。
+  String? _settingsSlot;
+
   /// 断点恢复的段内本地句子 index（仅首次播放该段时生效，用完清零）
   int _resumeStartLocalSentenceIndex = 0;
 
@@ -310,9 +314,10 @@ class RetellPlayer extends _$RetellPlayer {
   void initialize(
     List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
-    KeywordRatio? autoRatio,
-    double playbackSpeed = 1.0,
+    RetellSettings settings = const RetellSettings(),
+    String? settingsSlot,
   }) {
+    _settingsSlot = settingsSlot;
     _cleanup();
     _paragraphs = paragraphs;
     _allSentences = paragraphs.expand((p) => p).toList();
@@ -334,29 +339,19 @@ class RetellPlayer extends _$RetellPlayer {
     }
     _resumeStartLocalSentenceIndex = localIndex;
 
+    // [settings] 已由调用方从按槽位偏好 resolve 出(默认+记忆);自动播放录音走全局学习设置。
     final learningSettings = ref.read(learningSettingsProvider);
-    final initialSettings =
-        (autoRatio == null
-                ? const RetellSettings()
-                : const RetellSettings().copyWith(keywordRatio: autoRatio))
-            .copyWith(
-              autoPlayRecordingAfterCompletion:
-                  learningSettings.autoPlayRetellRecordingAfterCompletion,
-            );
     state = RetellPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
-      settings: initialSettings.copyWith(playbackSpeed: playbackSpeed),
+      settings: settings.copyWith(
+        autoPlayRecordingAfterCompletion:
+            learningSettings.autoPlayRetellRecordingAfterCompletion,
+      ),
     );
 
     // 按 settings.keywordRatio 生成关键词映射
     regenerateKeywords();
-    if (autoRatio != null) {
-      AppLogger.log(
-        'RetellPlayer',
-        'auto keywordRatio=${autoRatio.name} (${autoRatio.percent}%)',
-      );
-    }
     ref.read(analyticsServiceProvider).track(Events.retellStart, {
       ...ref.audioEventParams(ref.read(learningSessionProvider).audioItemId),
       EventParams.totalParagraphs: paragraphs.length,
@@ -827,10 +822,26 @@ class RetellPlayer extends _$RetellPlayer {
     state = state.copyWith(displayMode: mode);
   }
 
-  /// 更新设置
+  /// 记录用户手动改动到按槽位偏好(只写变化字段)。
   ///
-  /// 当 [keywordRatio] 变化时自动重新生成关键词。
+  /// `autoPlayRecordingAfterCompletion` 走全局学习设置,不在此偏好内
+  /// (persistRetellSettingsDiff 本身已不含该字段)。
+  void _recordSettingsChange(
+    RetellSettings oldSettings,
+    RetellSettings newSettings,
+  ) {
+    final slot = _settingsSlot;
+    if (slot == null) return;
+    persistRetellSettingsDiff(
+      ref.read(retellPrefsProvider.notifier),
+      slot,
+      oldSettings,
+      newSettings,
+    );
+  }
+
   void updateSettings(RetellSettings newSettings) {
+    _recordSettingsChange(state.settings, newSettings);
     final modeChanged = newSettings.isManualMode != state.settings.isManualMode;
     final ratioChanged =
         newSettings.keywordRatio != state.settings.keywordRatio;

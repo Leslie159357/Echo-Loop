@@ -34,7 +34,8 @@ String formatPlaybackSpeedLabel(double speed) {
 /// - 范围内但不在档位表中时，先按 `0.1` 四舍五入，再吸附到支持档位；
 /// - 便于旧 `0.75/0.85/0.95` 稳定升到 `0.8/0.9/1.0`。
 double normalizePlaybackSpeed(double speed, {double fallback = 1.0}) {
-  if (speed < kUnifiedPlaybackSpeeds.first || speed > kUnifiedPlaybackSpeeds.last) {
+  if (speed < kUnifiedPlaybackSpeeds.first ||
+      speed > kUnifiedPlaybackSpeeds.last) {
     return fallback;
   }
   if (kUnifiedPlaybackSpeeds.contains(speed)) return speed;

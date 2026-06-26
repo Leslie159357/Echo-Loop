@@ -168,8 +168,9 @@ class LearningProgress {
   /// 由该 audio 的 plan 版本快照派生：v1 = 盲听，v2 = 逐句精听。
   /// 用于判定「是否已开始」与「入口步骤不可跳过」，自动兼容新旧版本。
   SubStageType get firstLearnEntrySubStage {
-    final planned = LearningPlan.standard(stagePlanVersions: planVersionsByStage)
-        .subStagesFor(LearningStage.firstLearn);
+    final planned = LearningPlan.standard(
+      stagePlanVersions: planVersionsByStage,
+    ).subStagesFor(LearningStage.firstLearn);
     return planned.isNotEmpty ? planned.first : SubStageType.blindListen;
   }
 

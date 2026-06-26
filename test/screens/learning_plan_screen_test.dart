@@ -218,7 +218,8 @@ void main() {
         learningSessionProvider.overrideWith(() => TestLearningSession()),
         if (fixedNow != null) nowProvider.overrideWithValue(() => fixedNow),
         reviewStageCompletionTimesProvider(item.id).overrideWith(
-          (ref) async => completedStageTimes ?? const <String, DateTime>{},
+          (ref) =>
+              Stream.value(completedStageTimes ?? const <String, DateTime>{}),
         ),
       ],
       child: MaterialApp.router(

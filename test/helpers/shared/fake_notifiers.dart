@@ -849,6 +849,7 @@ class FakeLearningSession extends LearningSession {
     bool isFreePlay = false,
     required List<List<Sentence>> paragraphs,
     BlindListenSettings? settings,
+    LearningStage? stage,
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.blindListen,
@@ -862,8 +863,8 @@ class FakeLearningSession extends LearningSession {
     String audioItemId,
     List<Sentence> sentences, {
     bool isFreePlay = false,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    IntensiveListenSettings settings = const IntensiveListenSettings(),
+    String? settingsSlot,
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.intensiveListen,
@@ -891,8 +892,8 @@ class FakeLearningSession extends LearningSession {
     String audioItemId,
     List<Sentence> allSentences, {
     bool isFreePlay = false,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    DifficultPracticeSettings settings = const DifficultPracticeSettings(),
+    LearningStage? stage,
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.reviewDifficultPractice,
@@ -908,8 +909,6 @@ class FakeLearningSession extends LearningSession {
     bool isFreePlay = false,
     LearningStage? catchUpStage,
     SubStageType? catchUpSubStage,
-    KeywordRatio? overrideKeywordRatio,
-    double playbackSpeed = 1.0,
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.retell,
@@ -1027,13 +1026,14 @@ class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
   Future<void> initialize(
     List<Sentence> sentences, {
     int startIndex = 0,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    IntensiveListenSettings settings = const IntensiveListenSettings(),
+    String? settingsSlot,
   }) async {
     testSentences = List.of(sentences);
     state = IntensiveListenState(
       currentSentenceIndex: startIndex,
       totalSentences: sentences.length,
+      settings: settings,
     );
   }
 
@@ -1279,8 +1279,8 @@ class FakeRetellPlayer extends RetellPlayer {
   void initialize(
     List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
-    KeywordRatio? autoRatio,
-    double playbackSpeed = 1.0,
+    RetellSettings settings = const RetellSettings(),
+    String? settingsSlot,
   }) {
     testParagraphs = paragraphs;
     testKeywords = const {};
@@ -1293,13 +1293,10 @@ class FakeRetellPlayer extends RetellPlayer {
         }
       }
     }
-    final initialSettings = autoRatio == null
-        ? const RetellSettings()
-        : const RetellSettings().copyWith(keywordRatio: autoRatio);
     state = RetellPlayerState(
       currentParagraphIndex: safeIndex,
       totalParagraphs: paragraphs.length,
-      settings: initialSettings.copyWith(playbackSpeed: playbackSpeed),
+      settings: settings,
     );
   }
 
@@ -1555,8 +1552,8 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
   void initialize(
     List<Sentence> sentences, {
     int startIndex = 0,
-    double playbackSpeed = 1.0,
-    double pauseMultiplier = -1.0,
+    DifficultPracticeSettings settings = const DifficultPracticeSettings(),
+    String? settingsSlot,
   }) {
     testSentences = List.of(sentences);
     final validIndex = testSentences.isEmpty
@@ -1565,7 +1562,7 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
     state = ReviewDifficultPracticeState(
       currentSentenceIndex: validIndex,
       totalSentences: sentences.length,
-      settings: DifficultPracticeSettings(playbackSpeed: playbackSpeed),
+      settings: settings,
     );
   }
 

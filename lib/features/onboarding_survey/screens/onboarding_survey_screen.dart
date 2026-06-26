@@ -708,25 +708,33 @@ class _OnboardingSurveyScreenState
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option10,
-          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m10]),
+          leading: _emojiLeading(
+            _dailyMinutesEmoji[OnboardingDailyMinutes.m10],
+          ),
           selected: selected == OnboardingDailyMinutes.m10,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m10),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option20,
-          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m20]),
+          leading: _emojiLeading(
+            _dailyMinutesEmoji[OnboardingDailyMinutes.m20],
+          ),
           selected: selected == OnboardingDailyMinutes.m20,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m20),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2Option30,
-          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.m30]),
+          leading: _emojiLeading(
+            _dailyMinutesEmoji[OnboardingDailyMinutes.m30],
+          ),
           selected: selected == OnboardingDailyMinutes.m30,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m30),
         ),
         SurveyChoiceTile(
           label: l10n.onboardingQ2OptionFlexible,
-          leading: _emojiLeading(_dailyMinutesEmoji[OnboardingDailyMinutes.flexible]),
+          leading: _emojiLeading(
+            _dailyMinutesEmoji[OnboardingDailyMinutes.flexible],
+          ),
           selected: selected == OnboardingDailyMinutes.flexible,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.flexible),
         ),

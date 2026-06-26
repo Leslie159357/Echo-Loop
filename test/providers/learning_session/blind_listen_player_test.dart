@@ -384,7 +384,10 @@ void main() {
       addTearDown(container.dispose);
       final notifier = container.read(blindListenPlayerProvider.notifier);
 
-      final paragraphs = _buildParagraphs(paragraphCount: 1, sentencesPerParagraph: 1);
+      final paragraphs = _buildParagraphs(
+        paragraphCount: 1,
+        sentencesPerParagraph: 1,
+      );
       notifier.initializeParagraphs(
         paragraphs,
         const BlindListenSettings(repeatCount: 0),
@@ -394,7 +397,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(container.read(blindListenPlayerProvider).stepFinished, isFalse);
-      expect(container.read(blindListenPlayerProvider).currentRepeatCount, greaterThanOrEqualTo(1));
+      expect(
+        container.read(blindListenPlayerProvider).currentRepeatCount,
+        greaterThanOrEqualTo(1),
+      );
     });
 
     test('seek 写盘 globalIdx（由 _playCurrentParagraph 内部 async 写）', () async {

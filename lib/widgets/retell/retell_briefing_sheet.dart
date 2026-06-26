@@ -9,6 +9,7 @@ import '../../database/enums.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/stage_settings_overrides.dart' show BriefingPauseChoice;
 import '../../providers/new_user_guide_provider.dart';
 import '../../utils/retell_duration_estimator.dart';
 import '../common/paragraph_selection_sheet.dart';
@@ -59,15 +60,23 @@ Future<void> showRetellBriefingSheet({
   required List<Sentence> sentences,
   required void Function(
     Duration targetDuration,
-    double pauseMultiplier,
+    BriefingPauseChoice pause,
     KeywordRatio? keywordRatio,
     double playbackSpeed,
   )
   onStartPractice,
+  void Function(
+    Duration targetDuration,
+    BriefingPauseChoice pause,
+    KeywordRatio? keywordRatio,
+    double playbackSpeed,
+  )?
+  onSelectionChanged,
   int defaultSeconds = 30,
   String? stageLabel,
   KeywordRatio? defaultKeywordRatio,
   double defaultPlaybackSpeed = 1.0,
+  BriefingPauseChoice defaultPause = const BriefingPauseChoice.smart(),
   VoidCallback? onSkip,
 }) {
   final l10n = AppLocalizations.of(context)!;
@@ -82,7 +91,10 @@ Future<void> showRetellBriefingSheet({
     showPlaybackSpeed: true,
     playbackSpeedOptions: RetellSettings.briefingPlaybackSpeedOptions,
     defaultPlaybackSpeed: defaultPlaybackSpeed,
-    pauseMultiplierOptions: const [1.0, 2.0, 3.0, 4.0, 5.0],
+    // 与复述 🔧 面板一致(固定间隔 + 句长倍数)。
+    fixedPauseOptions: RetellSettings.fixedPauseOptions,
+    pauseMultiplierOptions: RetellSettings.multiplierOptions,
+    defaultPause: defaultPause,
     stageLabel: stageLabel,
     estimateDurationBuilder: (targetSeconds, pauseMultiplier) =>
         estimateRetellSessionDuration(
@@ -93,14 +105,10 @@ Future<void> showRetellBriefingSheet({
     defaultKeywordRatio: defaultKeywordRatio,
     onStartPractice: (_, _, _) {},
     onStartPracticeWithPlaybackSpeed:
-        (targetDuration, pauseMultiplier, keywordRatio, playbackSpeed) {
-          onStartPractice(
-            targetDuration,
-            pauseMultiplier,
-            keywordRatio,
-            playbackSpeed,
-          );
+        (targetDuration, pause, keywordRatio, playbackSpeed) {
+          onStartPractice(targetDuration, pause, keywordRatio, playbackSpeed);
         },
+    onSelectionChanged: onSelectionChanged,
     skipLabel: onSkip != null ? l10n.retellSkip : null,
     onSkip: onSkip,
     // 仅按计划学习路径才显示「跳过」按钮 + 配套新手引导。

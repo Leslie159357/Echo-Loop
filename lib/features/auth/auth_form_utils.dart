@@ -224,11 +224,8 @@ class AuthBrandHeader extends StatelessWidget {
       height: authBrandLogoSize,
       semanticLabel: 'Echo Loop',
       filterQuality: FilterQuality.high,
-      errorBuilder: (context, error, stackTrace) => Icon(
-        Icons.graphic_eq_rounded,
-        size: 48,
-        color: colorScheme.primary,
-      ),
+      errorBuilder: (context, error, stackTrace) =>
+          Icon(Icons.graphic_eq_rounded, size: 48, color: colorScheme.primary),
     );
     if (onLogoTap != null) {
       logo = GestureDetector(

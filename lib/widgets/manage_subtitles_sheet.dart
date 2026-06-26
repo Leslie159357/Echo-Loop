@@ -85,8 +85,9 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       _selectedAction = _SubtitleAction.aiTranscription;
     }
     // 取上次记住的「自动合并短句」选择作为默认值
-    _autoMergeShortSentences =
-        ref.read(appSettingsProvider).aiTranscriptionAutoMergeEnabled;
+    _autoMergeShortSentences = ref
+        .read(appSettingsProvider)
+        .aiTranscriptionAutoMergeEnabled;
     // 打开弹窗时异步清除之前的失败/空结果状态
     final taskState = ref.read(
       transcriptionTaskManagerProvider,

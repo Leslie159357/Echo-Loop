@@ -280,4 +280,48 @@ void main() {
       expect(result['review1'], base.add(const Duration(days: 2)));
     });
   });
+
+  group('watchStageCompletedAtByAudioId', () {
+    test('插入完成记录后流自动发射新完成时间', () async {
+      await insertAudio('a1', 'Audio One');
+      final stream = db.stageCompletionDao.watchStageCompletedAtByAudioId('a1');
+
+      // 首帧：空表
+      await expectLater(stream.first, completion(isEmpty));
+
+      final base = DateTime(2026, 3, 25, 12, 0);
+      await insertCompletion(
+        audioId: 'a1',
+        stage: 'review1',
+        subStage: 'blindListen',
+        completedAt: base,
+      );
+
+      // 插入后流应发射含新完成时间的 Map
+      final updated = await stream.firstWhere((m) => m.isNotEmpty);
+      expect(updated['review1'], base);
+    });
+
+    test('同一 stage 取最后一个子步骤完成时间', () async {
+      await insertAudio('a1', 'Audio One');
+      final base = DateTime(2026, 3, 25, 12, 0);
+      await insertCompletion(
+        audioId: 'a1',
+        stage: 'review1',
+        subStage: 'blindListen',
+        completedAt: base,
+      );
+      await insertCompletion(
+        audioId: 'a1',
+        stage: 'review1',
+        subStage: 'reviewDifficultPractice',
+        completedAt: base.add(const Duration(hours: 1)),
+      );
+
+      final result = await db.stageCompletionDao
+          .watchStageCompletedAtByAudioId('a1')
+          .first;
+      expect(result['review1'], base.add(const Duration(hours: 1)));
+    });
+  });
 }

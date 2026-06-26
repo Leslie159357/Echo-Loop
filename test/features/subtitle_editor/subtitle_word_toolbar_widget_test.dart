@@ -19,7 +19,11 @@ class _FakeEditorAudioEngine extends FakeAudioEngine {
   final Duration _duration;
 
   @override
-  Future<Duration?> loadAudio(AudioItem item, double speed, {String? subtitle}) async => _duration;
+  Future<Duration?> loadAudio(
+    AudioItem item,
+    double speed, {
+    String? subtitle,
+  }) async => _duration;
 
   @override
   Future<List<Sentence>> loadTranscript(AudioItem audioItem) async =>

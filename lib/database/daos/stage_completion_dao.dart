@@ -125,12 +125,35 @@ class StageCompletionDao extends DatabaseAccessor<AppDatabase>
   Future<Map<String, DateTime>> getStageCompletedAtByAudioId(
     String audioItemId,
   ) async {
-    final rows =
-        await (select(stageCompletions)
-              ..where((t) => t.audioItemId.equals(audioItemId))
-              ..orderBy([(t) => OrderingTerm.asc(t.completedAt)]))
-            .get();
+    final rows = await _stageCompletedAtQuery(audioItemId).get();
+    return _foldStageCompletedAt(rows);
+  }
 
+  /// 监听指定音频各大阶段的最终完成时间。
+  ///
+  /// 与 [getStageCompletedAtByAudioId] 语义相同，但返回流：`stage_completions`
+  /// 表发生增删改时自动重新查询并发射新结果，供学习计划页实时刷新
+  /// “完成于XX”文案，无需手动失效缓存。
+  Stream<Map<String, DateTime>> watchStageCompletedAtByAudioId(
+    String audioItemId,
+  ) {
+    return _stageCompletedAtQuery(
+      audioItemId,
+    ).watch().map(_foldStageCompletedAt);
+  }
+
+  /// 构造“按音频查询完成记录、按完成时间升序”的查询，供 Future / Stream 复用。
+  SimpleSelectStatement<$StageCompletionsTable, StageCompletion>
+  _stageCompletedAtQuery(String audioItemId) {
+    return select(stageCompletions)
+      ..where((t) => t.audioItemId.equals(audioItemId))
+      ..orderBy([(t) => OrderingTerm.asc(t.completedAt)]);
+  }
+
+  /// 将升序完成记录折叠为 `stage -> 最终完成时间`。
+  ///
+  /// 升序遍历、后写覆盖，故每个 stage 保留其最后一个子步骤的 `completedAt`。
+  Map<String, DateTime> _foldStageCompletedAt(List<StageCompletion> rows) {
     final result = <String, DateTime>{};
     for (final row in rows) {
       result[row.stage] = row.completedAt;

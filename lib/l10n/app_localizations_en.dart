@@ -987,7 +987,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get intensiveListenSettingsTemporaryHint =>
-      'Settings apply to this session only';
+      'Settings are remembered for next time';
 
   @override
   String get intensiveListenPauseSmartDesc =>

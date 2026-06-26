@@ -4,7 +4,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../models/sleep_timer_state.dart';
 import 'listening_practice_provider.dart';
 
-export '../../models/sleep_timer_state.dart' show SleepTimerState, sleepTimerPresets;
+export '../../models/sleep_timer_state.dart'
+    show SleepTimerState, sleepTimerPresets;
 
 part 'sleep_timer_provider.g.dart';
 
@@ -40,10 +41,7 @@ class SleepTimer extends _$SleepTimer {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       _tick(generation);
     });
-    state = SleepTimerState(
-      remaining: total,
-      presetMinutes: total.inMinutes,
-    );
+    state = SleepTimerState(remaining: total, presetMinutes: total.inMinutes);
   }
 
   /// 取消定时器，恢复未激活态（不触发暂停）。

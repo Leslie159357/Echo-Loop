@@ -32,6 +32,10 @@ import 'services/network_permission_trigger.dart';
 import 'services/user_id_service.dart';
 import 'firebase_options.dart';
 import 'providers/learning_settings_provider.dart';
+import 'providers/intensive_listen_prefs_provider.dart';
+import 'providers/blind_listen_prefs_provider.dart';
+import 'providers/retell_prefs_provider.dart';
+import 'providers/difficult_practice_prefs_provider.dart';
 import 'providers/new_user_guide_provider.dart';
 import 'providers/offline_asr_settings_provider.dart';
 import 'services/asr/asr_model_manager.dart';
@@ -91,6 +95,14 @@ void main() async {
   final initialLearningSettings = LearningSettings.fromPrefsSync(prefs);
   // 清理历史 SP key（开发期数据卫生，幂等无副作用）。
   await cleanupLegacyLearningSettingsKeys(prefs);
+
+  // 各学习子阶段用户偏好(按槽位)同步预读:入口弹窗 / 播放器进入时需立即拿到记忆值。
+  final initialIntensiveListenPrefs = intensiveListenPrefsFromPrefsSync(prefs);
+  final initialBlindListenPrefs = blindListenPrefsFromPrefsSync(prefs);
+  final initialRetellPrefs = retellPrefsFromPrefsSync(prefs);
+  final initialDifficultPracticePrefs = difficultPracticePrefsFromPrefsSync(
+    prefs,
+  );
 
   // 界面语言同步预读：让首帧 MaterialApp.locale 直接拿到用户已选语言，
   // 避免"先按系统语言渲染、再 hydrate 切到用户设置"的闪烁。
@@ -230,6 +242,16 @@ void main() async {
           ),
           initialLearningSettingsProvider.overrideWithValue(
             initialLearningSettings,
+          ),
+          initialIntensiveListenPrefsProvider.overrideWithValue(
+            initialIntensiveListenPrefs,
+          ),
+          initialBlindListenPrefsProvider.overrideWithValue(
+            initialBlindListenPrefs,
+          ),
+          initialRetellPrefsProvider.overrideWithValue(initialRetellPrefs),
+          initialDifficultPracticePrefsProvider.overrideWithValue(
+            initialDifficultPracticePrefs,
           ),
           initialUiLocaleProvider.overrideWithValue(initialUiLocale),
           initialAiTranscriptionAutoMergeEnabledProvider.overrideWithValue(

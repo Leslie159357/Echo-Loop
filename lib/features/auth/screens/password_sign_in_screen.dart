@@ -172,9 +172,8 @@ class _PasswordSignInScreenState extends ConsumerState<PasswordSignInScreen> {
                           : Icons.visibility_off_outlined,
                       color: colorScheme.onSurfaceVariant,
                     ),
-                    onPressed: () => setState(
-                      () => _obscurePassword = !_obscurePassword,
-                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 obscureText: _obscurePassword,

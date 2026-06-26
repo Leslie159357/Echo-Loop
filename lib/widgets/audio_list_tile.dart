@@ -698,9 +698,7 @@ class AudioListTile extends ConsumerWidget {
                     : Icons.pause_rounded,
                 size: 20,
               ),
-              label: isPausedForMenu
-                  ? l10n.resumeLearning
-                  : l10n.pauseLearning,
+              label: isPausedForMenu ? l10n.resumeLearning : l10n.pauseLearning,
             ),
           if (hasProgress)
             appPopupMenuItem(

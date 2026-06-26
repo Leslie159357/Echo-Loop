@@ -65,7 +65,7 @@ void main() {
       await openSheet(tester);
 
       expect(find.text('精听设置'), findsOneWidget);
-      expect(find.text('设置仅对本次精听有效'), findsOneWidget);
+      expect(find.text('设置会被记住，下次自动沿用'), findsOneWidget);
       // 不再有"完成"按钮
       expect(find.widgetWithText(FilledButton, '完成'), findsNothing);
     });
@@ -142,7 +142,10 @@ void main() {
       await openSheet(tester);
 
       expect(find.text('Settings'), findsOneWidget);
-      expect(find.text('Settings apply to this session only'), findsOneWidget);
+      expect(
+        find.text('Settings are remembered for next time'),
+        findsOneWidget,
+      );
       expect(find.text('Repeat per sentence'), findsOneWidget);
       expect(find.text('Pause between sentences'), findsOneWidget);
       // "Auto" appears in both control mode and pause mode sections

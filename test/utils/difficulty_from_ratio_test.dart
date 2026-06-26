@@ -20,7 +20,10 @@ void main() {
 
     test('5%<ratio<=15% → medium（边界 15%）', () {
       expect(difficultyFromDifficultRatio(100, 6), DifficultyLevel.medium);
-      expect(difficultyFromDifficultRatio(10, 1), DifficultyLevel.medium); // 10%
+      expect(
+        difficultyFromDifficultRatio(10, 1),
+        DifficultyLevel.medium,
+      ); // 10%
       expect(difficultyFromDifficultRatio(100, 15), DifficultyLevel.medium);
     });
 
@@ -31,7 +34,10 @@ void main() {
 
     test('ratio>30% → veryHard', () {
       expect(difficultyFromDifficultRatio(100, 31), DifficultyLevel.veryHard);
-      expect(difficultyFromDifficultRatio(10, 4), DifficultyLevel.veryHard); // 40%
+      expect(
+        difficultyFromDifficultRatio(10, 4),
+        DifficultyLevel.veryHard,
+      ); // 40%
     });
   });
 }

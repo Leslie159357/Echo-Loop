@@ -33,7 +33,8 @@ class BlindListenSettings {
   /// 入口弹窗使用的离散速度选项
   ///
   /// 与其他练习入口共用统一档位，保证默认值都能命中。
-  static const List<double> briefingPlaybackSpeedOptions = kUnifiedPlaybackSpeeds;
+  static const List<double> briefingPlaybackSpeedOptions =
+      kUnifiedPlaybackSpeeds;
 
   /// 固定间隔可选值（秒）
   static const List<int> fixedPauseOptions = [5, 10, 15, 20, 25, 30, 45, 60];

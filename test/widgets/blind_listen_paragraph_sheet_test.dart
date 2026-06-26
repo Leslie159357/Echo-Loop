@@ -88,5 +88,4 @@ void main() {
 
     expect(selectedSpeed, 1.5);
   });
-
 }
