@@ -1448,7 +1448,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String speechModelReady(String size) {
-    return '已就绪 · $size';
+    return '就绪 · $size';
   }
 
   @override
@@ -3736,10 +3736,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ttsVoice => '音色';
 
   @override
-  String get ttsVoiceFemale => '女声';
+  String get ttsVoiceFemale => '女';
 
   @override
-  String get ttsVoiceMale => '男声';
+  String get ttsVoiceMale => '男';
 
   @override
   String get ttsDeleteModel => '删除模型';
