@@ -128,7 +128,11 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
             title: Text(l10n.asrBackendPlatform),
             subtitle: Text(
               l10n.asrBackendPlatformDescription,
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.6,
+                ),
+              ),
             ),
             value: AsrBackend.platform,
           ),
@@ -161,7 +165,9 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
       children: [
         Text(
           l10n.asrBackendOfflineDescription,
-          style: theme.textTheme.bodySmall,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
         ),
         const SizedBox(height: 2),
         Text(

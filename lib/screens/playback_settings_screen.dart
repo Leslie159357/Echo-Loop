@@ -38,7 +38,14 @@ class PlaybackSettingsScreen extends ConsumerWidget {
                 SwitchListTile(
                   secondary: _emojiIcon('🤫'),
                   title: Text(l10n.skipSilenceTitle),
-                  subtitle: Text(l10n.skipSilenceDescription),
+                  subtitle: Text(
+                    l10n.skipSilenceDescription,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
+                  ),
                   value: settings.skipSilenceEnabled,
                   onChanged: controller.setSkipSilenceEnabled,
                 ),

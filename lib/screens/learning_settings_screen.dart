@@ -55,7 +55,7 @@ class LearningSettingsScreen extends ConsumerWidget {
               subtitle: Text(
                 l10n.autoExpandCachedAnnotationSubtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
               value: settings.autoExpandCachedAnnotation,
@@ -82,7 +82,7 @@ class LearningSettingsScreen extends ConsumerWidget {
               subtitle: Text(
                 l10n.autoSkipRetellSubtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
               value: settings.autoSkipRetell,
@@ -125,7 +125,7 @@ class LearningSettingsScreen extends ConsumerWidget {
               subtitle: Text(
                 l10n.autoPlayRetellRecordingSubtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
               value: settings.autoPlayRetellRecordingAfterCompletion,
@@ -158,7 +158,7 @@ class LearningSettingsScreen extends ConsumerWidget {
               subtitle: Text(
                 l10n.retellRatingSubtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
               value: settings.retellRatingEnabled,

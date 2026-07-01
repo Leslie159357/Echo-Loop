@@ -170,7 +170,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Text(
                 isSignedIn ? l10n.authSignedInStatus : l10n.authSignedOutStatus,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -269,9 +269,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ref.watch(offlineAsrSettingsProvider).enabled
                       ? l10n.speechRecognitionEnabled
                       : l10n.speechRecognitionDisabled,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 const Icon(Icons.chevron_right),
               ],
             ),
