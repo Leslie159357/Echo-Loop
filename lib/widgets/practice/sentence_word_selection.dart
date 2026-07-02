@@ -175,8 +175,12 @@ List<(int, int)> savedCharRanges(
   return ranges;
 }
 
-/// 区间修边后加入结果：两端剥非「字母/数字」字符，尾部撇号（直/弯）保留
-void _addTrimmedRange(String text, int start, int end, List<(int, int)> out) {
+/// 区间修边：两端剥非「字母/数字」字符，尾部撇号（直/弯）保留；
+/// 修边后为空（纯标点）返回 null。
+///
+/// 公开供调用方识别「命中区间 == 整段文本修边区间」的自匹配
+/// （如意群 badge 本体已有收藏视觉，整段命中不再重复下划线）。
+(int, int)? trimSavedRange(String text, int start, int end) {
   var s = start;
   var e = end;
   while (s < e && !_letterOrDigit.hasMatch(text[s])) {
@@ -187,7 +191,13 @@ void _addTrimmedRange(String text, int start, int end, List<(int, int)> out) {
       !_apostrophes.contains(text[e - 1])) {
     e--;
   }
-  if (s < e) out.add((s, e));
+  return s < e ? (s, e) : null;
+}
+
+/// 区间修边后加入结果（见 [trimSavedRange]）
+void _addTrimmedRange(String text, int start, int end, List<(int, int)> out) {
+  final trimmed = trimSavedRange(text, start, end);
+  if (trimmed != null) out.add(trimmed);
 }
 
 /// 区间列表 → 逐字符标记掩码（供 span 按边界切分渲染）
@@ -199,6 +209,37 @@ List<bool> charMaskFromRanges(int length, List<(int, int)> ranges) {
     }
   }
   return mask;
+}
+
+/// 收藏命中按「空白分词」词序切分（逐词渲染场景用，如遮盖句子 Tile）。
+///
+/// 返回 `词序号 → 该词内按收藏命中边界切分的 (相对起, 相对止, 是否命中) 子段列表`。
+/// 词序号与 `text.split(空白)` 的非空词序一致（即 keyword_extraction 的
+/// tokenize 结果下标），子段偏移相对词首字符。无任何命中的词不出现在
+/// 结果中，调用方可整词走普通渲染。
+Map<int, List<(int, int, bool)>> savedWordSegments(
+  String text,
+  SavedTextIndex index,
+) {
+  if (index.isEmpty) return const {};
+  final tokens = tokenizeSentence(text);
+  final ranges = savedCharRanges(text, tokens, index);
+  if (ranges.isEmpty) return const {};
+  final mask = charMaskFromRanges(text.length, ranges);
+  final result = <int, List<(int, int, bool)>>{};
+  var wordIdx = 0;
+  for (final t in tokens) {
+    if (t.text.trim().isEmpty) continue; // 空白 token 不占词序
+    final segments = splitByMask(t.start, t.end, mask);
+    if (segments.any((s) => s.$3)) {
+      result[wordIdx] = [
+        for (final (subStart, subEnd, saved) in segments)
+          (subStart - t.start, subEnd - t.start, saved),
+      ];
+    }
+    wordIdx++;
+  }
+  return result;
 }
 
 /// 把字符区间 [start, end) 按掩码翻转点切成 (子段起, 子段止, 是否命中) 列表。

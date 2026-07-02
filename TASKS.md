@@ -1,7 +1,20 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-02（收藏词汇正文点状下划线标记）
+> 最后更新：2026-07-02（收藏词汇下划线扩展到句子列表组件）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：收藏词汇下划线扩展到句子列表组件（随心听/全文盲听/段落复述）+ 意群模式
+
+用户反馈：收藏词下划线只覆盖了可点词场景（`SelectableSentenceText`），①三个场景共用的句子列表（`ParagraphSentenceListCard` → `MaskedSentenceTile`，逐词 `Text` 组成 `Wrap` 支撑关键词遮盖模式）没有标记；②标注卡意群模式（`SenseGroupText` badge）也没有。方案：都不换成 `SelectableSentenceText`（列表/badge 不需要点词手柄，且整句 RichText 与逐词/badge 结构不兼容），在各组件内复用同一套匹配纯逻辑给命中文本加同款橙色点状下划线；**遮盖词不渲染下划线**（避免给遮盖块泄漏词长之外的额外信息）。
+
+- [x] 匹配纯逻辑：`sentence_word_selection.dart` 新增 `savedWordSegments(text, index)`——复用 `savedCharRanges`/`charMaskFromRanges`/`splitByMask`，按「空白分词」词序输出每个命中词的词内子段（相对偏移），词序与 `keyword_extraction.tokenize` 一致；无命中词不进结果。
+- [x] 渲染：`MaskedSentenceTile` 改 `ConsumerWidget` watch `savedTextIndexProvider`（keepAlive 共享索引，§7.18 降级空集不崩宿主测试）；`_WordBlock` 新增 `savedSegments`，可见词有命中时用 `Text.rich` 按子段加 dotted 下划线（"dog." 只标 "dog"），遮盖/无命中仍走普通 `Text`（Wrap 子元素数量与布局不变）。词组/意群跨词时各词分别带下划线，词间空隙断开为可接受视觉折衷。
+- [x] 共享色：下划线橙色提取为 `AppTheme.savedTextMarkColor(brightness)`（亮 shade400/暗 shade300），`SelectableSentenceText` 同步改用，消除双处定义。
+- [x] 意群模式（第二轮反馈）：`SenseGroupText` 改 `ConsumerStatefulWidget` watch 同一索引，badge 内文本两条渲染路径（纯文本 / 跟读高亮 RichText）都经 `_savedAwareSpans` 按掩码切子段加下划线（与跟读绿字正交叠加）；只改 badge child 文本渲染，GestureDetector 点击播放意群交互零改动。**badge 本体即已收藏意群（橙底+边框）时剔除整段自匹配区间不重复下划线**（`trimSavedRange` 从 `_addTrimmedRange` 提出公开），内部更细的收藏词/词组照标。
+- [x] 测试：`sentence_word_selection_test.dart` 补 `savedWordSegments` 5 例（无命中/相对偏移/标点修边/词组跨词/引号语境）；`masked_sentence_tile_test.dart` 补下划线 4 例（可见命中/词组跨词/hideAll 遮盖不标/keywordsOnly 仅可见词标）；`sense_group_text_test.dart` 补 3 例（badge 内收藏词下划线+点击播放不受影响/整段自匹配剔除/与跟读绿字叠加）；`test/widgets/common/paragraph_sentence_list_card_test.dart` 宿主补 ProviderScope + 空索引 override。
+- [x] 验证：`flutter analyze` 改动文件 0 问题；定向测试全过（列表相关 79 + 意群/标注卡 71）。
+
+  **完成时间**: 2026-07-02
 
 ## 已完成：收藏词汇在句子中的下划线标记
 

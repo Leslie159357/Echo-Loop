@@ -23,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/speech_practice_models.dart';
 import '../../providers/saved_word_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/saved_text_index.dart';
 import '../dictionary/dictionary_panel_host.dart';
 import 'sentence_word_selection.dart';
@@ -397,9 +398,7 @@ class _SelectableSentenceTextState
   /// 收藏色系一致），必须显式设 decorationColor（默认会跟随文字色）。
   List<InlineSpan> _buildSpans(ThemeData theme, List<bool> savedMask) {
     final selectionColor = theme.colorScheme.primary.withValues(alpha: 0.15);
-    final savedColor = theme.brightness == Brightness.dark
-        ? Colors.orange.shade300
-        : Colors.orange.shade400;
+    final savedColor = AppTheme.savedTextMarkColor(theme.brightness);
     final (selStart, selEnd) = _selection?.charRangeOf(_tokens) ?? (-1, -1);
     final colorAt = _segmentColorLookup();
     final text = _fullText;

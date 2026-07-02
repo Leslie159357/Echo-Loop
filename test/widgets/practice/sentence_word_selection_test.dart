@@ -225,4 +225,54 @@ void main() {
       expect(splitByMask(0, 4, [true, true]), [(0, 2, true), (2, 4, false)]);
     });
   });
+
+  group('savedWordSegments', () {
+    Map<int, List<(int, int, bool)>> segments(
+      String text, {
+      Set<String> words = const {},
+      Set<String> phrases = const {},
+    }) {
+      return savedWordSegments(
+        text,
+        SavedTextIndex.build(savedWords: words, savedPhrases: phrases),
+      );
+    }
+
+    test('空索引/无命中返回空 map', () {
+      expect(segments('The quick fox.'), isEmpty);
+      expect(segments('The quick fox.', words: {'lazy'}), isEmpty);
+    });
+
+    test('单词命中：词序号与空白分词一致，子段偏移相对词首', () {
+      final result = segments('The quick fox.', words: {'quick'});
+      expect(result.keys, [1]);
+      expect(result[1], [(0, 5, true)]);
+    });
+
+    test('带标点词只标记词本体（"fox." 的句号不命中）', () {
+      final result = segments('I saw a fox.', words: {'fox'});
+      expect(result.keys, [3]);
+      // "fox." 内：fox 命中、句号不命中
+      expect(result[3], [(0, 3, true), (3, 4, false)]);
+    });
+
+    test('词组命中：跨词的每个词各自出现在结果中', () {
+      final result = segments('please figure out now', words: {'figure out'});
+      expect(result.keys, containsAll([1, 2]));
+      expect(result.containsKey(0), isFalse);
+      expect(result.containsKey(3), isFalse);
+      expect(result[1], [(0, 6, true)]);
+      expect(result[2], [(0, 3, true)]);
+    });
+
+    test('引号语境命中且修边（词序号按含标点的原词计）', () {
+      final result = segments(
+        'He said "beautiful" twice.',
+        words: {'beautiful'},
+      );
+      // "beautiful" 是第 2 个词（0-based），引号不命中
+      expect(result.keys, [2]);
+      expect(result[2], [(0, 1, false), (1, 10, true), (10, 11, false)]);
+    });
+  });
 }

@@ -7,10 +7,13 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'package:echo_loop/models/retell_settings.dart';
+import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/utils/saved_text_index.dart';
 import 'package:echo_loop/widgets/common/masked_sentence_tile.dart';
 import 'package:echo_loop/widgets/common/paragraph_sentence_list_card.dart';
 
@@ -50,17 +53,26 @@ void main() {
 
     // 在固定高度容器内构建列表，强制内容溢出以产生滚动空间。
     Widget buildHost({required int playingIndex}) {
-      return MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              height: 220,
-              child: ParagraphSentenceListCard(
-                sentences: createTestSentences(count: sentenceCount),
-                displayMode: RetellDisplayMode.showAll,
-                keywordMap: const {},
-                playingSentenceIndex: playingIndex,
-                autoFocusEnabled: true,
+      // MaskedSentenceTile 监听收藏索引 provider，需要 ProviderScope；
+      // 收藏标记与滚动行为无关，固定为空索引。
+      return ProviderScope(
+        overrides: [
+          savedTextIndexProvider.overrideWithValue(
+            const SavedTextIndex.empty(),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                height: 220,
+                child: ParagraphSentenceListCard(
+                  sentences: createTestSentences(count: sentenceCount),
+                  displayMode: RetellDisplayMode.showAll,
+                  keywordMap: const {},
+                  playingSentenceIndex: playingIndex,
+                  autoFocusEnabled: true,
+                ),
               ),
             ),
           ),

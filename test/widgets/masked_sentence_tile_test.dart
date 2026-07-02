@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/retell_settings.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/utils/saved_text_index.dart';
 import 'package:echo_loop/widgets/common/masked_sentence_tile.dart';
 
 import '../helpers/test_app.dart';
@@ -294,6 +296,105 @@ void main() {
       expect(find.text('1'), findsOneWidget);
       // 不应有 InkWell（两个 hit area 都 onTap=null）
       expect(find.byType(InkWell), findsNothing);
+    });
+  });
+
+  group('MaskedSentenceTile 收藏词下划线', () {
+    /// 构造带收藏索引覆盖的 tile
+    Widget buildSavedTile({
+      required Sentence sentence,
+      required Set<String> savedWords,
+      RetellDisplayMode displayMode = RetellDisplayMode.showAll,
+      Set<int> keywordIndices = const {},
+    }) {
+      return createTestApp(
+        MaskedSentenceTile(
+          sentence: sentence,
+          displayMode: displayMode,
+          keywordIndices: keywordIndices,
+          isPlayingSentence: false,
+        ),
+        overrides: [
+          savedTextIndexProvider.overrideWithValue(
+            SavedTextIndex.build(
+              savedWords: savedWords,
+              savedPhrases: const {},
+            ),
+          ),
+        ],
+      );
+    }
+
+    /// 取指定词的 Text widget 中带下划线的子段文本列表
+    List<String> underlinedSubstrings(WidgetTester tester, String word) {
+      final text = tester.widget<Text>(find.text(word));
+      final span = text.textSpan;
+      if (span is! TextSpan || span.children == null) return const [];
+      return [
+        for (final child in span.children!)
+          if (child is TextSpan &&
+              child.style?.decoration == TextDecoration.underline)
+            child.text ?? '',
+      ];
+    }
+
+    testWidgets('可见收藏词渲染点状下划线，标点不带下划线', (tester) async {
+      await tester.pumpWidget(
+        buildSavedTile(
+          sentence: _sentence('I love you.'),
+          savedWords: {'love'},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(underlinedSubstrings(tester, 'love'), ['love']);
+      // "you." 未收藏：仍是普通 Text（无 textSpan 子段）
+      final youText = tester.widget<Text>(find.text('you.'));
+      expect(youText.textSpan, isNull);
+    });
+
+    testWidgets('词组命中：跨词各自带下划线', (tester) async {
+      await tester.pumpWidget(
+        buildSavedTile(
+          sentence: _sentence('please figure out now'),
+          savedWords: {'figure out'},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(underlinedSubstrings(tester, 'figure'), ['figure']);
+      expect(underlinedSubstrings(tester, 'out'), ['out']);
+      expect(tester.widget<Text>(find.text('please')).textSpan, isNull);
+    });
+
+    testWidgets('遮盖词不渲染下划线（hideAll 全遮盖）', (tester) async {
+      await tester.pumpWidget(
+        buildSavedTile(
+          sentence: _sentence('I love you'),
+          savedWords: {'love'},
+          displayMode: RetellDisplayMode.hideAll,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 遮盖时走普通 Text（透明文字色），无下划线子段
+      expect(tester.widget<Text>(find.text('love')).textSpan, isNull);
+    });
+
+    testWidgets('keywordsOnly：可见关键词带下划线，遮盖词不带', (tester) async {
+      // "I love you" 关键词 {1}（love 可见），love/you 都已收藏
+      await tester.pumpWidget(
+        buildSavedTile(
+          sentence: _sentence('I love you'),
+          savedWords: {'love', 'you'},
+          displayMode: RetellDisplayMode.keywordsOnly,
+          keywordIndices: {1},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(underlinedSubstrings(tester, 'love'), ['love']);
+      expect(tester.widget<Text>(find.text('you')).textSpan, isNull);
     });
   });
 }

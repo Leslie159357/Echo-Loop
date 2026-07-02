@@ -35,6 +35,15 @@ class AppTheme {
   /// 语义色：置顶图钉
   static const Color pinColor = Color(0xFFE53935);
 
+  /// 语义色：收藏词/词组正文标记（点状下划线）
+  ///
+  /// 沿用「橙色 = 收藏」视觉语言（与意群收藏色系一致），
+  /// 深色主题提亮一档保证对比度。
+  static Color savedTextMarkColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? Colors.orange.shade300
+      : Colors.orange.shade400;
+
   /// 语义色：成功/完成（用于完成对话框的勾选徽章，清新绿）
   static const Color successColor = Color(0xFF2E9E5B);
 

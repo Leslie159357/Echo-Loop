@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/utils/saved_text_index.dart';
 import 'package:echo_loop/widgets/practice/sense_group_text.dart';
 
 import '../helpers/test_app.dart';
@@ -143,6 +145,103 @@ void main() {
       // 纯文本渲染：能找到原始文本，且无绿色高亮
       expect(find.text('Hello world'), findsOneWidget);
       expect(matchedWords(tester), isEmpty);
+    });
+  });
+
+  group('SenseGroupText — 收藏词下划线', () {
+    /// 收集所有带下划线的子段文本（Text.rich 内部也由 RichText 渲染，
+    /// 只扫 RichText 即可覆盖两条渲染路径且不重复计数）
+    List<String> underlinedTexts(WidgetTester tester) {
+      final result = <String>[];
+      for (final rich in tester.widgetList<RichText>(find.byType(RichText))) {
+        rich.text.visitChildren((child) {
+          if (child is TextSpan &&
+              child.style?.decoration == TextDecoration.underline &&
+              (child.text ?? '').trim().isNotEmpty) {
+            result.add(child.text!.trim());
+          }
+          return true;
+        });
+      }
+      return result;
+    }
+
+    Widget buildWithSaved(
+      SenseGroupText child, {
+      Set<String> savedWords = const {},
+      Set<String> savedPhrases = const {},
+    }) {
+      return createTestApp(
+        child,
+        overrides: [
+          savedTextIndexProvider.overrideWithValue(
+            SavedTextIndex.build(
+              savedWords: savedWords,
+              savedPhrases: savedPhrases,
+            ),
+          ),
+        ],
+      );
+    }
+
+    testWidgets('badge 内收藏词带下划线，其余不带；点击播放不受影响', (tester) async {
+      var tapped = -1;
+      await tester.pumpWidget(
+        buildWithSaved(
+          SenseGroupText(
+            chunks: const ['How many people', 'is it for?'],
+            timings: const [],
+            onTapGroup: (i) => tapped = i,
+          ),
+          savedWords: {'people'},
+        ),
+      );
+
+      expect(underlinedTexts(tester), equals(['people']));
+
+      // 点击第二个 badge 仍触发播放回调
+      await tester.tap(find.text('is it for?'));
+      expect(tapped, 1);
+    });
+
+    testWidgets('badge 本体已收藏（整段自匹配）不重复下划线，内部收藏词照标', (tester) async {
+      await tester.pumpWidget(
+        buildWithSaved(
+          SenseGroupText(
+            chunks: const ['How many people'],
+            timings: const [],
+            onTapGroup: (_) {},
+            savedGroupTexts: const {'how many people'},
+          ),
+          savedWords: {'many'},
+          savedPhrases: {'how many people'},
+        ),
+      );
+
+      // 整段自匹配被剔除，只有内部收藏词 many 带下划线
+      expect(underlinedTexts(tester), equals(['many']));
+    });
+
+    testWidgets('跟读高亮与收藏下划线叠加：匹配词染绿且带下划线', (tester) async {
+      await tester.pumpWidget(
+        buildWithSaved(
+          SenseGroupText(
+            chunks: const ['Hello world'],
+            timings: const [],
+            onTapGroup: (_) {},
+            highlightedSegments: [
+              word('Hello', matched: true),
+              const SpeechTranscriptSegment(text: ' ', isMatched: false),
+              word('world', matched: false),
+            ],
+          ),
+          savedWords: {'hello'},
+        ),
+      );
+
+      // Hello 同时匹配（绿）且收藏（下划线）
+      expect(matchedWords(tester), equals(['Hello']));
+      expect(underlinedTexts(tester), equals(['Hello']));
     });
   });
 }

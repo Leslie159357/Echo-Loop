@@ -3,12 +3,22 @@
 /// 将句子按意群渲染为内联 badge 样式，保持自然文本排版。
 /// 所有意群使用统一背景色，可点击播放对应音频片段。
 /// 支持四种视觉状态：空闲 / 播放中 / 已播放 / 已收藏。
+///
+/// 已收藏的单词/词组在 badge 内文本上渲染橙色点状下划线（与
+/// [SelectableSentenceText] 同一套匹配逻辑与视觉语言），纯视觉、
+/// 不改变点击播放意群的交互；badge 本体即已收藏意群（橙底+边框）时，
+/// 整段自匹配不重复下划线，只标记内部更细粒度的收藏词/词组。
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/speech_practice_models.dart';
+import '../../providers/saved_word_provider.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/saved_text_index.dart';
 import '../../utils/sense_group_timing.dart';
 import '../common/text_context_menu.dart';
+import 'sentence_word_selection.dart';
 
 /// 跟读匹配单词的高亮色（与非意群模式 [SentenceAnnotationCard] 保持一致）
 const _matchedColor = Color(0xFF2E9B51);
@@ -49,7 +59,7 @@ String normalizeSenseGroupPhrase(String text) {
 /// 意群标注文本
 ///
 /// 使用 Wrap + badge 实现，意群间留出间距，意群内单词保持正常间距。
-class SenseGroupText extends StatefulWidget {
+class SenseGroupText extends ConsumerStatefulWidget {
   /// 意群文本列表
   final List<String> chunks;
 
@@ -89,10 +99,10 @@ class SenseGroupText extends StatefulWidget {
   });
 
   @override
-  State<SenseGroupText> createState() => _SenseGroupTextState();
+  ConsumerState<SenseGroupText> createState() => _SenseGroupTextState();
 }
 
-class _SenseGroupTextState extends State<SenseGroupText> {
+class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
   /// 每个 badge 的 GlobalKey，用于获取位置
   final List<GlobalKey> _badgeKeys = [];
 
@@ -123,17 +133,79 @@ class _SenseGroupTextState extends State<SenseGroupText> {
       color: colorScheme.onSurface,
     );
 
+    // 收藏索引流式监听：加载中/降级（测试环境无 DB）时为空索引 = 无标记
+    final savedMasks = _buildSavedMasks(ref.watch(savedTextIndexProvider));
+    final savedColor = AppTheme.savedTextMarkColor(theme.brightness);
+
     // 按 chunk 顺序预生成高亮 span（单词游标跨 badge 连续消费）
-    final chunkSpans = _buildChunkSpans(baseStyle);
+    final chunkSpans = _buildChunkSpans(savedMasks, savedColor);
 
     return Wrap(
       spacing: 6,
       runSpacing: 6,
       children: [
         for (var i = 0; i < widget.chunks.length; i++)
-          _buildGroupBadge(i, baseStyle, colorScheme, chunkSpans?[i]),
+          _buildGroupBadge(
+            i,
+            baseStyle,
+            colorScheme,
+            chunkSpans?[i],
+            savedMasks[i],
+            savedColor,
+          ),
       ],
     );
+  }
+
+  /// 各意群的收藏命中掩码（下标与 [SenseGroupText.chunks] 对齐；空列表 = 无命中）
+  ///
+  /// badge 本体即已收藏意群时剔除「整段自匹配」区间——收藏态已由
+  /// 橙底+边框表达，整段下划线只会叠加噪声；内部更细的收藏词/词组照标。
+  List<List<bool>> _buildSavedMasks(SavedTextIndex index) {
+    return [for (final chunk in widget.chunks) _savedMaskFor(chunk, index)];
+  }
+
+  List<bool> _savedMaskFor(String chunk, SavedTextIndex index) {
+    if (index.isEmpty) return const [];
+    final text = chunk.trim();
+    var ranges = savedCharRanges(text, tokenizeSentence(text), index);
+    if (ranges.isEmpty) return const [];
+    if (widget.savedGroupTexts.contains(normalizeSenseGroupPhrase(chunk))) {
+      final fullSpan = trimSavedRange(text, 0, text.length);
+      ranges = [
+        for (final range in ranges)
+          if (range != fullSpan) range,
+      ];
+      if (ranges.isEmpty) return const [];
+    }
+    return charMaskFromRanges(text.length, ranges);
+  }
+
+  /// 把 [start, end) 按收藏掩码切成子 span：命中子段加点状下划线，
+  /// 可选叠加跟读匹配文字色 [color]（下划线与染色正交可叠加）
+  List<InlineSpan> _savedAwareSpans(
+    String text,
+    int start,
+    int end,
+    List<bool> mask,
+    Color savedColor, {
+    Color? color,
+  }) {
+    return [
+      for (final (subStart, subEnd, saved) in splitByMask(start, end, mask))
+        TextSpan(
+          text: text.substring(subStart, subEnd),
+          style: (color == null && !saved)
+              ? null
+              : TextStyle(
+                  color: color,
+                  decoration: saved ? TextDecoration.underline : null,
+                  decorationStyle: saved ? TextDecorationStyle.dotted : null,
+                  decorationColor: saved ? savedColor : null,
+                  decorationThickness: saved ? 2 : null,
+                ),
+        ),
+    ];
   }
 
   /// 把高亮片段拍平为有序的单词匹配标志列表。
@@ -154,10 +226,14 @@ class _SenseGroupTextState extends State<SenseGroupText> {
     return flags;
   }
 
-  /// 按 chunk 顺序生成每个意群的富文本 span，单词游标连续消费 [_buildWordFlags]。
+  /// 按 chunk 顺序生成每个意群的富文本 span，单词游标连续消费 [_buildWordFlags]；
+  /// 各子段同时按 [savedMasks] 叠加收藏下划线。
   ///
-  /// 无高亮数据时返回 null（badge 回退为纯文本）。
-  List<List<InlineSpan>>? _buildChunkSpans(TextStyle? baseStyle) {
+  /// 无高亮数据时返回 null（badge 回退为纯文本/收藏下划线文本）。
+  List<List<InlineSpan>>? _buildChunkSpans(
+    List<List<bool>> savedMasks,
+    Color savedColor,
+  ) {
     final wordFlags = _buildWordFlags();
     if (wordFlags == null) {
       return null;
@@ -165,29 +241,38 @@ class _SenseGroupTextState extends State<SenseGroupText> {
 
     var wordCursor = 0;
     final result = <List<InlineSpan>>[];
-    for (final chunk in widget.chunks) {
-      final text = chunk.trim();
+    for (var ci = 0; ci < widget.chunks.length; ci++) {
+      final text = widget.chunks[ci].trim();
+      final mask = savedMasks[ci];
       final spans = <InlineSpan>[];
       // 与普通模式一致：只给纯英文单词上色，单词外字符（空格/标点/连字符）原样保留
       var last = 0;
       for (final match in _englishWordPattern.allMatches(text)) {
         if (match.start > last) {
-          spans.add(TextSpan(text: text.substring(last, match.start)));
+          spans.addAll(
+            _savedAwareSpans(text, last, match.start, mask, savedColor),
+          );
         }
         // 按单词顺序消费匹配标志，越界按未匹配处理
         final isMatched =
             wordCursor < wordFlags.length && wordFlags[wordCursor];
         wordCursor++;
-        spans.add(
-          TextSpan(
-            text: text.substring(match.start, match.end),
-            style: isMatched ? const TextStyle(color: _matchedColor) : null,
+        spans.addAll(
+          _savedAwareSpans(
+            text,
+            match.start,
+            match.end,
+            mask,
+            savedColor,
+            color: isMatched ? _matchedColor : null,
           ),
         );
         last = match.end;
       }
       if (last < text.length) {
-        spans.add(TextSpan(text: text.substring(last)));
+        spans.addAll(
+          _savedAwareSpans(text, last, text.length, mask, savedColor),
+        );
       }
       result.add(spans);
     }
@@ -196,12 +281,15 @@ class _SenseGroupTextState extends State<SenseGroupText> {
 
   /// 构建单个意群 badge
   ///
-  /// [highlightSpans] 非空时按词级匹配渲染富文本，否则用纯文本。
+  /// [highlightSpans] 非空时按词级匹配渲染富文本（已含收藏下划线）；
+  /// 否则用纯文本，[savedMask] 非空时按掩码叠加收藏下划线。
   Widget _buildGroupBadge(
     int index,
     TextStyle? baseStyle,
     ColorScheme colorScheme,
     List<InlineSpan>? highlightSpans,
+    List<bool> savedMask,
+    Color savedColor,
   ) {
     final chunk = widget.chunks[index];
     final isPlaying = widget.playingGroupIndex == index;
@@ -265,7 +353,20 @@ class _SenseGroupTextState extends State<SenseGroupText> {
             ? RichText(
                 text: TextSpan(style: baseStyle, children: highlightSpans),
               )
-            : Text(chunk.trim(), style: baseStyle),
+            : savedMask.isEmpty
+            ? Text(chunk.trim(), style: baseStyle)
+            : Text.rich(
+                TextSpan(
+                  style: baseStyle,
+                  children: _savedAwareSpans(
+                    chunk.trim(),
+                    0,
+                    chunk.trim().length,
+                    savedMask,
+                    savedColor,
+                  ),
+                ),
+              ),
       ),
     );
   }

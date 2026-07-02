@@ -6,15 +6,22 @@
 ///
 /// 每个词独立渲染（Wrap 子元素数量恒定，切换模式时布局不跳动），
 /// 连续遮盖词通过溢出绘制桥接色块实现视觉连续。
+///
+/// 已收藏的单词/词组/意群在**可见**词上渲染橙色点状下划线（与
+/// [SelectableSentenceText] 同一套匹配逻辑与视觉语言）；遮盖词不渲染
+/// 下划线，避免给遮盖块泄漏词长之外的额外信息。
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
+import '../../providers/saved_word_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/keyword_extraction.dart';
 import '../guide_flow.dart';
+import '../practice/sentence_word_selection.dart';
 
 /// 句子编号点击区 key 前缀（供 widget test 精准点击，避免点到文本本身）。
 @visibleForTesting
@@ -41,7 +48,7 @@ const _wordSpacing = 4.0;
 ///   当前播放句的编号位置渲染 ▶ play_arrow 图标，提示"点击=播放"。
 /// - **主体区**（中间 Expanded）：`onDetailTap`，点击进入句子讲解页。
 /// - **收藏区**（右侧独立按钮）：`onBookmarkTap`，直接收藏/取消收藏。
-class MaskedSentenceTile extends StatelessWidget {
+class MaskedSentenceTile extends ConsumerWidget {
   /// 句子数据
   final Sentence sentence;
 
@@ -87,8 +94,13 @@ class MaskedSentenceTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // 收藏索引流式监听：加载中/降级（测试环境无 DB）时为空索引 = 无标记
+    final savedSegments = savedWordSegments(
+      sentence.text,
+      ref.watch(savedTextIndexProvider),
+    );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -130,7 +142,11 @@ class MaskedSentenceTile extends StatelessWidget {
                   ),
                   theme: theme,
                   onTap: onDetailTap,
-                  child: _buildMaskedText(theme, tokenize(sentence.text)),
+                  child: _buildMaskedText(
+                    theme,
+                    tokenize(sentence.text),
+                    savedSegments,
+                  ),
                 ),
               ),
             ),
@@ -152,7 +168,11 @@ class MaskedSentenceTile extends StatelessWidget {
       step == null ? child : GuideTarget(step: step, child: child);
 
   /// 构建遮盖文本
-  Widget _buildMaskedText(ThemeData theme, List<String> words) {
+  Widget _buildMaskedText(
+    ThemeData theme,
+    List<String> words,
+    Map<int, List<(int, int, bool)>> savedSegments,
+  ) {
     if (words.isEmpty) return const SizedBox.shrink();
 
     // 按显示模式渲染（listening 和 retelling 阶段统一逻辑）
@@ -167,7 +187,7 @@ class MaskedSentenceTile extends StatelessWidget {
     return Wrap(
       spacing: _wordSpacing,
       runSpacing: 2,
-      children: _buildWordWidgets(words, shouldMask, theme),
+      children: _buildWordWidgets(words, shouldMask, theme, savedSegments),
     );
   }
 
@@ -179,6 +199,7 @@ class MaskedSentenceTile extends StatelessWidget {
     List<String> words,
     bool Function(int index) shouldMask,
     ThemeData theme,
+    Map<int, List<(int, int, bool)>> savedSegments,
   ) {
     return [
       for (var i = 0; i < words.length; i++)
@@ -188,6 +209,7 @@ class MaskedSentenceTile extends StatelessWidget {
           isPrevMasked: i > 0 && shouldMask(i) && shouldMask(i - 1),
           isNextMasked:
               i < words.length - 1 && shouldMask(i) && shouldMask(i + 1),
+          savedSegments: savedSegments[i],
           theme: theme,
         ),
     ];
@@ -355,11 +377,18 @@ class _SentenceBookmarkHitArea extends StatelessWidget {
 /// 遮盖模式下，通过 [isPrevMasked]/[isNextMasked] 控制：
 /// - 连接侧圆角置零
 /// - 向后溢出绘制桥接色块，填充 Wrap spacing 间隙
+///
+/// [savedSegments] 非空且词可见时，按收藏命中子段渲染橙色点状下划线
+/// （如 "dog." 只给 "dog" 加下划线、句号不加）；遮盖时忽略。
 class _WordBlock extends StatelessWidget {
   final String text;
   final bool isMasked;
   final bool isPrevMasked;
   final bool isNextMasked;
+
+  /// 词内收藏命中子段（相对词首的 (起, 止, 是否命中) 列表；null = 无命中）
+  final List<(int, int, bool)>? savedSegments;
+
   final ThemeData theme;
 
   const _WordBlock({
@@ -368,6 +397,7 @@ class _WordBlock extends StatelessWidget {
     required this.theme,
     this.isPrevMasked = false,
     this.isNextMasked = false,
+    this.savedSegments,
   });
 
   @override
@@ -385,12 +415,7 @@ class _WordBlock extends StatelessWidget {
               ),
             )
           : null,
-      child: Text(
-        text,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: isMasked ? Colors.transparent : null,
-        ),
-      ),
+      child: _buildText(),
     );
 
     // 连续遮盖词：向右溢出绘制桥接色块填充 Wrap spacing
@@ -411,5 +436,38 @@ class _WordBlock extends StatelessWidget {
     }
 
     return child;
+  }
+
+  /// 词文本：无收藏命中或被遮盖时普通 [Text]；否则按子段渲染点状下划线。
+  ///
+  /// 下划线必须显式设 decorationColor（默认会跟随文字色）。
+  Widget _buildText() {
+    final baseStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: isMasked ? Colors.transparent : null,
+    );
+    final segments = savedSegments;
+    if (isMasked || segments == null) {
+      return Text(text, style: baseStyle);
+    }
+    final savedColor = AppTheme.savedTextMarkColor(theme.brightness);
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          for (final (start, end, saved) in segments)
+            TextSpan(
+              text: text.substring(start, end),
+              style: saved
+                  ? TextStyle(
+                      decoration: TextDecoration.underline,
+                      decorationStyle: TextDecorationStyle.dotted,
+                      decorationColor: savedColor,
+                      decorationThickness: 2,
+                    )
+                  : null,
+            ),
+        ],
+      ),
+    );
   }
 }
