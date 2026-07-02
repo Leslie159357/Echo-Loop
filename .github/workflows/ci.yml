@@ -85,13 +85,18 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      # Pods 缓存键必须同时绑定 pubspec.lock：ffmpeg_kit_flutter_new_min 的
+      # FFmpegKit xcframework 由 podspec prepare_command 下载到 pub-cache 包目录，
+      # 该命令只在 pod 首次安装时执行。若 pub-cache 因 pubspec.lock 变更被重建（Frameworks 丢失），
+      # 而 Pods 缓存仅按 Podfile.lock 命中，pod install 会跳过 prepare_command，
+      # 导致 framework 头文件缺失、iOS 构建失败。不用 restore-keys（部分命中会带回旧
+      # Manifest.lock，同样跳过 prepare_command）。
       - name: Cache CocoaPods
         if: matrix.platform == 'ios'
         uses: actions/cache@v4
         with:
           path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: pods-${{ runner.os }}-
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock', 'pubspec.lock') }}
 
       - name: Install CocoaPods
         if: matrix.platform == 'ios'
