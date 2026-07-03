@@ -7172,6 +7172,12 @@ abstract class AppLocalizations {
   /// **'Sign in to use the AI dictionary'**
   String get aiSignInRequired;
 
+  /// AI 词典查询词组超过单词数上限时的提示
+  ///
+  /// In en, this message translates to:
+  /// **'The phrase is too long. Select up to 8 words.'**
+  String get dictPhraseTooLong;
+
   /// No description provided for @ttsPlayUk.
   ///
   /// In en, this message translates to:

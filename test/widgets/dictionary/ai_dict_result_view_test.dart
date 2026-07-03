@@ -282,4 +282,11 @@ void main() {
     await tester.pumpWidget(_wrap(view(LookupError(Exception('x')))));
     expect(find.text('Retry'), findsOneWidget);
   });
+
+  testWidgets('词组过长显示提示且无重试按钮', (tester) async {
+    await tester.pumpWidget(_wrap(view(const LookupPhraseTooLong())));
+    expect(find.text('The phrase is too long. Select up to 8 words.'),
+        findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
 }

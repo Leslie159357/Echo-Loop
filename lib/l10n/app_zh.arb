@@ -1548,6 +1548,7 @@
   "dictCambridgeOpenInBrowser": "在浏览器中打开",
   "aiNoAnalysis": "暂无 AI 解析",
   "aiSignInRequired": "登录后可使用 AI 词典",
+  "dictPhraseTooLong": "词组过长，最多选择 8 个单词",
   "ttsPlayUk": "播放英式发音",
   "ttsPlayUs": "播放美式发音",
   "dictAiSynonyms": "近义词",

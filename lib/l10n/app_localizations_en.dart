@@ -4051,6 +4051,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiSignInRequired => 'Sign in to use the AI dictionary';
 
   @override
+  String get dictPhraseTooLong =>
+      'The phrase is too long. Select up to 8 words.';
+
+  @override
   String get ttsPlayUk => 'Play UK pronunciation';
 
   @override

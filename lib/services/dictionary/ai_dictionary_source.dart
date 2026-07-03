@@ -133,17 +133,34 @@ class AiDictionarySource implements DictionarySource {
     }
 
     // L3 API（null = 后端无 analysis，视作空条目）
-    final entry =
-        await apiClient.lookupDictionary(
-          word,
-          accessToken: accessToken,
-          targetLanguage: language,
-        ) ??
-        _emptyEntry(word);
+    final DictionaryEntry entry;
+    try {
+      entry =
+          await apiClient.lookupDictionary(
+            word,
+            accessToken: accessToken,
+            targetLanguage: language,
+          ) ??
+          _emptyEntry(word);
+    } on DioException catch (e) {
+      // 后端拒绝过长词组（400 + code=phrase_too_long）转专用异常，
+      // 不落缓存（异常在 upsert 之前抛出），由 controller 转「词组过长」态。
+      if (_isPhraseTooLong(e)) {
+        throw const DictionaryPhraseTooLongException();
+      }
+      rethrow;
+    }
 
     _memCache[key] = entry;
     await cacheDao.upsert(key, _cacheType, jsonEncode(entry.toJson()));
     return entry;
+  }
+
+  /// 判定是否为「词组过长」错误：后端返回 400 且响应体 code=phrase_too_long。
+  bool _isPhraseTooLong(DioException e) {
+    if (e.response?.statusCode != 400) return false;
+    final data = e.response?.data;
+    return data is Map && data['code'] == 'phrase_too_long';
   }
 
   /// 空条目（后端无结果时的占位，视图层据 isEmpty 显示空态）

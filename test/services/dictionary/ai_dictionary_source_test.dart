@@ -247,6 +247,68 @@ void main() {
     ).called(1);
   });
 
+  test('后端 400 + code=phrase_too_long → 抛 DictionaryPhraseTooLongException 且不落缓存', () async {
+    when(
+      () => dao.getByHash(any(), 'ai_dictionary'),
+    ).thenAnswer((_) async => null);
+    when(
+      () => api.lookupDictionary(
+        any(),
+        accessToken: any(named: 'accessToken'),
+        targetLanguage: any(named: 'targetLanguage'),
+        cancelToken: any(named: 'cancelToken'),
+      ),
+    ).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(path: '/api/v2/ai/dictionary'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/v2/ai/dictionary'),
+          statusCode: 400,
+          data: {'error': 'too long', 'code': 'phrase_too_long'},
+        ),
+      ),
+    );
+
+    await expectLater(
+      source.lookup(const DictionaryLookupRequest(
+        word: 'a b c d e f g h i',
+        accessToken: 'tok',
+        targetLanguage: 'zh-CN',
+      )),
+      throwsA(isA<DictionaryPhraseTooLongException>()),
+    );
+    // 异常在 upsert 之前抛出，不写缓存
+    verifyNever(() => dao.upsert(any(), 'ai_dictionary', any()));
+  });
+
+  test('其它 DioException（如 400 无 code）原样冒泡，不转词组过长', () async {
+    when(
+      () => dao.getByHash(any(), 'ai_dictionary'),
+    ).thenAnswer((_) async => null);
+    when(
+      () => api.lookupDictionary(
+        any(),
+        accessToken: any(named: 'accessToken'),
+        targetLanguage: any(named: 'targetLanguage'),
+        cancelToken: any(named: 'cancelToken'),
+      ),
+    ).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(path: '/api/v2/ai/dictionary'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/v2/ai/dictionary'),
+          statusCode: 400,
+          data: {'error': 'Missing word'},
+        ),
+      ),
+    );
+
+    await expectLater(
+      source.lookup(tokenReq),
+      throwsA(isA<DioException>()),
+    );
+  });
+
   test('API 返回 null → 空条目（isEmpty），仍为 AiDictResult', () async {
     when(
       () => dao.getByHash(any(), 'ai_dictionary'),

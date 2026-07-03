@@ -1982,6 +1982,10 @@
   "dictCambridgeOpenInBrowser": "Open in browser",
   "aiNoAnalysis": "No AI analysis available",
   "aiSignInRequired": "Sign in to use the AI dictionary",
+  "dictPhraseTooLong": "The phrase is too long. Select up to 8 words.",
+  "@dictPhraseTooLong": {
+    "description": "AI 词典查询词组超过单词数上限时的提示"
+  },
   "ttsPlayUk": "Play UK pronunciation",
   "ttsPlayUs": "Play US pronunciation",
   "dictAiSynonyms": "Synonyms",

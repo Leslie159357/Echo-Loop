@@ -44,6 +44,7 @@ class AiDictResultView extends StatelessWidget {
       return _AiEntryContent(entry: r.entry);
     }
     if (s is LookupAuthRequired) return _authRequired(context);
+    if (s is LookupPhraseTooLong) return _phraseTooLong(context);
     if (s is LookupError) return _error(context);
     if (s is LookupNotFound) return _empty(context);
     return const Padding(
@@ -83,6 +84,33 @@ class AiDictResultView extends StatelessWidget {
             ),
           ),
           TextButton(onPressed: onRetry, child: Text(l10n.aiRetry)),
+        ],
+      ),
+    );
+  }
+
+  /// 词组过长：静态提示，不显示重试按钮（重试无意义）
+  Widget _phraseTooLong(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              l10n.dictPhraseTooLong,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         ],
       ),
     );

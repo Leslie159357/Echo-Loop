@@ -19,6 +19,16 @@ class DictionaryAuthRequiredException implements Exception {
   String toString() => 'DictionaryAuthRequiredException';
 }
 
+/// 查询词组过长（后端返回 code=phrase_too_long）时抛出。
+///
+/// 由 controller 捕获并转为「词组过长」状态，区别于普通网络失败——
+/// 该错误重试无意义（词太长不会变短），视图不显示重试按钮。
+class DictionaryPhraseTooLongException implements Exception {
+  const DictionaryPhraseTooLongException();
+  @override
+  String toString() => 'DictionaryPhraseTooLongException';
+}
+
 /// 查词请求参数（聚合，避免接口参数膨胀）
 class DictionaryLookupRequest {
   /// 已清洗的查询词形

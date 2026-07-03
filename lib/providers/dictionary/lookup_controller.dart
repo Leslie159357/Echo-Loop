@@ -45,6 +45,11 @@ class LookupAuthRequired extends SourceLookupState {
   const LookupAuthRequired();
 }
 
+/// 查询词组过长（后端拒绝，重试无意义）
+class LookupPhraseTooLong extends SourceLookupState {
+  const LookupPhraseTooLong();
+}
+
 /// 查询失败（网络/服务端等）
 class LookupError extends SourceLookupState {
   final Object error;
@@ -212,6 +217,9 @@ class DictionaryLookupController extends _$DictionaryLookupController {
     } on DictionaryAuthRequiredException {
       if (_dropResult(id, seq)) return;
       _setState(id, const LookupAuthRequired());
+    } on DictionaryPhraseTooLongException {
+      if (_dropResult(id, seq)) return;
+      _setState(id, const LookupPhraseTooLong());
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return; // 主动取消不报错
       if (_dropResult(id, seq)) return;

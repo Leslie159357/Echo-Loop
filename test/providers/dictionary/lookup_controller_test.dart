@@ -157,6 +157,19 @@ void main() {
     );
   });
 
+  test('词组过长 → LookupPhraseTooLong', () async {
+    final a = ControllableSource('a');
+    final c = makeContainer({'a': a});
+    start(c, 'run');
+    await pump();
+    a.calls.single.completeError(const DictionaryPhraseTooLongException());
+    await pump();
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupPhraseTooLong>(),
+    );
+  });
+
   test('失败 → LookupError；retry 重新查询', () async {
     final a = ControllableSource('a');
     final c = makeContainer({'a': a});

@@ -3866,6 +3866,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiSignInRequired => '登录后可使用 AI 词典';
 
   @override
+  String get dictPhraseTooLong => '词组过长，最多选择 8 个单词';
+
+  @override
   String get ttsPlayUk => '播放英式发音';
 
   @override
