@@ -90,7 +90,7 @@ void main() {
 
       // 导出按钮应该可用（字幕默认选中）
       final exportButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Export'),
+        find.widgetWithText(FilledButton, 'Export Audio'),
       );
       expect(exportButton.onPressed, isNotNull);
     });
@@ -117,7 +117,7 @@ void main() {
 
       // 导出按钮应该 disabled
       final exportButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Export'),
+        find.widgetWithText(FilledButton, 'Export Audio'),
       );
       expect(exportButton.onPressed, isNull);
     });
@@ -177,7 +177,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 点击导出
-      await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Export Audio'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
@@ -209,7 +209,7 @@ void main() {
 
       // 导出按钮应 disabled（无字幕时默认都未选）
       var exportButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Export'),
+        find.widgetWithText(FilledButton, 'Export Audio'),
       );
       expect(exportButton.onPressed, isNull);
 
@@ -218,7 +218,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 现在可以导出
-      await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Export Audio'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
