@@ -46,7 +46,7 @@ void main() {
   });
 
   tearDown(() {
-    db.dispose();
+    service.close();
   });
 
   group('isAvailable', () {
@@ -79,7 +79,12 @@ void main() {
 
       final svc = DictionaryService.instance;
       svc.openDatabase(path);
-      addTearDown(svc.close);
+      addTearDown(() async {
+        svc.close();
+        if (await dir.exists()) {
+          await dir.delete(recursive: true);
+        }
+      });
 
       // 索引已补建
       final checker = sqlite3.open(path, mode: OpenMode.readOnly);
@@ -99,6 +104,7 @@ void main() {
       svc.warmUpDatabase();
       expect(svc.lookup('message')?.word, 'Message');
 
+      svc.close();
       await dir.delete(recursive: true);
     });
 

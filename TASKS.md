@@ -1,7 +1,17 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-04（AI 词典多词表达新 Prompt 展示对齐）
+> 最后更新：2026-07-04（修复 GitHub CI：dictionary_service_test 收尾 segfault）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：修复 GitHub CI：dictionary_service_test 收尾 segfault
+
+最新 GitHub Actions `CI` run `28699397917` 中 `analyze` 通过，但 `test` job 在 `flutter test` 汇总 `3620 tests passed, 11 skipped` 后仍以 1 退出。失败日志定位到 `test/services/dictionary_service_test.dart` 收尾阶段：
+
+- [x] **根因**：文件 SQLite 词典库测试在 `DictionaryService.instance.openDatabase(path)` 后，测试体内先删除临时目录，数据库连接依赖 `addTearDown(svc.close)` 之后才关闭；Ubuntu CI 并发全量测试下可能在 Flutter tester finalization 阶段触发 sqlite 原生子进程 segfault。
+- [x] **修复**：文件库测试改为先 `svc.close()` 再删除临时目录，并保留 `addTearDown` 兜底清理；注入内存库的测试统一通过 `service.close()` 释放，避免测试服务与原始 `Database` 生命周期分叉。
+- [x] **验证**：`flutter analyze test/services/dictionary_service_test.dart` 0 问题；`flutter test test/services/dictionary_service_test.dart` 全过（27 例）。本地额外启动过全量 `flutter test`，跑到 2362+ 例未复现原 CI 的 dictionary service segfault，因耗时过长手动中止，停止产生的 SIGINT 收尾错误不计入本次验证结果。
+
+  **完成时间**: 2026-07-04
 
 ## 已完成：AI 词典多词表达新 Prompt 展示对齐
 
