@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/services/asr/asr_model_manager.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
@@ -89,10 +90,12 @@ class _FakeOfflineAsrSettingsNotifier extends OfflineAsrSettingsNotifier {
 Widget _wrap({
   required OfflineAsrSettingsState asr,
   required _FakeService service,
+  LearningSettings learning = const LearningSettings(),
   required Widget child,
 }) {
   return ProviderScope(
     overrides: [
+      initialLearningSettingsProvider.overrideWithValue(learning),
       recommendedAsrModelProvider.overrideWith((ref) => _stubModel),
       offlineAsrSettingsProvider.overrideWith(
         () => _FakeOfflineAsrSettingsNotifier(asr),
@@ -181,7 +184,7 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     });
 
-    testWidgets('ASR 关闭时仅检查 mic — speech 缺失也放行', (tester) async {
+    testWidgets('旧 ASR enabled=false 兼容态仍按基础能力开启处理', (tester) async {
       final fake = _FakeService(
         current: const SpeechPracticePermissionState(
           microphone: _granted,
@@ -194,6 +197,36 @@ void main() {
         _wrap(
           asr: _settings(enabled: false),
           service: fake,
+          child: _Probe(onResult: (r) => result = r),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Open Settings'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      expect(result, isFalse);
+    });
+
+    testWidgets('评分全部关闭时仅检查 mic — speech 缺失也放行', (tester) async {
+      final fake = _FakeService(
+        current: const SpeechPracticePermissionState(
+          microphone: _granted,
+          speech: _denied,
+        ),
+      );
+
+      bool? result;
+      await tester.pumpWidget(
+        _wrap(
+          asr: _settings(),
+          service: fake,
+          learning: const LearningSettings(
+            listenAndRepeatRatingEnabled: false,
+            retellRatingEnabled: false,
+          ),
           child: _Probe(onResult: (r) => result = r),
         ),
       );

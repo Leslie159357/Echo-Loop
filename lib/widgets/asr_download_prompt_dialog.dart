@@ -11,19 +11,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/enums.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
 import '../services/asr/asr_model_manager.dart';
 import '../services/download/download_failure.dart';
 import '../utils/download_failure_message.dart';
 
 /// 判断某个学习子阶段是否会进入依赖本地 ASR 的录音流程。
-bool requiresAsrBeforeEnteringSubStage(SubStageType subStage) {
+bool requiresAsrBeforeEnteringSubStage(
+  SubStageType subStage, {
+  bool listenAndRepeatRatingEnabled = true,
+  bool retellRatingEnabled = true,
+}) {
   return switch (subStage) {
-    SubStageType.listenAndRepeat => true,
-    SubStageType.retell => true,
-    SubStageType.reviewDifficultPractice => true,
-    SubStageType.reviewRetellParagraph => true,
-    SubStageType.reviewRetellSummary => true,
+    SubStageType.listenAndRepeat => listenAndRepeatRatingEnabled,
+    SubStageType.reviewDifficultPractice => listenAndRepeatRatingEnabled,
+    SubStageType.retell => retellRatingEnabled,
+    SubStageType.reviewRetellParagraph => retellRatingEnabled,
+    SubStageType.reviewRetellSummary => retellRatingEnabled,
     _ => false,
   };
 }
@@ -39,8 +44,8 @@ Future<bool> ensureAsrReadyBeforeSpeechPractice(
 ) async {
   final state = ref.read(offlineAsrSettingsProvider);
 
-  // 非 offline 后端或未启用 → 不需要检查模型
-  if (!state.enabled || state.backend != AsrBackend.offline) {
+  // 非 offline 后端 → 不需要检查 Whisper 模型。
+  if (state.backend != AsrBackend.offline) {
     return true;
   }
 
@@ -67,7 +72,12 @@ Future<bool> ensureAsrReadyForSubStage(
   WidgetRef ref,
   SubStageType subStage,
 ) async {
-  if (!requiresAsrBeforeEnteringSubStage(subStage)) {
+  final settings = ref.read(learningSettingsProvider);
+  if (!requiresAsrBeforeEnteringSubStage(
+    subStage,
+    listenAndRepeatRatingEnabled: settings.listenAndRepeatRatingEnabled,
+    retellRatingEnabled: settings.retellRatingEnabled,
+  )) {
     return true;
   }
   return ensureAsrReadyBeforeSpeechPractice(context, ref);
@@ -76,7 +86,7 @@ Future<bool> ensureAsrReadyForSubStage(
 /// 后台加载引擎（fire-and-forget，不阻塞 UI）。
 Future<void> _ensureEngineLoaded(WidgetRef ref) async {
   final state = ref.read(offlineAsrSettingsProvider);
-  if (state.enabled &&
+  if (state.backend == AsrBackend.offline &&
       state.downloadStatus == AsrModelDownloadStatus.downloaded &&
       !state.engineReady) {
     await ref.read(offlineAsrSettingsProvider.notifier).loadEngine();
@@ -157,7 +167,7 @@ class _EnableDownloadPromptDialog extends ConsumerWidget {
       actions: [
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: Text(l10n.downloadAndEnable),
+          child: Text(l10n.downloadNow),
         ),
       ],
     );

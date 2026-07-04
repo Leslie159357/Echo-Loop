@@ -20,11 +20,10 @@ import '../services/download/download_failure.dart';
 import '../utils/app_data_dir.dart';
 import 'asr_engine_provider.dart';
 
-const _enabledKey = 'offline_asr_enabled';
-
 /// 进程内是否已检查过 ASR 崩溃面包屑（只检查一次）。
 bool _asrCrashMarkerChecked = false;
 const _backendKey = 'offline_asr_backend';
+const _selectedModelKey = 'offline_asr_selected_model_id';
 String _downloadCompletedKey(String modelId) =>
     'offline_asr_downloaded_$modelId';
 
@@ -53,9 +52,46 @@ enum AsrBackend {
   offline,
 }
 
+/// 单个 ASR 模型的下载与校验状态。
+class AsrModelState {
+  final AsrModelDownloadStatus downloadStatus;
+  final double downloadProgress;
+  final int localSizeBytes;
+
+  /// 失败时的归类原因（供 UI 显本地化文案）；非失败态为 null。
+  final DownloadFailureKind? downloadError;
+
+  const AsrModelState({
+    this.downloadStatus = AsrModelDownloadStatus.notDownloaded,
+    this.downloadProgress = 0,
+    this.localSizeBytes = 0,
+    this.downloadError,
+  });
+
+  bool get isReady => downloadStatus == AsrModelDownloadStatus.downloaded;
+
+  bool get isDownloading =>
+      downloadStatus == AsrModelDownloadStatus.downloading;
+
+  AsrModelState copyWith({
+    AsrModelDownloadStatus? downloadStatus,
+    double? downloadProgress,
+    int? localSizeBytes,
+    DownloadFailureKind? downloadError,
+    bool clearError = false,
+  }) {
+    return AsrModelState(
+      downloadStatus: downloadStatus ?? this.downloadStatus,
+      downloadProgress: downloadProgress ?? this.downloadProgress,
+      localSizeBytes: localSizeBytes ?? this.localSizeBytes,
+      downloadError: clearError ? null : (downloadError ?? this.downloadError),
+    );
+  }
+}
+
 /// 离线 ASR 功能的完整 UI 状态。
 class OfflineAsrSettingsState {
-  /// 功能开关：true=开启, false=关闭。默认开启。
+  /// 兼容旧调用的功能开关。语音识别现在是基础能力，业务态恒为 true。
   final bool enabled;
 
   /// 当前选择的 ASR 后端。
@@ -64,44 +100,90 @@ class OfflineAsrSettingsState {
   /// Android 固定 [AsrBackend.offline]。
   final AsrBackend backend;
 
-  /// 模型下载状态（仅 [AsrBackend.offline] 时有意义）。
-  final AsrModelDownloadStatus downloadStatus;
-
-  /// 下载进度 0.0~1.0。
-  final double downloadProgress;
-
-  /// 模型本地占用空间（字节）。
-  final int localSizeBytes;
-
-  /// 失败时的归类原因（供 UI 显本地化文案）；非失败态为 null。
-  ///
-  /// 不再存原始异常字符串——用户只需知道「空间不足/网络/校验失败/通用失败」，
-  /// 原始异常由 provider 打日志（诊断用），不直接展示。
-  final DownloadFailureKind? downloadError;
-
   /// 引擎是否已就绪（模型已加载到内存）。
   final bool engineReady;
 
   /// 推荐的模型信息。
   final AsrModelInfo recommendedModel;
 
-  const OfflineAsrSettingsState({
+  /// 当前选中的 Whisper 模型。
+  final AsrModelInfo selectedModel;
+
+  /// 各 Whisper 模型的下载状态（key 为 model id）。
+  final Map<String, AsrModelState> modelStates;
+
+  OfflineAsrSettingsState({
     this.enabled = true,
     this.backend = AsrBackend.platform,
-    this.downloadStatus = AsrModelDownloadStatus.notDownloaded,
-    this.downloadProgress = 0,
-    this.localSizeBytes = 0,
-    this.downloadError,
     this.engineReady = false,
     required this.recommendedModel,
-  });
+    AsrModelInfo? selectedModel,
+    Map<String, AsrModelState> modelStates = const {},
+    AsrModelDownloadStatus? downloadStatus,
+    double? downloadProgress,
+    int? localSizeBytes,
+    DownloadFailureKind? downloadError,
+  }) : selectedModel = selectedModel ?? recommendedModel,
+       modelStates = _withLegacySelectedModelState(
+         modelStates,
+         selectedModel ?? recommendedModel,
+         downloadStatus,
+         downloadProgress,
+         localSizeBytes,
+         downloadError,
+       );
 
-  /// 是否可以删除模型（关闭 + 已下载）。
-  bool get canDelete => !enabled && localSizeBytes > 0;
+  static Map<String, AsrModelState> _withLegacySelectedModelState(
+    Map<String, AsrModelState> states,
+    AsrModelInfo selectedModel,
+    AsrModelDownloadStatus? downloadStatus,
+    double? downloadProgress,
+    int? localSizeBytes,
+    DownloadFailureKind? downloadError,
+  ) {
+    if (downloadStatus == null &&
+        downloadProgress == null &&
+        localSizeBytes == null &&
+        downloadError == null) {
+      return states;
+    }
+    final current = states[selectedModel.id] ?? const AsrModelState();
+    return {
+      ...states,
+      selectedModel.id: current.copyWith(
+        downloadStatus: downloadStatus,
+        downloadProgress: downloadProgress,
+        localSizeBytes: localSizeBytes,
+        downloadError: downloadError,
+      ),
+    };
+  }
+
+  AsrModelState modelStateOf(String modelId) =>
+      modelStates[modelId] ?? const AsrModelState();
+
+  AsrModelState get selectedModelState => modelStateOf(selectedModel.id);
+
+  /// 模型下载状态（当前选中模型）。
+  AsrModelDownloadStatus get downloadStatus =>
+      selectedModelState.downloadStatus;
+
+  /// 下载进度 0.0~1.0（当前选中模型）。
+  double get downloadProgress => selectedModelState.downloadProgress;
+
+  /// 当前选中模型本地占用空间（字节）。
+  int get localSizeBytes => selectedModelState.localSizeBytes;
+
+  /// 当前选中模型下载错误。
+  DownloadFailureKind? get downloadError => selectedModelState.downloadError;
+
+  int get totalDownloadedModelBytes => modelStates.values.fold<int>(
+    0,
+    (sum, s) => s.isReady ? sum + s.localSizeBytes : sum,
+  );
 
   /// 是否正在下载。
-  bool get isDownloading =>
-      downloadStatus == AsrModelDownloadStatus.downloading;
+  bool get isDownloading => selectedModelState.isDownloading;
 
   /// 离线 ASR 是否完全就绪（模型已下载 + 引擎已加载）。
   bool get isOfflineReady =>
@@ -119,17 +201,38 @@ class OfflineAsrSettingsState {
     DownloadFailureKind? downloadError,
     bool clearError = false,
     bool? engineReady,
+    AsrModelInfo? selectedModel,
+    Map<String, AsrModelState>? modelStates,
   }) {
+    final nextSelected = selectedModel ?? this.selectedModel;
+    final currentStates = modelStates ?? this.modelStates;
+    final nextStates = _withLegacySelectedModelState(
+      currentStates,
+      nextSelected,
+      downloadStatus,
+      downloadProgress,
+      localSizeBytes,
+      clearError ? null : downloadError,
+    );
     return OfflineAsrSettingsState(
-      enabled: enabled ?? this.enabled,
+      enabled: true,
       backend: backend ?? this.backend,
-      downloadStatus: downloadStatus ?? this.downloadStatus,
-      downloadProgress: downloadProgress ?? this.downloadProgress,
-      localSizeBytes: localSizeBytes ?? this.localSizeBytes,
-      downloadError: clearError ? null : (downloadError ?? this.downloadError),
       engineReady: engineReady ?? this.engineReady,
       recommendedModel: recommendedModel,
+      selectedModel: nextSelected,
+      modelStates: clearError
+          ? {
+              ...nextStates,
+              nextSelected.id:
+                  (nextStates[nextSelected.id] ?? const AsrModelState())
+                      .copyWith(clearError: true),
+            }
+          : nextStates,
     );
+  }
+
+  OfflineAsrSettingsState withModelState(String modelId, AsrModelState s) {
+    return copyWith(modelStates: {...modelStates, modelId: s});
   }
 }
 
@@ -168,26 +271,23 @@ final recommendedAsrModelProvider = Provider<AsrModelInfo>(
 
 /// 离线 ASR 设置 Notifier。
 class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
-  CancelToken? _downloadCancelToken;
+  final Map<String, CancelToken> _downloadCancelTokens = {};
 
   @override
   OfflineAsrSettingsState build() {
     ref.onDispose(() {
-      _downloadCancelToken?.cancel();
+      for (final token in _downloadCancelTokens.values) {
+        token.cancel();
+      }
     });
 
     return ref.read(initialOfflineAsrSettingsStateProvider);
   }
 
-  /// 开启功能。
-  ///
-  /// platform 后端：直接标记 enabled。
-  /// offline 后端：模型已下载 → 直接初始化引擎；未下载 → 自动触发下载。
+  /// 兼容旧调用：语音识别基础能力常开；offline 后端下确保当前模型就绪。
   Future<void> enable() async {
-    // platform 后端无需下载，直接开启。
     if (state.backend == AsrBackend.platform) {
       state = state.copyWith(enabled: true, clearError: true);
-      await _persistEnabled(true);
       ref.read(analyticsServiceProvider).track(Events.asrSettingChanged, {
         EventParams.asrEnabled: true,
         EventParams.asrBackend: AsrBackend.platform.name,
@@ -195,31 +295,33 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
       return;
     }
 
-    // 已在下载中，不重复触发。
     if (state.isDownloading) return;
 
-    final modelId = state.recommendedModel.id;
+    final modelId = state.selectedModel.id;
     final modelManager = ref.read(asrModelManagerProvider);
 
     if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
       final localSize = await modelManager.modelLocalSize(modelId);
-      state = state.copyWith(
-        enabled: true,
-        downloadStatus: AsrModelDownloadStatus.downloaded,
-        localSizeBytes: localSize,
-        clearError: true,
-      );
-      await _persistEnabled(true);
+      state = state
+          .withModelState(
+            modelId,
+            state
+                .modelStateOf(modelId)
+                .copyWith(
+                  downloadStatus: AsrModelDownloadStatus.downloaded,
+                  localSizeBytes: localSize,
+                  clearError: true,
+                ),
+          )
+          .copyWith(enabled: true);
       await _persistDownloadCompleted(modelId, true);
+      await _initializeEngine(modelId);
       ref.read(analyticsServiceProvider).track(Events.asrSettingChanged, {
         EventParams.asrEnabled: true,
         EventParams.asrBackend: AsrBackend.offline.name,
       });
-      // 引擎不在此处加载，进入录音页面时按需加载。
     } else {
-      // 先标记 enabled，下载完成后引擎自动初始化。
       state = state.copyWith(enabled: true, clearError: true);
-      await _persistEnabled(true);
       ref.read(analyticsServiceProvider).track(Events.asrSettingChanged, {
         EventParams.asrEnabled: true,
         EventParams.asrBackend: AsrBackend.offline.name,
@@ -228,42 +330,22 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     }
   }
 
-  /// 关闭功能（不删除模型文件）。
+  /// 兼容旧调用：不再关闭语音识别基础能力，仅取消下载并卸载离线引擎。
   Future<void> disable() async {
-    _downloadCancelToken?.cancel();
-    _downloadCancelToken = null;
+    for (final token in _downloadCancelTokens.values) {
+      token.cancel();
+    }
+    _downloadCancelTokens.clear();
     await unloadEngine();
-    final modelManager = ref.read(asrModelManagerProvider);
-    final localSize = await modelManager.modelLocalSize(
-      state.recommendedModel.id,
-    );
-    final fullyDownloaded =
-        state.downloadStatus == AsrModelDownloadStatus.downloaded;
-    state = state.copyWith(
-      enabled: false,
-      engineReady: false,
-      downloadStatus: _deriveStoredDownloadStatus(
-        fullyDownloaded: fullyDownloaded,
-        localSizeBytes: localSize,
-      ),
-      downloadProgress: 0,
-      localSizeBytes: localSize,
-      clearError: true,
-    );
-    await _persistEnabled(false);
-    await _persistDownloadCompleted(state.recommendedModel.id, fullyDownloaded);
-    ref.read(analyticsServiceProvider).track(Events.asrSettingChanged, {
-      EventParams.asrEnabled: false,
-      EventParams.asrBackend: state.backend.name,
-    });
+    state = state.copyWith(enabled: true, engineReady: false, clearError: true);
   }
 
-  /// 按需加载引擎（进入录音页面时调用，不阻塞 UI）。
+  /// 按需加载引擎（进入录音页面时调用）。
   Future<void> loadEngine() async {
     if (state.engineReady) return;
-    if (!state.enabled) return;
+    if (state.backend != AsrBackend.offline) return;
     if (state.downloadStatus != AsrModelDownloadStatus.downloaded) return;
-    await _initializeEngine(state.recommendedModel.id);
+    await _initializeEngine(state.selectedModel.id);
   }
 
   /// 卸载引擎释放内存（退出录音页面时调用）。
@@ -274,47 +356,92 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     state = state.copyWith(engineReady: false);
   }
 
-  /// 关闭功能并删除模型。
+  /// 兼容旧调用：当前模型不再通过关闭流程删除。
   Future<void> disableAndDelete() async {
     await disable();
-    await deleteModel();
   }
 
-  /// 删除本地模型（仅关闭时可调用）。
-  Future<void> deleteModel() async {
-    if (state.enabled) return;
+  /// 选择一个 Whisper 模型。离线后端下未下载则立即下载，已下载则初始化。
+  Future<void> selectModel(AsrModelInfo model) async {
+    if (state.selectedModel.id == model.id) {
+      if (state.backend == AsrBackend.offline && !state.isDownloading) {
+        if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
+          await _initializeEngine(model.id);
+        } else {
+          await _downloadAndInitialize(model.id);
+        }
+      }
+      return;
+    }
+
+    await unloadEngine();
+    state = state.copyWith(selectedModel: model, engineReady: false);
+    await _persistSelectedModel(model.id);
+
+    if (state.backend == AsrBackend.offline) {
+      if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
+        await _initializeEngine(model.id);
+      } else if (!state.isDownloading) {
+        await _downloadAndInitialize(model.id);
+      }
+    }
+  }
+
+  /// 删除本地模型。Echo Loop AI 当前使用的模型不可删除；Apple Speech 下可删任意模型。
+  Future<void> deleteModel([String? modelId]) async {
+    final targetId = modelId ?? state.selectedModel.id;
+    if (state.backend == AsrBackend.offline &&
+        targetId == state.selectedModel.id) {
+      return;
+    }
+    _downloadCancelTokens.remove(targetId)?.cancel();
     final modelManager = ref.read(asrModelManagerProvider);
-    await modelManager.deleteModel(state.recommendedModel.id);
-    state = state.copyWith(
-      downloadStatus: AsrModelDownloadStatus.notDownloaded,
-      localSizeBytes: 0,
+    await modelManager.deleteModel(targetId);
+    state = state.withModelState(targetId, const AsrModelState());
+    await _persistDownloadCompleted(targetId, false);
+  }
+
+  /// 删除所有已下载且当前未使用的 Whisper 模型。
+  Future<void> deleteDownloadedModels({required bool includeSelected}) async {
+    final downloaded = availableModels.where((m) {
+      if (!includeSelected && m.id == state.selectedModel.id) return false;
+      return state.modelStateOf(m.id).isReady;
+    }).toList();
+    for (final model in downloaded) {
+      await deleteModel(model.id);
+    }
+  }
+
+  /// 重试下载当前或指定模型。
+  Future<void> retryDownload([String? modelId]) async {
+    final targetId = modelId ?? state.selectedModel.id;
+    state = state.withModelState(
+      targetId,
+      state.modelStateOf(targetId).copyWith(clearError: true),
     );
-    await _persistDownloadCompleted(state.recommendedModel.id, false);
+    await _downloadAndInitialize(targetId);
   }
 
-  /// 重试下载。
-  Future<void> retryDownload() async {
-    state = state.copyWith(clearError: true);
-    await _downloadAndInitialize(state.recommendedModel.id);
-  }
-
-  /// 取消正在进行的下载。
-  Future<void> cancelDownload() async {
-    _downloadCancelToken?.cancel();
-    _downloadCancelToken = null;
+  /// 取消当前或指定模型正在进行的下载。
+  Future<void> cancelDownload([String? modelId]) async {
+    final targetId = modelId ?? state.selectedModel.id;
+    _downloadCancelTokens.remove(targetId)?.cancel();
     final modelManager = ref.read(asrModelManagerProvider);
-    final localSize = await modelManager.modelLocalSize(
-      state.recommendedModel.id,
+    final localSize = await modelManager.modelLocalSize(targetId);
+    state = state.withModelState(
+      targetId,
+      state
+          .modelStateOf(targetId)
+          .copyWith(
+            downloadStatus: _deriveStoredDownloadStatus(
+              fullyDownloaded: false,
+              localSizeBytes: localSize,
+            ),
+            downloadProgress: 0,
+            localSizeBytes: localSize,
+          ),
     );
-    state = state.copyWith(
-      downloadStatus: _deriveStoredDownloadStatus(
-        fullyDownloaded: false,
-        localSizeBytes: localSize,
-      ),
-      downloadProgress: 0,
-      localSizeBytes: localSize,
-    );
-    await _persistDownloadCompleted(state.recommendedModel.id, false);
+    await _persistDownloadCompleted(targetId, false);
   }
 
   // ---------------------------------------------------------------------------
@@ -323,57 +450,81 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
 
   Future<void> _downloadAndInitialize(String modelId) async {
     await _persistDownloadCompleted(modelId, false);
-    state = state.copyWith(
-      downloadStatus: AsrModelDownloadStatus.downloading,
-      downloadProgress: 0,
+    state = state.withModelState(
+      modelId,
+      state
+          .modelStateOf(modelId)
+          .copyWith(
+            downloadStatus: AsrModelDownloadStatus.downloading,
+            downloadProgress: 0,
+            clearError: true,
+          ),
     );
 
-    _downloadCancelToken = CancelToken();
+    final cancelToken = CancelToken();
+    _downloadCancelTokens[modelId] = cancelToken;
     final modelManager = ref.read(asrModelManagerProvider);
 
     try {
       await modelManager.downloadModel(
         modelId,
-        cancelToken: _downloadCancelToken,
+        cancelToken: cancelToken,
         onProgress: (progress) {
-          if (_downloadCancelToken?.isCancelled ?? true) return;
-          state = state.copyWith(downloadProgress: progress.progress);
+          if (cancelToken.isCancelled) return;
+          state = state.withModelState(
+            modelId,
+            state
+                .modelStateOf(modelId)
+                .copyWith(downloadProgress: progress.progress),
+          );
         },
       );
 
       // 下载 VAD 模型（静默，不影响主进度条）。
       if (!await modelManager.isModelDownloaded(vadModelId)) {
-        await modelManager.downloadModel(
-          vadModelId,
-          cancelToken: _downloadCancelToken,
-        );
+        await modelManager.downloadModel(vadModelId, cancelToken: cancelToken);
       }
 
-      _downloadCancelToken = null;
+      _downloadCancelTokens.remove(modelId);
       final localSize = await modelManager.modelLocalSize(modelId);
 
-      state = state.copyWith(
-        downloadStatus: AsrModelDownloadStatus.downloaded,
-        downloadProgress: 1.0,
-        localSizeBytes: localSize,
+      state = state.withModelState(
+        modelId,
+        state
+            .modelStateOf(modelId)
+            .copyWith(
+              downloadStatus: AsrModelDownloadStatus.downloaded,
+              downloadProgress: 1.0,
+              localSizeBytes: localSize,
+            ),
       );
       await _persistDownloadCompleted(modelId, true);
 
       await _initializeEngine(modelId);
     } catch (e) {
-      _downloadCancelToken = null;
+      _downloadCancelTokens.remove(modelId);
       // 取消不是失败：恢复未下载态，不显错误。
       if (e is DioException && e.type == DioExceptionType.cancel) {
-        state = state.copyWith(
-          downloadStatus: AsrModelDownloadStatus.notDownloaded,
-          downloadProgress: 0,
+        state = state.withModelState(
+          modelId,
+          state
+              .modelStateOf(modelId)
+              .copyWith(
+                downloadStatus: AsrModelDownloadStatus.notDownloaded,
+                downloadProgress: 0,
+              ),
         );
       } else {
         // 原始异常打日志（诊断用），向用户只展示归类后的友好文案。
         AppLogger.log('OfflineAsr', '✗ download failed ($modelId): $e');
-        state = state.copyWith(
-          downloadStatus: AsrModelDownloadStatus.failed,
-          downloadError: classifyDownloadFailure(e),
+        state = state.withModelState(
+          modelId,
+          state
+              .modelStateOf(modelId)
+              .copyWith(
+                downloadStatus: AsrModelDownloadStatus.failed,
+                downloadError: classifyDownloadFailure(e),
+              ),
         );
       }
       await _persistDownloadCompleted(modelId, false);
@@ -402,10 +553,12 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
   }
 
   Future<void> _initializeEngine(String modelId) async {
+    if (modelId != state.selectedModel.id) return;
     await _reportPreviousAsrCrashIfAny();
     final engine = ref.read(offlineAsrEngineProvider);
     final modelManager = ref.read(asrModelManagerProvider);
     final modelDir = await modelManager.modelDir(modelId);
+    final modelInfo = _modelInfoById(modelId);
 
     // VAD 模型路径（可选，未下载时跳过静音裁剪）。
     String? vadPath;
@@ -417,7 +570,7 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     try {
       await engine.initialize(
         AsrModelConfig(
-          model: state.recommendedModel,
+          model: modelInfo,
           modelDir: modelDir,
           numThreads: AsrModelConfig.recommendedThreads(),
           vadModelPath: vadPath,
@@ -427,23 +580,36 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     } catch (e) {
       // 引擎初始化失败不是下载失败，无确定归类 → 通用文案；原始异常打日志。
       AppLogger.log('OfflineAsr', '✗ engine init failed ($modelId): $e');
-      state = state.copyWith(
-        engineReady: false,
-        downloadStatus: AsrModelDownloadStatus.failed,
-        downloadError: DownloadFailureKind.unknown,
-      );
+      state = state
+          .withModelState(
+            modelId,
+            state
+                .modelStateOf(modelId)
+                .copyWith(
+                  downloadStatus: AsrModelDownloadStatus.failed,
+                  downloadError: DownloadFailureKind.unknown,
+                ),
+          )
+          .copyWith(engineReady: false);
       await _persistDownloadCompleted(modelId, false);
     }
-  }
-
-  Future<void> _persistEnabled(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_enabledKey, value);
   }
 
   Future<void> _persistBackend(AsrBackend value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_backendKey, value.name);
+  }
+
+  Future<void> _persistSelectedModel(String modelId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_selectedModelKey, modelId);
+  }
+
+  AsrModelInfo _modelInfoById(String modelId) {
+    return availableModels.firstWhere(
+      (m) => m.id == modelId,
+      orElse: () => state.recommendedModel,
+    );
   }
 
   /// 切换 ASR 后端。
@@ -453,16 +619,26 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
   Future<void> setBackend(AsrBackend backend) async {
     if (state.backend == backend) return;
 
+    if (backend == AsrBackend.platform) {
+      await unloadEngine();
+    }
+
     // 切离 offline 时取消正在进行的下载
     if (state.backend == AsrBackend.offline && state.isDownloading) {
-      _downloadCancelToken?.cancel();
-      _downloadCancelToken = null;
-      state = state.copyWith(
-        backend: backend,
-        downloadStatus: AsrModelDownloadStatus.notDownloaded,
-        downloadProgress: 0,
-        clearError: true,
-      );
+      final modelId = state.selectedModel.id;
+      _downloadCancelTokens.remove(modelId)?.cancel();
+      state = state
+          .withModelState(
+            modelId,
+            state
+                .modelStateOf(modelId)
+                .copyWith(
+                  downloadStatus: AsrModelDownloadStatus.notDownloaded,
+                  downloadProgress: 0,
+                  clearError: true,
+                ),
+          )
+          .copyWith(backend: backend);
     } else {
       state = state.copyWith(backend: backend);
     }
@@ -472,10 +648,10 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
       EventParams.asrBackend: backend.name,
     });
 
-    final modelId = state.recommendedModel.id;
+    final modelId = state.selectedModel.id;
 
-    // 切到 offline + 已启用 → 确保模型就绪
-    if (backend == AsrBackend.offline && state.enabled) {
+    // 切到 offline → 确保当前模型就绪。
+    if (backend == AsrBackend.offline) {
       if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
         await _initializeEngine(modelId);
       } else if (state.downloadStatus != AsrModelDownloadStatus.downloading) {
@@ -500,25 +676,39 @@ Future<OfflineAsrSettingsState> loadInitialOfflineAsrSettingsState({
   required AsrModelInfo recommendedModel,
   required AsrBackend defaultBackend,
 }) async {
-  final enabled = prefs.getBool(_enabledKey) ?? true;
   final backendName = prefs.getString(_backendKey);
   final backend = backendName == AsrBackend.offline.name
       ? AsrBackend.offline
       : backendName == AsrBackend.platform.name
       ? AsrBackend.platform
       : defaultBackend;
-  final persistedDownloaded =
-      prefs.getBool(_downloadCompletedKey(recommendedModel.id)) ?? false;
-  final localSize = await modelManager.modelLocalSize(recommendedModel.id);
+  final selectedModelId = prefs.getString(_selectedModelKey);
+  final selectedModel = availableModels.firstWhere(
+    (m) => m.id == selectedModelId,
+    orElse: () => recommendedModel,
+  );
+
+  final modelStates = <String, AsrModelState>{};
+  for (final model in availableModels) {
+    final persistedDownloaded =
+        prefs.getBool(_downloadCompletedKey(model.id)) ?? false;
+    final localSize = await modelManager.modelLocalSize(model.id);
+    final fullyDownloaded =
+        persistedDownloaded && await modelManager.isModelDownloaded(model.id);
+    modelStates[model.id] = AsrModelState(
+      downloadStatus: _deriveStoredDownloadStatus(
+        fullyDownloaded: fullyDownloaded,
+        localSizeBytes: localSize,
+      ),
+      localSizeBytes: localSize,
+    );
+  }
 
   return OfflineAsrSettingsState(
-    enabled: enabled,
+    enabled: true,
     backend: backend,
-    downloadStatus: _deriveStoredDownloadStatus(
-      fullyDownloaded: persistedDownloaded,
-      localSizeBytes: localSize,
-    ),
-    localSizeBytes: localSize,
     recommendedModel: recommendedModel,
+    selectedModel: selectedModel,
+    modelStates: modelStates,
   );
 }

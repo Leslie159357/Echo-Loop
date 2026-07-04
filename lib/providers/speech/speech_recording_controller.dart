@@ -31,6 +31,7 @@ import '../../services/speech_completion_detector.dart';
 import '../../services/speech_practice_matcher.dart';
 import '../../services/speech_practice_platform.dart';
 import '../../services/study_event_recorder.dart';
+import '../learning_settings_provider.dart';
 import '../offline_asr_settings_provider.dart';
 
 /// 等待开口最大时长
@@ -348,10 +349,13 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
     try {
       final asrSettings = ref.read(offlineAsrSettingsProvider);
+      final ratingEnabled = ref
+          .read(learningSettingsProvider)
+          .listenAndRepeatRatingEnabled;
       await _recordingService.startRecording(
         promptId: promptId,
         recognitionEnabled:
-            asrSettings.enabled && asrSettings.backend == AsrBackend.platform,
+            ratingEnabled && asrSettings.backend == AsrBackend.platform,
       );
       _eventSub?.cancel();
       _eventSub = _recordingService.events.listen(_handleRecordingEvent);
@@ -470,7 +474,9 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     required String referenceText,
   }) async {
     final backend = ref.read(speechPracticeBackendProvider);
-    final asrEnabled = ref.read(offlineAsrSettingsProvider).enabled;
+    final ratingEnabled = ref
+        .read(learningSettingsProvider)
+        .listenAndRepeatRatingEnabled;
     _cancelAllTimers();
     await _eventSub?.cancel();
     _eventSub = null;
@@ -509,16 +515,15 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       return;
     }
 
-    // ── ASR 关闭：直接存录音，不等转录 ──
-    if (!asrEnabled) {
-      AppLogger.log('SpeechRec', '● ASR 关闭，保留录音，跳过转录');
+    // ── 跟读评级关闭：直接存录音，不等转录 ──
+    if (!ratingEnabled) {
+      AppLogger.log('SpeechRec', '● 跟读评级关闭，保留录音，跳过转录与评分');
       await _recordingService.shutdown();
       state = state.copyWith(
         phase: SpeechRecordingPhase.idle,
         currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
           filePath: filePath,
           status: SpeechPracticeAttemptStatus.unavailable,
-          score: 0,
         ),
         clearLiveTranscript: true,
         hasDetectedSpeech: false,
@@ -536,7 +541,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     );
     AppLogger.log(
       'SpeechRec',
-      '│ transcript filePath=${filePath} '
+      '│ transcript filePath=$filePath '
           'finalLen=${result.finalTranscript?.trim().length ?? 0} '
           'errorCode=${result.errorCode ?? '(null)'}',
     );

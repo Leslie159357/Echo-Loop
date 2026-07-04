@@ -7,7 +7,6 @@ import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/services/asr/asr_model_manager.dart';
-import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 import 'package:echo_loop/services/download/download_failure.dart';
 import 'package:echo_loop/widgets/asr_download_prompt_dialog.dart';
 
@@ -51,7 +50,7 @@ class _TestOfflineAsrSettingsNotifier extends OfflineAsrSettingsNotifier {
   }
 
   @override
-  Future<void> retryDownload() async {
+  Future<void> retryDownload([String? modelId]) async {
     retryDownloadCallCount += 1;
     state = state.copyWith(
       enabled: true,
@@ -147,6 +146,20 @@ void main() {
         requiresAsrBeforeEnteringSubStage(SubStageType.reviewRetellSummary),
         isTrue,
       );
+      expect(
+        requiresAsrBeforeEnteringSubStage(
+          SubStageType.listenAndRepeat,
+          listenAndRepeatRatingEnabled: false,
+        ),
+        isFalse,
+      );
+      expect(
+        requiresAsrBeforeEnteringSubStage(
+          SubStageType.retell,
+          retellRatingEnabled: false,
+        ),
+        isFalse,
+      );
     });
 
     testWidgets('默认开启但未下载时点空白关闭后返回 false 且不改状态', (tester) async {
@@ -209,7 +222,7 @@ void main() {
 
       expect(find.text('Speech Recognition Model Required'), findsOneWidget);
 
-      // 点击空白区域关闭对话框（"Download & Enable" 是唯一按钮，没有 "Not Now"）
+      // 点击空白区域关闭对话框（"Download Now" 是唯一按钮，没有 "Not Now"）
       await tester.tapAt(const Offset(8, 8));
       await tester.pumpAndSettle();
 
@@ -231,7 +244,7 @@ void main() {
       await tester.tap(find.text('start'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Download & Enable'));
+      await tester.tap(find.text('Download Now'));
       await tester.pump();
       await tester.pumpAndSettle();
 
@@ -275,7 +288,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
-      expect(find.text('Download & Enable'), findsNothing);
+      expect(find.text('Download Now'), findsNothing);
       expect(find.text('Not Now'), findsNothing);
       expect(find.byIcon(Icons.close), findsOneWidget);
 
@@ -388,11 +401,10 @@ void main() {
       expect(notifier.state.enabled, isTrue);
     });
 
-    testWidgets('已关闭后不再提醒并直接放行', (tester) async {
+    testWidgets('平台后端不需要 Whisper 模型并直接放行', (tester) async {
       final notifier = _TestOfflineAsrSettingsNotifier(
         OfflineAsrSettingsState(
-          backend: AsrBackend.offline,
-          enabled: false,
+          backend: AsrBackend.platform,
           recommendedModel: recommendedModel,
         ),
       );

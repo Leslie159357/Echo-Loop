@@ -85,6 +85,12 @@ class _TestLearningSettingsNotifier extends Notifier<LearningSettings>
   }
 
   @override
+  Future<void> setListenAndRepeatRatingEnabled(bool enabled) async {
+    if (state.listenAndRepeatRatingEnabled == enabled) return;
+    state = state.copyWith(listenAndRepeatRatingEnabled: enabled);
+  }
+
+  @override
   void reloadFromPrefs() {
     // 测试 Notifier 不依赖 SP，无需回灌；保持当前内存状态即可。
   }

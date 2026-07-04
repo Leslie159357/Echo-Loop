@@ -116,6 +116,37 @@ class LearningSettingsScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
+                  Icons.record_voice_over_outlined,
+                  size: 20,
+                  color: colorScheme.primary,
+                ),
+              ),
+              title: Text(l10n.listenAndRepeatRatingToggle),
+              subtitle: Text(
+                l10n.listenAndRepeatRatingSubtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              value: settings.listenAndRepeatRatingEnabled,
+              onChanged: (value) async {
+                await ref
+                    .read(learningSettingsProvider.notifier)
+                    .setListenAndRepeatRatingEnabled(value);
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.m),
+          Card(
+            child: SwitchListTile(
+              secondary: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
                   Icons.record_voice_over,
                   size: 20,
                   color: colorScheme.primary,

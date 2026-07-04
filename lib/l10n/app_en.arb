@@ -816,7 +816,8 @@
   "speechRecognitionNotConfigured": "Not configured",
   "speechRecognitionEnabled": "Enabled",
   "speechRecognitionDisabled": "Disabled",
-  "speechRecognitionDescription": "When enabled, speech recognition automatically evaluates your pronunciation during repeat and retell practice.",
+  "speechRecognitionDescription": "Speech recognition powers practice ratings and future local transcription. Choose the model that fits your device.",
+  "asrEngine": "Speech Engine",
   "asrBackendPlatform": "Apple Speech",
   "asrBackendPlatformDescription": "Uses the built-in system speech recognition, no download needed",
   "asrBackendOffline": "Echo Loop AI",
@@ -827,9 +828,18 @@
       "tier": { "type": "String" }
     }
   },
+  "asrModelFastDescription": "Fastest. Best for low-end devices.",
+  "asrModelBalancedDescription": "Balanced accuracy and speed.",
+  "asrModelAccurateDescription": "More accurate, but larger and slower.",
   "localSpeechRecognition": "Local Speech Recognition",
   "speechModelSize": "Model size: ~{size}",
   "@speechModelSize": {
+    "placeholders": {
+      "size": { "type": "String" }
+    }
+  },
+  "speechModelApproxSize": "~{size}",
+  "@speechModelApproxSize": {
     "placeholders": {
       "size": { "type": "String" }
     }
@@ -869,7 +879,7 @@
   "alsoDeleteModel": "Also delete downloaded model",
   "disableAction": "Disable",
   "speechRecognitionRequiredTitle": "Speech Recognition Model Required",
-  "speechRecognitionRequiredMessage": "Speech recognition is used to automatically evaluate your read-along and retelling. A model download is required. You can disable this in Settings.",
+  "speechRecognitionRequiredMessage": "Speech recognition is used to automatically evaluate your read-aloud and retelling. A model download is required before starting.",
   "downloadAndEnable": "Download & Enable",
   "notNow": "Not Now",
   "speechModelRepairTitle": "Model Download Incomplete",
@@ -1732,6 +1742,8 @@
   "autoExpandCachedAnnotationSubtitle": "Auto-show cached translation, analysis and sense groups",
   "autoPlayRetellRecordingToggle": "Auto-play retell recording",
   "autoPlayRetellRecordingSubtitle": "After retelling, automatically play your recording for pronunciation review",
+  "listenAndRepeatRatingToggle": "Show rating during read-aloud",
+  "listenAndRepeatRatingSubtitle": "When off, recordings are kept but recognition and scoring are skipped",
   "retellRatingToggle": "Show rating during retelling",
   "retellRatingSubtitle": "When off, only recording playback is kept and scores are not shown",
   "retellSkip": "Skip",
@@ -1954,6 +1966,14 @@
   "ttsDownloadedModelsTitle": "Downloaded Echo Loop models",
   "ttsDownloadedModelsDesc": "Not in use · {size}",
   "@ttsDownloadedModelsDesc": {
+    "placeholders": {
+      "size": { "type": "String" }
+    }
+  },
+  "asrDeleteAllModelsConfirm": "Delete all downloaded Echo Loop speech recognition models? You can re-download them anytime.",
+  "asrDownloadedModelsTitle": "Downloaded speech recognition models",
+  "asrDownloadedModelsDesc": "Not in use · {size}",
+  "@asrDownloadedModelsDesc": {
     "placeholders": {
       "size": { "type": "String" }
     }

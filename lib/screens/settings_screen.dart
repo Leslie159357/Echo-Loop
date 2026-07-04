@@ -266,9 +266,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  ref.watch(offlineAsrSettingsProvider).enabled
-                      ? l10n.speechRecognitionEnabled
-                      : l10n.speechRecognitionDisabled,
+                  ref.watch(offlineAsrSettingsProvider).backend ==
+                          AsrBackend.platform
+                      ? l10n.asrBackendPlatform
+                      : l10n.asrBackendOffline,
                   style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: AppSpacing.xs),

@@ -34,6 +34,7 @@ void main() {
       final settings = LearningSettings.fromPrefsSync(prefs);
       expect(settings.autoSkipRetell, isFalse);
       expect(settings.autoPlayRetellRecordingAfterCompletion, isFalse);
+      expect(settings.listenAndRepeatRatingEnabled, isTrue);
       expect(settings.retellRatingEnabled, isTrue);
       expect(settings.retellAutoPlaybackPromptShown, isFalse);
     });
@@ -42,6 +43,7 @@ void main() {
       SharedPreferences.setMockInitialValues({
         LearningSettingsKeys.autoSkipRetell: true,
         LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion: true,
+        LearningSettingsKeys.listenAndRepeatRatingEnabled: false,
         LearningSettingsKeys.retellRatingEnabled: false,
         LearningSettingsKeys.retellAutoPlaybackPromptShown: true,
       });
@@ -49,6 +51,7 @@ void main() {
       final settings = LearningSettings.fromPrefsSync(prefs);
       expect(settings.autoSkipRetell, isTrue);
       expect(settings.autoPlayRetellRecordingAfterCompletion, isTrue);
+      expect(settings.listenAndRepeatRatingEnabled, isFalse);
       expect(settings.retellRatingEnabled, isFalse);
       expect(settings.retellAutoPlaybackPromptShown, isTrue);
     });
@@ -145,6 +148,25 @@ void main() {
       expect(prefs.getBool(LearningSettingsKeys.retellRatingEnabled), isFalse);
     });
 
+    test('setListenAndRepeatRatingEnabled 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setListenAndRepeatRatingEnabled(false);
+
+      expect(
+        container.read(learningSettingsProvider).listenAndRepeatRatingEnabled,
+        isFalse,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.listenAndRepeatRatingEnabled),
+        isFalse,
+      );
+    });
+
     test('markRetellAutoPlaybackPromptShown 写 SP + 翻转 state', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
@@ -200,6 +222,64 @@ void main() {
     });
   });
 
+  group('migrateLegacyOfflineAsrEnabledToRatingSettings', () {
+    test('旧 ASR 关闭且无新 key 时迁移为关闭两个评分', () async {
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.legacyOfflineAsrEnabled: false,
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await migrateLegacyOfflineAsrEnabledToRatingSettings(prefs);
+
+      expect(
+        prefs.getBool(LearningSettingsKeys.listenAndRepeatRatingEnabled),
+        isFalse,
+      );
+      expect(prefs.getBool(LearningSettingsKeys.retellRatingEnabled), isFalse);
+      expect(
+        prefs.containsKey(LearningSettingsKeys.legacyOfflineAsrEnabled),
+        isFalse,
+      );
+    });
+
+    test('旧 ASR 开启或缺失时不写新评分 key，默认保持 true', () async {
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.legacyOfflineAsrEnabled: true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await migrateLegacyOfflineAsrEnabledToRatingSettings(prefs);
+      final settings = LearningSettings.fromPrefsSync(prefs);
+
+      expect(settings.listenAndRepeatRatingEnabled, isTrue);
+      expect(settings.retellRatingEnabled, isTrue);
+      expect(
+        prefs.containsKey(LearningSettingsKeys.listenAndRepeatRatingEnabled),
+        isFalse,
+      );
+      expect(
+        prefs.containsKey(LearningSettingsKeys.retellRatingEnabled),
+        isFalse,
+      );
+    });
+
+    test('旧 ASR 关闭不覆盖已有新评分 key', () async {
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.legacyOfflineAsrEnabled: false,
+        LearningSettingsKeys.retellRatingEnabled: true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await migrateLegacyOfflineAsrEnabledToRatingSettings(prefs);
+
+      expect(
+        prefs.getBool(LearningSettingsKeys.listenAndRepeatRatingEnabled),
+        isFalse,
+      );
+      expect(prefs.getBool(LearningSettingsKeys.retellRatingEnabled), isTrue);
+    });
+  });
+
   group('cleanupLegacyLearningSettingsKeys', () {
     test('清除老 SP key（retell_enabled / setup_choice_at_ms）', () async {
       SharedPreferences.setMockInitialValues({
@@ -233,11 +313,13 @@ void main() {
       final copied = settings.copyWith(
         autoSkipRetell: false,
         autoPlayRetellRecordingAfterCompletion: true,
+        listenAndRepeatRatingEnabled: false,
         retellRatingEnabled: false,
         retellAutoPlaybackPromptShown: true,
       );
       expect(copied.autoSkipRetell, isFalse);
       expect(copied.autoPlayRetellRecordingAfterCompletion, isTrue);
+      expect(copied.listenAndRepeatRatingEnabled, isFalse);
       expect(copied.retellRatingEnabled, isFalse);
       expect(copied.retellAutoPlaybackPromptShown, isTrue);
     });
@@ -246,11 +328,13 @@ void main() {
       const a = LearningSettings(
         autoSkipRetell: true,
         autoPlayRetellRecordingAfterCompletion: true,
+        listenAndRepeatRatingEnabled: false,
         retellRatingEnabled: false,
       );
       const b = LearningSettings(
         autoSkipRetell: true,
         autoPlayRetellRecordingAfterCompletion: true,
+        listenAndRepeatRatingEnabled: false,
         retellRatingEnabled: false,
       );
       const c = LearningSettings(autoSkipRetell: false);

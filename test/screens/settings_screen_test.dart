@@ -63,7 +63,7 @@ void main() {
       recommendedAsrModelProvider.overrideWithValue(recommendedModel),
       initialOfflineAsrSettingsStateProvider.overrideWithValue(
         offlineAsrState ??
-            const OfflineAsrSettingsState(recommendedModel: recommendedModel),
+            OfflineAsrSettingsState(recommendedModel: recommendedModel),
       ),
       audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
       collectionListProvider.overrideWith(() => TestCollectionList()),

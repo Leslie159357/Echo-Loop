@@ -106,7 +106,8 @@ class TestRetellPlayer extends FakeRetellPlayer {
 }
 
 class TestReviewDifficultPractice extends FakeReviewDifficultPractice {
-  TestReviewDifficultPractice() : super(const ReviewDifficultPracticeState(), const []);
+  TestReviewDifficultPractice()
+    : super(const ReviewDifficultPracticeState(), const []);
 }
 
 class TestAudioEngine extends FakeAudioEngine {
@@ -119,16 +120,19 @@ class TestDailyStudyTime extends FakeDailyStudyTime {}
 
 /// 集成测试默认关闭 ASR（与之前行为一致）
 class TestOfflineAsrSettings extends FakeOfflineAsrSettings {
-  TestOfflineAsrSettings() : super(const OfflineAsrSettingsState(
-    enabled: false,
-    backend: AsrBackend.platform,
-    engineReady: false,
-    recommendedModel: AsrModelInfo(
-      id: 'test-model',
-      displayName: 'Test Model',
-      type: AsrModelType.moonshine,
-    ),
-  ));
+  TestOfflineAsrSettings()
+    : super(
+        OfflineAsrSettingsState(
+          enabled: false,
+          backend: AsrBackend.platform,
+          engineReady: false,
+          recommendedModel: const AsrModelInfo(
+            id: 'test-model',
+            displayName: 'Test Model',
+            type: AsrModelType.moonshine,
+          ),
+        ),
+      );
 }
 
 class TestStudyTimeService extends FakeStudyTimeService {}
@@ -192,10 +196,13 @@ class TestSpeechPracticePlatform implements SpeechPracticeBackend {
   Stream<SpeechPracticeEvent> get events => _controller.stream;
 
   @override
-  Future<SpeechPracticePermissionState> getPermissionStatus() async => permissions;
+  Future<SpeechPracticePermissionState> getPermissionStatus() async =>
+      permissions;
 
   @override
-  Future<SpeechPracticePermissionState> requestPermissions({bool onlyMic = false}) async => permissions;
+  Future<SpeechPracticePermissionState> requestPermissions({
+    bool onlyMic = false,
+  }) async => permissions;
 
   @override
   Future<void> warmup({String locale = 'en-US'}) async {}
@@ -210,7 +217,10 @@ class TestSpeechPracticePlatform implements SpeechPracticeBackend {
   Future<void> shutdown() async {}
 
   @override
-  Future<String> startSession({required String promptId, String locale = 'en-US'}) async {
+  Future<String> startSession({
+    required String promptId,
+    String locale = 'en-US',
+  }) async {
     lastPromptId = promptId;
     _counter += 1;
     final path = '/tmp/test-recording-$_counter.caf';
@@ -223,11 +233,13 @@ class TestSpeechPracticePlatform implements SpeechPracticeBackend {
     if (_counter == 0) return const SpeechPracticeStopResult();
     final filePath = '/tmp/test-recording-$_counter.caf';
     scheduleMicrotask(() {
-      _controller.add(SpeechPracticeEvent(
-        type: SpeechPracticeEventType.finalTranscriptReady,
-        promptId: lastPromptId ?? 'prompt',
-        transcript: transcriptsByPath[filePath] ?? '',
-      ));
+      _controller.add(
+        SpeechPracticeEvent(
+          type: SpeechPracticeEventType.finalTranscriptReady,
+          promptId: lastPromptId ?? 'prompt',
+          transcript: transcriptsByPath[filePath] ?? '',
+        ),
+      );
     });
     return SpeechPracticeStopResult(filePath: filePath);
   }
@@ -272,7 +284,9 @@ Future<void> safeSettle(
       EnginePhase.sendSemanticsUpdate,
       timeout,
     );
-  } catch (_) {/* settle 超时容忍 */}
+  } catch (_) {
+    /* settle 超时容忍 */
+  }
 }
 
 // ========== Analytics 初始化 ==========
@@ -363,27 +377,39 @@ Widget createTestApp() {
       tagListProvider.overrideWith(() => TestTagList()),
       listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
       audioEngineProvider.overrideWith(() => TestAudioEngine()),
-      learningProgressNotifierProvider.overrideWith(() => TestLearningProgressNotifier()),
+      learningProgressNotifierProvider.overrideWith(
+        () => TestLearningProgressNotifier(),
+      ),
       learningSessionProvider.overrideWith(() => TestLearningSession()),
       blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
-      intensiveListenPlayerProvider.overrideWith(() => TestIntensiveListenPlayer()),
+      intensiveListenPlayerProvider.overrideWith(
+        () => TestIntensiveListenPlayer(),
+      ),
       retellPlayerProvider.overrideWith(() => TestRetellPlayer()),
-      reviewDifficultPracticeProvider.overrideWith(() => TestReviewDifficultPractice()),
+      reviewDifficultPracticeProvider.overrideWith(
+        () => TestReviewDifficultPractice(),
+      ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       stageCompletionDaoProvider.overrideWithValue(TestStageCompletionDao()),
       audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
-      sentenceAiNotifierProvider.overrideWithValue(SentenceAiNotifier(
-        cacheDao: _TestSentenceAiCacheDao(),
-        apiClient: _TestSentenceAiApiClient(),
-      )),
+      sentenceAiNotifierProvider.overrideWithValue(
+        SentenceAiNotifier(
+          cacheDao: _TestSentenceAiCacheDao(),
+          apiClient: _TestSentenceAiApiClient(),
+        ),
+      ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
       studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
       studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
       flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
-      speechPracticeBackendProvider.overrideWithValue(TestSpeechPracticePlatform()),
-      reviewReminderServiceProvider.overrideWithValue(TestReviewReminderService()),
+      speechPracticeBackendProvider.overrideWithValue(
+        TestSpeechPracticePlatform(),
+      ),
+      reviewReminderServiceProvider.overrideWithValue(
+        TestReviewReminderService(),
+      ),
       savedWordDaoProvider.overrideWithValue(TestSavedWordDao()),
     ],
     child: const EchoLoopApp(),
@@ -398,7 +424,9 @@ Widget createTestAppWithAudio({
   final audioItem = audioItemOverride ?? createTestAudioItem();
   final collection = createTestCollection();
   final sentences = createTestSentences();
-  final progress = progressOverride ?? createTestLearningProgress(currentStageStartedAt: DateTime.now());
+  final progress =
+      progressOverride ??
+      createTestLearningProgress(currentStageStartedAt: DateTime.now());
 
   return ProviderScope(
     overrides: [
@@ -412,27 +440,39 @@ Widget createTestAppWithAudio({
       tagListProvider.overrideWith(() => TestTagList()),
       listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
       audioEngineProvider.overrideWith(() => TestAudioEngine()),
-      learningProgressNotifierProvider.overrideWith(() => TestLearningProgressNotifier()),
+      learningProgressNotifierProvider.overrideWith(
+        () => TestLearningProgressNotifier(),
+      ),
       learningSessionProvider.overrideWith(() => TestLearningSession()),
       blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
-      intensiveListenPlayerProvider.overrideWith(() => TestIntensiveListenPlayer()),
+      intensiveListenPlayerProvider.overrideWith(
+        () => TestIntensiveListenPlayer(),
+      ),
       retellPlayerProvider.overrideWith(() => TestRetellPlayer()),
-      reviewDifficultPracticeProvider.overrideWith(() => TestReviewDifficultPractice()),
+      reviewDifficultPracticeProvider.overrideWith(
+        () => TestReviewDifficultPractice(),
+      ),
       bookmarkDaoProvider.overrideWithValue(TestBookmarkDao()),
       stageCompletionDaoProvider.overrideWithValue(TestStageCompletionDao()),
       audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
       packageInfoProvider.overrideWithValue(_testPackageInfo),
-      sentenceAiNotifierProvider.overrideWithValue(SentenceAiNotifier(
-        cacheDao: _TestSentenceAiCacheDao(),
-        apiClient: _TestSentenceAiApiClient(),
-      )),
+      sentenceAiNotifierProvider.overrideWithValue(
+        SentenceAiNotifier(
+          cacheDao: _TestSentenceAiCacheDao(),
+          apiClient: _TestSentenceAiApiClient(),
+        ),
+      ),
       dailyStudyTimeProvider.overrideWith(() => TestDailyStudyTime()),
       studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
       studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
       flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
-      speechPracticeBackendProvider.overrideWithValue(TestSpeechPracticePlatform()),
-      reviewReminderServiceProvider.overrideWithValue(TestReviewReminderService()),
+      speechPracticeBackendProvider.overrideWithValue(
+        TestSpeechPracticePlatform(),
+      ),
+      reviewReminderServiceProvider.overrideWithValue(
+        TestReviewReminderService(),
+      ),
       savedWordDaoProvider.overrideWithValue(TestSavedWordDao()),
     ],
     child: _AudioPreloadWrapper(
@@ -459,7 +499,8 @@ class _AudioPreloadWrapper extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_AudioPreloadWrapper> createState() => _AudioPreloadWrapperState();
+  ConsumerState<_AudioPreloadWrapper> createState() =>
+      _AudioPreloadWrapperState();
 }
 
 class _AudioPreloadWrapperState extends ConsumerState<_AudioPreloadWrapper> {
@@ -472,17 +513,22 @@ class _AudioPreloadWrapperState extends ConsumerState<_AudioPreloadWrapper> {
   }
 
   void _preloadData() {
-    final audioLib = ref.read(audioLibraryProvider.notifier) as TestAudioLibrary;
+    final audioLib =
+        ref.read(audioLibraryProvider.notifier) as TestAudioLibrary;
     audioLib.addAudioItem(widget.audioItem);
 
-    final collectionList = ref.read(collectionListProvider.notifier) as TestCollectionList;
+    final collectionList =
+        ref.read(collectionListProvider.notifier) as TestCollectionList;
     collectionList.state = collectionList.state.copyWith(
       rawCollections: [widget.collection],
-      audioIdsMap: {widget.collection.id: [widget.audioItem.id]},
+      audioIdsMap: {
+        widget.collection.id: [widget.audioItem.id],
+      },
     );
 
-    final progressNotifier = ref.read(learningProgressNotifierProvider.notifier)
-        as TestLearningProgressNotifier;
+    final progressNotifier =
+        ref.read(learningProgressNotifierProvider.notifier)
+            as TestLearningProgressNotifier;
     progressNotifier.setProgress(widget.progress);
 
     // 按 (currentStage, currentSubStage) 推导已完成的 sub_stage key 集合
@@ -505,7 +551,8 @@ class _AudioPreloadWrapperState extends ConsumerState<_AudioPreloadWrapper> {
     }
     progressNotifier.setCompletionKeys(progress.audioItemId, completed);
 
-    final practice = ref.read(listeningPracticeProvider.notifier) as TestListeningPractice;
+    final practice =
+        ref.read(listeningPracticeProvider.notifier) as TestListeningPractice;
     practice.setTestSentences(widget.sentences);
 
     final engine = ref.read(audioEngineProvider.notifier) as TestAudioEngine;

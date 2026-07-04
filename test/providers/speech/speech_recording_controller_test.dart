@@ -1,12 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/providers/speech/speech_recording_controller.dart';
-import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 import 'package:echo_loop/services/speech_practice_platform.dart';
 
 import '../../helpers/mock_providers.dart';
@@ -17,7 +15,7 @@ const _testAsrModel = AsrModelInfo(
   type: AsrModelType.moonshine,
 );
 
-const _testAsrSettings = OfflineAsrSettingsState(
+final _testAsrSettings = OfflineAsrSettingsState(
   enabled: true,
   backend: AsrBackend.platform,
   recommendedModel: _testAsrModel,
@@ -261,6 +259,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -303,6 +302,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -359,6 +359,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -413,6 +414,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -467,6 +469,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -522,6 +525,7 @@ void main() {
         container = ProviderContainer(
           overrides: [
             analyticsOverride(),
+            ...learningSettingsOverrides(),
             speechPracticeBackendProvider.overrideWithValue(backend!),
             recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
             offlineAsrSettingsProvider.overrideWith(
@@ -580,6 +584,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           analyticsOverride(),
+          ...learningSettingsOverrides(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -621,6 +626,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           analyticsOverride(),
+          ...learningSettingsOverrides(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -661,6 +667,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           analyticsOverride(),
+          ...learningSettingsOverrides(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -702,6 +709,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           analyticsOverride(),
+          ...learningSettingsOverrides(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(
@@ -745,6 +753,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           analyticsOverride(),
+          ...learningSettingsOverrides(),
           speechPracticeBackendProvider.overrideWithValue(backend),
           recommendedAsrModelProvider.overrideWithValue(_testAsrModel),
           offlineAsrSettingsProvider.overrideWith(

@@ -1419,7 +1419,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get speechRecognitionDisabled => '已关闭';
 
   @override
-  String get speechRecognitionDescription => '开启语音识别后，跟读和复述练习时会自动识别你的发音并评估准确度。';
+  String get speechRecognitionDescription =>
+      '语音识别用于练习评分和后续本地转录。你可以选择适合当前设备的模型。';
+
+  @override
+  String get asrEngine => '语音引擎';
 
   @override
   String get asrBackendPlatform => 'Apple Speech';
@@ -1439,11 +1443,25 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get asrModelFastDescription => '速度最快，适合低端设备。';
+
+  @override
+  String get asrModelBalancedDescription => '准确率和速度平衡。';
+
+  @override
+  String get asrModelAccurateDescription => '准确率更高，但体积更大、速度更慢。';
+
+  @override
   String get localSpeechRecognition => '本地语音识别';
 
   @override
   String speechModelSize(String size) {
     return '模型大小：约 $size';
+  }
+
+  @override
+  String speechModelApproxSize(String size) {
+    return '约 $size';
   }
 
   @override
@@ -1501,7 +1519,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get speechRecognitionRequiredMessage =>
-      '语音识别用于自动评估跟读和复述效果，需要下载模型才能使用。你可以在设置中关闭此功能。';
+      '语音识别用于自动评估跟读和复述效果，开始前需要先下载模型。';
 
   @override
   String get downloadAndEnable => '下载并启用';
@@ -3225,6 +3243,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get autoPlayRetellRecordingSubtitle => '复述结束后自动回听自己的录音，用于对照和纠音';
 
   @override
+  String get listenAndRepeatRatingToggle => '跟读时显示评分';
+
+  @override
+  String get listenAndRepeatRatingSubtitle => '关闭后保留录音回听，但不再识别和评分';
+
+  @override
   String get retellRatingToggle => '复述时显示评分';
 
   @override
@@ -3804,6 +3828,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String ttsDownloadedModelsDesc(String size) {
+    return '未在使用 · 占用 $size';
+  }
+
+  @override
+  String get asrDeleteAllModelsConfirm => '删除所有已下载的 Echo Loop 语音识别模型？可随时重新下载。';
+
+  @override
+  String get asrDownloadedModelsTitle => '已下载的语音识别模型';
+
+  @override
+  String asrDownloadedModelsDesc(String size) {
     return '未在使用 · 占用 $size';
   }
 

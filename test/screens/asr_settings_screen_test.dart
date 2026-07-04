@@ -14,12 +14,20 @@ class _StaticOfflineAsrSettingsNotifier extends OfflineAsrSettingsNotifier {
   _StaticOfflineAsrSettingsNotifier(this._initialState);
 
   final OfflineAsrSettingsState _initialState;
+  bool deleteAllDownloadedModelsCalled = false;
+  bool? deleteAllIncludeSelected;
 
   @override
   OfflineAsrSettingsState build() => _initialState;
 
   @override
-  Future<void> retryDownload() async {}
+  Future<void> retryDownload([String? modelId]) async {}
+
+  @override
+  Future<void> deleteDownloadedModels({required bool includeSelected}) async {
+    deleteAllDownloadedModelsCalled = true;
+    deleteAllIncludeSelected = includeSelected;
+  }
 }
 
 Widget _buildTestWidget(_StaticOfflineAsrSettingsNotifier notifier) {
@@ -66,7 +74,7 @@ void main() {
     expect(find.textContaining('Ready'), findsNothing);
   });
 
-  testWidgets('关闭状态下隐藏后端选择和模型信息', (tester) async {
+  testWidgets('不再显示语音识别总开关，关闭旧状态也显示模型列表', (tester) async {
     final notifier = _StaticOfflineAsrSettingsNotifier(
       OfflineAsrSettingsState(
         enabled: false,
@@ -79,12 +87,9 @@ void main() {
     await tester.pumpWidget(_buildTestWidget(notifier));
     await tester.pumpAndSettle();
 
-    // 开关显示 Disabled
-    expect(find.text('Disabled'), findsOneWidget);
-    // 不显示模型档位（关闭时隐藏）
-    expect(find.textContaining('Balanced'), findsNothing);
-    // 不显示删除按钮（已移除）
-    expect(find.text('Delete Model'), findsNothing);
+    expect(find.byType(SwitchListTile), findsNothing);
+    expect(find.text('Disabled'), findsNothing);
+    expect(find.textContaining('Balanced'), findsAny);
   });
 
   testWidgets('已下载模型显示 Ready 和大小', (tester) async {
@@ -104,5 +109,81 @@ void main() {
     expect(find.textContaining('Balanced'), findsAny);
     expect(find.textContaining('Ready'), findsAny);
     expect(find.textContaining('153 MB'), findsAny);
+  });
+
+  testWidgets('Echo Loop AI 模型列表单独成组并显示预估大小', (tester) async {
+    final notifier = _StaticOfflineAsrSettingsNotifier(
+      OfflineAsrSettingsState(
+        enabled: true,
+        backend: AsrBackend.offline,
+        recommendedModel: recommendedModel,
+      ),
+    );
+
+    await tester.pumpWidget(_buildTestWidget(notifier));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Speech Engine'), findsOneWidget);
+    expect(find.text('Echo Loop AI'), findsNWidgets(2));
+    expect(find.byType(Card), findsNWidgets(2));
+    expect(find.textContaining('~100 MB'), findsOneWidget);
+    expect(find.textContaining('~150 MB'), findsOneWidget);
+    expect(find.textContaining('~360 MB'), findsOneWidget);
+  });
+
+  testWidgets('Apple Speech 后端不平铺模型列表', (tester) async {
+    final notifier = _StaticOfflineAsrSettingsNotifier(
+      OfflineAsrSettingsState(
+        enabled: true,
+        backend: AsrBackend.platform,
+        recommendedModel: recommendedModel,
+      ),
+    );
+
+    await tester.pumpWidget(_buildTestWidget(notifier));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Speech Engine'), findsOneWidget);
+    expect(find.text('Fast'), findsNothing);
+    expect(find.text('Balanced'), findsNothing);
+    expect(find.text('Accurate'), findsNothing);
+  });
+
+  testWidgets('Apple Speech 后端允许删除所有已下载 Whisper 模型', (tester) async {
+    final notifier = _StaticOfflineAsrSettingsNotifier(
+      OfflineAsrSettingsState(
+        enabled: true,
+        backend: AsrBackend.platform,
+        recommendedModel: recommendedModel,
+        modelStates: const {
+          'whisper-base-en-int8': AsrModelState(
+            downloadStatus: AsrModelDownloadStatus.downloaded,
+            localSizeBytes: 153 * 1024 * 1024,
+          ),
+        },
+      ),
+    );
+
+    await tester.pumpWidget(_buildTestWidget(notifier));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Downloaded speech recognition models'), findsOneWidget);
+    expect(find.textContaining('153 MB'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Delete Model'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Delete all downloaded Echo Loop speech recognition models? You can re-download them anytime.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Delete Model').last);
+    await tester.pumpAndSettle();
+
+    expect(notifier.deleteAllDownloadedModelsCalled, isTrue);
+    expect(notifier.deleteAllIncludeSelected, isTrue);
   });
 }

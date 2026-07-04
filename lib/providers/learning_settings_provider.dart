@@ -35,11 +35,14 @@ abstract final class LearningSettingsKeys {
       'learning_auto_expand_cached_annotation';
   static const autoPlayRetellRecordingAfterCompletion =
       'learning_auto_play_retell_recording_after_completion';
+  static const listenAndRepeatRatingEnabled =
+      'learning_listen_and_repeat_rating_enabled';
   static const retellRatingEnabled = 'learning_retell_rating_enabled';
   static const retellAutoPlaybackPromptShown =
       'learning_retell_auto_playback_prompt_shown';
 
   /// 历史 SP key，启动期会被清理。
+  static const legacyOfflineAsrEnabled = 'offline_asr_enabled';
   static const legacyRetellEnabled = 'learning_retell_enabled';
   static const legacySetupChoiceMadeAtMs = 'retell_setup_choice_at_ms';
 }
@@ -57,6 +60,9 @@ class LearningSettings {
   /// 复述完成后是否自动播放用户录音（默认 false）。
   final bool autoPlayRetellRecordingAfterCompletion;
 
+  /// 是否计算并显示跟读评级（默认 true）。
+  final bool listenAndRepeatRatingEnabled;
+
   /// 是否计算并显示复述评级（默认 true）。
   final bool retellRatingEnabled;
 
@@ -67,6 +73,7 @@ class LearningSettings {
     this.autoSkipRetell = false,
     this.autoExpandCachedAnnotation = true,
     this.autoPlayRetellRecordingAfterCompletion = false,
+    this.listenAndRepeatRatingEnabled = true,
     this.retellRatingEnabled = true,
     this.retellAutoPlaybackPromptShown = false,
   });
@@ -84,6 +91,9 @@ class LearningSettings {
             LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion,
           ) ??
           false,
+      listenAndRepeatRatingEnabled:
+          prefs.getBool(LearningSettingsKeys.listenAndRepeatRatingEnabled) ??
+          true,
       retellRatingEnabled:
           prefs.getBool(LearningSettingsKeys.retellRatingEnabled) ?? true,
       retellAutoPlaybackPromptShown:
@@ -96,6 +106,7 @@ class LearningSettings {
     bool? autoSkipRetell,
     bool? autoExpandCachedAnnotation,
     bool? autoPlayRetellRecordingAfterCompletion,
+    bool? listenAndRepeatRatingEnabled,
     bool? retellRatingEnabled,
     bool? retellAutoPlaybackPromptShown,
   }) {
@@ -106,6 +117,8 @@ class LearningSettings {
       autoPlayRetellRecordingAfterCompletion:
           autoPlayRetellRecordingAfterCompletion ??
           this.autoPlayRetellRecordingAfterCompletion,
+      listenAndRepeatRatingEnabled:
+          listenAndRepeatRatingEnabled ?? this.listenAndRepeatRatingEnabled,
       retellRatingEnabled: retellRatingEnabled ?? this.retellRatingEnabled,
       retellAutoPlaybackPromptShown:
           retellAutoPlaybackPromptShown ?? this.retellAutoPlaybackPromptShown,
@@ -121,6 +134,7 @@ class LearningSettings {
           autoExpandCachedAnnotation == other.autoExpandCachedAnnotation &&
           autoPlayRetellRecordingAfterCompletion ==
               other.autoPlayRetellRecordingAfterCompletion &&
+          listenAndRepeatRatingEnabled == other.listenAndRepeatRatingEnabled &&
           retellRatingEnabled == other.retellRatingEnabled &&
           retellAutoPlaybackPromptShown == other.retellAutoPlaybackPromptShown;
 
@@ -129,6 +143,7 @@ class LearningSettings {
     autoSkipRetell,
     autoExpandCachedAnnotation,
     autoPlayRetellRecordingAfterCompletion,
+    listenAndRepeatRatingEnabled,
     retellRatingEnabled,
     retellAutoPlaybackPromptShown,
   );
@@ -191,6 +206,24 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
     }
   }
 
+  /// 切换跟读评级计算与显示，写 SP + 更新 state。
+  Future<void> setListenAndRepeatRatingEnabled(bool enabled) async {
+    if (state.listenAndRepeatRatingEnabled == enabled) return;
+    state = state.copyWith(listenAndRepeatRatingEnabled: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(
+        LearningSettingsKeys.listenAndRepeatRatingEnabled,
+        enabled,
+      );
+    } catch (e) {
+      AppLogger.log(
+        'LearningSettings',
+        'setListenAndRepeatRatingEnabled 写 SP 失败: $e',
+      );
+    }
+  }
+
   /// 切换复述评级计算与显示，写 SP + 更新 state。
   Future<void> setRetellRatingEnabled(bool enabled) async {
     if (state.retellRatingEnabled == enabled) return;
@@ -241,6 +274,32 @@ final learningSettingsProvider =
     NotifierProvider<LearningSettingsNotifier, LearningSettings>(
       LearningSettingsNotifier.new,
     );
+
+/// 一次性迁移旧“语音识别总开关”到两个练习评分开关。
+///
+/// 旧开关只有 false 表示用户不想使用语音练习评分；true 或缺失时，新评分开关
+/// 保持默认 true。已存在的新 key 代表用户已有明确选择，不覆盖。
+Future<void> migrateLegacyOfflineAsrEnabledToRatingSettings(
+  SharedPreferences prefs,
+) async {
+  final legacyEnabled = prefs.getBool(
+    LearningSettingsKeys.legacyOfflineAsrEnabled,
+  );
+  if (legacyEnabled == false) {
+    if (!prefs.containsKey(LearningSettingsKeys.listenAndRepeatRatingEnabled)) {
+      await prefs.setBool(
+        LearningSettingsKeys.listenAndRepeatRatingEnabled,
+        false,
+      );
+    }
+    if (!prefs.containsKey(LearningSettingsKeys.retellRatingEnabled)) {
+      await prefs.setBool(LearningSettingsKeys.retellRatingEnabled, false);
+    }
+  }
+  if (prefs.containsKey(LearningSettingsKeys.legacyOfflineAsrEnabled)) {
+    await prefs.remove(LearningSettingsKeys.legacyOfflineAsrEnabled);
+  }
+}
 
 /// 启动期 best-effort 清理历史 SP key（开发期数据卫生）。
 ///

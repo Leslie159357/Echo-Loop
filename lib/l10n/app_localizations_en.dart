@@ -1468,7 +1468,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get speechRecognitionDescription =>
-      'When enabled, speech recognition automatically evaluates your pronunciation during repeat and retell practice.';
+      'Speech recognition powers practice ratings and future local transcription. Choose the model that fits your device.';
+
+  @override
+  String get asrEngine => 'Speech Engine';
 
   @override
   String get asrBackendPlatform => 'Apple Speech';
@@ -1490,11 +1493,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get asrModelFastDescription => 'Fastest. Best for low-end devices.';
+
+  @override
+  String get asrModelBalancedDescription => 'Balanced accuracy and speed.';
+
+  @override
+  String get asrModelAccurateDescription =>
+      'More accurate, but larger and slower.';
+
+  @override
   String get localSpeechRecognition => 'Local Speech Recognition';
 
   @override
   String speechModelSize(String size) {
     return 'Model size: ~$size';
+  }
+
+  @override
+  String speechModelApproxSize(String size) {
+    return '~$size';
   }
 
   @override
@@ -1557,7 +1575,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get speechRecognitionRequiredMessage =>
-      'Speech recognition is used to automatically evaluate your read-along and retelling. A model download is required. You can disable this in Settings.';
+      'Speech recognition is used to automatically evaluate your read-aloud and retelling. A model download is required before starting.';
 
   @override
   String get downloadAndEnable => 'Download & Enable';
@@ -3376,6 +3394,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'After retelling, automatically play your recording for pronunciation review';
 
   @override
+  String get listenAndRepeatRatingToggle => 'Show rating during read-aloud';
+
+  @override
+  String get listenAndRepeatRatingSubtitle =>
+      'When off, recordings are kept but recognition and scoring are skipped';
+
+  @override
   String get retellRatingToggle => 'Show rating during retelling';
 
   @override
@@ -3986,6 +4011,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String ttsDownloadedModelsDesc(String size) {
+    return 'Not in use · $size';
+  }
+
+  @override
+  String get asrDeleteAllModelsConfirm =>
+      'Delete all downloaded Echo Loop speech recognition models? You can re-download them anytime.';
+
+  @override
+  String get asrDownloadedModelsTitle => 'Downloaded speech recognition models';
+
+  @override
+  String asrDownloadedModelsDesc(String size) {
     return 'Not in use · $size';
   }
 

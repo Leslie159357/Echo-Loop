@@ -20,7 +20,7 @@ const _testAsrModel = AsrModelInfo(
   type: AsrModelType.moonshine,
 );
 
-const _testAsrSettings = OfflineAsrSettingsState(
+final _testAsrSettings = OfflineAsrSettingsState(
   enabled: true,
   backend: AsrBackend.platform,
   recommendedModel: _testAsrModel,

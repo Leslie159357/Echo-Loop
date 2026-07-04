@@ -23,6 +23,7 @@ import '../utils/playback_speed.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/speech/speech_recording_controller.dart';
 import '../providers/audio_engine/audio_engine_provider.dart';
@@ -576,6 +577,11 @@ class _ListenAndRepeatPlayerScreenState
                           )
                         : null,
                     onRecordTap: () => ctrl.onRecordButtonTapped(),
+                    showRatingBadge: ref.watch(
+                      learningSettingsProvider.select(
+                        (s) => s.listenAndRepeatRatingEnabled,
+                      ),
+                    ),
                     onFastForward:
                         showCountdown &&
                             ctrlState.phase is WaitingInterval &&

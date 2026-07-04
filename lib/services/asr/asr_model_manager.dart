@@ -382,19 +382,21 @@ class AsrModelManager {
     }
   }
 
-  /// 清理不再使用的旧模型目录。
+  /// 清理不再可识别的旧模型目录。
   ///
-  /// 保留 [keepModelId] 对应的目录，删除其他所有模型目录。
-  /// 在启动时调用，防止推荐模型变更后旧文件残留。
-  Future<void> cleanupUnusedModels(String keepModelId) async {
+  /// 保留当前版本可选择的全部 Whisper 模型和共享 VAD；仅删除历史废弃目录。
+  Future<void> cleanupUnknownModels() async {
     final root = Directory(await _modelsRoot);
     if (!root.existsSync()) return;
 
+    final knownModelIds = {
+      vadModelId,
+      for (final model in availableModels) model.id,
+    };
     await for (final entity in root.list()) {
       if (entity is Directory) {
         final dirName = p.basename(entity.path);
-        // 保留当前使用的 whisper 模型和共享的 VAD 模型。
-        if (dirName != keepModelId && dirName != vadModelId) {
+        if (!knownModelIds.contains(dirName)) {
           AppLogger.log('ASRModel', '🗑 清理旧模型: $dirName');
           await entity.delete(recursive: true);
         }

@@ -19,7 +19,6 @@ import 'package:echo_loop/features/usage/usage_providers.dart';
 import 'package:echo_loop/features/usage/usage_tracker.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
 import 'package:echo_loop/models/audio_item.dart';
-import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/providers/app_update_provider.dart';
 import 'package:echo_loop/providers/dictionary_provider.dart';
@@ -48,83 +47,73 @@ export 'shared/test_fixtures.dart';
 // 实现全部在 shared/ 的 Fake* 类中。
 
 class TestAppSettings extends FakeAppSettings {
-  TestAppSettings([AppSettingsState initialState = const AppSettingsState()])
-    : super(initialState);
+  TestAppSettings([super.initialState = const AppSettingsState()]);
 }
 
 class TestAudioLibrary extends FakeAudioLibrary {
-  TestAudioLibrary([AudioLibraryState initialState = const AudioLibraryState()])
-    : super(initialState);
+  TestAudioLibrary([super.initialState = const AudioLibraryState()]);
 }
 
 class TestCollectionList extends FakeCollectionList {
-  TestCollectionList([CollectionState initialState = const CollectionState()])
-    : super(initialState);
+  TestCollectionList([super.initialState = const CollectionState()]);
 }
 
 class TestTagList extends FakeTagList {
-  TestTagList([TagState initialState = const TagState()]) : super(initialState);
+  TestTagList([super.initialState = const TagState()]);
 }
 
 class TestListeningPractice extends FakeListeningPractice {
-  TestListeningPractice([
-    ListeningPracticeState initialState = const ListeningPracticeState(),
-  ]) : super(initialState);
+  TestListeningPractice([super.initialState = const ListeningPracticeState()]);
 }
 
 class TestLearningProgressNotifier extends FakeLearningProgressNotifier {
   TestLearningProgressNotifier([
-    LearningProgressState initialState = const LearningProgressState(),
-  ]) : super(initialState);
+    super.initialState = const LearningProgressState(),
+  ]);
 }
 
 class TestLearningSession extends FakeLearningSession {
-  TestLearningSession([
-    LearningSessionState initialState = const LearningSessionState(),
-  ]) : super(initialState);
+  TestLearningSession([super.initialState = const LearningSessionState()]);
 }
 
 class TestBlindListenPlayer extends FakeBlindListenPlayer {
-  TestBlindListenPlayer([
-    BlindListenPlayerState initialState = const BlindListenPlayerState(),
-  ]) : super(initialState);
+  TestBlindListenPlayer([super.initialState = const BlindListenPlayerState()]);
 }
 
 class TestIntensiveListenPlayer extends FakeIntensiveListenPlayer {
   TestIntensiveListenPlayer([
-    IntensiveListenState initialState = const IntensiveListenState(),
-    List<Sentence> testSentences = const [],
-  ]) : super(initialState, testSentences);
+    super.initialState = const IntensiveListenState(),
+    super.testSentences = const [],
+  ]);
 }
 
 class TestRetellPlayer extends FakeRetellPlayer {
   TestRetellPlayer([
-    RetellPlayerState initialState = const RetellPlayerState(),
-    List<List<Sentence>> testParagraphs = const [],
-    Map<int, Set<int>> testKeywords = const {},
-  ]) : super(initialState, testParagraphs, testKeywords);
+    super.initialState = const RetellPlayerState(),
+    super.testParagraphs = const [],
+    super.testKeywords = const {},
+  ]);
 }
 
 class TestReviewDifficultPractice extends FakeReviewDifficultPractice {
   TestReviewDifficultPractice([
-    ReviewDifficultPracticeState initialState =
-        const ReviewDifficultPracticeState(),
-    List<Sentence> testSentences = const [],
-  ]) : super(initialState, testSentences);
+    super.initialState = const ReviewDifficultPracticeState(),
+    super.testSentences = const [],
+  ]);
 }
 
 class TestAudioEngine extends FakeAudioEngine {
   TestAudioEngine({
-    AudioEngineState initialState = const AudioEngineState(),
-    bool isPlaying = false,
-  }) : super(initialState: initialState, isPlaying: isPlaying);
+    super.initialState = const AudioEngineState(),
+    super.isPlaying = false,
+  });
 }
 
 class TestForegroundAudioEngine extends FakeForegroundAudioEngine {
   TestForegroundAudioEngine({
-    AudioEngineState initialState = const AudioEngineState(),
-    bool isPlaying = false,
-  }) : super(initialState: initialState, isPlaying: isPlaying);
+    super.initialState = const AudioEngineState(),
+    super.isPlaying = false,
+  });
 }
 
 class TestFlashcardNotifier extends FakeFlashcardNotifier {}
@@ -132,18 +121,20 @@ class TestFlashcardNotifier extends FakeFlashcardNotifier {}
 class TestDailyStudyTime extends FakeDailyStudyTime {}
 
 class TestOfflineAsrSettings extends FakeOfflineAsrSettings {
-  TestOfflineAsrSettings([
-    OfflineAsrSettingsState initialState = const OfflineAsrSettingsState(
-      enabled: true,
-      backend: AsrBackend.platform,
-      engineReady: true,
-      recommendedModel: AsrModelInfo(
-        id: 'test-model',
-        displayName: 'Test Model',
-        type: AsrModelType.moonshine,
-      ),
-    ),
-  ]) : super(initialState);
+  TestOfflineAsrSettings([OfflineAsrSettingsState? initialState])
+    : super(
+        initialState ??
+            OfflineAsrSettingsState(
+              enabled: true,
+              backend: AsrBackend.platform,
+              engineReady: true,
+              recommendedModel: const AsrModelInfo(
+                id: 'test-model',
+                displayName: 'Test Model',
+                type: AsrModelType.moonshine,
+              ),
+            ),
+      );
 }
 
 class TestStudyTimeService extends FakeStudyTimeService {}
@@ -286,6 +277,8 @@ class _TestDictionary extends Dictionary {
 List<Override> learningSettingsOverrides({
   bool autoSkipRetell = false,
   bool autoPlayRetellRecordingAfterCompletion = false,
+  bool listenAndRepeatRatingEnabled = true,
+  bool retellRatingEnabled = true,
   bool retellAutoPlaybackPromptShown = false,
   SharedPreferences? prefs,
 }) {
@@ -295,6 +288,8 @@ List<Override> learningSettingsOverrides({
         autoSkipRetell: autoSkipRetell,
         autoPlayRetellRecordingAfterCompletion:
             autoPlayRetellRecordingAfterCompletion,
+        listenAndRepeatRatingEnabled: listenAndRepeatRatingEnabled,
+        retellRatingEnabled: retellRatingEnabled,
         retellAutoPlaybackPromptShown: retellAutoPlaybackPromptShown,
       ),
     ),

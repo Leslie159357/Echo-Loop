@@ -1,7 +1,7 @@
 /// 录音权限入口前置阻塞弹窗。
 ///
-/// 进入跟读类录音页面前，先确认麦克风（始终需要）和平台语音识别（仅当
-/// 启用 ASR 且 backend == platform 时需要）权限就绪。权限不通过则阻塞进入。
+/// 进入跟读类录音页面前，先确认麦克风（始终需要）和平台语音识别（仅当评分开启且
+/// backend == platform 时需要）权限就绪。权限不通过则阻塞进入。
 ///
 /// 与本地 ASR 模型下载弹窗（`asr_download_prompt_dialog.dart`）解耦：
 /// 本文件只管系统授权；模型下载在权限通过后由
@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/enums.dart';
 import '../l10n/app_localizations.dart';
 import '../models/speech_practice_models.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
 import '../services/app_logger.dart';
 import '../services/speech_permission_service.dart';
@@ -116,7 +117,11 @@ Future<bool> _ensurePermissions(BuildContext context, WidgetRef ref) async {
 /// 是否需要平台语音识别权限。
 bool _needsPlatformSpeechPermission(WidgetRef ref) {
   final asrSettings = ref.read(offlineAsrSettingsProvider);
-  return asrSettings.enabled && asrSettings.backend == AsrBackend.platform;
+  final learningSettings = ref.read(learningSettingsProvider);
+  final anyRatingEnabled =
+      learningSettings.listenAndRepeatRatingEnabled ||
+      learningSettings.retellRatingEnabled;
+  return anyRatingEnabled && asrSettings.backend == AsrBackend.platform;
 }
 
 /// 当前权限是否已经覆盖所需项。

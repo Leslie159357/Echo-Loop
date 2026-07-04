@@ -2190,18 +2190,19 @@ class FakeDailyStudyTime extends DailyStudyTime {
 class FakeOfflineAsrSettings extends OfflineAsrSettingsNotifier {
   final OfflineAsrSettingsState initialState;
 
-  FakeOfflineAsrSettings([
-    this.initialState = const OfflineAsrSettingsState(
-      enabled: false,
-      backend: AsrBackend.platform,
-      engineReady: false,
-      recommendedModel: AsrModelInfo(
-        id: 'test-model',
-        displayName: 'Test Model',
-        type: AsrModelType.moonshine,
-      ),
-    ),
-  ]);
+  FakeOfflineAsrSettings([OfflineAsrSettingsState? initialState])
+    : initialState =
+          initialState ??
+          OfflineAsrSettingsState(
+            enabled: true,
+            backend: AsrBackend.platform,
+            engineReady: false,
+            recommendedModel: const AsrModelInfo(
+              id: 'test-model',
+              displayName: 'Test Model',
+              type: AsrModelType.moonshine,
+            ),
+          );
 
   @override
   OfflineAsrSettingsState build() => initialState;
@@ -2217,7 +2218,7 @@ class FakeOfflineAsrSettings extends OfflineAsrSettingsNotifier {
   }
 
   @override
-  Future<void> retryDownload() async {}
+  Future<void> retryDownload([String? modelId]) async {}
 
   @override
   Future<void> loadEngine() async {

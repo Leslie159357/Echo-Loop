@@ -99,6 +99,9 @@ void main() async {
     prefs,
   );
 
+  // 旧“语音识别总开关”迁移到两个练习评分开关，须在学习设置预读前完成。
+  await migrateLegacyOfflineAsrEnabledToRatingSettings(prefs);
+
   // 学习设置（自动跳过复述）同步预读：plan / progress 启动期就需要拿到值。
   final initialLearningSettings = LearningSettings.fromPrefsSync(prefs);
   // 清理历史 SP key（开发期数据卫生，幂等无副作用）。
@@ -242,8 +245,8 @@ void main() async {
       recommendedModel: recommendedAsrModel,
       defaultBackend: defaultBackend,
     );
-    // 清理推荐模型变更后残留的旧模型文件（异步，不阻塞启动）
-    unawaited(modelManager.cleanupUnusedModels(recommendedAsrModel.id));
+    // 清理历史废弃 ASR 模型目录；保留当前版本所有可选模型。
+    unawaited(modelManager.cleanupUnknownModels());
   }
 
   // Echo Loop TTS（Kokoro）模型初始状态：用持久化标记 + 文件系统校验恢复，

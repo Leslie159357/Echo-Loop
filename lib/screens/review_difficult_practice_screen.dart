@@ -26,6 +26,7 @@ import '../l10n/app_localizations.dart';
 import '../utils/playback_speed.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../providers/speech/speech_recording_controller.dart';
@@ -718,6 +719,9 @@ class _ReviewDifficultPracticeScreenState
       isProcessing: isProcessing,
       currentAttempt: currentAttempt,
       hintText: isPlaying ? l10n.listenAndRepeatListenHint : null,
+      showRatingBadge: ref.watch(
+        learningSettingsProvider.select((s) => s.listenAndRepeatRatingEnabled),
+      ),
       showCountdown: showCountdown,
       isInPause: isInPause,
       countdownWidget: showCountdown

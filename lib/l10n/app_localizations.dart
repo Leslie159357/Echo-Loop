@@ -2645,8 +2645,14 @@ abstract class AppLocalizations {
   /// No description provided for @speechRecognitionDescription.
   ///
   /// In en, this message translates to:
-  /// **'When enabled, speech recognition automatically evaluates your pronunciation during repeat and retell practice.'**
+  /// **'Speech recognition powers practice ratings and future local transcription. Choose the model that fits your device.'**
   String get speechRecognitionDescription;
+
+  /// No description provided for @asrEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech Engine'**
+  String get asrEngine;
 
   /// No description provided for @asrBackendPlatform.
   ///
@@ -2678,6 +2684,24 @@ abstract class AppLocalizations {
   /// **'Model: {tier} (auto-selected for your device)'**
   String asrModelTier(String tier);
 
+  /// No description provided for @asrModelFastDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Fastest. Best for low-end devices.'**
+  String get asrModelFastDescription;
+
+  /// No description provided for @asrModelBalancedDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Balanced accuracy and speed.'**
+  String get asrModelBalancedDescription;
+
+  /// No description provided for @asrModelAccurateDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'More accurate, but larger and slower.'**
+  String get asrModelAccurateDescription;
+
   /// No description provided for @localSpeechRecognition.
   ///
   /// In en, this message translates to:
@@ -2689,6 +2713,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Model size: ~{size}'**
   String speechModelSize(String size);
+
+  /// No description provided for @speechModelApproxSize.
+  ///
+  /// In en, this message translates to:
+  /// **'~{size}'**
+  String speechModelApproxSize(String size);
 
   /// No description provided for @speechModelReady.
   ///
@@ -2783,7 +2813,7 @@ abstract class AppLocalizations {
   /// No description provided for @speechRecognitionRequiredMessage.
   ///
   /// In en, this message translates to:
-  /// **'Speech recognition is used to automatically evaluate your read-along and retelling. A model download is required. You can disable this in Settings.'**
+  /// **'Speech recognition is used to automatically evaluate your read-aloud and retelling. A model download is required before starting.'**
   String get speechRecognitionRequiredMessage;
 
   /// No description provided for @downloadAndEnable.
@@ -5936,6 +5966,18 @@ abstract class AppLocalizations {
   /// **'After retelling, automatically play your recording for pronunciation review'**
   String get autoPlayRetellRecordingSubtitle;
 
+  /// No description provided for @listenAndRepeatRatingToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show rating during read-aloud'**
+  String get listenAndRepeatRatingToggle;
+
+  /// No description provided for @listenAndRepeatRatingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When off, recordings are kept but recognition and scoring are skipped'**
+  String get listenAndRepeatRatingSubtitle;
+
   /// No description provided for @retellRatingToggle.
   ///
   /// In en, this message translates to:
@@ -7063,6 +7105,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not in use · {size}'**
   String ttsDownloadedModelsDesc(String size);
+
+  /// No description provided for @asrDeleteAllModelsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all downloaded Echo Loop speech recognition models? You can re-download them anytime.'**
+  String get asrDeleteAllModelsConfirm;
+
+  /// No description provided for @asrDownloadedModelsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded speech recognition models'**
+  String get asrDownloadedModelsTitle;
+
+  /// No description provided for @asrDownloadedModelsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in use · {size}'**
+  String asrDownloadedModelsDesc(String size);
 
   /// No description provided for @dictionarySettings.
   ///

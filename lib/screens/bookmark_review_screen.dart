@@ -24,6 +24,7 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../models/speech_practice_models.dart';
 import '../utils/playback_speed.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
 import '../providers/repeat_flow/repeat_flow_state.dart';
@@ -488,6 +489,9 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
       isProcessing: isProcessingState,
       currentAttempt: currentAttempt,
       hintText: isPlaying ? l10n.listenAndRepeatListenHint : null,
+      showRatingBadge: ref.watch(
+        learningSettingsProvider.select((s) => s.listenAndRepeatRatingEnabled),
+      ),
       showCountdown: showCountdown,
       isInPause: isInPause,
       countdownWidget: showCountdown

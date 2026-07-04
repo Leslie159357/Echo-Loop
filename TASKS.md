@@ -1,7 +1,22 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-04（修复 GitHub CI：dictionary_service_test 收尾 segfault）
+> 最后更新：2026-07-04（语音识别常开 + 评分开关迁移 + ASR 模型管理）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：语音识别常开 + 评分开关迁移 + ASR 模型管理
+
+语音识别从“可关闭功能”调整为基础能力，后续可复用于字幕转录；跟读/复述评分改由学习设置页的两个独立开关控制，入口在需要评分且 Whisper 模型未就绪时阻塞下载。
+
+- [x] **迁移**：启动期读取旧 key `offline_asr_enabled`；旧值为 `false` 且用户未显式设置新 key 时，写入 `learning_listen_and_repeat_rating_enabled=false` 与 `learning_retell_rating_enabled=false`；旧值为 `true` 或缺失时保持新评分开关默认 `true`；迁移后移除旧 key。
+- [x] **学习设置**：学习设置页新增「跟读时显示评分」和「复述时显示评分」两个独立开关。关闭后仍保留录音回听，但跳过识别/转录/评分流程。
+- [x] **ASR 设置页**：移除语音识别总开关；按设备推荐模型，同时允许用户在 Tiny/Base/Small 之间选择、下载、重试、取消下载和删除已下载模型。
+- [x] **ASR 设置页 UI 对齐**：与语音合成设置页保持一致，后端选择独立成组；仅选中 Echo Loop AI 时在下方显示独立模型组，并在模型选项中展示预估大小（Fast 约 99 MB / Balanced 约 153 MB / Accurate 约 358 MB）。
+- [x] **模型删除**：Echo Loop AI 后端下当前选中模型不可删除；Apple Speech 后端下允许删除所有已下载 Whisper 模型，并使用 ASR 专用删除文案。
+- [x] **入口阻塞**：跟读、难句跟读、复述、段落复述、复述复习等仅在对应评分开关开启时要求 ASR；平台原生后端不检查 Whisper 模型，离线后端模型未 ready 时不进入。
+- [x] **模型清理**：启动清理只删除未知/废弃 ASR 模型目录，保留当前版本所有可选 Whisper 模型，避免用户下载的非推荐模型被误删。
+- [x] **验证**：`flutter analyze` 改动相关 22 个文件 0 问题；`flutter test test/providers/learning_settings_provider_test.dart test/screens/learning_settings_screen_test.dart test/providers/offline_asr_settings_provider_test.dart test/screens/asr_settings_screen_test.dart test/widgets/asr_download_prompt_dialog_test.dart test/providers/speech/speech_recording_controller_test.dart test/providers/retell_recording_controller_test.dart` 全过（69 例）。
+
+  **完成时间**: 2026-07-04
 
 ## 已完成：修复 GitHub CI：dictionary_service_test 收尾 segfault
 

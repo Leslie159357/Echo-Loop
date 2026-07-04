@@ -23,12 +23,15 @@ void main() {
   Future<Widget> buildApp({
     bool autoSkipRetell = false,
     bool autoPlayRetellRecording = false,
+    bool listenAndRepeatRatingEnabled = true,
     bool retellRatingEnabled = true,
   }) async {
     SharedPreferences.setMockInitialValues({
       if (autoSkipRetell) LearningSettingsKeys.autoSkipRetell: true,
       if (autoPlayRetellRecording)
         LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion: true,
+      if (!listenAndRepeatRatingEnabled)
+        LearningSettingsKeys.listenAndRepeatRatingEnabled: false,
       if (!retellRatingEnabled) LearningSettingsKeys.retellRatingEnabled: false,
     });
     final prefs = await SharedPreferences.getInstance();
@@ -79,9 +82,17 @@ void main() {
       (w) =>
           w is SwitchListTile &&
           w.title is Text &&
+          (w.title as Text).data == 'Show rating during read-aloud',
+    );
+    final listenRatingTile = tester.widget<SwitchListTile>(ratingFinder);
+    expect(listenRatingTile.value, isTrue);
+    final retellRatingFinder = find.byWidgetPredicate(
+      (w) =>
+          w is SwitchListTile &&
+          w.title is Text &&
           (w.title as Text).data == 'Show rating during retelling',
     );
-    final ratingTile = tester.widget<SwitchListTile>(ratingFinder);
+    final ratingTile = tester.widget<SwitchListTile>(retellRatingFinder);
     expect(ratingTile.value, isTrue);
   });
 
@@ -156,6 +167,29 @@ void main() {
     expect(prefs.getBool(LearningSettingsKeys.retellRatingEnabled), isFalse);
   });
 
+  testWidgets('点击跟读评级开关 → 翻转 state + 写 SP', (tester) async {
+    await tester.pumpWidget(await buildApp());
+    await tester.pumpAndSettle();
+
+    final ratingFinder = find.byWidgetPredicate(
+      (w) =>
+          w is SwitchListTile &&
+          w.title is Text &&
+          (w.title as Text).data == 'Show rating during read-aloud',
+    );
+    await tester.tap(ratingFinder);
+    await tester.pumpAndSettle();
+
+    final switchTile = tester.widget<SwitchListTile>(ratingFinder);
+    expect(switchTile.value, isFalse);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getBool(LearningSettingsKeys.listenAndRepeatRatingEnabled),
+      isFalse,
+    );
+  });
+
   testWidgets('初始 ON 时开关显示 ON', (tester) async {
     await tester.pumpWidget(
       await buildApp(autoSkipRetell: true, autoPlayRetellRecording: true),
@@ -185,9 +219,18 @@ void main() {
       (w) =>
           w is SwitchListTile &&
           w.title is Text &&
+          (w.title as Text).data == 'Show rating during read-aloud',
+    );
+    final listenRatingTile = tester.widget<SwitchListTile>(ratingFinder);
+    expect(listenRatingTile.value, isTrue);
+
+    final retellRatingFinder = find.byWidgetPredicate(
+      (w) =>
+          w is SwitchListTile &&
+          w.title is Text &&
           (w.title as Text).data == 'Show rating during retelling',
     );
-    final ratingTile = tester.widget<SwitchListTile>(ratingFinder);
+    final ratingTile = tester.widget<SwitchListTile>(retellRatingFinder);
     expect(ratingTile.value, isTrue);
   });
 
@@ -200,6 +243,22 @@ void main() {
           w is SwitchListTile &&
           w.title is Text &&
           (w.title as Text).data == 'Show rating during retelling',
+    );
+    final ratingTile = tester.widget<SwitchListTile>(ratingFinder);
+    expect(ratingTile.value, isFalse);
+  });
+
+  testWidgets('跟读评级初始 OFF 时开关显示 OFF', (tester) async {
+    await tester.pumpWidget(
+      await buildApp(listenAndRepeatRatingEnabled: false),
+    );
+    await tester.pumpAndSettle();
+
+    final ratingFinder = find.byWidgetPredicate(
+      (w) =>
+          w is SwitchListTile &&
+          w.title is Text &&
+          (w.title as Text).data == 'Show rating during read-aloud',
     );
     final ratingTile = tester.widget<SwitchListTile>(ratingFinder);
     expect(ratingTile.value, isFalse);
