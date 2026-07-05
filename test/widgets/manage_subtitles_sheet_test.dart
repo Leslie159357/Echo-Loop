@@ -447,16 +447,17 @@ void main() {
     });
 
     group('本地（离线）转录', () {
-      testWidgets('无字幕音频：显示本地转录选项', (tester) async {
+      testWidgets('无字幕音频：隐藏本地转录选项', (tester) async {
         final item = createTestAudioItem(transcriptPath: null);
         await tester.pumpWidget(buildSheet(item));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        expect(find.text('On-Device Transcription'), findsOneWidget);
+        expect(find.text('On-Device Transcription'), findsNothing);
       });
 
+      // 本地转录入口暂时隐藏，保留展开态测试便于后续恢复。
       testWidgets('选中本地转录：显示语言（英文）与模型档位选择', (tester) async {
         // 用已有字幕的音频，避免无字幕时的新手引导 coachmark 干扰 pumpAndSettle。
         SharedPreferences.setMockInitialValues({});
@@ -483,8 +484,9 @@ void main() {
         expect(find.text('Test Model'), findsOneWidget);
         // 自动合并短句开关在离线区也出现（与 AI 转录对齐）。
         expect(find.text('Auto-merge short sentences'), findsOneWidget);
-      });
+      }, skip: true);
 
+      // 本地转录入口暂时隐藏，保留语言选择器测试便于后续恢复。
       testWidgets('选中本地转录：语言胶囊可点击弹出菜单（仅英文一项）', (tester) async {
         SharedPreferences.setMockInitialValues({});
         final sp = await SharedPreferences.getInstance();
@@ -514,7 +516,7 @@ void main() {
           find.text('English').evaluate().length,
           greaterThan(englishBefore),
         );
-      });
+      }, skip: true);
 
       testWidgets('转录进行中：显示保持前台提示', (tester) async {
         final item = createTestAudioItem();
@@ -562,9 +564,9 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
 
-        // 取消后状态回 Idle，进度视图消失，重新显示转录选项。
+        // 取消后状态回 Idle，进度视图消失；本地转录入口保持隐藏。
         expect(find.textContaining('Keep the app open'), findsNothing);
-        expect(find.text('On-Device Transcription'), findsOneWidget);
+        expect(find.text('On-Device Transcription'), findsNothing);
       });
     });
   });

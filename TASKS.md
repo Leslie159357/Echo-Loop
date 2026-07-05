@@ -1,7 +1,18 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-05（本地转录去 VAD + whisper 自驱滑窗 + 原生 segment 时间戳）
+> 最后更新：2026-07-06（隐藏本地转录入口）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
+
+## 已完成：隐藏管理字幕里的本地转录入口
+
+用户反馈本地转录效果不好，先从「管理字幕」弹窗隐藏本地转录入口，避免继续暴露给用户；底层本地转录实现、状态展示、取消逻辑和测试代码保留，方便后续恢复或继续排查。
+
+- [x] **入口隐藏**：`ManageSubtitlesSheet` 新增 `_showOfflineTranscriptionEntry` 开关，当前返回 `false`；本地转录选项与展开区仍保留在代码中，但运行时不渲染。
+- [x] **进行中状态保留**：已有本地转录任务的进度、前台提示、取消入口仍按原逻辑显示，避免历史/后台任务状态不可见。
+- [x] **测试**：管理字幕弹窗测试改为断言无字幕音频不显示 `On-Device Transcription`；本地转录展开态测试保留但暂时跳过，进行中/取消测试继续覆盖。
+- [x] **验证**：`flutter analyze lib/widgets/manage_subtitles_sheet.dart test/widgets/manage_subtitles_sheet_test.dart` 0 问题；`flutter test test/widgets/manage_subtitles_sheet_test.dart` 全过（18 例，2 skipped）。
+
+  **完成时间**: 2026-07-06
 
 ## 已完成：字幕编辑最大缩放按音频时长自适应
 

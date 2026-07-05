@@ -95,6 +95,11 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   final OverlayPortalController _modelMenuController =
       OverlayPortalController();
 
+  /// 是否展示本地离线转录入口。
+  ///
+  /// 当前本地转录效果不稳定，先隐藏入口；保留实现和状态处理，便于后续恢复。
+  bool get _showOfflineTranscriptionEntry => false;
+
   @override
   void initState() {
     super.initState();
@@ -916,27 +921,29 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                 : const SizedBox(width: double.infinity, height: 0),
           ),
           const SizedBox(height: AppSpacing.s),
-          // 本地（离线）转录选项
-          _buildOptionTile(
-            theme: theme,
-            icon: Icons.offline_bolt_outlined,
-            title: l10n.offlineTranscription,
-            subtitle: l10n.offlineTranscriptionSubtitle,
-            selected: _selectedAction == _SubtitleAction.offlineTranscription,
-            onTap: () => setState(
-              () => _selectedAction = _SubtitleAction.offlineTranscription,
+          // 本地（离线）转录入口暂时隐藏：当前识别效果不稳定，保留代码便于后续恢复。
+          if (_showOfflineTranscriptionEntry) ...[
+            _buildOptionTile(
+              theme: theme,
+              icon: Icons.offline_bolt_outlined,
+              title: l10n.offlineTranscription,
+              subtitle: l10n.offlineTranscriptionSubtitle,
+              selected: _selectedAction == _SubtitleAction.offlineTranscription,
+              onTap: () => setState(
+                () => _selectedAction = _SubtitleAction.offlineTranscription,
+              ),
             ),
-          ),
-          // 本地转录选项（语言 + 模型档位，动画展开/收起）
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            alignment: Alignment.topCenter,
-            child: _selectedAction == _SubtitleAction.offlineTranscription
-                ? _buildOfflineOptions(l10n, theme)
-                : const SizedBox(width: double.infinity, height: 0),
-          ),
-          const SizedBox(height: AppSpacing.s),
+            // 本地转录选项（语言 + 模型档位，动画展开/收起）
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              alignment: Alignment.topCenter,
+              child: _selectedAction == _SubtitleAction.offlineTranscription
+                  ? _buildOfflineOptions(l10n, theme)
+                  : const SizedBox(width: double.infinity, height: 0),
+            ),
+            const SizedBox(height: AppSpacing.s),
+          ],
           // 本地上传（手动导入已有字幕文件）
           _buildOptionTile(
             theme: theme,
