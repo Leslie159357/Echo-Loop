@@ -153,6 +153,7 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          REVENUECAT_API_KEY_GOOGLE: ${{ vars.REVENUECAT_API_KEY_GOOGLE }}
         run: |
           flutter clean
           DART_DEFINES=(
@@ -165,6 +166,11 @@ jobs:
           if [[ -n "$POSTHOG_API_KEY" ]]; then
             DART_DEFINES+=("--dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY}")
           fi
+          if [[ -z "$REVENUECAT_API_KEY_GOOGLE" ]]; then
+            echo "ERROR: REVENUECAT_API_KEY_GOOGLE repository variable is required for Android release builds." >&2
+            exit 1
+          fi
+          DART_DEFINES+=("--dart-define=REVENUECAT_API_KEY_GOOGLE=${REVENUECAT_API_KEY_GOOGLE}")
           flutter build apk --release --flavor=prod \
             --target-platform android-arm64 \
             --build-name="$BUILD_NAME" \
@@ -215,6 +221,7 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
+          REVENUECAT_API_KEY_GOOGLE: ${{ vars.REVENUECAT_API_KEY_GOOGLE }}
         run: |
           DART_DEFINES=(
             "--dart-define=API_BASE_URL=${API_BASE_URL}"
@@ -226,6 +233,11 @@ jobs:
           if [[ -n "$POSTHOG_API_KEY" ]]; then
             DART_DEFINES+=("--dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY}")
           fi
+          if [[ -z "$REVENUECAT_API_KEY_GOOGLE" ]]; then
+            echo "ERROR: REVENUECAT_API_KEY_GOOGLE repository variable is required for Android release builds." >&2
+            exit 1
+          fi
+          DART_DEFINES+=("--dart-define=REVENUECAT_API_KEY_GOOGLE=${REVENUECAT_API_KEY_GOOGLE}")
           # abiFilters 已在 gradle 限定 arm64，AAB 同样只含 arm64
           flutter build appbundle --release --flavor=prod \
             --build-name="$BUILD_NAME" \
@@ -354,9 +366,11 @@ jobs:
           if [[ -n "$POSTHOG_API_KEY" ]]; then
             DART_DEFINES+=("--dart-define=POSTHOG_API_KEY=${POSTHOG_API_KEY}")
           fi
-          if [[ -n "$REVENUECAT_API_KEY_APPLE" ]]; then
-            DART_DEFINES+=("--dart-define=REVENUECAT_API_KEY_APPLE=${REVENUECAT_API_KEY_APPLE}")
+          if [[ -z "$REVENUECAT_API_KEY_APPLE" ]]; then
+            echo "ERROR: REVENUECAT_API_KEY_APPLE secret is required for iOS release builds." >&2
+            exit 1
           fi
+          DART_DEFINES+=("--dart-define=REVENUECAT_API_KEY_APPLE=${REVENUECAT_API_KEY_APPLE}")
           # 先用 flutter 编译 dart 代码，--no-codesign 跳过签名
           flutter build ios --release --no-codesign --flavor=prod \
             --build-name="$BUILD_NAME" \
