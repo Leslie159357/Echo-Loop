@@ -3,7 +3,14 @@
 /// 验证 App 能正常启动并显示首页。
 library;
 
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
+import 'package:echo_loop/features/official_collections/data/official_catalog_service.dart';
+import 'package:echo_loop/features/official_collections/data/official_sync_service.dart';
+import 'package:echo_loop/features/official_collections/models/catalog.dart';
+import 'package:echo_loop/providers/app_update_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -24,6 +31,34 @@ import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/package_info_provider.dart';
 
 import 'helpers/mock_providers.dart';
+
+class _NoopOfficialCatalogService extends OfficialCatalogService {
+  _NoopOfficialCatalogService()
+    : super.withDio(dio: Dio(), resolveDir: () async => Directory.systemTemp);
+
+  @override
+  CatalogSnapshot? get cached => null;
+
+  @override
+  bool get hasInitialized => true;
+
+  @override
+  Future<CatalogSnapshot?> loadCachedCatalog() async => null;
+
+  @override
+  Future<CatalogRefreshOutcome> refresh({bool force = false}) async {
+    return const CatalogThrottled();
+  }
+}
+
+class _NoopOfficialSyncService extends OfficialSyncService {
+  _NoopOfficialSyncService({required super.database, required super.catalog});
+
+  @override
+  Future<OfficialSyncStats> syncAll({bool force = false}) async {
+    return OfficialSyncStats.noop(const CatalogThrottled());
+  }
+}
 
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
@@ -59,6 +94,16 @@ void main() {
               NativeDatabase.memory(
                 setup: (db) => db.execute('PRAGMA foreign_keys = ON'),
               ),
+            ),
+          ),
+          appUpdateProvider.overrideWith(() => TestAppUpdate()),
+          officialCatalogServiceProvider.overrideWithValue(
+            _NoopOfficialCatalogService(),
+          ),
+          officialSyncServiceProvider.overrideWith(
+            (ref) => _NoopOfficialSyncService(
+              database: ref.read(appDatabaseProvider),
+              catalog: ref.read(officialCatalogServiceProvider),
             ),
           ),
         ],

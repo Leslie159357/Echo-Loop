@@ -3,6 +3,16 @@
 > 最后更新：2026-07-06（订阅页自动续费说明弱化）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——**仍未解决**
 
+## 已完成：修复 GitHub CI 冒烟测试后台网络副作用
+
+最新 GitHub Actions `CI` run `28786906432` 中 `test` job 日志显示 `3845 tests passed, 13 skipped`，但 `flutter test --concurrency=1` 在汇总全过后仍以 exit code 1 结束。失败尾部集中在 `test/widget_test.dart: App smoke test` 启动 `EchoLoopApp` 后触发的真实后台链路：版本更新检查访问 `localhost:3000/version.json`，官方合集冷启动同步访问真实 catalog。
+
+- [x] **更新检查隔离**：`widget_test.dart` 覆盖 `appUpdateProvider` 为既有 `TestAppUpdate`，避免 MainShell 初始化时发起真实版本检查。
+- [x] **官方合集同步隔离**：新增测试私有 `_NoopOfficialCatalogService` 与 `_NoopOfficialSyncService`，让冷启动缓存加载和 3 秒后强制同步都走本地 no-op，不访问网络。
+- [x] **验证**：`flutter analyze test/widget_test.dart` 0 问题；`flutter test test/widget_test.dart` 全过，日志只剩 no-op `CatalogThrottled`。
+
+  **完成时间**: 2026-07-06
+
 ## 已完成：订阅页自动续费说明弱化
 
 用户反馈订阅页「到期前 24 小时」提醒语气偏重且信息冗余，后续又反馈说明文字视觉仍太黑。保留自动续费与账户管理/取消的核心披露，去掉 24 小时细节，并降低辅助说明文字对比度，让它退到 CTA 下方的次要信息层级。
