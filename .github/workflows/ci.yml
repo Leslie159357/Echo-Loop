@@ -56,12 +56,13 @@ jobs:
 
       - name: Run tests
         # Ubuntu runner 上全量测试收尾时，偶发「全部用例通过但 flutter test 以 1
-        # 退出」的原生资源清理竞态（SQLite/插件/Flutter tester teardown 崩溃，发生在
-        # 所有用例已完成、reporter 已写出结果之后）。--concurrency=1 降低竞态频率，
-        # 但无法根治。改用 JSON reporter 的 done.success 作为权威判定：忽略进程退出码，
-        # 仅当存在失败用例（或运行未正常结束）时才判失败。
+        # 退出」的 Flutter 测试运行器收尾工具链 flakiness（发生在所有用例已完成、
+        # reporter 已写出结果之后，与 app 代码无关）。诊断证实 --concurrency=1 防不住
+        # 它（失败样本本就是串行），故不再牺牲速度串行。改用 JSON reporter 的
+        # done.success 作为权威判定：忽略被收尾污染的进程退出码，仅当存在失败用例
+        # （或运行未正常结束、无 done 事件）时才判失败。
         run: |
-          flutter test --concurrency=1 \
+          flutter test \
             --file-reporter=json:test-results.json || true
           python3 - <<'PY'
           import json, sys
