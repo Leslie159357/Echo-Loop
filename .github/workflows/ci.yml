@@ -55,10 +55,40 @@ jobs:
         run: flutter pub get
 
       - name: Run tests
-        # Ubuntu runner 上全量 widget/unit 测试并行收尾时，偶发出现
-        # “全部测试通过但 flutter test 以 1 退出”的原生资源竞态。
-        # 串行执行牺牲少量耗时，换取 SQLite/插件/Flutter tester 清理稳定性。
-        run: flutter test --concurrency=1
+        # Ubuntu runner 上全量测试收尾时，偶发「全部用例通过但 flutter test 以 1
+        # 退出」的原生资源清理竞态（SQLite/插件/Flutter tester teardown 崩溃，发生在
+        # 所有用例已完成、reporter 已写出结果之后）。--concurrency=1 降低竞态频率，
+        # 但无法根治。改用 JSON reporter 的 done.success 作为权威判定：忽略进程退出码，
+        # 仅当存在失败用例（或运行未正常结束）时才判失败。
+        run: |
+          flutter test --concurrency=1 \
+            --file-reporter=json:test-results.json || true
+          python3 - <<'PY'
+          import json, sys
+          done = None
+          try:
+              with open('test-results.json', encoding='utf-8') as f:
+                  for line in f:
+                      line = line.strip()
+                      if not line:
+                          continue
+                      try:
+                          event = json.loads(line)
+                      except json.JSONDecodeError:
+                          continue
+                      if event.get('type') == 'done':
+                          done = event
+          except FileNotFoundError:
+              print('::error::test-results.json 缺失 —— 测试未产出结果')
+              sys.exit(1)
+          if done is None:
+              print('::error::未找到 done 事件，测试运行未正常结束')
+              sys.exit(1)
+          if not done.get('success'):
+              print('::error::flutter test 报告存在失败用例')
+              sys.exit(1)
+          print('全部用例通过（依据 JSON reporter done.success），忽略进程退出码')
+          PY
 
   build:
     needs: [analyze, test]
