@@ -17,6 +17,11 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # 崩溃间歇性复现：并行跑多份提高单次 dispatch 抓到失败实例的概率。
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - uses: actions/checkout@v4
@@ -46,19 +51,37 @@ jobs:
 
       - name: Run tests (verbose, capture crash)
         run: |
+          # 后台每 2s 采样内存高水位（OOM 假设的直接证据）。
+          ( while true; do
+              echo "$(date +%T) $(free -m | awk '/Mem:/{print "used="$3"M free="$4"M avail="$7"M"}')"
+              sleep 2
+            done ) > mem-samples.log 2>&1 &
+          MEM_PID=$!
           # ulimit 只在当前 shell 生效，必须与 flutter test 同 step（子进程继承）。
           ulimit -c unlimited
           set +e
           flutter test -v --concurrency=1 \
             --file-reporter=json:test-results.json \
             > flutter-test-verbose.log 2>&1
-          echo "flutter test exit code: $?" | tee flutter-test-exitcode.txt
-          # 只回显 verbose 日志尾部关键片段（子进程退出/崩溃信息通常在收尾）。
+          CODE=$?
+          kill $MEM_PID 2>/dev/null || true
+          echo "flutter test exit code: $CODE" | tee flutter-test-exitcode.txt
+          echo '===== 内存高水位（used 最大 3 行）====='
+          sort -t= -k2 -n mem-samples.log | tail -3
           echo '===== tail of verbose log ====='
-          tail -300 flutter-test-verbose.log
-          echo '===== grep for exit/crash/signal ====='
-          grep -inE "exit|crash|signal|shell|tester|unexpected|segfault|sigsegv|sigabrt" \
-            flutter-test-verbose.log | tail -80 || true
+          tail -120 flutter-test-verbose.log
+          echo '===== 非 cleanup 场景的异常退出（正常 -9 前必有 Terminating）====='
+          grep -nE "exited with code=(-6|-11)|error|Bad state|abort|shell exited unexpectedly|Observed an unexpected|test .*: crash" \
+            flutter-test-verbose.log | tail -40 || true
+
+      - name: Check dmesg for OOM killer
+        if: always()
+        run: |
+          echo '===== dmesg OOM / killed process ====='
+          sudo dmesg -T 2>/dev/null | grep -iE "out of memory|killed process|oom-kill|flutter_tester|invoked oom" \
+            | tee dmesg-oom.log || echo '（dmesg 无 OOM 记录）'
+          echo '===== dmesg 尾部 ====='
+          sudo dmesg -T 2>/dev/null | tail -40 || true
 
       - name: Analyze core dumps
         if: always()
@@ -83,10 +106,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-crash-diagnostics
+          name: test-crash-diagnostics-${{ matrix.shard }}
           path: |
             flutter-test-verbose.log
             flutter-test-exitcode.txt
             test-results.json
+            mem-samples.log
+            dmesg-oom.log
             /tmp/cores/
           if-no-files-found: warn
