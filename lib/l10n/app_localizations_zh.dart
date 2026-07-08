@@ -123,6 +123,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumRestored => '已恢复购买。';
 
   @override
+  String get premiumWebCheckoutCta => '前往订阅结账';
+
+  @override
+  String get premiumWebCheckoutHint => '将在浏览器中安全完成支付，随后返回 App。';
+
+  @override
+  String get premiumWebVerifying => '正在等待支付结果确认…';
+
+  @override
+  String get premiumWebCheckDone => '我已完成支付';
+
+  @override
+  String get premiumWebOpenFailed => '无法打开结账页面，请重试。';
+
+  @override
+  String get premiumWebAutoRenewNotice => '自动续费。可在账户页或结账确认邮件中管理或取消。';
+
+  @override
+  String get premiumRefresh => '刷新';
+
+  @override
   String get premiumPeriodMonthly => '月付';
 
   @override

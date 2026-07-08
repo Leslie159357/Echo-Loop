@@ -58,10 +58,13 @@ Widget _harness({
   SubscriptionController Function()? controller,
   // 测试宿主（macOS/无 key）默认不支持订阅，这里默认置 true 以覆盖购买页 UI。
   bool available = true,
+  // 网页支付渠道（侧载 APK / 桌面）：切换到浏览器结账购买态。
+  bool webCheckout = false,
 }) {
   return ProviderScope(
     overrides: [
       subscriptionAvailabilityProvider.overrideWithValue(available),
+      webCheckoutModeProvider.overrideWithValue(webCheckout),
       subscriptionControllerProvider.overrideWith(
         controller ?? () => _FixedController(state),
       ),
@@ -95,6 +98,26 @@ void main() {
     );
     expect(find.text('Monthly'), findsNothing);
     expect(find.byType(FilledButton), findsNothing);
+    expect(find.text('Restore Purchases'), findsNothing);
+  });
+
+  testWidgets('网页支付渠道：展示网页结账 CTA，不展示商店套餐卡与恢复购买', (tester) async {
+    await tester.pumpWidget(
+      _harness(state: const EntitlementState.free(), webCheckout: true),
+    );
+    await tester.pumpAndSettle();
+
+    // 权益列表仍展示
+    expect(find.text('Unlimited AI translation'), findsOneWidget);
+    // 网页结账 CTA + 说明，不出现商店套餐卡
+    expect(
+      find.widgetWithText(FilledButton, 'Continue to checkout'),
+      findsOneWidget,
+    );
+    expect(find.text('Monthly'), findsNothing);
+    expect(find.text('Yearly'), findsNothing);
+    // appbar action 为「刷新」，非商店「恢复购买」
+    expect(find.text('Refresh'), findsOneWidget);
     expect(find.text('Restore Purchases'), findsNothing);
   });
 

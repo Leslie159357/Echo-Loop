@@ -11,9 +11,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../config/revenuecat_config.dart';
+import '../../../config/web_purchase_config.dart';
 
 part 'subscription_availability.g.dart';
 
 /// 当前平台是否支持订阅（订阅 UI 展示总闸）。
 @riverpod
 bool subscriptionAvailability(Ref ref) => isSubscriptionSupported;
+
+/// 当前是否走「网页支付」渠道（侧载 APK / 桌面）。
+///
+/// Paywall 据此切换购买交互：true 时不展示商店套餐卡、改为「浏览器结账 + 回流对账」。
+/// 测试可 override 模拟网页渠道。
+@riverpod
+bool webCheckoutMode(Ref ref) => isWebCheckoutConfigured;

@@ -8,6 +8,8 @@
 /// 不接触 RevenueCat 类型；购买 / 恢复经 [SubscriptionController] 集中入口。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +17,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../config/revenuecat_config.dart';
+import '../../../config/web_purchase_config.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/sign_in_required_dialog.dart';
 import '../../../theme/app_theme.dart';
@@ -22,6 +25,7 @@ import '../models/entitlement.dart';
 import '../models/subscription_plan.dart';
 import '../providers/subscription_availability.dart';
 import '../providers/subscription_controller.dart';
+import '../providers/subscription_identity.dart';
 import '../providers/subscription_plans_provider.dart';
 import '../services/purchase_service.dart';
 import '../utils/member_status.dart';
@@ -41,6 +45,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   /// 购买 / 恢复进行中。
   bool _busy = false;
+
+  /// 网页支付：已打开浏览器结账、正在轮询后端等权益到账。
+  bool _waitingForWeb = false;
 
   @override
   Widget build(BuildContext context) {
@@ -66,15 +73,20 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
     final subState = ref.watch(subscriptionControllerProvider);
     final isPremium = subState.isActive;
+    // 网页支付渠道（侧载 APK / 桌面）：购买改为浏览器结账 + 回流对账，不展示商店套餐卡。
+    final webMode = ref.watch(webCheckoutModeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.premiumTitle),
         // 恢复购买为低频操作（登录后通常自动对账获取权益），弱化为右上角文字 action。
+        // 网页渠道无平台「恢复」，改为「刷新」——直接触发后端权益对账。
         actions: [
           TextButton(
-            onPressed: _busy ? null : _restore,
-            child: Text(l10n.premiumRestore),
+            onPressed: _busy
+                ? null
+                : (webMode ? _refreshEntitlement : _restore),
+            child: Text(webMode ? l10n.premiumRefresh : l10n.premiumRestore),
           ),
         ],
       ),
@@ -90,7 +102,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       const SizedBox(height: 24),
                       _BenefitCard(l10n: l10n),
                       const SizedBox(height: 24),
-                      _buildPurchaseArea(l10n),
+                      if (webMode)
+                        _buildWebPurchaseArea(l10n)
+                      else
+                        _buildPurchaseArea(l10n),
                     ],
             ),
             if (_busy)
@@ -121,22 +136,26 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       _MembershipInfoTile(l10n: l10n, summary: summary),
       const SizedBox(height: 20),
       _BenefitCard(l10n: l10n),
-      const SizedBox(height: 24),
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.premiumAccent(
-              Theme.of(context).brightness,
+      // 「管理订阅」仅在有可跳转的管理页时展示（网页支付渠道无稳定深链时隐藏，
+      // 避免死按钮）。
+      if (manageSubscriptionsUrl != null) ...[
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.premiumAccent(
+                Theme.of(context).brightness,
+              ),
+              foregroundColor: AppTheme.onPremiumAccent(
+                Theme.of(context).brightness,
+              ),
             ),
-            foregroundColor: AppTheme.onPremiumAccent(
-              Theme.of(context).brightness,
-            ),
+            onPressed: _openManageSubscription,
+            child: Text(l10n.premiumManage),
           ),
-          onPressed: _openManageSubscription,
-          child: Text(l10n.premiumManage),
         ),
-      ),
+      ],
     ];
   }
 
@@ -209,6 +228,141 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         );
       },
     );
+  }
+
+  /// 网页支付购买区：无商店套餐卡，改为「浏览器结账 + 回流对账」。
+  ///
+  /// 套餐与本地化价格由 RevenueCat 托管结账页展示（客户端不硬编码价格）。
+  Widget _buildWebPurchaseArea(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        if (_waitingForWeb) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Flexible(child: Text(l10n.premiumWebVerifying)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _busy ? null : _manualCheckEntitlement,
+              child: Text(l10n.premiumWebCheckDone),
+            ),
+          ),
+        ] else ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.premiumAccent(theme.brightness),
+                foregroundColor: AppTheme.onPremiumAccent(theme.brightness),
+              ),
+              onPressed: _busy ? null : _startWebCheckout,
+              child: Text(l10n.premiumWebCheckoutCta),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.premiumWebCheckoutHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          l10n.premiumWebAutoRenewNotice,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.72 : 0.58,
+            ),
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        _LegalFooter(l10n: l10n),
+      ],
+    );
+  }
+
+  /// 发起网页结账：登录 → 拼带 user_id 的 Web Purchase Link → 外部浏览器打开 →
+  /// 进入等待态并轮询后端对账（不阻塞 UI，用户可点「我已完成支付」立即复核）。
+  Future<void> _startWebCheckout() async {
+    if (!await _ensureSignedIn() || !mounted) return;
+    final userId = ref.read(subscriptionIdentityProvider).userId;
+    final uri = userId == null ? null : buildWebPurchaseUri(userId);
+    if (uri == null) {
+      _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    if (!opened) {
+      _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+      return;
+    }
+    setState(() => _waitingForWeb = true);
+    unawaited(_pollEntitlement());
+  }
+
+  /// 轮询后端权益对账，直到到账（自动关闭）或超时（~2 分钟）。
+  ///
+  /// 权益真相在后端（RC webhook 落库），浏览器结账成功回跳不作数——必须回源确认。
+  /// 用户从浏览器返回 App 时 resume 也会触发 refresh（main.dart），双保险。
+  Future<void> _pollEntitlement() async {
+    const interval = Duration(seconds: 3);
+    const maxAttempts = 40; // ~2 分钟
+    for (var i = 0; i < maxAttempts; i++) {
+      if (!mounted || !_waitingForWeb) return;
+      await ref.read(subscriptionControllerProvider.notifier).refresh();
+      if (!mounted) return;
+      if (ref.read(subscriptionControllerProvider).isActive) {
+        setState(() => _waitingForWeb = false);
+        if (mounted) context.pop();
+        return;
+      }
+      await Future<void>.delayed(interval);
+    }
+    if (mounted) setState(() => _waitingForWeb = false);
+  }
+
+  /// 「我已完成支付」：立即回源对账一次（不必等轮询间隔）。
+  Future<void> _manualCheckEntitlement() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(subscriptionControllerProvider.notifier).refresh();
+      if (!mounted) return;
+      if (ref.read(subscriptionControllerProvider).isActive) {
+        setState(() => _waitingForWeb = false);
+        context.pop();
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 刷新权益（网页渠道的 appbar action）：直接触发后端对账并提示当前状态。
+  Future<void> _refreshEntitlement() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(subscriptionControllerProvider.notifier).refresh();
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      final active = ref.read(subscriptionControllerProvider).isActive;
+      _showMessage(active ? l10n.premiumRestored : l10n.premiumRestoreNone);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// 解析当前生效选择：用户选中 > 推荐年付 > 第一个。

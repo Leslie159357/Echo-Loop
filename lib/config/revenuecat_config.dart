@@ -16,6 +16,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
+import 'web_purchase_config.dart';
+
 /// Apple App Store 平台的 RevenueCat 公开 API Key（iOS / macOS）。
 const _revenueCatApiKeyApple = String.fromEnvironment(
   'REVENUECAT_API_KEY_APPLE',
@@ -74,10 +76,13 @@ bool get isRevenueCatConfigured => revenueCatApiKey.isNotEmpty;
 
 /// 当前平台是否支持订阅（订阅 UI 展示的总闸）。
 ///
-/// 「某平台是否启用订阅」由编译期 key 注入表达：不给某平台注入 RC key，
-/// 该平台即无订阅（入口隐藏、Paywall 不可达、RC 不初始化）。本地 StoreKit
-/// 测试模式视为支持（开发调试用）。
-bool get isSubscriptionSupported => useLocalStoreKit || isRevenueCatConfigured;
+/// 「某平台是否启用订阅」由编译期配置表达：
+/// - 商店渠道：注入 RC key → 走原生内购；
+/// - 非商店渠道（侧载 APK / 桌面）：注入 `DISTRIBUTION_CHANNEL` + `WEB_PURCHASE_LINK_BASE`
+///   → 走网页支付（[isWebCheckoutConfigured]）；
+/// - 本地 StoreKit 测试模式视为支持（开发调试用）。
+bool get isSubscriptionSupported =>
+    useLocalStoreKit || isRevenueCatConfigured || isWebCheckoutConfigured;
 
 /// 本地 StoreKit 测试模式开关（`--dart-define=USE_LOCAL_STOREKIT=true`）。
 ///
@@ -95,6 +100,12 @@ const bool useLocalStoreKit = bool.fromEnvironment('USE_LOCAL_STOREKIT');
 /// iOS 走 App Store 订阅管理深链；Android 走 Google Play 订阅页。
 String? get manageSubscriptionsUrl {
   if (kIsWeb) return null;
+  // 网页支付渠道优先：这类订阅经 Stripe 结账，**不**走商店订阅页（侧载 APK 仍是
+  // Android，但绝不能跳 Google Play 订阅管理）。v1 无稳定的自助管理深链时返回
+  // 可选注入的 [webManageUrl]，缺省为 null（Paywall 据此隐藏「管理订阅」按钮）。
+  if (isWebCheckoutConfigured) {
+    return webManageUrl.isNotEmpty ? webManageUrl : null;
+  }
   if (Platform.isIOS || Platform.isMacOS) {
     return 'https://apps.apple.com/account/subscriptions';
   }
@@ -103,3 +114,9 @@ String? get manageSubscriptionsUrl {
   }
   return null;
 }
+
+/// 网页支付订阅的自助管理页 URL（可选，`--dart-define=WEB_MANAGE_URL=` 注入）。
+///
+/// RevenueCat Billing 的客户自助管理链接是按客户下发的，无 SDK 时拿不到稳定 URL；
+/// 若你有统一的账户/管理页可注入此项，否则「管理订阅」按钮隐藏。
+const webManageUrl = String.fromEnvironment('WEB_MANAGE_URL');

@@ -128,6 +128,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get premiumRestored => 'Purchases restored.';
 
   @override
+  String get premiumWebCheckoutCta => 'Continue to checkout';
+
+  @override
+  String get premiumWebCheckoutHint =>
+      'You\'ll complete payment securely in your browser, then return to the app.';
+
+  @override
+  String get premiumWebVerifying => 'Waiting for payment to be confirmed…';
+
+  @override
+  String get premiumWebCheckDone => 'I\'ve completed payment';
+
+  @override
+  String get premiumWebOpenFailed =>
+      'Couldn\'t open the checkout page. Please try again.';
+
+  @override
+  String get premiumWebAutoRenewNotice =>
+      'Auto-renews. Manage or cancel from your account page or the confirmation email.';
+
+  @override
+  String get premiumRefresh => 'Refresh';
+
+  @override
   String get premiumPeriodMonthly => 'Monthly';
 
   @override

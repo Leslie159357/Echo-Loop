@@ -25,6 +25,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'config/api_config.dart';
 import 'config/auth_config.dart' as auth_config;
 import 'config/revenuecat_config.dart' as revenuecat_config;
+import 'config/web_purchase_config.dart' as web_purchase_config;
 import 'providers/review_reminder_provider.dart';
 import 'services/notification_tap_router_bridge.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -205,6 +206,10 @@ void main() async {
     // 本地 StoreKit 测试模式：**不初始化 RevenueCat**，购买走 in_app_purchase
     // 直连 .storekit，避免本地交易被 RC SDK 捕获上报（不污染 RC Sandbox）。
     AppLogger.log('App', '本地 StoreKit 测试模式：跳过 RevenueCat 初始化');
+  } else if (web_purchase_config.isWebCheckoutConfigured) {
+    // 网页支付渠道（侧载 APK / 桌面）：无可用 RC 原生 SDK，购买走浏览器结账、
+    // 权益经后端 /api/entitlements 读回，**不初始化 RevenueCat SDK**。
+    AppLogger.log('App', '网页支付渠道：跳过 RevenueCat 初始化（权益经后端读回）');
   } else if (revenuecat_config.isRevenueCatConfigured) {
     try {
       // Debug 构建打开 RevenueCat 详细日志，便于定位 Offerings 为空等问题。

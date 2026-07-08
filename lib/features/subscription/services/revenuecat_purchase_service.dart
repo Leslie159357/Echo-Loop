@@ -14,11 +14,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../../../config/revenuecat_config.dart';
+import '../../../config/web_purchase_config.dart';
 import '../../../services/app_logger.dart';
 import '../models/entitlement.dart';
 import '../models/subscription_plan.dart';
 import 'local_storekit_purchase_service.dart';
 import 'purchase_service.dart';
+import 'web_purchase_service.dart';
 
 class RevenueCatPurchaseService implements PurchaseService {
   RevenueCatPurchaseService({String entitlementId = revenueCatEntitlementId})
@@ -314,14 +316,19 @@ class RevenueCatPurchaseService implements PurchaseService {
 ///
 /// 路由优先级：
 /// 1. [useLocalStoreKit]（本地 StoreKit 测试模式）→ 本地实现，绕开 RevenueCat；
-/// 2. 已配置 RevenueCat（注入了平台 API Key）→ 真实 RC 实现；
-/// 3. 否则回退 Stub（匿名可运行）。
+/// 2. 网页支付渠道（[isWebCheckoutConfigured]，侧载 APK / 桌面）→ [WebPurchaseService]，
+///    权益经后端读回；
+/// 3. 已配置 RevenueCat（注入了平台 API Key）→ 真实 RC 实现；
+/// 4. 否则回退 Stub（匿名可运行）。
 /// 测试通过 override 注入 Fake。
 final purchaseServiceProvider = Provider<PurchaseService>((ref) {
   if (useLocalStoreKit) {
     final service = LocalStoreKitPurchaseService();
     ref.onDispose(service.dispose);
     return service;
+  }
+  if (isWebCheckoutConfigured) {
+    return const WebPurchaseService();
   }
   if (isRevenueCatConfigured) {
     return RevenueCatPurchaseService();

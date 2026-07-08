@@ -314,6 +314,48 @@ abstract class AppLocalizations {
   /// **'Purchases restored.'**
   String get premiumRestored;
 
+  /// No description provided for @premiumWebCheckoutCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to checkout'**
+  String get premiumWebCheckoutCta;
+
+  /// No description provided for @premiumWebCheckoutHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll complete payment securely in your browser, then return to the app.'**
+  String get premiumWebCheckoutHint;
+
+  /// No description provided for @premiumWebVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for payment to be confirmed…'**
+  String get premiumWebVerifying;
+
+  /// No description provided for @premiumWebCheckDone.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve completed payment'**
+  String get premiumWebCheckDone;
+
+  /// No description provided for @premiumWebOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the checkout page. Please try again.'**
+  String get premiumWebOpenFailed;
+
+  /// No description provided for @premiumWebAutoRenewNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-renews. Manage or cancel from your account page or the confirmation email.'**
+  String get premiumWebAutoRenewNotice;
+
+  /// No description provided for @premiumRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get premiumRefresh;
+
   /// No description provided for @premiumPeriodMonthly.
   ///
   /// In en, this message translates to:
