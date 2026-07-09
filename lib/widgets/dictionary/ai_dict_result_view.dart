@@ -53,6 +53,22 @@ class AiDictResultView extends StatelessWidget {
         ),
       };
     }
+    // 流式部分结果：首帧尚无字段时显示 shimmer，否则按已到达字段逐块渲染
+    // （内容视图各区块已按 isNotEmpty 门控，字段随帧渐显；AnimatedSize 平滑高度）。
+    if (s case LookupStreaming(result: final AiDictResult r)) {
+      if (r.entry.isEmpty) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.m),
+          child: ShimmerPlaceholder(),
+        );
+      }
+      return switch (r.entry) {
+        final DictionaryEntry entry => _AiEntryContent(entry: entry),
+        final MultiWordDictionaryEntry entry => AiMultiWordResultView(
+          entry: entry,
+        ),
+      };
+    }
     if (s is LookupAuthRequired) return _authRequired(context);
     if (s is LookupPhraseTooLong) return _phraseTooLong(context);
     if (s is LookupQuotaExceeded) return _quotaExceeded(context);

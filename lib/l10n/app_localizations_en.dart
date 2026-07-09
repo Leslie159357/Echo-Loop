@@ -4378,13 +4378,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dictAiTips => 'Learning Tips';
 
   @override
-  String get dictAiMultiKeyPoints => 'Key Points';
+  String get dictAiMultiKeyPoints => 'Study Notes';
 
   @override
   String get dictAiMultiMeanings => 'Meanings & Examples';
 
   @override
-  String get dictAiMultiNaturalness => 'Naturalness';
+  String get dictAiMultiNaturalness => 'Correction';
 
   @override
   String get dictAiMultiPronunciationTips => 'Pronunciation';

@@ -1674,9 +1674,9 @@
   "dictAiForms": "词形变化",
   "dictAiEtymology": "词源",
   "dictAiTips": "学习提示",
-  "dictAiMultiKeyPoints": "核心要点",
+  "dictAiMultiKeyPoints": "学习要点",
   "dictAiMultiMeanings": "含义与例句",
-  "dictAiMultiNaturalness": "自然性",
+  "dictAiMultiNaturalness": "纠错",
   "dictAiMultiPronunciationTips": "发音提示",
   "dictAiMultiSimilarExpressions": "相似表达",
   "dictAiMultiBackground": "背景知识"

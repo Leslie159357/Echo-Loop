@@ -42,6 +42,14 @@ class LookupLoaded extends SourceLookupState {
   const LookupLoaded(this.result);
 }
 
+/// 流式查询中：已到达的部分结果，随帧更新（仅流式源如 AI 会经过此态）。
+///
+/// 视图据当前部分结果逐块渲染；字段随后续帧渐显，完成后转 [LookupLoaded]。
+class LookupStreaming extends SourceLookupState {
+  final DictionaryLookupResult result;
+  const LookupStreaming(this.result);
+}
+
 /// 需要登录
 class LookupAuthRequired extends SourceLookupState {
   const LookupAuthRequired();
@@ -215,17 +223,33 @@ class DictionaryLookupController extends _$DictionaryLookupController {
 
     final request = _buildRequest(source);
     try {
-      final result = await source.lookup(request, cancelToken: token);
-      if (_dropResult(id, seq)) return;
-      _setState(
-        id,
-        result == null ? const LookupNotFound() : LookupLoaded(result),
-      );
-      // AI 词典成功返回可用结果：记录成功次数（用于评价/付费提醒；含缓存命中）
-      if (result != null && source is AiDictionarySource) {
-        ref
-            .read(usageTrackerProvider)
-            .record(UsageEvent.aiWordAnalysisSucceeded);
+      if (source is AiDictionarySource) {
+        // AI 源：流式逐帧渲染，完成后转 Loaded。每帧套用防竞态守卫。
+        DictionaryLookupResult? last;
+        await for (final r in source.lookupStream(request, cancelToken: token)) {
+          if (_dropResult(id, seq)) return;
+          last = r;
+          if (r != null) _setState(id, LookupStreaming(r));
+        }
+        if (_dropResult(id, seq)) return;
+        _setState(
+          id,
+          last == null ? const LookupNotFound() : LookupLoaded(last),
+        );
+        // AI 词典成功返回可用结果：记录成功次数（用于评价/付费提醒；含缓存命中）
+        if (last != null) {
+          ref
+              .read(usageTrackerProvider)
+              .record(UsageEvent.aiWordAnalysisSucceeded);
+        }
+      } else {
+        // 非流式源（本地/网页）：保持原请求-响应路径不变。
+        final result = await source.lookup(request, cancelToken: token);
+        if (_dropResult(id, seq)) return;
+        _setState(
+          id,
+          result == null ? const LookupNotFound() : LookupLoaded(result),
+        );
       }
     } on DictionaryAuthRequiredException {
       if (_dropResult(id, seq)) return;

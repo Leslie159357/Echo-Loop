@@ -1,12 +1,13 @@
-/// AI 词典数据源
+/// AI 词典数据源（流式）
 ///
-/// 对接后端 `POST /api/v2/ai/dictionary`（需登录态），三级缓存查找：
-/// L1 内存 → L2 SQLite（`sentence_ai_cache` type `ai_dictionary_v2`）→ L3 API。
-/// 并发请求同一词复用同一 Future，避免重复调用。不可禁用、需联网。
+/// 对接后端流式端点（需登录态），三级缓存查找：
+/// L1 内存 → L2 SQLite（`sentence_ai_cache` type `ai_dictionary_v2`）→ L3 流式 API。
+/// 按查询是否含空白路由到 `lookup-word`（单词）或 `lookup-phrase`（词组）端点，
+/// 规则与后端原 `resolveQueryType` 一致。
 ///
-/// **后台单请求语义**：AI 调用烧 token、耗时数秒，故请求一经发起就跑到底——
-/// 刻意忽略调用方传入的 [CancelToken]（如关闭弹窗触发的取消），让请求在后台
-/// 完成并落 L1+L2 缓存。重查/并发同词命中在途 Future 或缓存，全程只有一个请求。
+/// **流式路径尊重取消**（区别于旧「后台单请求语义」）：调用方取消（如关闭
+/// 弹窗）会中断在途 HTTP → 后端 `request.signal` abort → 中断 LLM，止损 token；
+/// 未完整完成不落缓存（部分结果丢弃）。只有收到后端显式 final 帧才写 L1+L2。
 library;
 
 import 'dart:convert';
@@ -29,9 +30,6 @@ class AiDictionarySource implements DictionarySource {
 
   /// L1 内存缓存（key 含 targetLanguage）
   final Map<String, AiDictionaryEntry> _memCache = {};
-
-  /// 在途请求（并发去重）
-  final Map<String, Future<AiDictionaryEntry>> _pending = {};
 
   /// SQLite 缓存 type 列，与句子翻译/解析（`translation`/`analysis`）隔离。
   ///
@@ -66,61 +64,34 @@ class AiDictionarySource implements DictionarySource {
   ///
   /// 用户「清除缓存」或切换数据库时调用——SQLite（L2）由 DAO 单独清，
   /// 内存这层必须显式清，否则清缓存后重查仍命中 L1 返回旧结果。
-  /// 不动 `_pending`：在途请求让其自然完成（清掉反而可能引发重复请求）。
   void clearMemoryCache() => _memCache.clear();
 
-  @override
-  Future<DictionaryLookupResult?> lookup(
+  /// 流式查词：L1/L2 命中即时单帧返回；未命中走 L3 流式，逐帧 yield，
+  /// 收到 final 帧（完整完成）才写 L1+L2。取消/异常在写入前抛出 → 不落缓存。
+  Stream<DictionaryLookupResult?> lookupStream(
     DictionaryLookupRequest request, {
-    // 刻意忽略：AI 采用后台单请求语义，调用方取消不中断在途请求（见库级注释）
     CancelToken? cancelToken,
-  }) async {
+  }) async* {
     final token = request.accessToken;
     if (token == null || token.isEmpty) {
       throw const DictionaryAuthRequiredException();
     }
     final language = request.targetLanguage ?? _defaultLanguage;
-    // request.word 已由 controller 清洗但保留大小写；API 使用它进入后端 prompt。
-    // 缓存键继续使用小写词形，确保 NASA/nasa 复用同一 L1/L2/L3 缓存。
+    // request.word 保留大小写进入后端 prompt；缓存键用小写词形，
+    // 确保 NASA/nasa 复用同一 L1/L2/L3 缓存。
     final word = request.word;
     final cacheWord = normalizeWord(word);
     final key = hashText('$cacheWord|$language');
 
-    // L1 内存
+    // L1 内存（即时整块返回，不模拟流式）
     final mem = _memCache[key];
-    if (mem != null) return AiDictResult(mem);
-
-    // 并发去重：同词在途请求复用同一 Future（与 widget 生命周期解耦）
-    final inflight = _pending[key];
-    if (inflight != null) return AiDictResult(await inflight);
-
-    final future = _fetch(
-      key: key,
-      word: word,
-      accessToken: token,
-      language: language,
-    );
-    _pending[key] = future;
-    try {
-      return AiDictResult(await future);
-    } finally {
-      _pending.remove(key);
+    if (mem != null) {
+      yield AiDictResult(mem);
+      return;
     }
-  }
-
-  /// L2 + L3 查找
-  ///
-  /// 不接受 CancelToken：请求一经发起即跑到底并落缓存（后台单请求语义）。
-  Future<AiDictionaryEntry> _fetch({
-    required String key,
-    required String word,
-    required String accessToken,
-    required String language,
-  }) async {
-    final cacheDao = _cacheDao();
-    final apiClient = _apiClient();
 
     // L2 SQLite（JSON 损坏则跳过，fallthrough 到 L3）
+    final cacheDao = _cacheDao();
     final cached = await cacheDao.getByHash(key, _cacheType);
     if (cached != null) {
       try {
@@ -128,53 +99,61 @@ class AiDictionarySource implements DictionarySource {
         if (decoded is Map<String, dynamic>) {
           final entry = AiDictionaryEntry.fromJson(decoded);
           _memCache[key] = entry;
-          return entry;
+          yield AiDictResult(entry);
+          return;
         }
       } catch (_) {
         // 损坏数据，继续 L3
       }
     }
 
-    // L3 API（null = 后端无 analysis，视作空条目）
-    final AiDictionaryEntry entry;
-    try {
-      entry =
-          await apiClient.lookupDictionary(
+    // L3 流式 API：按是否含空白分流到单词/词组端点（同后端 resolveQueryType）
+    final apiClient = _apiClient();
+    final isPhrase = cacheWord.contains(' ');
+    final stream = isPhrase
+        ? apiClient.lookupPhraseStreamFrames(
             word,
-            accessToken: accessToken,
+            accessToken: token,
             targetLanguage: language,
-          ) ??
-          _emptyEntry(word);
-    } on DioException catch (e) {
-      // 后端拒绝过长词组（400 + code=phrase_too_long）转专用异常，
-      // 不落缓存（异常在 upsert 之前抛出），由 controller 转「词组过长」态。
-      if (_isPhraseTooLong(e)) {
-        throw const DictionaryPhraseTooLongException();
-      }
-      rethrow;
+            cancelToken: cancelToken,
+          )
+        : apiClient.lookupWordStreamFrames(
+            word,
+            accessToken: token,
+            targetLanguage: language,
+            cancelToken: cancelToken,
+          );
+
+    AiDictionaryEntry? last;
+    var sawFinal = false;
+    await for (final frame in stream) {
+      last = frame.entry;
+      sawFinal = sawFinal || frame.isFinal;
+      yield AiDictResult(frame.entry);
     }
 
-    _memCache[key] = entry;
-    await cacheDao.upsert(key, _cacheType, jsonEncode(entry.toJson()));
-    return entry;
+    // 只有显式 final 帧才落缓存；正常 EOF 但无 final 视为协议中断/损坏。
+    if (last != null && !sawFinal) {
+      throw const DictionaryStreamException();
+    }
+    if (last != null && sawFinal) {
+      _memCache[key] = last;
+      await cacheDao.upsert(key, _cacheType, jsonEncode(last.toJson()));
+    }
   }
 
-  /// 判定是否为「词组过长」错误：后端返回 400 且响应体 code=phrase_too_long。
-  bool _isPhraseTooLong(DioException e) {
-    if (e.response?.statusCode != 400) return false;
-    final data = e.response?.data;
-    return data is Map && data['code'] == 'phrase_too_long';
+  /// 接口要求的 [lookup]：消费 [lookupStream] 取最后一帧（完整结果）。
+  ///
+  /// controller 对 AI 源走 [lookupStream] 逐帧渲染；此方法供其它非流式消费方兜底。
+  @override
+  Future<DictionaryLookupResult?> lookup(
+    DictionaryLookupRequest request, {
+    CancelToken? cancelToken,
+  }) async {
+    DictionaryLookupResult? last;
+    await for (final r in lookupStream(request, cancelToken: cancelToken)) {
+      last = r;
+    }
+    return last;
   }
-
-  /// 空条目（后端无结果时的占位，视图层据 isEmpty 显示空态）
-  AiDictionaryEntry _emptyEntry(String word) => DictionaryEntry(
-    headword: word,
-    pronunciation: const Pronunciation(uk: '', us: ''),
-    meanings: const [],
-    commonExpressions: const [],
-    wordFamily: const [],
-    forms: const [],
-    etymology: '',
-    learnerTips: const [],
-  );
 }

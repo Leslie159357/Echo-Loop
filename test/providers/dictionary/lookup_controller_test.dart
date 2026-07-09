@@ -5,6 +5,7 @@ import 'package:echo_loop/features/usage/usage_counters.dart';
 import 'package:echo_loop/features/usage/usage_event.dart';
 import 'package:echo_loop/features/usage/usage_providers.dart';
 import 'package:echo_loop/features/usage/usage_tracker.dart';
+import 'package:echo_loop/models/dictionary/dictionary_entry.dart';
 import 'package:echo_loop/models/dictionary/dictionary_lookup_result.dart';
 import 'package:echo_loop/providers/dictionary/dictionary_registry.dart';
 import 'package:echo_loop/providers/dictionary/lookup_controller.dart';
@@ -34,8 +35,9 @@ class _RecordingUsageTracker implements UsageTracker {
   Future<void> resetForTests() async {}
 }
 
-/// 假 AI 源：满足 `is AiDictionarySource`，lookup 返回可控结果/异常。
-/// 结果类型不影响 controller 的成功计数判定（只看 result != null + 源类型）。
+/// 假 AI 源：满足 `is AiDictionarySource`，lookupStream 单帧返回可控结果/异常。
+/// controller 对 AI 源走 lookupStream；结果类型不影响成功计数判定
+/// （只看最终结果 != null + 源类型）。
 class _FakeAiSource extends AiDictionarySource {
   _FakeAiSource({this.result, this.error})
     : super(
@@ -47,14 +49,50 @@ class _FakeAiSource extends AiDictionarySource {
   final Object? error;
 
   @override
-  Future<DictionaryLookupResult?> lookup(
+  Stream<DictionaryLookupResult?> lookupStream(
     DictionaryLookupRequest request, {
     CancelToken? cancelToken,
-  }) async {
+  }) async* {
     if (error != null) throw error!;
-    return result;
+    yield result;
   }
 }
+
+/// 可控 AI 源：每次 lookupStream 返回一个可手动驱动的 StreamController，
+/// 用于编排流式多帧 / 竞态时序。满足 `is AiDictionarySource`。
+class _ControllableAiSource extends AiDictionarySource {
+  _ControllableAiSource()
+    : super(
+        cacheDao: () => throw UnimplementedError(),
+        apiClient: () => throw UnimplementedError(),
+      );
+
+  final List<StreamController<DictionaryLookupResult?>> calls = [];
+
+  @override
+  Stream<DictionaryLookupResult?> lookupStream(
+    DictionaryLookupRequest request, {
+    CancelToken? cancelToken,
+  }) {
+    final ctrl = StreamController<DictionaryLookupResult?>();
+    calls.add(ctrl);
+    return ctrl.stream;
+  }
+}
+
+/// 构造一个 AI 结果（部分/完整均可，只需 headword）
+AiDictResult _aiResult(String headword) => AiDictResult(
+  DictionaryEntry(
+    headword: headword,
+    pronunciation: const Pronunciation(uk: '', us: ''),
+    meanings: const [],
+    commonExpressions: const [],
+    wordFamily: const [],
+    forms: const [],
+    etymology: '',
+    learnerTips: const [],
+  ),
+);
 
 /// 可控源：每次 lookup 返回一个手动完成的 Future，用于编排竞态时序
 class ControllableSource implements DictionarySource {
@@ -517,6 +555,94 @@ void main() {
     a.calls.single.complete(_result('run'));
     await pump();
 
+    expect(tracker.events, isEmpty);
+  });
+
+  test('AI 流式：Loading → Streaming（逐帧）→ Loaded，记录一次成功', () async {
+    final tracker = _RecordingUsageTracker();
+    final ai = _ControllableAiSource();
+    final c = makeAiContainer({'ai': ai}, tracker, defaultId: 'ai');
+    start(c, 'run');
+    await pump();
+
+    // 起播前：Loading
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupLoading>(),
+    );
+
+    // 首帧部分结果 → Streaming
+    ai.calls.single.add(_aiResult(''));
+    await pump();
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupStreaming>(),
+    );
+
+    // 更完整帧 → 仍 Streaming（未 close）
+    ai.calls.single.add(_aiResult('run'));
+    await pump();
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupStreaming>(),
+    );
+
+    // 流关闭（完整完成）→ Loaded + 记一次成功
+    await ai.calls.single.close();
+    await pump();
+    final state = c.read(dictionaryLookupControllerProvider('run'));
+    expect(state.current, isA<LookupLoaded>());
+    expect((state.current! as LookupLoaded).result.headword, 'run');
+    expect(tracker.events, [UsageEvent.aiWordAnalysisSucceeded]);
+  });
+
+  test('AI 流式竞态：重查后旧流的帧被丢弃', () async {
+    final tracker = _RecordingUsageTracker();
+    final ai = _ControllableAiSource();
+    final c = makeAiContainer({'ai': ai}, tracker, defaultId: 'ai');
+    final ctrl = start(c, 'run');
+    await pump();
+
+    ctrl.retry(); // 第二次查询（新 seq），取消旧流
+    await pump();
+    expect(ai.calls, hasLength(2));
+
+    // 旧流的帧晚到 → 丢弃，状态维持 Loading
+    ai.calls[0].add(_aiResult('OLD'));
+    await pump();
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupLoading>(),
+    );
+
+    // 新流的帧生效
+    ai.calls[1].add(_aiResult('NEW'));
+    await pump();
+    final cur = c.read(dictionaryLookupControllerProvider('run')).current;
+    expect(cur, isA<LookupStreaming>());
+    expect((cur! as LookupStreaming).result.headword, 'NEW');
+
+    await ai.calls[0].close();
+    await ai.calls[1].close();
+  });
+
+  test('AI 流式中途错误（DictionaryStreamException）→ LookupError', () async {
+    final tracker = _RecordingUsageTracker();
+    final ai = _ControllableAiSource();
+    final c = makeAiContainer({'ai': ai}, tracker, defaultId: 'ai');
+    start(c, 'run');
+    await pump();
+
+    ai.calls.single.add(_aiResult('run')); // 先来一帧
+    await pump();
+    ai.calls.single.addError(const DictionaryStreamException());
+    await pump();
+
+    expect(
+      c.read(dictionaryLookupControllerProvider('run')).current,
+      isA<LookupError>(),
+    );
+    // 未完整完成 → 不记成功
     expect(tracker.events, isEmpty);
   });
 

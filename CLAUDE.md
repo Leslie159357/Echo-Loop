@@ -497,3 +497,34 @@ flutter test integration_test -d macos
   - 新增可点词渲染场景一律复用 `SelectableSentenceText`，不要再造分词/recognizer。
 - **相关代码**：`lib/widgets/dictionary/dictionary_panel_host.dart`、`dictionary_panel.dart`、`lib/widgets/practice/selectable_sentence_text.dart`、`sentence_word_selection.dart`、`lib/providers/dictionary/lookup_controller.dart`（`_resolveInitialSourceId`）、`lib/utils/text_normalize.dart`；测试 `test/widgets/dictionary/dictionary_panel_test.dart` 等
 - **完成时间**：2026-07-02
+
+### 7.26 流式 AI 词典（NDJSON 部分对象快照）：设计约束与踩坑
+
+- **背景**：词典查词原为同步阻塞（`await` 完整 JSON → 一次性 shimmer→完整）。改为流式后端逐帧下发部分对象快照，首 token 延迟大幅下降、字段逐块渐显。拆成两个独立端点 `POST /api/v1/stream/lookup-word`（单词）与 `/lookup-phrase`（多词），各自持有 prompt+schema；**客户端按规范化后是否含空白路由**（`normalizeWord(word).contains(' ')`，规则同后端原 `resolveQueryType`）。旧 combined 同步端点 `/api/v2/ai/dictionary` 保留给老客户端。
+- **传输 = NDJSON**（`\n` 分隔，`application/x-ndjson`）。选它而非 SSE：Flutter 无原生 EventSource，NDJSON 用 `utf8.decoder`+`LineSplitter` 两个标准 transformer 即可，无需容错半截 JSON。**注：帧载荷已由「每帧完整累计快照」改为「字段级增量事件」，见 §7.27（本节其余设计不变）。**
+- **模型天然兼容部分帧**：`AiDictionaryEntry.fromJson` 已全防御性解析（缺字段回退空串/空列表，永不抛错），**无需 `fromPartialJson`**，每帧直接 `fromJson`。sealed 分派靠 `queryType`/`originalExpression`，故**服务端每帧注入 `queryType`**，客户端首帧即选对子类。视图各区块 `if (isNotEmpty)` 门控 → 部分帧自然逐块渐显。新增 `LookupStreaming` 态承载部分结果，完成转 `LookupLoaded`。
+- **取消即止损（刻意反转旧「后台单请求语义」）**：旧 `AiDictionarySource` 忽略 CancelToken、跑完落缓存。流式路径**尊重取消**——controller 取消 token → Dio 关流 → 后端 `request.signal` abort → `streamObject` abort → 中断 LLM 省 token；**未完整读完不落缓存**（部分结果丢弃）。仅流正常读完才写 L1+L2。
+- **缓存模拟流式的边界**：**服务端** L3/L4 命中按 key 顺序累计吐帧（首块 ~0.5s）；**客户端 L1/L2 本地命中直接整块即时返回**（0 延迟，不模拟）。
+- **踩坑**：
+  - **`Stream<Uint8List>.transform(utf8.decoder)` 运行时协变检查失败**（要求 `StreamTransformer<Uint8List,String>`，而 `utf8.decoder` 是 `<List<int>,String>`）。Dio 的 `ResponseBody.stream` 实为 `Stream<Uint8List>` → 必须先 `.cast<List<int>>()` 再 transform。见 `lib/services/ndjson_stream.dart`。
+  - **前置错误体在 stream 模式下是未解析的 `ResponseBody`**：`_streamDictionary` 用 `validateStatus: (_) => true`（Dio 不在非 2xx 提前抛），手动读小 JSON 错误体取 `code`，映射为 `DictionaryPhraseTooLongException`/`DictionaryAuthRequiredException`/带状态码的 `DioException`（402 沿用 controller 现有分支）。
+  - **流内错误无 HTTP 状态**（200 已发）：后端末帧发 `{"__error": ...}`，客户端识别 → `DictionaryStreamException` → controller 转 `LookupError`（可重试）。
+  - **服务端 `streamObject` 错误不从流里抛**，而经 `onError` 回调 + `object` Promise reject。glue 靠 `await object` 的 reject 判失败；且**入库回调 `onComplete` 只在完整对象成功后 await 执行**（写在完整帧之后、`controller.close()` 之前，保证「完成才写、取消不写」）。
+  - **`ApiLogInterceptor` 跳过 stream 响应体**（`responseType == ResponseType.stream` 时不 `_stringifyBody`，避免序列化/误触碰未消费的流）。
+- **相关代码**：客户端 `lib/services/ndjson_stream.dart`、`sentence_ai_api_client.dart`（`lookupWordStream`/`lookupPhraseStream`/`_streamDictionary`）、`dictionary/ai_dictionary_source.dart`（`lookupStream`）、`providers/dictionary/lookup_controller.dart`（`LookupStreaming` + AI 流式分支）、`widgets/dictionary/ai_dict_result_view.dart`、`services/api_log_interceptor.dart`；后端 `packages/ai/lib/stream-structured.ts`、`apps/app/app/api/v1/stream/{_shared,lookup-word,lookup-phrase}`、`apps/app/app/api/v2/ai/dictionary/_shared.ts`。测试：`test/services/ndjson_stream_test.dart`、`sentence_ai_api_client_test.dart`、`dictionary/ai_dictionary_source_test.dart`、`providers/dictionary/lookup_controller_test.dart`、`widgets/dictionary/ai_dict_result_view_test.dart`；`packages/ai/__tests__/stream-structured.test.ts`、`apps/app/__tests__/stream-lookup-{word,phrase}-route.test.ts`。
+- **待真机验证**：断连确实触发 Vercel `request.signal` abort（本机/CI 测不到）；gpt-5-mini 经 AI Gateway 的 `streamObject` 逐帧到达。
+- **完成时间**：2026-07-08
+
+### 7.27 流式 AI 词典：帧协议由「累计完整快照」改为「字段级增量」
+
+- **背景/动机**：§7.26 的 NDJSON 每帧下发**当前累计的完整对象快照**，后一帧包含前一帧全部内容 → 总传输量 O(n²)。真机日志（查 `what's`）显示最终对象 ~1862B，却分 20 帧、每帧把已发内容整份重发。加 500ms 节流 + 相邻字节去重只能压掉「字段没变时的重复帧」，压不掉「每帧重发已完成字段」这个根本浪费。
+- **新协议（NDJSON，每行一个 JSON object；只有一种数据操作：按路径设标量叶子）**：
+  - 元信息（首行）`{"q":"single_word"|"multi_word"}` → 客户端播种 `acc={"queryType":q}`，sealed 分派尽早确定。
+  - 叶子赋值 `{"p":["meanings",0,"definition"],"v":<scalar>}` → 每个**标量叶子（任意嵌套深度）**写完发一次，用路径寻址；数组由 int 路径段 + 客户端**自动扩容**隐式处理，无 append 操作。任何内容只发一次（O(n)）。
+  - 结束 `{"done":true}` → isFinal 帧、落缓存；错误 `{"__error":"unavailable"}` → `DictionaryStreamException`。
+  - 标量长文本**整段一次到位**（写完才发、不逐字流出）；数组/嵌套元素逐个渐显。空数组无叶子 → 不下发（`fromJson` 走默认空值，视图自然隐藏）。`thinking` 及其子路径永不下发。
+- **后端**（`apps/app/app/api/v1/stream/_shared.ts`）：核心是递归 `emitStableLeaves(node,path,complete,emittedSet,out)`——`complete=false` 表示「在正在书写的尾部边缘」，一路 hold 到最深尾部叶子稳定；依据「AI SDK 部分解析器只有在对象/元素 JSON 闭合后才出现下一个键/元素」，故非末位子节点必已内部写完。真流式保留 500ms 批量节流、`emittedSet` 跨 flush 保证只发一次、末尾把整个 `full` 当完整补发剩余叶子 + `done`；缓存命中路径按 KEY_ORDER 重排顶层键后一次性发全部叶子、按叶子文本量控速。`onComplete` 入库仍存**含 thinking** 的完整 entry，不变。
+- **客户端**（`lib/services/sentence_ai_api_client.dart`）：改造**收敛在 `_streamDictionaryFrames` 一处**——维护累积 `acc`，`{q}` 写 queryType、`{p,v}` 走 `_setPath`（按下一段类型自动建 List/Map、按需 null 扩容）、`{done}` 发 isFinal 帧；每个叶子事件后整体 `AiDictionaryEntry.fromJson(acc)` 再 yield 完整 `AiDictionaryStreamFrame`。**`AiDictionaryStreamFrame` 契约（entry+isFinal）不变** → `ai_dictionary_source.dart`（`last`=末帧完整 entry / `sawFinal` / 落缓存）、`lookup_controller.dart`、`ai_dict_result_view.dart`/`ai_multi_word_result_view.dart`、`dictionary_entry.dart` 模型**全部零改动**。`decodeNdjson` 也不变（仍逐行 yield Map）。
+- **规则**：流式结构化对象要「增量下发、不重发」时，用**按路径设叶子**的单操作协议 + 客户端 `_setPath` 自动建容器拼装，别用「每帧完整快照」（O(n²)）；发射端靠「尾部边缘 hold、非末位必闭合」的递归规则判定叶子是否稳定，不依赖 per-schema 元信息（运行时结构判断即可）。
+- **相关代码**：后端 `apps/app/app/api/v1/stream/_shared.ts`（`emitStableLeaves`/`buildNdjsonStreamResponse`/`buildRevealResponse`）；客户端 `lib/services/sentence_ai_api_client.dart`（`_streamDictionaryFrames`/`_setPath`）。测试：`apps/app/__tests__/stream-lookup-{word,phrase}-route.test.ts`（叶子拼装 `assemble` + `dropEmptyArrays`）、`test/services/sentence_ai_api_client_test.dart`（叶子增量 + 嵌套路径累积）。
+- **完成时间**：2026-07-09

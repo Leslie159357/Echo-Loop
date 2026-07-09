@@ -54,8 +54,13 @@ class ApiLogInterceptor extends Interceptor {
       ..writeln(
         '← ${request.method} ${request.uri} '
         '${response.statusCode}${_elapsedSuffix(request)}',
-      )
-      ..writeln('  响应体: ${_stringifyBody(response.data)}');
+      );
+    // 流式响应体是未消费的 ResponseBody，序列化它会破坏流；只记状态行。
+    if (request.responseType == ResponseType.stream) {
+      buffer.writeln('  响应体: (流式，略)');
+    } else {
+      buffer.writeln('  响应体: ${_stringifyBody(response.data)}');
+    }
     logPrint(buffer.toString().trimRight());
     handler.next(response);
   }
@@ -80,7 +85,11 @@ class ApiLogInterceptor extends Interceptor {
       buffer.writeln(
         '  状态码: ${response.statusCode} ${response.statusMessage ?? ''}',
       );
-      buffer.writeln('  响应体: ${_stringifyBody(response.data)}');
+      if (request.responseType == ResponseType.stream) {
+        buffer.writeln('  响应体: (流式，略)');
+      } else {
+        buffer.writeln('  响应体: ${_stringifyBody(response.data)}');
+      }
     } else {
       // 无响应：连接超时、DNS 失败、断网等
       buffer.writeln('  无响应（连接/超时/网络层错误）');

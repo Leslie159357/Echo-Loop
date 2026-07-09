@@ -4172,13 +4172,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dictAiTips => '学习提示';
 
   @override
-  String get dictAiMultiKeyPoints => '核心要点';
+  String get dictAiMultiKeyPoints => '学习要点';
 
   @override
   String get dictAiMultiMeanings => '含义与例句';
 
   @override
-  String get dictAiMultiNaturalness => '自然性';
+  String get dictAiMultiNaturalness => '纠错';
 
   @override
   String get dictAiMultiPronunciationTips => '发音提示';

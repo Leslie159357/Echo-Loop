@@ -7745,7 +7745,7 @@ abstract class AppLocalizations {
   /// No description provided for @dictAiMultiKeyPoints.
   ///
   /// In en, this message translates to:
-  /// **'Key Points'**
+  /// **'Study Notes'**
   String get dictAiMultiKeyPoints;
 
   /// No description provided for @dictAiMultiMeanings.
@@ -7757,7 +7757,7 @@ abstract class AppLocalizations {
   /// No description provided for @dictAiMultiNaturalness.
   ///
   /// In en, this message translates to:
-  /// **'Naturalness'**
+  /// **'Correction'**
   String get dictAiMultiNaturalness;
 
   /// No description provided for @dictAiMultiPronunciationTips.

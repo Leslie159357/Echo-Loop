@@ -29,6 +29,16 @@ class DictionaryPhraseTooLongException implements Exception {
   String toString() => 'DictionaryPhraseTooLongException';
 }
 
+/// 流式查词途中收到错误帧（`{"__error": ...}`）时抛出。
+///
+/// 后端已发出 HTTP 200 后 LLM 中途失败，只能用末帧告知；由 controller 捕获
+/// 转普通 error 态（可重试），区别于取消（静默）与词组过长（不可重试）。
+class DictionaryStreamException implements Exception {
+  const DictionaryStreamException();
+  @override
+  String toString() => 'DictionaryStreamException';
+}
+
 /// 查词请求参数（聚合，避免接口参数膨胀）
 class DictionaryLookupRequest {
   /// 已清洗的查询文本。

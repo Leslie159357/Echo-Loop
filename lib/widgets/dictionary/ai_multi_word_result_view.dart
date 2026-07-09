@@ -1,9 +1,9 @@
 /// AI 多词表达结果视图
 ///
 /// 展示后端 `queryType=multi_word` 的结构化分析。视觉语言与单词视图
-/// [AiDictResultView] 完全对齐：顶部类别标签 → 核心要点卡片 → 词义区（序号 +
-/// 对译 + 例句，主内容，无卡片包裹）→ 补充卡片（自然性 / 发音 / 相似表达 /
-/// 背景，图标徽章 + 主色小标题 + 柔和卡片）。空字段整段隐藏。
+/// [AiDictResultView] 完全对齐：顶部类别标签 → 词义区（序号 + 对译 + 例句，
+/// 主内容，无卡片包裹）→ 学习要点（主内容，无卡片包裹）→ 补充卡片（纠错 /
+/// 发音 / 相似表达 / 背景，图标徽章 + 主色小标题 + 柔和卡片）。空字段整段隐藏。
 library;
 
 import 'package:flutter/material.dart';
@@ -28,26 +28,6 @@ class AiMultiWordResultView extends StatelessWidget {
     // 类别标签是多词表达的元信息，不参与主要内容区排序。
     if (entry.category.isNotEmpty) {
       children.add(_CategoryTag(text: entry.category));
-    }
-
-    // 核心要点（置于词义之前，作主内容不套卡片，逐条项目符号）
-    if (entry.keyPoints.isNotEmpty) {
-      children.add(
-        _Section(
-          title: l10n.dictAiMultiKeyPoints,
-          icon: Icons.lightbulb_outline,
-          boxed: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < entry.keyPoints.length; i++) ...[
-                if (i > 0) const SizedBox(height: AppSpacing.s),
-                _KeyPointItem(item: entry.keyPoints[i]),
-              ],
-            ],
-          ),
-        ),
-      );
     }
 
     // 词义（主内容）：多义项显示序号，义项之间细分隔，直接渲染不套卡片
@@ -89,32 +69,33 @@ class AiMultiWordResultView extends StatelessWidget {
       );
     }
 
-    // 自然性提示（纠错；表达自然时后端返回空则整段隐藏）
+    // 学习要点（置于词义与例句之后，作主内容不套卡片，逐条项目符号）
+    if (entry.keyPoints.isNotEmpty) {
+      children.add(
+        _Section(
+          title: l10n.dictAiMultiKeyPoints,
+          icon: Icons.lightbulb_outline,
+          boxed: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < entry.keyPoints.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppSpacing.s),
+                _KeyPointItem(item: entry.keyPoints[i]),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 纠错提示（表达自然时后端返回空则整段隐藏）
     if (entry.naturalness.isNotEmpty) {
       children.add(
         _Section(
           title: l10n.dictAiMultiNaturalness,
           icon: Icons.tips_and_updates_outlined,
           child: _bodyText(Theme.of(context), entry.naturalness),
-        ),
-      );
-    }
-
-    // 发音提示（逐条项目符号）
-    if (entry.pronunciationTips.isNotEmpty) {
-      children.add(
-        _Section(
-          title: l10n.dictAiMultiPronunciationTips,
-          icon: Icons.record_voice_over_outlined,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < entry.pronunciationTips.length; i++) ...[
-                if (i > 0) const SizedBox(height: AppSpacing.xs),
-                _TipItem(text: entry.pronunciationTips[i]),
-              ],
-            ],
-          ),
         ),
       );
     }
@@ -138,7 +119,26 @@ class AiMultiWordResultView extends StatelessWidget {
       );
     }
 
-    // 背景
+    // 发音提示（逐条项目符号，紧邻背景之前）
+    if (entry.pronunciationTips.isNotEmpty) {
+      children.add(
+        _Section(
+          title: l10n.dictAiMultiPronunciationTips,
+          icon: Icons.record_voice_over_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < entry.pronunciationTips.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppSpacing.xs),
+                _TipItem(text: entry.pronunciationTips[i]),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 背景（置于最底部）
     if (entry.background.isNotEmpty) {
       children.add(
         _Section(

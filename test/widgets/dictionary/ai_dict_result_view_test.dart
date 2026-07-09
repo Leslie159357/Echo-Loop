@@ -304,7 +304,7 @@ void main() {
     expect(find.text('提示二'), findsOneWidget);
   });
 
-  testWidgets('多词表达渲染核心要点/含义/自然性/发音/相似表达/背景', (tester) async {
+  testWidgets('多词表达渲染含义/学习要点/纠错/发音/相似表达/背景', (tester) async {
     await tester.pumpWidget(
       _wrap(view(LookupLoaded(AiDictResult(_multiEntry())))),
     );
@@ -326,28 +326,28 @@ void main() {
     expect(find.text('人工智能核心术语。'), findsOneWidget);
   });
 
-  testWidgets('多词表达核心要点位于含义之前，其余按 schema 顺序渲染', (tester) async {
+  testWidgets('多词表达学习要点位于含义与例句之后，其余按 schema 顺序渲染', (tester) async {
     await tester.pumpWidget(
       _wrap(view(LookupLoaded(AiDictResult(_multiEntry())))),
     );
 
     double topOf(String text) => tester.getTopLeft(find.text(text)).dy;
 
-    final keyPointsTop = topOf('machine learning 是固定术语，不可拆开理解。');
     final meaningsTop = topOf('机器学习');
+    final keyPointsTop = topOf('machine learning 是固定术语，不可拆开理解。');
     final naturalnessTop = topOf('这是自然表达。');
     final pronunciationTop = topOf('重音通常落在 learning。');
     final similarTop = topOf('deep learning');
     final backgroundTop = topOf('人工智能核心术语。');
 
-    expect(keyPointsTop, lessThan(meaningsTop));
-    expect(meaningsTop, lessThan(naturalnessTop));
+    expect(meaningsTop, lessThan(keyPointsTop));
+    expect(keyPointsTop, lessThan(naturalnessTop));
     expect(naturalnessTop, lessThan(pronunciationTop));
     expect(pronunciationTop, lessThan(similarTop));
     expect(similarTop, lessThan(backgroundTop));
   });
 
-  testWidgets('多词表达中文分节标题显示为核心要点/含义与例句/背景知识', (tester) async {
+  testWidgets('多词表达中文分节标题显示为学习要点/含义与例句/背景知识', (tester) async {
     await tester.pumpWidget(
       _wrap(
         view(LookupLoaded(AiDictResult(_multiEntry()))),
@@ -355,7 +355,7 @@ void main() {
       ),
     );
 
-    expect(find.text('核心要点'), findsOneWidget);
+    expect(find.text('学习要点'), findsOneWidget);
     expect(find.text('含义与例句'), findsOneWidget);
     expect(find.text('背景知识'), findsOneWidget);
   });
@@ -378,6 +378,52 @@ void main() {
   testWidgets('加载中显示 Shimmer', (tester) async {
     await tester.pumpWidget(_wrap(view(const LookupLoading())));
     expect(find.byType(ShimmerPlaceholder), findsOneWidget);
+  });
+
+  testWidgets('流式首帧（空 entry）显示 Shimmer', (tester) async {
+    const empty = DictionaryEntry(
+      headword: '',
+      pronunciation: Pronunciation(uk: '', us: ''),
+      meanings: [],
+      commonExpressions: [],
+      wordFamily: [],
+      forms: [],
+      etymology: '',
+      learnerTips: [],
+    );
+    await tester.pumpWidget(
+      _wrap(view(LookupStreaming(AiDictResult(empty)))),
+    );
+    expect(find.byType(ShimmerPlaceholder), findsOneWidget);
+  });
+
+  testWidgets('流式部分帧（仅音标、无词义）：渲染已到达字段，不显示 Shimmer', (
+    tester,
+  ) async {
+    // 只有 headword+音标，meanings 尚未到达
+    await tester.pumpWidget(
+      _wrap(view(LookupStreaming(AiDictResult(_entry(meanings: const []))))),
+    );
+    expect(find.byType(ShimmerPlaceholder), findsNothing);
+    // 音标已渲染
+    expect(find.textContaining('rʌn'), findsWidgets);
+    // 词义区尚未出现（例句文本不存在）
+    expect(find.text('I run fast.'), findsNothing);
+  });
+
+  testWidgets('流式更完整帧：词义逐块渐显', (tester) async {
+    await tester.pumpWidget(_wrap(view(LookupStreaming(AiDictResult(_entry())))));
+    expect(find.byType(ShimmerPlaceholder), findsNothing);
+    // 词义与例句已渲染
+    expect(find.text('I run fast.'), findsOneWidget);
+  });
+
+  testWidgets('流式多词表达帧渲染 AiMultiWordResultView 内容', (tester) async {
+    await tester.pumpWidget(
+      _wrap(view(LookupStreaming(AiDictResult(_multiEntry())))),
+    );
+    expect(find.byType(ShimmerPlaceholder), findsNothing);
+    expect(find.textContaining('机器学习'), findsWidgets);
   });
 
   testWidgets('需登录显示提示与登录按钮', (tester) async {
