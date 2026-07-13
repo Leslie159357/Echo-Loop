@@ -104,8 +104,6 @@ void main() {
     expect(find.byIcon(Icons.refresh), findsNothing);
     expect(find.byIcon(Icons.info_outline), findsNothing);
     expect(find.text('More'), findsOneWidget);
-    verify(() => podcastRepo.refresh('podcast-1', force: false)).called(1);
-
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
 
@@ -294,9 +292,6 @@ void main() {
         },
       ),
     );
-    when(
-      () => podcastRepo.refresh('podcast-1', force: false),
-    ).thenAnswer((_) async {});
     when(() => podcastRepo.refresh('podcast-1', force: true)).thenAnswer((
       _,
     ) async {
@@ -326,6 +321,11 @@ void main() {
     await tester.drag(find.text('Episode One'), const Offset(0, 500));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      find.text('Failed to refresh: Exception: rss failed'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();

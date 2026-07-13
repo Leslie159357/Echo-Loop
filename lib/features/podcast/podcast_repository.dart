@@ -16,6 +16,7 @@ import '../../models/audio_item.dart';
 import '../../models/collection.dart';
 import '../../providers/audio_library_provider.dart';
 import '../../providers/collection_provider.dart';
+import '../../services/app_logger.dart';
 import '../../services/refresh_coordinator.dart';
 import 'anti_bot_detector.dart';
 import 'podcast_feed_parser.dart';
@@ -124,6 +125,13 @@ class PodcastRepository {
         .firstOrNull;
     if (collection == null || !collection.isPodcast) return Future.value();
 
+    AppLogger.log(
+      'PodcastRefresh',
+      'repo refresh start collectionId=${collection.id} '
+          'name=${collection.name} force=$force '
+          'lastRefreshedAt=${collection.podcastLastRefreshedAt?.toIso8601String() ?? "(null)"}',
+    );
+
     return _refresh
         .run(
           key: collectionId,
@@ -132,7 +140,22 @@ class PodcastRepository {
           throttleWindow: const Duration(minutes: _refreshThrottleMinutes),
           refresh: () => _doRefresh(collection),
         )
-        .then((_) {});
+        .then((result) {
+          switch (result) {
+            case RefreshThrottled<void>():
+              AppLogger.log(
+                'PodcastRefresh',
+                'repo refresh throttled collectionId=${collection.id} '
+                    'name=${collection.name}',
+              );
+            case RefreshCompleted<void>():
+              AppLogger.log(
+                'PodcastRefresh',
+                'repo refresh done collectionId=${collection.id} '
+                    'name=${collection.name}',
+              );
+          }
+        });
   }
 
   Future<void> _doRefresh(Collection collection) async {
@@ -141,6 +164,11 @@ class PodcastRepository {
 
     final refreshedAt = DateTime.now();
     try {
+      AppLogger.log(
+        'PodcastRefresh',
+        'load feed start collectionId=${collection.id} '
+            'name=${collection.name} feedUrl=$feedUrl',
+      );
       final feed = await _loadFeedWithAppleFallback(collection, feedUrl);
       final result = feed.result;
 
@@ -156,7 +184,16 @@ class PodcastRepository {
           .read(collectionListProvider.notifier)
           .updatePodcastCollection(updated);
 
-      await _importEpisodes(result.episodes, collectionId: collection.id);
+      final addedCount = await _importEpisodes(
+        result.episodes,
+        collectionId: collection.id,
+      );
+      AppLogger.log(
+        'PodcastRefresh',
+        'load feed success collectionId=${collection.id} '
+            'name=${collection.name} resolvedFeedUrl=${feed.url} '
+            'episodes=${result.episodes.length} added=$addedCount',
+      );
     } catch (e) {
       final failed = collection.copyWith(
         podcastLastRefreshedAt: refreshedAt,
@@ -165,6 +202,11 @@ class PodcastRepository {
       await _ref
           .read(collectionListProvider.notifier)
           .updatePodcastCollection(failed);
+      AppLogger.log(
+        'PodcastRefresh',
+        'load feed failed collectionId=${collection.id} '
+            'name=${collection.name} feedUrl=$feedUrl error=$e',
+      );
       rethrow;
     }
   }
@@ -197,11 +239,18 @@ class PodcastRepository {
   }
 
   Future<String> _fetchFeedContent(String feedUrl) async {
+    AppLogger.log('PodcastRefresh', 'rss request → GET $feedUrl');
     final response = await _dio.get<String>(
       feedUrl,
       options: Options(responseType: ResponseType.plain),
     );
     final content = response.data;
+    AppLogger.log(
+      'PodcastRefresh',
+      'rss response ← GET ${response.realUri} '
+          '${response.statusCode ?? "(null)"} '
+          'bytes=${content?.length ?? 0}',
+    );
     if (content == null || content.isEmpty) {
       throw const PodcastParseException('Feed 内容为空');
     }
@@ -223,7 +272,7 @@ class PodcastRepository {
   }
 
   /// 将 episodes 入库；只在同一合集内按 guid 去重。
-  Future<void> _importEpisodes(
+  Future<int> _importEpisodes(
     List<PodcastEpisode> episodes, {
     required String collectionId,
   }) async {
@@ -265,12 +314,13 @@ class PodcastRepository {
       newItems.add(item);
     }
 
-    if (newItems.isEmpty) return;
+    if (newItems.isEmpty) return 0;
     await audioLib.addAudioItems(newItems);
     await collList.addAudiosToCollection(
       collectionId,
       newItems.map((item) => item.id).toList(),
     );
+    return newItems.length;
   }
 }
 

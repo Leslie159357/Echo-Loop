@@ -2,7 +2,6 @@
 //
 // 展示合集中的音频列表，复用 AudioListView 和 AudioSortButton。
 // 支持上传音频到合集。
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -51,14 +50,6 @@ class _CollectionDetailScreenState
     AudioSortType.originalDateAsc,
     AudioSortType.originalDateDesc,
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_refreshPodcastFeed(force: false));
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +182,21 @@ class _CollectionDetailScreenState
       });
       final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.podcastSubscribeFailed(e.toString()))),
+        SnackBar(content: Text(_formatPodcastRefreshError(l10n, e))),
       );
     }
+  }
+
+  String _formatPodcastRefreshError(AppLocalizations l10n, Object error) {
+    if (error is PodcastFeedBlockedException) {
+      return l10n.podcastRefreshFailed(l10n.podcastFeedBlocked);
+    }
+    final raw = error.toString();
+    final message = raw
+        .replaceFirst('PodcastParseException: ', '')
+        .replaceFirst(RegExp(r'DioException \[[^\]]+\]:\s*'), '')
+        .trim();
+    return l10n.podcastRefreshFailed(message.isEmpty ? raw : message);
   }
 }
 

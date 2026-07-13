@@ -17,6 +17,7 @@ import '../models/reminder_settings.dart';
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
 import '../database/providers.dart';
+import '../features/podcast/podcast_refresh_controller.dart';
 import '../providers/app_update_provider.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
@@ -126,6 +127,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           'library bootstrap collections done: '
               'stateCollections=${collectionState.rawCollections.length}',
         );
+        unawaited(_refreshSubscribedPodcastsInBackground());
 
         ref.read(tagListProvider.notifier).loadTags();
         ref.read(audioLibraryProvider.notifier).backfillDurations();
@@ -332,10 +334,8 @@ class _MainShellState extends ConsumerState<MainShell> {
       info: result.info!,
       isForceUpdate: isForce,
       downloadUrl: downloadUrl,
-      onUpdate: () => launcher.launch(
-        info: result.info!,
-        primaryUrl: downloadUrl,
-      ),
+      onUpdate: () =>
+          launcher.launch(info: result.info!, primaryUrl: downloadUrl),
       onDismiss: () => ref.read(appUpdateProvider.notifier).dismiss(),
     );
   }
@@ -379,11 +379,27 @@ class _MainShellState extends ConsumerState<MainShell> {
   void _onAppResume() {
     AppLogger.log('AppUpdate', 'onAppResume: trigger checkInBackground');
     _refreshStudyData();
-    ref.read(appUpdateProvider.notifier).checkInBackground();
+    unawaited(ref.read(appUpdateProvider.notifier).checkInBackground());
+    unawaited(_refreshSubscribedPodcastsInBackground());
     // 回前台时同步系统通知权限状态，覆盖用户在系统设置中手动变更的情况
-    ref
-        .read(notificationPermissionServiceProvider)
-        .syncSystemAuthorizationStatus();
+    unawaited(
+      ref
+          .read(notificationPermissionServiceProvider)
+          .syncSystemAuthorizationStatus(),
+    );
+  }
+
+  /// 使用统一控制器静默刷新已订阅播客。
+  Future<void> _refreshSubscribedPodcastsInBackground() async {
+    try {
+      await ref.read(podcastRefreshControllerProvider).refreshIfStale();
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'PodcastRefresh',
+        'MainShell background refresh failed: $error',
+      );
+      AppLogger.log('PodcastRefresh', stackTrace.toString());
+    }
   }
 
   Future<void> _retryStudyBootstrap() async {

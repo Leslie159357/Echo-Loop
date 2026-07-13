@@ -7430,6 +7430,12 @@ abstract class AppLocalizations {
   /// **'Failed to subscribe: {error}'**
   String podcastSubscribeFailed(String error);
 
+  /// No description provided for @podcastRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to refresh: {error}'**
+  String podcastRefreshFailed(String error);
+
   /// No description provided for @podcastAlreadySubscribed.
   ///
   /// In en, this message translates to:

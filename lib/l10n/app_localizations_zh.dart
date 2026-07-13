@@ -4026,6 +4026,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String podcastRefreshFailed(String error) {
+    return '刷新失败：$error';
+  }
+
+  @override
   String podcastAlreadySubscribed(String name) {
     return '已订阅该播客，合集名为「$name」';
   }

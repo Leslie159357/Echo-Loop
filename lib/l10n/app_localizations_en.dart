@@ -4219,6 +4219,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String podcastRefreshFailed(String error) {
+    return 'Failed to refresh: $error';
+  }
+
+  @override
   String podcastAlreadySubscribed(String name) {
     return 'Already subscribed — see collection \"$name\"';
   }

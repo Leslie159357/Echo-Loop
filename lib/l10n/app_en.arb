@@ -2106,6 +2106,10 @@
   "@podcastSubscribeFailed": {
     "placeholders": { "error": { "type": "String" } }
   },
+  "podcastRefreshFailed": "Failed to refresh: {error}",
+  "@podcastRefreshFailed": {
+    "placeholders": { "error": { "type": "String" } }
+  },
   "podcastAlreadySubscribed": "Already subscribed — see collection \"{name}\"",
   "@podcastAlreadySubscribed": {
     "placeholders": { "name": { "type": "String" } }
