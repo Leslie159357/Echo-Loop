@@ -1,6 +1,6 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-14（收口 Web 渠道恢复购买语义）
+> 最后更新：2026-07-14（版本号升级到 1.0.26）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——仍未解决
 
 ## 当前优先级
@@ -60,6 +60,7 @@
 
 ## 最近完成（保留近两周）
 
+- [x] 2026-07-14 22:38：版本号升级到 `1.0.26`。
 - [x] 2026-07-14 22:24：修复订阅权益前台长驻跨过 expiresAt 后仍保持 Premium；`SubscriptionController` 根据有效权益到期时间安排一次性 refresh，新权益到来时重排 timer，并补到期刷新/重排/永久权益回归测试。
 - [x] 2026-07-14 22:11：收口 Web/direct 渠道恢复购买语义，`SubscriptionController.restore()` 在 Web 渠道转为后端权益刷新，避免误穿透到 `WebPurchaseService.restore()` 抛异常，并补充回归测试。
 - [x] 2026-07-14 21:59：修复订阅登出本地清理顺序，登出时先将权益状态置为 free 并清除本地缓存，再 best-effort 解绑 RevenueCat 身份；补充 RC 解绑延迟/失败时本地隔离立即生效的回归测试。
