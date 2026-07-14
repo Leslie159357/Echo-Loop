@@ -33,14 +33,14 @@ class _CustomApiSettingsScreenState extends ConsumerState<CustomApiSettingsScree
     super.dispose();
   }
 
-  void _save() {
-    ref.read(customApiConfigNotifierProvider.notifier).update(CustomApiConfig(
+  Future<void> _save() async {
+    await ref.read(customApiConfigNotifierProvider.notifier).update(CustomApiConfig(
       enabled: _enabled,
       baseUrl: _urlCtl.text.trim(),
       apiKey: _keyCtl.text.trim(),
       model: _modelCtl.text.trim(),
     ));
-    Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
