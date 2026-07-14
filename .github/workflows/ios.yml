@@ -1,16 +1,37 @@
+# iOS 未签名 IPA 构建工作流
+#
+# 手动触发：Actions → Build iOS → Run workflow
+# 产出：未签名 IPA（可用 AltStore / SideStore 侧载，7 天有效期）
+#
+# dart-define 留空时 App 自动以离线模式运行（无需 Supabase / RevenueCat）。
 name: Build iOS
 on: workflow_dispatch
+env:
+  FLUTTER_VERSION: '3.41.5'
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
-        with: {channel: master, cache: true}
-      - run: cp .dev.env.template .dev.env
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
-      - run: mkdir -p Payload && cp -r build/ios/iphoneos/Runner.app Payload/ && zip -r EchoLoop.ipa Payload/
+      - name: CocoaPods install
+        run: cd ios && pod install
+      - name: Build iOS (no codesign)
+        run: |
+          flutter build ios --release --no-codesign --flavor=prod \
+            --dart-define=API_BASE_URL= \
+            --dart-define=SUPABASE_URL= \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY= \
+            --dart-define=REVENUECAT_API_KEY_APPLE=
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r EchoLoop.ipa Payload/
       - uses: actions/upload-artifact@v4
         with:
           name: EchoLoop.ipa

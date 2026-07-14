@@ -19,6 +19,7 @@ import '../providers/package_info_provider.dart';
 import 'ai_http_client_adapter.dart';
 import 'app_logger.dart';
 import 'backend_dio.dart';
+import 'custom_ai_service.dart';
 import 'dictionary/dictionary_source.dart';
 import 'ndjson_object_stream.dart';
 import 'ndjson_stream.dart';
@@ -103,9 +104,13 @@ class SenseGroupsStreamException implements Exception {
 }
 
 /// AI 句子翻译/解析 API 客户端
+///
+/// 当 [useCustomApi] 为 true 时，所有 AI 操作委托给 [CustomAiService]，
+/// 无需 accessToken，直接调用用户配置的 OpenAI 兼容 API。
 class SentenceAiApiClient {
   final Dio _dio;
   final CustomApiConfig? _customConfig;
+  final CustomAiService? _customAiService;
   final void Function(String message) _streamLogPrint;
 
   /// [appVersion] 随请求以 `x-app-version` 上报（版本灰度预留），可为 null。
@@ -127,7 +132,10 @@ class SentenceAiApiClient {
        ),
        _streamLogPrint =
            streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = customConfig {
+       _customConfig = customConfig,
+       _customAiService = (customConfig != null && customConfig.enabled)
+           ? CustomAiService(customConfig)
+           : null {
     configureAiHttpClientAdapter(
       _dio,
       baseUrl: baseUrl,
@@ -169,6 +177,17 @@ class SentenceAiApiClient {
     String? targetLanguage,
     CancelToken? cancelToken,
   }) async* {
+    // 自定义 API 启用时委托给 CustomAiService
+    if (useCustomApi && _customAiService != null) {
+      yield* _customAiService!.translateStream(
+        text,
+        previousText: previousText,
+        nextText: nextText,
+        targetLanguage: targetLanguage,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/translate',
       data: {
@@ -245,6 +264,15 @@ class SentenceAiApiClient {
     String? targetLanguage,
     CancelToken? cancelToken,
   }) async* {
+    // 自定义 API 启用时委托给 CustomAiService
+    if (useCustomApi && _customAiService != null) {
+      yield* _customAiService!.analyzeStream(
+        text,
+        targetLanguage: targetLanguage,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/analyze',
       data: {
@@ -330,14 +358,25 @@ class SentenceAiApiClient {
     required String accessToken,
     String? targetLanguage,
     CancelToken? cancelToken,
-  }) => _streamDictionaryFrames(
-    '/api/v1/stream/lookup-word',
-    word,
-    fromJson: DictionaryEntry.fromJson,
-    accessToken: accessToken,
-    targetLanguage: targetLanguage,
-    cancelToken: cancelToken,
-  );
+  }) async* {
+    // 自定义 API 启用时委托给 CustomAiService
+    if (useCustomApi && _customAiService != null) {
+      yield* _customAiService!.lookupWordStream(
+        word,
+        targetLanguage: targetLanguage,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
+    yield* _streamDictionaryFrames(
+      '/api/v1/stream/lookup-word',
+      word,
+      fromJson: DictionaryEntry.fromJson,
+      accessToken: accessToken,
+      targetLanguage: targetLanguage,
+      cancelToken: cancelToken,
+    );
+  }
 
   /// AI 词典释义（多词/短语，流式）
   ///
@@ -362,14 +401,25 @@ class SentenceAiApiClient {
     required String accessToken,
     String? targetLanguage,
     CancelToken? cancelToken,
-  }) => _streamDictionaryFrames(
-    '/api/v1/stream/lookup-phrase',
-    phrase,
-    fromJson: MultiWordDictionaryEntry.fromJson,
-    accessToken: accessToken,
-    targetLanguage: targetLanguage,
-    cancelToken: cancelToken,
-  );
+  }) async* {
+    // 自定义 API 启用时委托给 CustomAiService
+    if (useCustomApi && _customAiService != null) {
+      yield* _customAiService!.lookupPhraseStream(
+        phrase,
+        targetLanguage: targetLanguage,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
+    yield* _streamDictionaryFrames(
+      '/api/v1/stream/lookup-phrase',
+      phrase,
+      fromJson: MultiWordDictionaryEntry.fromJson,
+      accessToken: accessToken,
+      targetLanguage: targetLanguage,
+      cancelToken: cancelToken,
+    );
+  }
 
   /// 流式查词通用实现：发起 `ResponseType.stream` 请求，逐帧解析 NDJSON。
   ///
@@ -486,6 +536,14 @@ class SentenceAiApiClient {
     required String accessToken,
     CancelToken? cancelToken,
   }) async* {
+    // 自定义 API 启用时委托给 CustomAiService
+    if (useCustomApi && _customAiService != null) {
+      yield* _customAiService!.senseGroupsStream(
+        text,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/sense-groups',
       data: {'text': text},

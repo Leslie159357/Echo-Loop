@@ -14,6 +14,7 @@ class _State extends ConsumerState<CustomApiSettingsScreen> {
   final TextEditingController _keyCtrl = TextEditingController();
   final TextEditingController _mdlCtrl = TextEditingController();
   bool _on = false;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -35,16 +36,44 @@ class _State extends ConsumerState<CustomApiSettingsScreen> {
 
   void _save() {
     ref.read(customApiConfigNotifierProvider.notifier).update(CustomApiConfig(
-      enabled: _on,
-      baseUrl: _urlCtrl.text.trim(),
-      apiKey: _keyCtrl.text.trim(),
-      model: _mdlCtrl.text.trim(),
-    ));
+          enabled: _on,
+          baseUrl: _urlCtrl.text.trim(),
+          apiKey: _keyCtrl.text.trim(),
+          model: _mdlCtrl.text.trim(),
+        ));
     Navigator.of(context).pop();
+  }
+
+  Future<void> _refreshModels() async {
+    setState(() => _isRefreshing = true);
+    final models = await ref
+        .read(customApiConfigNotifierProvider.notifier)
+        .refreshModels();
+    setState(() => _isRefreshing = false);
+    if (models.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法获取模型列表，请检查 API 地址和 Key')),
+        );
+      }
+      return;
+    }
+    // 如果当前模型不在列表中，自动选择第一个
+    final currentModel = _mdlCtrl.text.trim();
+    if (currentModel.isEmpty || !models.contains(currentModel)) {
+      _mdlCtrl.text = models.first;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已获取 ${models.length} 个模型')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cfg = ref.watch(customApiConfigNotifierProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text("自定义 API")),
       body: ListView(
@@ -78,14 +107,79 @@ class _State extends ConsumerState<CustomApiSettingsScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _mdlCtrl,
-              decoration: const InputDecoration(
-                labelText: "模型",
-                hintText: "gpt-4o-mini",
-                border: OutlineInputBorder(),
-              ),
+            // 模型选择行：下拉 + 刷新按钮
+            Row(
+              children: [
+                Expanded(
+                  child: cfg.modelList.isNotEmpty
+                      ? Autocomplete<String>(
+                          optionsBuilder: (textEditingValue) =>
+                              cfg.modelList.where((model) => model
+                                  .toLowerCase()
+                                  .contains(
+                                      textEditingValue.text.toLowerCase())),
+                          initialValue: TextEditingValue(
+                            text: _mdlCtrl.text,
+                          ),
+                          fieldViewBuilder: (context, textEditingController,
+                              focusNode, onSubmitted) {
+                            // 同步外部 controller
+                            _mdlCtrl.text = textEditingController.text;
+                            return TextField(
+                              controller: textEditingController,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(
+                                labelText: "模型",
+                                hintText: "gpt-4o-mini",
+                                border: OutlineInputBorder(),
+                              ),
+                            );
+                          },
+                          onSelected: (selection) {
+                            _mdlCtrl.text = selection;
+                          },
+                        )
+                      : TextField(
+                          controller: _mdlCtrl,
+                          decoration: const InputDecoration(
+                            labelText: "模型",
+                            hintText: "gpt-4o-mini",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _isRefreshing ? null : _refreshModels,
+                  icon: _isRefreshing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  tooltip: "刷新模型列表",
+                ),
+              ],
             ),
+            if (cfg.modelList.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                "共 ${cfg.modelList.length} 个模型可用",
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            if (cfg.lastRefreshedAtMs > 0) ...[
+              const SizedBox(height: 2),
+              Text(
+                "上次刷新: ${DateTime.fromMillisecondsSinceEpoch(cfg.lastRefreshedAtMs).toString().substring(0, 19)}",
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _save,

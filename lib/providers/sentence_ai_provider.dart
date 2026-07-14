@@ -212,6 +212,10 @@ class SentenceAiNotifier {
   final SentenceAiCacheDao _cacheDao;
   final SentenceAiApiClient _apiClient;
 
+  /// 是否启用自定义 API\uff08OpenAI 兼容\uff09。启用时跳过 accessToken 检查
+  /// 和订阅配额闸，直接发往自定义 API 端点。
+  final bool _useCustomApi;
+
   /// 额度闸：发起 L3 请求前调用。已登录但未解锁（非会员且免费试用用尽）时
   /// 抛 [AiFeatureQuotaExceededException]；会员或仍有试用额度则放行。
   /// 注入而非内联订阅依赖，保持数据层与订阅状态解耦（通过 [PremiumFeature] 中性枚举）。
@@ -248,6 +252,7 @@ class SentenceAiNotifier {
   SentenceAiNotifier({
     required SentenceAiCacheDao cacheDao,
     required SentenceAiApiClient apiClient,
+    bool useCustomApi = false,
     void Function(PremiumFeature feature)? guardFeature,
     void Function(PremiumFeature feature)? onConsumeTrial,
     Future<void> Function(
@@ -260,6 +265,7 @@ class SentenceAiNotifier {
     Future<void> Function(PremiumFeature feature)? onApiSucceeded,
   }) : _cacheDao = cacheDao,
        _apiClient = apiClient,
+       _useCustomApi = useCustomApi,
        _guardFeature = guardFeature,
        _onConsumeTrial = onConsumeTrial,
        _beforeApiRequest = beforeApiRequest,
@@ -314,10 +320,12 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
+    if (!_useCustomApi && (accessToken == null || accessToken.isEmpty)) {
       AppLogger.log('SentenceAI', '翻译 L3 需要登录，未发现 Supabase access token');
       throw const AiFeatureAuthRequiredException();
     }
+    // 自定义 API 启用时传空字符串（SentenceAiApiClient 会跳过 auth header）
+    final effectiveToken = accessToken ?? '';
     await _beforeApiRequest?.call(
       PremiumFeature.aiTranslation,
       respectLocalQuotaReset: respectLocalQuotaReset,
@@ -342,7 +350,7 @@ class SentenceAiNotifier {
         previous: previous,
         next: next,
         targetLanguage: targetLanguage,
-        accessToken: accessToken,
+        accessToken: effectiveToken,
       ),
     );
     yield* pending.subscribe();
@@ -478,10 +486,11 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
+    if (!_useCustomApi && (accessToken == null || accessToken.isEmpty)) {
       AppLogger.log('SentenceAI', '解析 L3 需要登录，未发现 Supabase access token');
       throw const AiFeatureAuthRequiredException();
     }
+    final effectiveToken = accessToken ?? '';
     await _beforeApiRequest?.call(
       PremiumFeature.aiAnalysis,
       respectLocalQuotaReset: respectLocalQuotaReset,
@@ -504,7 +513,7 @@ class SentenceAiNotifier {
         l2Type: l2Type,
         text: text,
         targetLanguage: targetLanguage,
-        accessToken: accessToken,
+        accessToken: effectiveToken,
       ),
     );
     yield* pending.subscribe();
@@ -639,10 +648,11 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
+    if (!_useCustomApi && (accessToken == null || accessToken.isEmpty)) {
       AppLogger.log('SenseGroup', 'L3 需要登录，未发现 Supabase access token');
       throw const AiFeatureAuthRequiredException();
     }
+    final effectiveToken = accessToken ?? '';
     await _beforeApiRequest?.call(
       PremiumFeature.aiSenseGroup,
       respectLocalQuotaReset: respectLocalQuotaReset,
@@ -662,7 +672,7 @@ class SentenceAiNotifier {
         pending,
         hash: hash,
         text: text,
-        accessToken: accessToken,
+        accessToken: effectiveToken,
       ),
     );
     yield* pending.subscribe();
@@ -913,6 +923,7 @@ final sentenceAiNotifierProvider = Provider<SentenceAiNotifier>((ref) {
   return SentenceAiNotifier(
     cacheDao: ref.watch(sentenceAiCacheDaoProvider),
     apiClient: ref.watch(sentenceAiApiClientProvider),
+    useCustomApi: ref.watch(customApiConfigNotifierProvider).enabled,
     // 额度闸：已登录前提下未解锁（非会员且试用用尽）→ 抛配额超限。
     guardFeature: (feature) {
       if (ref.read(customApiConfigNotifierProvider).enabled) return;

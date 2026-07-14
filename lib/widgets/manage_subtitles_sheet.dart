@@ -75,7 +75,9 @@ class ManageSubtitlesSheet extends ConsumerStatefulWidget {
 
 class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 默认选中首位「AI 转录」（与选项排序一致，避免高亮落在末尾）。
+  /// 未登录时默认选中本地转录。
   _SubtitleAction _selectedAction = _SubtitleAction.aiTranscription;
+  bool _initialDefaultSet = false;
   String _selectedLanguage = 'en';
 
   /// AI 转录「自动合并短句」开关，初值取自设置（记住上次选择），默认开启。
@@ -105,6 +107,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   @override
   void initState() {
     super.initState();
+    // 未登录时默认选中本地转录（离线可用）
+    _setInitialDefault();
     // 取上次记住的「自动合并短句」选择作为默认值
     _autoMergeShortSentences = ref
         .read(appSettingsProvider)
@@ -145,6 +149,20 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   void dispose() {
     _errorClearTimer?.cancel();
     super.dispose();
+  }
+
+  /// 未登录时默认选中本地转录（离线可用，无需 Supabase 认证）。
+  void _setInitialDefault() {
+    if (_initialDefaultSet) return;
+    _initialDefaultSet = true;
+    try {
+      final session = ref.read(supabaseSessionProvider).valueOrNull;
+      if (session == null) {
+        _selectedAction = _SubtitleAction.offlineTranscription;
+      }
+    } catch (_) {
+      _selectedAction = _SubtitleAction.offlineTranscription;
+    }
   }
 
   /// 显示内联错误条，5 秒后自动消失。重复触发会重置倒计时。
