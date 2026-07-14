@@ -1,5 +1,4 @@
 import 'dart:convert';
->>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/custom_api/custom_api_config.dart';
@@ -56,7 +55,6 @@ class CustomApiSettingsScreen extends ConsumerWidget {
     final config = ref.watch(customApiConfigNotifierProvider);
     final notifier = ref.read(customApiConfigNotifierProvider.notifier);
 
->>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
     return Scaffold(
       appBar: AppBar(title: const Text('自定义 API')),
       body: ListView(
@@ -154,7 +152,6 @@ class CustomApiSettingsScreen extends ConsumerWidget {
               },
             ),
           ],
->>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
         ],
       ),
     );
