@@ -100,7 +100,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 是否展示本地离线转录入口。
   ///
   /// 当前本地转录效果不稳定，先隐藏入口；保留实现和状态处理，便于后续恢复。
-  bool get _showOfflineTranscriptionEntry => false;
+  bool get _showOfflineTranscriptionEntry => true;
 
   @override
   void initState() {

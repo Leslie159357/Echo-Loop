@@ -54,6 +54,7 @@ import '../providers/dictionary/visible_sources_provider.dart';
 import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
 import 'asr_test_screen.dart';
+import 'custom_api_settings_screen.dart';
 import 'dictionary_settings_screen.dart';
 import 'tts_settings_screen.dart';
 import 'learning_settings_screen.dart';
