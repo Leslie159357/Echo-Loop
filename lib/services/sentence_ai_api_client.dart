@@ -153,7 +153,8 @@ class SentenceAiApiClient {
     void Function(String message)? streamLogPrint,
   }) : _streamLogPrint =
            streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = null;
+       _customConfig = null,
+       _customAiService = null;
 
   /// 请求公共 headers（仅测试用，验证平台/版本标识已随请求携带）。
   @visibleForTesting

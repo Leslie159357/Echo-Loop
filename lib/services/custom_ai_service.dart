@@ -89,9 +89,9 @@ class CustomAiService {
     final responseBody = response.data;
     if (responseBody == null) return;
 
-    await for (final chunk in responseBody.stream.transform(
-      utf8.decoder.transform(const LineSplitter()),
-    )) {
+    await for (final chunk in responseBody.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())) {
       final line = chunk.toString().trim();
       if (!line.startsWith('data: ')) continue;
       final jsonStr = line.substring(6).trim();
