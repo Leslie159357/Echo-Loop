@@ -206,9 +206,9 @@ class CustomAiService {
     final systemPrompt = '你是一个英语语法和词汇分析助手。请用$lang分析以下英文句子。\n\n'
         '按以下 JSON 格式输出（只输出 JSON，不要额外文字）：\n'
         '{\n'
-        '  "grammar": [{"point": "语法点", "detail": "详细解释"}],\n'
-        '  "vocabulary": [{"word": "单词", "partOfSpeech": "词性", "definition": "释义", "example": "例句"}],\n'
-        '  "listening": [{"tip": "听力技巧", "detail": "说明"}]\n'
+        '  "grammar": [{"point": "语法点", "note": "详细解释"}],\n'
+        '  "vocabulary": [{"term": "单词/短语", "note": "在本句中的含义"}],\n'
+        '  "listening": [{"phrase": "单词/短语", "note": "发音/听力难点说明"}]\n'
         '}\n\n'
         '如果某类没有内容，用空数组 []。';
 
@@ -325,22 +325,35 @@ class CustomAiService {
     final systemPrompt = type == 'word'
         ? '你是一个英语词典助手。请用$lang解释以下英语单词。\n\n'
             '按以下 JSON 格式输出（只输出 JSON，不要额外文字）：\n'
-            '{\n'
-            '  "word": "单词",\n'
-            '  "pronunciation": "音标",\n'
-            '  "partOfSpeech": "词性",\n'
-            '  "definitions": [{"definition": "释义", "example": "例句"}],\n'
-            '  "synonyms": ["近义词1", "近义词2"],\n'
-            '  "antonyms": ["反义词1"]\n'
+            '{
+'
+            '  "headword": "单词原形",
+'
+            '  "pronunciation": {"uk": "英式音标", "us": "美式音标"},
+'
+            '  "meanings": [{"partOfSpeech": "词性", "definition": "英文释义", "examples": [{"sentence": "例句", "translation": "翻译"}], "synonyms": ["近义词"], "antonyms": ["反义词"]}],
+'
+            '  "etymology": "词源简注",
+'
+            '  "learnerTips": ["学习提示"]
+'
             '}'
         : '你是一个英语词典助手。请用$lang解释以下英语短语。\n\n'
             '按以下 JSON 格式输出（只输出 JSON，不要额外文字）：\n'
             '{\n'
-            '  "phrase": "短语",\n'
-            '  "definitions": [{"definition": "释义", "example": "例句"}],\n'
-            '  "usage": "用法说明"\n'
-            '}';
-
+            '{
+'
+            '  "originalExpression": "短语本体",
+'
+            '  "naturalness": "",
+'
+            '  "category": "搭配/习惯/短语动词",
+'
+            '  "keyPoints": [{"point": "核心要点", "example": {"sentence": "例句", "translation": "翻译"}}],
+'
+            '  "meanings": [{"meaning": "含义", "usage": "用法", "examples": [{"sentence": "例句", "translation": "翻译"}]}]
+'
+            '}'
     String fullContent = '';
     try {
       await for (final chunk in _streamChat(systemPrompt, query)) {
