@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
-import '../features/custom_api/custom_api_config.dart';
 import '../providers/package_info_provider.dart';
 import 'ai_http_client_adapter.dart';
 import 'app_logger.dart';
@@ -105,7 +104,6 @@ class SenseGroupsStreamException implements Exception {
 /// AI 句子翻译/解析 API 客户端
 class SentenceAiApiClient {
   final Dio _dio;
-  final CustomApiConfig? _customConfig;
   final void Function(String message) _streamLogPrint;
 
   /// [appVersion] 随请求以 `x-app-version` 上报（版本灰度预留），可为 null。
@@ -115,7 +113,6 @@ class SentenceAiApiClient {
     String? appVersion,
     bool http2Enabled = aiHttp2EnabledByDefault,
     void Function(String message)? streamLogPrint,
-    CustomApiConfig? customConfig,
   }) : _dio = createBackendDio(
          baseUrl: baseUrl,
          appVersion: appVersion,
@@ -126,8 +123,7 @@ class SentenceAiApiClient {
          apiLogTag: 'AI-API',
        ),
        _streamLogPrint =
-           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = customConfig {
+           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)) {
     configureAiHttpClientAdapter(
       _dio,
       baseUrl: baseUrl,
@@ -168,11 +164,6 @@ class SentenceAiApiClient {
     String? targetLanguage,
     CancelToken? cancelToken,
   }) async* {
-    if (useCustomApi) {
-      final result = await _customTranslate(text, targetLanguage ?? 'zh-CN');
-      yield SentenceTranslationStreamFrame(translation: result);
-      return;
-    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/translate',
       data: {
