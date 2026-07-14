@@ -140,8 +140,7 @@ class SentenceAiApiClient {
     this._dio, {
     void Function(String message)? streamLogPrint,
   }) : _streamLogPrint =
-           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = null;
+           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message));
 
   /// 请求公共 headers（仅测试用，验证平台/版本标识已随请求携带）。
   @visibleForTesting
@@ -538,23 +537,6 @@ class SentenceAiApiClient {
   }
 
   /// 释放资源
-  bool get useCustomApi => _customConfig != null && _customConfig!.enabled;
-
-  Future<String> _customTranslate(String text, String targetLanguage) async {
-    final response = await Dio().post(
-      _customConfig!.baseUrl,
-      data: {'text': text, 'targetLanguage': targetLanguage},
-      options: Options(headers: {'Content-Type': 'application/json'}, receiveTimeout: const Duration(seconds: 30)),
-    );
-    if (response.statusCode == 200 && response.data != null) {
-      if (response.data is Map && response.data['translation'] != null) {
-        return response.data['translation'] as String;
-      }
-      if (response.data is String) return response.data as String;
-    }
-    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
-  }
-
   void dispose() => _dio.close();
 
   /// 流式响应体只能被消费一次；这里在 NDJSON 解码入口旁路打印原始帧，
