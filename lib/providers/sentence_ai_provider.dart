@@ -22,6 +22,7 @@ import '../features/subscription/providers/subscription_identity.dart';
 import '../models/sense_group_result.dart';
 import '../models/sentence_ai_result.dart';
 import '../services/sentence_ai_api_client.dart';
+import '../features/custom_api/custom_api_config.dart';
 import '../utils/sense_group_validate.dart';
 import '../utils/text_normalize.dart';
 
@@ -914,6 +915,7 @@ final sentenceAiNotifierProvider = Provider<SentenceAiNotifier>((ref) {
     apiClient: ref.watch(sentenceAiApiClientProvider),
     // 额度闸：已登录前提下未解锁（非会员且试用用尽）→ 抛配额超限。
     guardFeature: (feature) {
+      if (ref.read(customApiConfigNotifierProvider).enabled) return;
       if (!ref.read(featureAccessProvider(feature))) {
         throw const AiFeatureQuotaExceededException();
       }
@@ -924,6 +926,7 @@ final sentenceAiNotifierProvider = Provider<SentenceAiNotifier>((ref) {
       ref.read(aiTrialUsageProvider.notifier).consume(feature);
     },
     beforeApiRequest: (feature, {required respectLocalQuotaReset}) async {
+      if (ref.read(customApiConfigNotifierProvider).enabled) return;
       final userId = ref.read(subscriptionIdentityProvider).userId;
       if (userId == null) return;
       final store = ref.read(aiQuotaLimitStoreProvider);
@@ -942,6 +945,7 @@ final sentenceAiNotifierProvider = Provider<SentenceAiNotifier>((ref) {
       }
     },
     onQuotaExceeded: (feature, resetAt) async {
+      if (ref.read(customApiConfigNotifierProvider).enabled) return;
       final userId = ref.read(subscriptionIdentityProvider).userId;
       if (userId == null) return;
       await ref
@@ -949,6 +953,7 @@ final sentenceAiNotifierProvider = Provider<SentenceAiNotifier>((ref) {
           .recordResetAt(userId, feature, resetAt);
     },
     onApiSucceeded: (feature) async {
+      if (ref.read(customApiConfigNotifierProvider).enabled) return;
       final userId = ref.read(subscriptionIdentityProvider).userId;
       if (userId == null) return;
       await ref.read(aiQuotaLimitStoreProvider).clearReset(userId, feature);

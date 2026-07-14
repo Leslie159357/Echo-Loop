@@ -53,6 +53,7 @@ import '../providers/dictionary/dictionary_registry.dart';
 import '../providers/dictionary/visible_sources_provider.dart';
 import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
+import 'custom_api_settings_screen.dart';
 import 'asr_test_screen.dart';
 import 'custom_api_settings_screen.dart';
 import 'dictionary_settings_screen.dart';
@@ -334,6 +335,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
             onTap: () => Navigator.of(context).push(
+            ListTile(
+              leading: const Icon(Icons.api),
+              title: const Text('自定义 API'),
+              subtitle: const Text('配置自建 API 后免登录使用'),
+              onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const CustomApiSettingsScreen()),
+              ),
+            ),
               MaterialPageRoute<void>(
                 builder: (_) => const AsrSettingsScreen(),
               ),

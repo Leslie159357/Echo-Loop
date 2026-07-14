@@ -1,3 +1,5 @@
+import 'dart:convert';
+>>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/custom_api/custom_api_config.dart';
@@ -46,6 +48,15 @@ class _CustomApiSettingsScreenState extends ConsumerState<CustomApiSettingsScree
 
   @override
   Widget build(BuildContext context) {
+class CustomApiSettingsScreen extends ConsumerWidget {
+  const CustomApiSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(customApiConfigNotifierProvider);
+    final notifier = ref.read(customApiConfigNotifierProvider.notifier);
+
+>>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
     return Scaffold(
       appBar: AppBar(title: const Text('自定义 API')),
       body: ListView(
@@ -91,6 +102,59 @@ class _CustomApiSettingsScreenState extends ConsumerState<CustomApiSettingsScree
             icon: const Icon(Icons.save),
             label: const Text('保存'),
           ),
+            subtitle: const Text('开启后可免登录使用翻译、分析、意群功能'),
+            value: config.enabled,
+            onChanged: (v) => notifier.update(enabled: v),
+          ),
+          if (config.enabled) ...[
+            const SizedBox(height: 8),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'API 地址',
+                hintText: 'https://your-api.com/v1',
+                border: OutlineInputBorder(),
+              ),
+              controller: TextEditingController(text: config.baseUrl),
+              onChanged: (v) => notifier.update(baseUrl: v),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'API Key',
+                hintText: 'sk-...',
+                border: OutlineInputBorder(),
+              ),
+              controller: TextEditingController(text: config.apiKey),
+              onChanged: (v) => notifier.update(apiKey: v),
+              obscureText: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: '模型',
+                hintText: 'gpt-4o-mini 或 deepseek-chat',
+                border: OutlineInputBorder(),
+              ),
+              controller: TextEditingController(text: config.model),
+              onChanged: (v) => notifier.update(model: v),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<AiProvider>(
+              value: config.provider,
+              decoration: const InputDecoration(
+                labelText: '提供商',
+                border: OutlineInputBorder(),
+              ),
+              items: AiProvider.values.map((p) => DropdownMenuItem(
+                value: p,
+                child: Text(p.name),
+              )).toList(),
+              onChanged: (v) {
+                if (v != null) notifier.update(provider: v);
+              },
+            ),
+          ],
+>>>>>>> 6b7f476519267e2af4d2180bc28a0f8e848438c7
         ],
       ),
     );
