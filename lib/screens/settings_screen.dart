@@ -334,16 +334,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
             onTap: () => Navigator.of(context).push(
-            ListTile(
-              leading: const Icon(Icons.api),
-              title: const Text('自定义 API'),
-              subtitle: const Text('配置自建 API 后免登录使用'),
-              onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const CustomApiSettingsScreen()),
-              ),
-            ),
               MaterialPageRoute<void>(
                 builder: (_) => const AsrSettingsScreen(),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.api, color: colorScheme.onSurfaceVariant),
+            title: const Text('自定义 API'),
+            subtitle: const Text('配置自建 API 后免登录使用翻译、分析、意群'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const CustomApiSettingsScreen(),
               ),
             ),
           ),
