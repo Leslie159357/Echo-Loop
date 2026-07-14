@@ -15,6 +15,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../config/client_distribution.dart';
 import '../../../services/app_logger.dart';
 import '../models/entitlement.dart';
 import '../services/entitlement_cache.dart';
@@ -27,14 +28,26 @@ import 'subscription_identity.dart';
 
 part 'subscription_controller.g.dart';
 
+/// 当前支付渠道 seam：生产读取编译期平台/渠道，测试可 override。
+final subscriptionPaymentChannelProvider = Provider<ClientPaymentChannel>(
+  (ref) => clientPaymentChannel,
+);
+
 @Riverpod(keepAlive: true)
 class SubscriptionController extends _$SubscriptionController {
   /// 防竞态代际计数。每次重对账 / 登录切换前自增，异步回调校验不匹配则丢弃。
   int _generation = 0;
 
+  /// 当前身份同步任务。外部 refresh 必须等待它完成，避免 RevenueCat logIn 尚未
+  /// 生效时读取到旧匿名用户 / 旧账号的 CustomerInfo。
+  Future<void>? _identitySync;
+
   /// 调试用权益覆盖（仅 debug 构建）。非 null 时 [refresh] 短路为该状态，
   /// 用于不发起真实购买即测试会员 UI / Paywall 门禁。release 不暴露入口。
   EntitlementStatus? _debugOverride;
+
+  /// 当前权益到期刷新计时器。只在 premium 且存在未来 expiresAt 时启用。
+  Timer? _expiryRefreshTimer;
 
   @override
   EntitlementState build() {
@@ -43,13 +56,30 @@ class SubscriptionController extends _$SubscriptionController {
     // 「身份早已落定后」才首次创建本 controller，也会执行一次 Purchases.logIn 绑定
     // （否则默认只在值变化时回调 → 老用户登录态无变化 → logIn 从不执行 → 匿名购买）。
     ref.listen(subscriptionIdentityProvider, (previous, next) {
-      _onIdentityChanged(previous, next);
+      final sync = _onIdentityChanged(previous, next);
+      _identitySync = sync;
+      unawaited(
+        sync.then(
+          (_) {
+            if (identical(_identitySync, sync)) {
+              _identitySync = null;
+            }
+          },
+          onError: (Object e, StackTrace stackTrace) {
+            if (identical(_identitySync, sync)) {
+              _identitySync = null;
+            }
+            AppLogger.log('Subscription', '身份同步异常: $e');
+          },
+        ),
+      );
     }, fireImmediately: true);
     // 监听平台侧权益变化（续费 / 退款 / 试用转正），运行期实时刷新。
     final sub = _purchases.entitlementStream.listen((_) => refresh());
     ref.onDispose(sub.cancel);
-    // 冷启动首帧返回「未知」中间态（C5），随后异步对账。
-    unawaited(refresh());
+    ref.onDispose(_cancelExpiryRefreshTimer);
+    // 冷启动首帧返回「未知」中间态（C5）。后续对账由上面的身份监听串行触发：
+    // 已登录时先 RevenueCat identify，再读取权益；匿名启动则直接匿名对账。
     return const EntitlementState.unknown();
   }
 
@@ -57,15 +87,34 @@ class SubscriptionController extends _$SubscriptionController {
   EntitlementRepository get _repository =>
       ref.read(entitlementRepositoryProvider);
   PurchaseService get _purchases => ref.read(purchaseServiceProvider);
+  ClientPaymentChannel get _paymentChannel =>
+      ref.read(subscriptionPaymentChannelProvider);
 
   SubscriptionIdentity get _identity => ref.read(subscriptionIdentityProvider);
 
   /// 与在线权威源对账并刷新权益。集中状态变更入口之一。
   Future<void> refresh() async {
+    await _waitForIdentitySync();
+    await _refreshOnline();
+  }
+
+  /// 等待当前最新身份同步完成。等待过程中若身份再次切换，会继续等待新的任务，
+  /// 避免 refresh 只等到旧用户 identify 就读取到新用户尚未绑定时的 CustomerInfo。
+  Future<void> _waitForIdentitySync() async {
+    while (true) {
+      final sync = _identitySync;
+      if (sync == null) return;
+      await sync;
+      if (_identitySync == null || identical(_identitySync, sync)) return;
+    }
+  }
+
+  /// 执行实际在线对账。调用方必须保证需要绑定购买身份时已完成 identify。
+  Future<void> _refreshOnline() async {
     // 调试覆盖生效时跳过在线对账，保持人为设定的状态。
     final override = _debugOverride;
     if (override != null) {
-      state = _stateForOverride(override);
+      _setEntitlementState(_stateForOverride(override));
       return;
     }
     final generation = ++_generation;
@@ -77,14 +126,17 @@ class SubscriptionController extends _$SubscriptionController {
     Entitlement? remote;
     String? error;
     try {
-      // 后端权威源（Phase 1 接入；当前 stub 返回 null）。
-      if (userId != null && accessToken != null) {
+      // Web/direct 无原生商店 SDK，权益经后端 /api/entitlements 读回；
+      // App Store / Google Play 则以 RevenueCat SDK CustomerInfo 为准。
+      if (_paymentChannel == ClientPaymentChannel.web &&
+          userId != null &&
+          accessToken != null) {
         remote = await _repository.fetchRemote(
           userId: userId,
           accessToken: accessToken,
         );
       }
-      // 后端未就绪时，用 RevenueCat 已服务端校验的 CustomerInfo 作为在线权威源。
+      // Native 渠道或后端不可达时，用平台购买服务的当前权益快照兜底。
       remote ??= await _purchases.currentEntitlement();
     } catch (e) {
       // 失败不静默吞：记录错误、保留兜底，不误判为无权益。
@@ -98,7 +150,9 @@ class SubscriptionController extends _$SubscriptionController {
       cached: cached,
       now: clock.now(),
     );
-    state = error == null ? next : next.copyWith(error: error, isStale: true);
+    _setEntitlementState(
+      error == null ? next : next.copyWith(error: error, isStale: true),
+    );
 
     // 对账关键日志：在线源 / 缓存各自结果 + 合并后最终态，便于排查
     // 「删了订阅仍显示已订阅」「在线不可达走缓存」等问题。
@@ -115,7 +169,7 @@ class SubscriptionController extends _$SubscriptionController {
     }
   }
 
-  /// 发起购买。成功后立即本地解锁（不等后端 webhook，避免延迟），再触发后端对账。
+  /// 发起购买。成功后立即以平台返回的权益快照解锁。
   Future<void> purchase(String planId) async {
     AppLogger.log(
       'Subscription',
@@ -130,7 +184,6 @@ class SubscriptionController extends _$SubscriptionController {
         '购买成功: isPremium=${entitlement.isPremium} productId=${entitlement.productId} '
             'expiresAt=${entitlement.expiresAt?.toIso8601String() ?? "无"}',
       );
-      unawaited(refresh());
     } on PurchaseException catch (e) {
       // 取消与失败分别记录：取消属正常路径，不当错误处理。
       AppLogger.log(
@@ -149,6 +202,12 @@ class SubscriptionController extends _$SubscriptionController {
   /// 恢复购买。
   Future<void> restore() async {
     AppLogger.log('Subscription', '发起恢复购买: userId=${_identity.userId ?? "匿名"}');
+    if (_paymentChannel == ClientPaymentChannel.web) {
+      // Web/direct 无平台恢复入口，恢复语义等价于回源刷新后端权益。
+      AppLogger.log('Subscription', 'Web 渠道恢复购买转为刷新后端权益');
+      await refresh();
+      return;
+    }
     await _ensurePurchaseIdentity(); // fail-closed：未绑定 Supabase user_id 直接中止。
     try {
       final entitlement = await _purchases.restore();
@@ -157,7 +216,6 @@ class SubscriptionController extends _$SubscriptionController {
         'Subscription',
         '恢复完成: isPremium=${entitlement.isPremium} productId=${entitlement.productId}',
       );
-      unawaited(refresh());
     } catch (e) {
       AppLogger.log('Subscription', '恢复购买失败: error=$e');
       rethrow;
@@ -188,7 +246,7 @@ class SubscriptionController extends _$SubscriptionController {
       return;
     }
     _generation++; // 作废在途对账，避免被真实结果覆盖。
-    state = _stateForOverride(status);
+    _setEntitlementState(_stateForOverride(status));
   }
 
   /// 由覆盖状态构造对应的 [EntitlementState]。
@@ -214,12 +272,14 @@ class SubscriptionController extends _$SubscriptionController {
   ) async {
     final generation = ++_generation;
     if (generation != _generation) return;
-    state = EntitlementState(
-      status: entitlement.isActive(clock.now())
-          ? EntitlementStatus.premium
-          : EntitlementStatus.free,
-      entitlement: entitlement,
-      isStale: false,
+    _setEntitlementState(
+      EntitlementState(
+        status: entitlement.isActive(clock.now())
+            ? EntitlementStatus.premium
+            : EntitlementStatus.free,
+        entitlement: entitlement,
+        isStale: false,
+      ),
     );
     await _writeCache(entitlement, userId);
   }
@@ -247,21 +307,98 @@ class SubscriptionController extends _$SubscriptionController {
     SubscriptionIdentity? previous,
     SubscriptionIdentity next,
   ) async {
+    final isInitialIdentity = previous == null;
     final previousUserId = previous?.userId;
     final nextUserId = next.userId;
-    if (previousUserId == nextUserId) return; // 仅 token 刷新，忽略。
+    if (!isInitialIdentity && previousUserId == nextUserId) {
+      return; // 仅 token 刷新，忽略。
+    }
 
     _generation++; // 作废在途对账。
     if (nextUserId == null) {
-      // 登出：清权益 + 清缓存 + 解绑购买身份。
-      await _purchases.identify(null);
+      if (isInitialIdentity) {
+        // 匿名冷启动没有身份要绑定，但仍要做一次对账，避免 state 停在 unknown。
+        await _refreshOnline();
+        return;
+      }
+      // 登出是账号隔离边界：先本地 fail-closed，最后 best-effort 解绑购买身份。
+      _setEntitlementState(const EntitlementState.free());
       await _cache.clear();
-      state = const EntitlementState.free();
+      try {
+        await _purchases.identify(null);
+      } catch (e) {
+        AppLogger.log('Subscription', '登出解绑购买身份失败，本地权益已清理: $e');
+      }
       return;
     }
     // 登录 / 切换用户：绑定购买身份后重对账。
-    await _purchases.identify(nextUserId);
-    await refresh();
+    final generation = _generation;
+    bool bound;
+    try {
+      bound = await _purchases.ensureIdentified(nextUserId);
+    } catch (e) {
+      await _applyIdentityFailure(
+        userId: nextUserId,
+        generation: generation,
+        error: e,
+      );
+      return;
+    }
+    if (!bound) {
+      await _applyIdentityFailure(
+        userId: nextUserId,
+        generation: generation,
+        error: PurchaseException('订阅身份未就绪，请稍后重试'),
+      );
+      return;
+    }
+    if (generation != _generation) return;
+    await _refreshOnline();
+  }
+
+  /// identify 失败时 fail-closed：不读取平台 CustomerInfo，不写缓存，只使用当前用户
+  /// 已有的新鲜缓存兜底，并把错误显式暴露给 UI / 调试日志。
+  Future<void> _applyIdentityFailure({
+    required String userId,
+    required int generation,
+    required Object error,
+  }) async {
+    final cached = await _readValidCache(userId);
+    if (generation != _generation) return;
+    final next = reconcileEntitlement(
+      remote: null,
+      cached: cached,
+      now: clock.now(),
+    );
+    _setEntitlementState(next.copyWith(error: error.toString(), isStale: true));
+    AppLogger.log('Subscription', '身份绑定失败，跳过权益查询: userId=$userId error=$error');
+  }
+
+  /// 写入权益状态并按 [Entitlement.expiresAt] 重排一次性到期刷新。
+  ///
+  /// App 长时间保持前台时不会触发 lifecycle resumed；这里用到期点的 one-shot
+  /// refresh 兜住时效边界，避免内存态越过 expiresAt 后仍保持 premium。
+  void _setEntitlementState(EntitlementState next) {
+    state = next;
+    _rescheduleExpiryRefresh(next);
+  }
+
+  void _rescheduleExpiryRefresh(EntitlementState next) {
+    _cancelExpiryRefreshTimer();
+    if (next.status != EntitlementStatus.premium) return;
+    final expiresAt = next.entitlement?.expiresAt;
+    if (expiresAt == null) return;
+    final delay = expiresAt.difference(clock.now());
+    if (delay <= Duration.zero) return;
+    _expiryRefreshTimer = Timer(delay, () {
+      _expiryRefreshTimer = null;
+      unawaited(refresh());
+    });
+  }
+
+  void _cancelExpiryRefreshTimer() {
+    _expiryRefreshTimer?.cancel();
+    _expiryRefreshTimer = null;
   }
 
   /// 读取缓存，并校验归属用户；与当前用户不一致的缓存视为无效（防跨账号泄漏）。

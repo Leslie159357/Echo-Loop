@@ -1,6 +1,6 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-13（版本号升级到 1.0.25）
+> 最后更新：2026-07-14（收口 Web 渠道恢复购买语义）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——仍未解决
 
 ## 当前优先级
@@ -60,6 +60,11 @@
 
 ## 最近完成（保留近两周）
 
+- [x] 2026-07-14 22:24：修复订阅权益前台长驻跨过 expiresAt 后仍保持 Premium；`SubscriptionController` 根据有效权益到期时间安排一次性 refresh，新权益到来时重排 timer，并补到期刷新/重排/永久权益回归测试。
+- [x] 2026-07-14 22:11：收口 Web/direct 渠道恢复购买语义，`SubscriptionController.restore()` 在 Web 渠道转为后端权益刷新，避免误穿透到 `WebPurchaseService.restore()` 抛异常，并补充回归测试。
+- [x] 2026-07-14 21:59：修复订阅登出本地清理顺序，登出时先将权益状态置为 free 并清除本地缓存，再 best-effort 解绑 RevenueCat 身份；补充 RC 解绑延迟/失败时本地隔离立即生效的回归测试。
+- [x] 2026-07-14 21:44：修复订阅控制器身份绑定竞态，RevenueCat 身份核对完成前不再读取 CustomerInfo，快速切换账号时 refresh 等待最新身份任务，身份失败时不查询/写入旧身份权益缓存，并补充串行化回归测试。
+- [x] 2026-07-14 17:35：重构订阅权益来源：App Store / Google Play 客户端以 RevenueCat SDK 为准，Web/direct 读 `/api/entitlements`；购买/恢复不再调用后端 reconcile，Flutter 端移除 `/api/entitlements/reconcile` 客户端接口并补渠道分流回归测试。
 - [x] 2026-07-13 21:34：微调随心听与学习页底部播放状态 label 的移动端安全区间距，读取真实 viewPadding 并保留约 16px 底边，避免与 iPhone Home indicator 重叠，同时保持底部留白紧凑。
 - [x] 2026-07-13 19:56：修复讲解页自动翻译早于前后句上下文就绪导致写入无上下文缓存 key；自动翻译现在等待上下文稳定后再请求，避免返回页面缓存 miss。
 - [x] 2026-07-13 17:13：收紧随心听与学习页底部播放状态 label 到底部的间距，移动端压缩安全区占用，给上方内容更多空间。

@@ -1,10 +1,10 @@
 /// 后端权益仓库接口 + 实现。
 ///
-/// 查询后端权威权益（后端经 RevenueCat webhook 落库，绑定 Supabase user_id）。
-/// 后端 `user_entitlements` 由 RC webhook 单向投影，对所有购买渠道
-/// （App Store / Play / Web Billing）返回一致结果——**桌面 / 侧载等无 RC 原生 SDK
-/// 的端也能据此拿到权威权益**（这正是 [SubscriptionController.refresh] 先查后端、
-/// 再退回 RC 的对账顺序所依赖的能力）。
+/// 查询后端权威权益。
+///
+/// 该仓库只供 Web/direct 支付渠道使用：这些端没有可用的原生商店 SDK，
+/// 权益必须经后端 `/api/entitlements` 读回。App Store / Google Play
+/// 渠道的客户端权益以 RevenueCat SDK CustomerInfo 为准。
 library;
 
 import 'package:dio/dio.dart';

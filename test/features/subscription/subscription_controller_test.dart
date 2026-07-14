@@ -12,6 +12,7 @@ import 'package:echo_loop/features/subscription/services/revenuecat_purchase_ser
     show PurchaseServiceType, purchaseServiceProvider, purchaseServiceTypeFor;
 import 'package:echo_loop/config/client_distribution.dart';
 import 'package:echo_loop/features/subscription/state/entitlement_state.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -45,6 +46,11 @@ class FakePurchaseService implements PurchaseService {
   /// 非 null 时 currentEntitlement 抛此异常（模拟 RC 离线 / 不可达）。
   Object? currentError;
   Object? purchaseError;
+  Object? identifyError;
+  Completer<void>? identifyCompleter;
+  Object? ensureIdentifiedError;
+  final Map<String, Completer<void>> ensureIdentifiedCompleters = {};
+  int currentCalls = 0;
   final List<String?> identifyCalls = [];
 
   /// ensureIdentified 返回值（默认已绑定，购买门禁通过）。
@@ -56,6 +62,9 @@ class FakePurchaseService implements PurchaseService {
   /// purchase 实际被调次数（验证门禁不通过时不成交）。
   int purchaseCalls = 0;
 
+  /// restore 实际被调次数（验证 Web 渠道不穿透到底层恢复）。
+  int restoreCalls = 0;
+
   /// invalidateCustomerInfoCache 调用次数（验证清缓存动作）。
   int invalidateCalls = 0;
 
@@ -66,6 +75,7 @@ class FakePurchaseService implements PurchaseService {
 
   @override
   Future<Entitlement> currentEntitlement() async {
+    currentCalls++;
     final error = currentError;
     if (error != null) throw error;
     return currentResult;
@@ -83,14 +93,31 @@ class FakePurchaseService implements PurchaseService {
   }
 
   @override
-  Future<Entitlement> restore() async => restoreResult;
+  Future<Entitlement> restore() async {
+    restoreCalls++;
+    return restoreResult;
+  }
 
   @override
-  Future<void> identify(String? userId) async => identifyCalls.add(userId);
+  Future<void> identify(String? userId) async {
+    identifyCalls.add(userId);
+    final completer = identifyCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
+    final error = identifyError;
+    if (error != null) throw error;
+  }
 
   @override
   Future<bool> ensureIdentified(String userId) async {
     ensureIdentifiedCalls.add(userId);
+    final completer = ensureIdentifiedCompleters[userId];
+    if (completer != null) {
+      await completer.future;
+    }
+    final error = ensureIdentifiedError;
+    if (error != null) throw error;
     return ensureIdentifiedResult;
   }
 
@@ -215,6 +242,7 @@ void main() {
     required EntitlementRepository repo,
     required EntitlementCache cache,
     PurchaseService? purchases,
+    ClientPaymentChannel paymentChannel = ClientPaymentChannel.web,
   }) {
     final container = ProviderContainer(
       overrides: [
@@ -226,6 +254,7 @@ void main() {
         subscriptionIdentityProvider.overrideWith(
           (ref) => ref.watch(testIdentityProvider),
         ),
+        subscriptionPaymentChannelProvider.overrideWithValue(paymentChannel),
       ],
     );
     addTearDown(container.dispose);
@@ -293,6 +322,145 @@ void main() {
       expect(state.isStale, isFalse);
       expect(cache.stored?.userId, 'u1');
       expect(cache.stored?.entitlement.isPremium, isTrue);
+    });
+  });
+
+  test('premium expiresAt 到期时自动 refresh 并降级为 free', () {
+    fakeAsync((async) {
+      final start = DateTime.utc(2026, 6, 22, 12);
+      withClock(async.getClock(start), () {
+        var fetches = 0;
+        final expiry = start.add(const Duration(minutes: 10));
+        final repo = FakeEntitlementRepository((_) async {
+          fetches++;
+          return fetches == 1
+              ? Entitlement(
+                  isPremium: true,
+                  productId: 'pro_monthly',
+                  expiresAt: expiry,
+                )
+              : Entitlement.free;
+        });
+        final container = makeContainer(
+          identity: signedIn,
+          repo: repo,
+          cache: FakeEntitlementCache(),
+        );
+        container.read(subscriptionControllerProvider);
+        async.flushMicrotasks();
+
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.premium,
+        );
+        expect(fetches, 1);
+
+        async.elapse(const Duration(minutes: 9, seconds: 59));
+        async.flushMicrotasks();
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.premium,
+        );
+        expect(fetches, 1);
+
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        expect(fetches, 2);
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.free,
+        );
+      });
+    });
+  });
+
+  test('新 premium 权益会取消旧到期 timer 并按新 expiresAt 重排', () {
+    fakeAsync((async) {
+      final start = DateTime.utc(2026, 6, 22, 12);
+      withClock(async.getClock(start), () {
+        var fetches = 0;
+        final firstExpiry = start.add(const Duration(minutes: 10));
+        final secondExpiry = start.add(const Duration(minutes: 30));
+        final repo = FakeEntitlementRepository((_) async {
+          fetches++;
+          return switch (fetches) {
+            1 => Entitlement(
+              isPremium: true,
+              productId: 'pro_monthly',
+              expiresAt: firstExpiry,
+            ),
+            2 => Entitlement(
+              isPremium: true,
+              productId: 'pro_yearly',
+              expiresAt: secondExpiry,
+            ),
+            _ => Entitlement.free,
+          };
+        });
+        final container = makeContainer(
+          identity: signedIn,
+          repo: repo,
+          cache: FakeEntitlementCache(),
+        );
+        final controller = container.read(
+          subscriptionControllerProvider.notifier,
+        );
+        container.read(subscriptionControllerProvider);
+        async.flushMicrotasks();
+
+        async.elapse(const Duration(minutes: 5));
+        unawaited(controller.refresh());
+        async.flushMicrotasks();
+        expect(fetches, 2);
+        expect(
+          container.read(subscriptionControllerProvider).entitlement?.productId,
+          'pro_yearly',
+        );
+
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+        expect(fetches, 2);
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.premium,
+        );
+
+        async.elapse(const Duration(minutes: 20));
+        async.flushMicrotasks();
+        expect(fetches, 3);
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.free,
+        );
+      });
+    });
+  });
+
+  test('expiresAt 为空的永久 premium 不安排到期 refresh', () {
+    fakeAsync((async) {
+      final start = DateTime.utc(2026, 6, 22, 12);
+      withClock(async.getClock(start), () {
+        var fetches = 0;
+        final repo = FakeEntitlementRepository((_) async {
+          fetches++;
+          return const Entitlement(isPremium: true, productId: 'lifetime');
+        });
+        final container = makeContainer(
+          identity: signedIn,
+          repo: repo,
+          cache: FakeEntitlementCache(),
+        );
+        container.read(subscriptionControllerProvider);
+        async.flushMicrotasks();
+
+        async.elapse(const Duration(days: 30));
+        async.flushMicrotasks();
+        expect(fetches, 1);
+        expect(
+          container.read(subscriptionControllerProvider).status,
+          EntitlementStatus.premium,
+        );
+      });
     });
   });
 
@@ -382,6 +550,71 @@ void main() {
     });
   });
 
+  test('登出时 RC 解绑未完成 → 本地立即清权益与缓存', () async {
+    await withClock(Clock.fixed(now), () async {
+      final cache = FakeEntitlementCache();
+      final identify = Completer<void>();
+      final purchases = FakePurchaseService()..identifyCompleter = identify;
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => proEntitlement),
+        cache: cache,
+        purchases: purchases,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+
+      container.read(testIdentityProvider.notifier).state =
+          SubscriptionIdentity.anonymous;
+      await pumpEventQueue();
+
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.free,
+      );
+      expect(cache.clears, greaterThanOrEqualTo(1));
+      expect(purchases.identifyCalls, contains(null));
+
+      identify.complete();
+      await pumpEventQueue();
+    });
+  });
+
+  test('登出时 RC 解绑失败 → 本地仍保持 free 且缓存已清', () async {
+    await withClock(Clock.fixed(now), () async {
+      final cache = FakeEntitlementCache();
+      final purchases = FakePurchaseService()
+        ..identifyError = Exception('logout failed');
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => proEntitlement),
+        cache: cache,
+        purchases: purchases,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+
+      container.read(testIdentityProvider.notifier).state =
+          SubscriptionIdentity.anonymous;
+      await pumpEventQueue();
+
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.free,
+      );
+      expect(cache.clears, greaterThanOrEqualTo(1));
+      expect(purchases.identifyCalls, contains(null));
+    });
+  });
+
   test('切换用户 → 重对账并绑定新购买身份', () async {
     await withClock(Clock.fixed(now), () async {
       final purchases = FakePurchaseService();
@@ -408,7 +641,7 @@ void main() {
         container.read(subscriptionControllerProvider).status,
         EntitlementStatus.premium,
       );
-      expect(purchases.identifyCalls, contains('u2'));
+      expect(purchases.ensureIdentifiedCalls, contains('u2'));
     });
   });
 
@@ -438,6 +671,189 @@ void main() {
     });
   });
 
+  test('native 登录冷启动 → 跳过后端，直接采用 RevenueCat active', () async {
+    await withClock(Clock.fixed(now), () async {
+      final repo = FakeEntitlementRepository((_) async => Entitlement.free);
+      final container = makeContainer(
+        identity: signedIn,
+        repo: repo,
+        cache: FakeEntitlementCache(),
+        purchases: FakePurchaseService()..currentResult = proEntitlement,
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      expect(repo.calls, isEmpty);
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+    });
+  });
+
+  test('native 登录冷启动 → identify 完成前不读取 RevenueCat 权益', () async {
+    await withClock(Clock.fixed(now), () async {
+      final identify = Completer<void>();
+      final purchases = FakePurchaseService()
+        ..currentResult = proEntitlement
+        ..ensureIdentifiedCompleters['u1'] = identify;
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => Entitlement.free),
+        cache: FakeEntitlementCache(),
+        purchases: purchases,
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      // identify 尚未完成时，不能抢先读取旧匿名 / 旧账号 CustomerInfo。
+      expect(purchases.ensureIdentifiedCalls, contains('u1'));
+      expect(purchases.currentCalls, 0);
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.unknown,
+      );
+
+      identify.complete();
+      await pumpEventQueue();
+
+      expect(purchases.currentCalls, 1);
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+    });
+  });
+
+  test('native identify 失败 → 不读取 CustomerInfo 且不覆盖当前用户缓存', () async {
+    await withClock(Clock.fixed(now), () async {
+      final cachedEntitlement = cached(proEntitlement);
+      final cache = FakeEntitlementCache()..stored = cachedEntitlement;
+      final purchases = FakePurchaseService()
+        ..ensureIdentifiedError = Exception('identify failed')
+        // 若被错误读取，会返回 free 并污染缓存；断言应证明它未被调用。
+        ..currentResult = Entitlement.free;
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => Entitlement.free),
+        cache: cache,
+        purchases: purchases,
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      final state = container.read(subscriptionControllerProvider);
+      expect(purchases.currentCalls, 0);
+      expect(cache.stored, same(cachedEntitlement));
+      expect(state.status, EntitlementStatus.premium);
+      expect(state.isStale, isTrue);
+      expect(state.error, contains('identify failed'));
+    });
+  });
+
+  test('native 快速切换身份 → refresh 必须等待最新用户 identify 完成', () async {
+    await withClock(Clock.fixed(now), () async {
+      final identifyU1 = Completer<void>();
+      final identifyU2 = Completer<void>();
+      final purchases = FakePurchaseService()
+        ..currentResult = proEntitlement
+        ..ensureIdentifiedCompleters['u1'] = identifyU1
+        ..ensureIdentifiedCompleters['u2'] = identifyU2;
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => Entitlement.free),
+        cache: FakeEntitlementCache(),
+        purchases: purchases,
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+
+      final controller = container.read(
+        subscriptionControllerProvider.notifier,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      final refreshFuture = controller.refresh();
+      await pumpEventQueue();
+
+      container.read(testIdentityProvider.notifier).state =
+          const SubscriptionIdentity(userId: 'u2', accessToken: 't2');
+      await pumpEventQueue();
+      expect(purchases.ensureIdentifiedCalls, containsAll(['u1', 'u2']));
+
+      identifyU1.complete();
+      await pumpEventQueue();
+
+      // refresh 原本等的是 u1；u1 完成后必须发现 u2 是更新的身份任务并继续等待。
+      expect(purchases.currentCalls, 0);
+
+      identifyU2.complete();
+      await refreshFuture;
+      await pumpEventQueue();
+
+      expect(purchases.currentCalls, greaterThanOrEqualTo(1));
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+    });
+  });
+
+  test('restore active → 直接应用平台返回权益，不调用后端', () async {
+    await withClock(Clock.fixed(now), () async {
+      final repo = FakeEntitlementRepository((_) async => Entitlement.free);
+      final container = makeContainer(
+        identity: signedIn,
+        repo: repo,
+        cache: FakeEntitlementCache(),
+        purchases: FakePurchaseService()..restoreResult = proEntitlement,
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      await container.read(subscriptionControllerProvider.notifier).restore();
+      await pumpEventQueue();
+
+      expect(repo.calls, isEmpty);
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+    });
+  });
+
+  test('Web 渠道 restore → 转为后端权益刷新，不调用底层恢复', () async {
+    await withClock(Clock.fixed(now), () async {
+      final repo = FakeEntitlementRepository((_) async => proEntitlement);
+      final purchases = FakePurchaseService()..restoreResult = Entitlement.free;
+      final container = makeContainer(
+        identity: signedIn,
+        repo: repo,
+        cache: FakeEntitlementCache(),
+        purchases: purchases,
+        paymentChannel: ClientPaymentChannel.web,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      await container.read(subscriptionControllerProvider.notifier).restore();
+      await pumpEventQueue();
+
+      expect(repo.calls, contains('u1'));
+      expect(purchases.restoreCalls, 0);
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+    });
+  });
+
   test('fail-closed：身份未绑定 → purchase 报错且不成交', () async {
     await withClock(Clock.fixed(now), () async {
       final purchases = FakePurchaseService()
@@ -448,6 +864,7 @@ void main() {
         repo: FakeEntitlementRepository((_) async => null),
         cache: FakeEntitlementCache(),
         purchases: purchases,
+        paymentChannel: ClientPaymentChannel.appleStore,
       );
       final controller = container.read(
         subscriptionControllerProvider.notifier,
@@ -472,6 +889,7 @@ void main() {
         repo: FakeEntitlementRepository((_) async => null),
         cache: FakeEntitlementCache(),
         purchases: purchases,
+        paymentChannel: ClientPaymentChannel.appleStore,
       );
       final controller = container.read(
         subscriptionControllerProvider.notifier,
@@ -498,8 +916,8 @@ void main() {
       container.read(subscriptionControllerProvider);
       await pumpEventQueue();
 
-      // fireImmediately 令 build 即以当前已登录身份触发 identify(logIn)。
-      expect(purchases.identifyCalls, contains('u1'));
+      // fireImmediately 令 build 即以当前已登录身份触发 ensureIdentified(logIn + appUserID 核对)。
+      expect(purchases.ensureIdentifiedCalls, contains('u1'));
     });
   });
 

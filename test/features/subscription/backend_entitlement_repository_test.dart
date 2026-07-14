@@ -126,4 +126,32 @@ void main() {
     final e = await repo.fetchRemote(userId: 'u1', accessToken: 't');
     expect(e, isNull);
   });
+
+  test('fetchRemote：GET /api/entitlements 携带 Bearer token', () async {
+    when(
+      () => dio.get<Map<String, dynamic>>(
+        '/api/entitlements',
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer(
+      (_) async => resp({
+        'isPremium': false,
+        'entitlementIds': <String>[],
+        'productId': null,
+        'expiresAtMs': null,
+      }),
+    );
+
+    await repo.fetchRemote(userId: 'u1', accessToken: 't');
+
+    final captured =
+        verify(
+              () => dio.get<Map<String, dynamic>>(
+                '/api/entitlements',
+                options: captureAny(named: 'options'),
+              ),
+            ).captured.single
+            as Options;
+    expect(captured.headers?['Authorization'], 'Bearer t');
+  });
 }
