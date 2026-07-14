@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
-import '../features/custom_api/custom_api_config.dart';
 import '../providers/package_info_provider.dart';
 import 'ai_http_client_adapter.dart';
 import 'app_logger.dart';
@@ -114,7 +113,6 @@ class SentenceAiApiClient {
     String? appVersion,
     bool http2Enabled = aiHttp2EnabledByDefault,
     void Function(String message)? streamLogPrint,
-    CustomApiConfig? customConfig,
   }) : _dio = createBackendDio(
          baseUrl: baseUrl,
          appVersion: appVersion,
@@ -125,8 +123,7 @@ class SentenceAiApiClient {
          apiLogTag: 'AI-API',
        ),
        _streamLogPrint =
-           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = customConfig {
+           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)) {
     configureAiHttpClientAdapter(
       _dio,
       baseUrl: baseUrl,
