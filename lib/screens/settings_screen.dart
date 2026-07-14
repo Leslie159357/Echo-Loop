@@ -53,7 +53,6 @@ import '../providers/dictionary/dictionary_registry.dart';
 import '../providers/dictionary/visible_sources_provider.dart';
 import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
-import 'custom_api_settings_screen.dart';
 import 'asr_test_screen.dart';
 import 'dictionary_settings_screen.dart';
 import 'tts_settings_screen.dart';
@@ -341,7 +340,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ListTile(
             leading: Icon(Icons.api, color: colorScheme.onSurfaceVariant),
-            title: const Text('自定义 API'),
             subtitle: const Text('配置自建 API 后免登录使用翻译、分析、意群'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
