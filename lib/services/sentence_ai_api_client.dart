@@ -590,9 +590,11 @@ class SentenceAiApiClient {
 /// AI API 客户端单例 Provider
 @Riverpod(keepAlive: true)
 SentenceAiApiClient sentenceAiApiClient(Ref ref) {
+  final customCfg = ref.watch(customApiConfigNotifierProvider);
   final client = SentenceAiApiClient(
     baseUrl: apiBaseUrl,
     appVersion: readAppVersion(ref),
+    customConfig: customCfg.enabled ? customCfg : null,
   );
   ref.onDispose(client.dispose);
   return client;
