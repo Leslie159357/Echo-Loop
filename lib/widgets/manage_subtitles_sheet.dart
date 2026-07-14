@@ -30,6 +30,7 @@ import '../providers/transcription_task_provider.dart';
 import '../providers/local_transcription_task_provider.dart';
 import '../providers/local_transcription_model_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
+import '../features/custom_api/custom_api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../services/asr/asr_model_manager.dart';
@@ -99,7 +100,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 是否展示本地离线转录入口。
   ///
   /// 当前本地转录效果不稳定，先隐藏入口；保留实现和状态处理，便于后续恢复。
-  bool get _showOfflineTranscriptionEntry => true;
+  bool get _showOfflineTranscriptionEntry => false;
 
   @override
   void initState() {
@@ -1751,7 +1752,11 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     ))?.accessToken;
     if (!mounted || !context.mounted) return;
     if (accessToken == null || accessToken.isEmpty) {
+      if (ref.read(customApiConfigNotifierProvider).enabled) {
+      // Skip sign-in when custom API is configured
+    } else {
       await _showTranscriptionSignInDialog(context);
+    }
       return;
     }
     // 已登录但未解锁（非会员且 AI 转录试用用尽）→ 引导订阅升级。
