@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -72,8 +73,8 @@ class CustomAiService {
     };
   }
 
-  /// 从 SSE 流式响应中提取完整文本。
-  Stream<String> _streamChat(String systemPrompt, String userMessage) async* {
+  /// 从 SSE 流式响应中提取文本行。
+  Stream<String> _streamLines(String systemPrompt, String userMessage) async* {
     final body = _buildBody(
       systemPrompt: systemPrompt,
       userMessage: userMessage,
@@ -89,10 +90,25 @@ class CustomAiService {
     final responseBody = response.data;
     if (responseBody == null) return;
 
-    await for (final chunk in responseBody.stream
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())) {
-      final line = chunk.toString().trim();
+    // 逐行解码 SSE 帧
+    String carry = '';
+    await for (final data in responseBody.stream) {
+      carry += utf8.decode(data, allowMalformed: true);
+      while (true) {
+        final lineEnd = carry.indexOf('\n');
+        if (lineEnd < 0) break;
+        final line = carry.substring(0, lineEnd);
+        carry = carry.substring(lineEnd + 1);
+        yield line;
+      }
+    }
+    // 尾部残留
+    if (carry.isNotEmpty) yield carry;
+  }
+
+  /// 从 SSE 流式响应中提取完整 delta 文本（累积 content 字段）。
+  Stream<String> _streamChat(String systemPrompt, String userMessage) async* {
+    await for (final line in _streamLines(systemPrompt, userMessage)) {
       if (!line.startsWith('data: ')) continue;
       final jsonStr = line.substring(6).trim();
       if (jsonStr == '[DONE]') break;
@@ -228,7 +244,6 @@ class CustomAiService {
         );
       } catch (e) {
         AppLogger.log('CustomAI', '解析最终 JSON 失败: $e');
-        // 返回空结果避免挂起
         yield SentenceAnalysisStreamFrame(
           analysis: const SentenceAnalysis(),
           isFinal: true,
