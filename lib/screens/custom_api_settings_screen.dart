@@ -10,7 +10,6 @@ class CustomApiSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(customApiConfigNotifierProvider);
     final notifier = ref.read(customApiConfigNotifierProvider.notifier);
-
     return Scaffold(
       appBar: AppBar(title: const Text('自定义 API')),
       body: ListView(
@@ -53,21 +52,6 @@ class CustomApiSettingsScreen extends ConsumerWidget {
               ),
               controller: TextEditingController(text: config.model),
               onChanged: (v) => notifier.update(model: v),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<AiProvider>(
-              value: config.provider,
-              decoration: const InputDecoration(
-                labelText: '提供商',
-                border: OutlineInputBorder(),
-              ),
-              items: AiProvider.values.map((p) => DropdownMenuItem(
-                value: p,
-                child: Text(p.name),
-              )).toList(),
-              onChanged: (v) {
-                if (v != null) notifier.update(provider: v);
-              },
             ),
           ],
         ],
