@@ -17,7 +17,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../config/revenuecat_config.dart';
-import '../../../config/web_purchase_config.dart';
+import '../../../config/client_distribution.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../services/app_logger.dart';
 import '../../auth/sign_in_required_dialog.dart';
@@ -26,9 +26,9 @@ import '../models/entitlement.dart';
 import '../models/subscription_plan.dart';
 import '../providers/subscription_availability.dart';
 import '../providers/subscription_controller.dart';
-import '../providers/subscription_identity.dart';
 import '../providers/subscription_plans_provider.dart';
 import '../services/purchase_service.dart';
+import '../services/subscription_management_launcher.dart';
 import '../utils/member_status.dart';
 import '../utils/plan_pricing.dart';
 
@@ -49,6 +49,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   /// 网页支付：已打开浏览器结账、正在轮询后端等权益到账。
   bool _waitingForWeb = false;
+
+  final SubscriptionManagementLauncher _subscriptionManagementLauncher =
+      SubscriptionManagementLauncher();
 
   @override
   void initState() {
@@ -86,11 +89,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
     final subState = ref.watch(subscriptionControllerProvider);
     final isPremium = subState.isActive;
-    // 网页支付渠道（侧载 APK / 桌面）：购买改为浏览器结账 + 回流对账，不展示商店套餐卡。
+    // direct 渠道复用统一套餐 UI，购买动作改为 Paddle 浏览器结账 + 回流对账。
     final webMode = ref.watch(webCheckoutModeProvider);
-    final plansAsync = webMode || isPremium
-        ? null
-        : ref.watch(subscriptionPlansProvider);
+    final plansAsync = isPremium ? null : ref.watch(subscriptionPlansProvider);
     final specialOfferLabel = webMode
         ? null
         : _specialOfferLabel(l10n, plansAsync?.valueOrNull ?? const []);
@@ -103,13 +104,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       appBar: AppBar(
         title: Text(l10n.premiumTitle),
         // 恢复购买为低频操作（登录后通常自动对账获取权益），弱化为右上角文字 action。
-        // 网页渠道无平台「恢复」，改为「刷新」——直接触发后端权益对账。
+        // 网页渠道没有平台恢复接口，但用户语义仍是「找回已购买权益」；
+        // 底层转为后端权益同步。
         actions: [
           TextButton(
             onPressed: _busy
                 ? null
                 : (webMode ? _refreshEntitlement : _restore),
-            child: Text(webMode ? l10n.premiumRefresh : l10n.premiumRestore),
+            child: Text(l10n.premiumRestore),
           ),
         ],
       ),
@@ -149,9 +151,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             ),
                             _FixedPurchasePanel(
                               maxHeight: constraints.maxHeight * 0.52,
-                              child: webMode
-                                  ? _buildWebPurchaseArea(l10n)
-                                  : _buildPurchaseArea(l10n),
+                              child: _buildPurchaseArea(l10n, webMode: webMode),
                             ),
                           ],
                         );
@@ -200,6 +200,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   /// 会员态页面主体：金色 hero + 到期信息卡 + 权益卡 + 管理订阅按钮。
   List<Widget> _buildMemberBody(AppLocalizations l10n) {
+    final webMode = ref.watch(webCheckoutModeProvider);
     final entitlement =
         ref.watch(subscriptionControllerProvider).entitlement ??
         const Entitlement(isPremium: true);
@@ -215,9 +216,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       _MembershipInfoTile(l10n: l10n, summary: summary),
       const SizedBox(height: 20),
       _BenefitCard(l10n: l10n),
-      // 「管理订阅」仅在有可跳转的管理页时展示（网页支付渠道无稳定深链时隐藏，
-      // 避免死按钮）。
-      if (manageSubscriptionsUrl != null) ...[
+      if (webMode || manageSubscriptionsUrl != null) ...[
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
@@ -230,7 +229,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 Theme.of(context).brightness,
               ),
             ),
-            onPressed: _openManageSubscription,
+            onPressed: webMode ? _openPaddlePortal : _openManageSubscription,
             child: Text(l10n.premiumManage),
           ),
         ),
@@ -238,7 +237,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     ];
   }
 
-  Widget _buildPurchaseArea(AppLocalizations l10n) {
+  Widget _buildPurchaseArea(AppLocalizations l10n, {required bool webMode}) {
     final plansAsync = ref.watch(subscriptionPlansProvider);
     return plansAsync.when(
       loading: () => const Padding(
@@ -274,6 +273,26 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     setState(() => _selectedPlanId = plans[index].planId),
               ),
             ],
+            if (webMode && _waitingForWeb) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(child: Text(l10n.premiumWebVerifying)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _busy ? null : _manualCheckEntitlement,
+                child: Text(l10n.premiumWebCheckDone),
+              ),
+            ],
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -286,7 +305,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     Theme.of(context).brightness,
                   ),
                 ),
-                onPressed: _busy ? null : () => _purchase(selected),
+                onPressed: _busy
+                    ? null
+                    : () => webMode
+                          ? _startPaddleCheckout(selected)
+                          : _purchase(selected),
                 child: Text(_ctaLabel(l10n, selected)),
               ),
             ),
@@ -298,95 +321,37 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     );
   }
 
-  /// 网页支付购买区：无商店套餐卡，改为「托管 Paywall + 回流对账」。
-  ///
-  /// 套餐、本地化价格与 Paddle 促销由 RevenueCat 托管 Paywall 展示，
-  /// 客户端不硬编码也不复刻 Paddle discount。
-  Widget _buildWebPurchaseArea(AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        if (_waitingForWeb) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 12),
-              Flexible(child: Text(l10n.premiumWebVerifying)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _busy ? null : _manualCheckEntitlement,
-              child: Text(l10n.premiumWebCheckDone),
-            ),
-          ),
-        ] else ...[
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.premiumAccent(theme.brightness),
-                foregroundColor: AppTheme.onPremiumAccent(theme.brightness),
-              ),
-              onPressed: _busy ? null : _startWebCheckout,
-              child: Text(l10n.premiumWebCheckoutCta),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.premiumWebCheckoutHint,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-        const SizedBox(height: 2),
-        _LegalFooter(l10n: l10n),
-      ],
-    );
-  }
-
-  /// 发起网页结账：登录 → 拼带 user_id 的 Web Purchase Link → in-app browser 打开 →
-  /// 进入等待态并轮询后端对账（不阻塞 UI，用户可点「我已完成支付」立即复核）。
-  Future<void> _startWebCheckout() async {
+  /// 发起 Paddle 结账：登录 → 服务端创建 transaction → 系统浏览器打开 →
+  /// 等待 webhook 后刷新统一权益。打开 URL 本身永远不视为购买成功。
+  Future<void> _startPaddleCheckout(SubscriptionPlan plan) async {
     if (!await _ensureSignedIn() || !mounted) return;
-    final userId = ref.read(subscriptionIdentityProvider).userId;
-    final uri = userId == null ? null : buildWebPurchaseUri(userId);
-    if (uri == null) {
-      AppLogger.log(
-        'Subscription',
-        'web checkout open skipped: userIdPresent=${userId != null} uri=null',
-      );
-      _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
-      return;
-    }
+    setState(() => _busy = true);
     bool opened;
+    Uri? uri;
     try {
-      opened = await launchUrl(uri);
+      uri = await ref
+          .read(subscriptionControllerProvider.notifier)
+          .startPaddleCheckout(plan.planId);
+      opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
     } catch (e) {
-      // 无可用浏览器 / 平台拒绝时 launchUrl 会抛异常，与「返回 false」同样处理，
-      // 不让异常冒泡为未捕获错误。
-      AppLogger.log('Subscription', 'web checkout launchUrl 异常: $e');
+      AppLogger.log('Subscription', 'Paddle checkout 异常: $e');
       opened = false;
     }
     AppLogger.log(
       'Subscription',
-      'web checkout open result: opened=$opened host=${uri.host} path=${uri.path}',
+      'Paddle checkout open result: opened=$opened '
+          'host=${uri?.host ?? "null"} path=${uri?.path ?? "null"}',
     );
     if (!mounted) return;
     if (!opened) {
       _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+      setState(() => _busy = false);
       return;
     }
-    setState(() => _waitingForWeb = true);
+    setState(() {
+      _busy = false;
+      _waitingForWeb = true;
+    });
     unawaited(_pollEntitlement());
   }
 
@@ -426,7 +391,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
   }
 
-  /// 刷新权益（网页渠道的 appbar action）：直接触发后端对账并提示当前状态。
+  /// Web 渠道恢复购买：直接触发后端对账并提示当前账号的权益状态。
   Future<void> _refreshEntitlement() async {
     setState(() => _busy = true);
     try {
@@ -515,6 +480,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       final l10n = AppLocalizations.of(context)!;
       final active = ref.read(subscriptionControllerProvider).isActive;
       _showMessage(active ? l10n.premiumRestored : l10n.premiumRestoreNone);
+    } on PurchaseException catch (e) {
+      if (mounted) {
+        _showMessage(
+          e.ownershipConflict
+              ? AppLocalizations.of(context)!.premiumRestoreAccountMismatch
+              : AppLocalizations.of(context)!.premiumPurchaseFailed,
+        );
+      }
     } catch (_) {
       if (mounted) {
         _showMessage(AppLocalizations.of(context)!.premiumPurchaseFailed);
@@ -525,8 +498,35 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _openManageSubscription() async {
-    final url = manageSubscriptionsUrl;
-    if (url != null) await launchUrl(Uri.parse(url));
+    final entitlement = ref.read(subscriptionControllerProvider).entitlement;
+    final opened = await _subscriptionManagementLauncher.open(
+      channel: clientPaymentChannel,
+      productId: entitlement?.productId,
+    );
+    if (!opened && mounted) {
+      _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+    }
+  }
+
+  Future<void> _openPaddlePortal() async {
+    if (!await _ensureSignedIn() || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final uri = await ref
+          .read(subscriptionControllerProvider.notifier)
+          .createPaddlePortal();
+      final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+      if (!opened && mounted) {
+        _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+      }
+    } catch (e) {
+      AppLogger.log('Subscription', 'Paddle Portal 打开失败: $e');
+      if (mounted) {
+        _showMessage(AppLocalizations.of(context)!.premiumWebOpenFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   void _showMessage(String message) {

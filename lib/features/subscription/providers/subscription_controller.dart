@@ -21,6 +21,7 @@ import '../models/entitlement.dart';
 import '../services/entitlement_cache.dart';
 import '../services/entitlement_reconciler.dart';
 import '../services/entitlement_repository.dart';
+import '../services/paddle_billing_repository.dart';
 import '../services/purchase_service.dart';
 import '../services/revenuecat_purchase_service.dart';
 import '../state/entitlement_state.dart';
@@ -199,6 +200,38 @@ class SubscriptionController extends _$SubscriptionController {
     }
   }
 
+  /// 创建 direct Paddle checkout。创建成功只返回 URL，不改变 premium 状态；
+  /// 只有 webhook 更新后端权益并由 [refresh] 读回才算购买完成。
+  Future<Uri> startPaddleCheckout(String planId) async {
+    if (_paymentChannel != ClientPaymentChannel.web) {
+      throw PurchaseException('当前渠道不支持 Paddle checkout');
+    }
+    await _ensurePurchaseIdentity();
+    final token = _identity.accessToken;
+    if (token == null || token.isEmpty) {
+      throw PurchaseException('订阅身份未就绪，请稍后重试');
+    }
+    final session = await ref
+        .read(paddleBillingRepositoryProvider)
+        .createCheckout(accessToken: token, planId: planId);
+    return session.checkoutUrl;
+  }
+
+  /// 创建 Paddle Customer Portal session，供 direct 用户取消订阅或更新支付方式。
+  Future<Uri> createPaddlePortal() async {
+    if (_paymentChannel != ClientPaymentChannel.web) {
+      throw PurchaseException('当前渠道不支持 Paddle Portal');
+    }
+    await _ensurePurchaseIdentity();
+    final token = _identity.accessToken;
+    if (token == null || token.isEmpty) {
+      throw PurchaseException('订阅身份未就绪，请稍后重试');
+    }
+    return ref
+        .read(paddleBillingRepositoryProvider)
+        .createPortal(accessToken: token);
+  }
+
   /// 恢复购买。
   Future<void> restore() async {
     AppLogger.log('Subscription', '发起恢复购买: userId=${_identity.userId ?? "匿名"}');
@@ -210,7 +243,24 @@ class SubscriptionController extends _$SubscriptionController {
     }
     await _ensurePurchaseIdentity(); // fail-closed：未绑定 Supabase user_id 直接中止。
     try {
-      final entitlement = await _purchases.restore();
+      final result = await _purchases.restore();
+      final entitlement = result.entitlement;
+      final currentUserId = _identity.userId;
+      final ownerUserId = result.originalAppUserId;
+      if (entitlement.isActive(clock.now()) &&
+          currentUserId != null &&
+          ownerUserId != null &&
+          ownerUserId != currentUserId) {
+        AppLogger.log(
+          'Subscription',
+          '恢复购买归属冲突: currentUserId=$currentUserId '
+              'originalAppUserId=$ownerUserId productId=${entitlement.productId}',
+        );
+        throw PurchaseException(
+          '此订阅已绑定到另一个 Echo Loop 账号。请登录原账号后重试。',
+          ownershipConflict: true,
+        );
+      }
       await _applyEntitlement(entitlement, _identity.userId);
       AppLogger.log(
         'Subscription',

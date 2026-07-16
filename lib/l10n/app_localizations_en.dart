@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Echo Loop';
 
   @override
-  String get premiumTitle => 'Echo Loop Membership';
+  String get premiumTitle => 'Echo Loop Premium';
 
   @override
   String get premiumTagline => 'Get more AI-powered learning';
@@ -126,17 +126,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get premiumPurchaseFailed => 'Purchase failed. Please try again.';
 
   @override
+  String get premiumRestoreAccountMismatch =>
+      'This subscription is linked to another Echo Loop account. Sign in to the original account and try again.';
+
+  @override
   String get premiumRestoreNone => 'No purchases found to restore.';
 
   @override
   String get premiumRestored => 'Purchases restored.';
 
   @override
-  String get premiumWebCheckoutCta => 'Continue to checkout';
-
-  @override
-  String get premiumWebCheckoutHint =>
-      'Plans, current prices, and offers are shown on the secure checkout page.';
+  String get premiumWebCheckoutCta => 'Continue to secure checkout';
 
   @override
   String get premiumWebVerifying => 'Waiting for payment to be confirmed…';

@@ -123,16 +123,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumPurchaseFailed => '购买失败，请重试。';
 
   @override
+  String get premiumRestoreAccountMismatch =>
+      '此订阅已绑定到另一个 Echo Loop 账号。请登录原账号后重试。';
+
+  @override
   String get premiumRestoreNone => '未找到可恢复的购买。';
 
   @override
   String get premiumRestored => '已恢复购买。';
 
   @override
-  String get premiumWebCheckoutCta => '前往订阅结账';
-
-  @override
-  String get premiumWebCheckoutHint => '套餐、当前价格和优惠会在安全结账页显示。';
+  String get premiumWebCheckoutCta => '查看订阅方案';
 
   @override
   String get premiumWebVerifying => '正在等待支付结果确认…';

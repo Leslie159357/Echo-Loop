@@ -30,7 +30,8 @@ class _FakePurchaseService implements PurchaseService {
   @override
   Future<Entitlement> purchase(String planId) async => current;
   @override
-  Future<Entitlement> restore() async => current;
+  Future<RestorePurchaseResult> restore() async =>
+      RestorePurchaseResult(entitlement: current);
   @override
   Future<void> identify(String? userId) async {}
   @override

@@ -107,7 +107,7 @@ abstract class AppLocalizations {
   /// No description provided for @premiumTitle.
   ///
   /// In en, this message translates to:
-  /// **'Echo Loop Membership'**
+  /// **'Echo Loop Premium'**
   String get premiumTitle;
 
   /// No description provided for @premiumTagline.
@@ -314,6 +314,12 @@ abstract class AppLocalizations {
   /// **'Purchase failed. Please try again.'**
   String get premiumPurchaseFailed;
 
+  /// No description provided for @premiumRestoreAccountMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'This subscription is linked to another Echo Loop account. Sign in to the original account and try again.'**
+  String get premiumRestoreAccountMismatch;
+
   /// No description provided for @premiumRestoreNone.
   ///
   /// In en, this message translates to:
@@ -329,14 +335,8 @@ abstract class AppLocalizations {
   /// No description provided for @premiumWebCheckoutCta.
   ///
   /// In en, this message translates to:
-  /// **'Continue to checkout'**
+  /// **'Continue to secure checkout'**
   String get premiumWebCheckoutCta;
-
-  /// No description provided for @premiumWebCheckoutHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Plans, current prices, and offers are shown on the secure checkout page.'**
-  String get premiumWebCheckoutHint;
 
   /// No description provided for @premiumWebVerifying.
   ///

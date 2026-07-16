@@ -1,6 +1,6 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-14（版本号升级到 1.0.26）
+> 最后更新：2026-07-15（direct 渠道切换为 Paddle 自建支付）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——仍未解决
 
 ## 当前优先级
@@ -60,6 +60,14 @@
 
 ## 最近完成（保留近两周）
 
+- [x] 2026-07-15 23:32：修复原生订阅的“管理订阅”入口，iOS 优先调用 StoreKit 系统订阅管理页，Android 优先打开 Play Store 订阅管理页，并保留平台不可用时的外部链接兜底。
+- [x] 2026-07-15 23:04：修复原生恢复购买归属校验，RevenueCat restore 返回的订阅若已绑定其他 Echo Loop 账号则拒绝写入当前账号，并在订阅页提示登录原账号后重试。
+- [x] 2026-07-15：direct 渠道由 RevenueCat Web Purchase Link 切换为后端 Paddle 集成；App 展示 Paddle 月付/年付套餐，登录后创建 checkout、等待统一权益生效，并通过 Paddle Customer Portal 管理订阅；App Store / Google Play 的 RevenueCat 购买与恢复路径保持隔离。
+- [x] 2026-07-15 12:11：订阅页英文标题由“Echo Loop Membership”改为“Echo Loop Premium”，并补充 paywall 标题回归断言。
+- [x] 2026-07-15 10:31：统一 direct/Web 渠道订阅页右上角文案为“恢复购买”，底层仍走后端权益同步，避免“刷新”造成用户困惑。
+- [x] 2026-07-15 10:20：调整 direct 渠道订阅页中文 CTA 文案，由“前往安全结账”改为“查看订阅方案”，匹配 RevenueCat 托管页仍会展示套餐选择的实际流程。
+- [x] 2026-07-15 09:40：优化 direct 渠道 Web checkout 入口，网页支付 CTA 改为安全结账文案，使用系统内置浏览器容器打开 RevenueCat/Paddle 托管结账页，并补充未登录拦截、打开成功等待权益确认、打开失败提示的 widget 回归测试。
+- [x] 2026-07-15 09:07：补充 RevenueCat CustomerInfo 关键诊断日志，覆盖 current/purchase/restore/update 路径，输出 expiresAt、willRenew、productId、active entitlements、RC 用户与订阅明细，并补充摘要/快照回归测试。
 - [x] 2026-07-14 22:38：版本号升级到 `1.0.26`。
 - [x] 2026-07-14 22:24：修复订阅权益前台长驻跨过 expiresAt 后仍保持 Premium；`SubscriptionController` 根据有效权益到期时间安排一次性 refresh，新权益到来时重排 timer，并补到期刷新/重排/永久权益回归测试。
 - [x] 2026-07-14 22:11：收口 Web/direct 渠道恢复购买语义，`SubscriptionController.restore()` 在 Web 渠道转为后端权益刷新，避免误穿透到 `WebPurchaseService.restore()` 抛异常，并补充回归测试。

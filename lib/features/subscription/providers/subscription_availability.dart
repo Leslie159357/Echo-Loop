@@ -5,15 +5,15 @@
 ///
 /// 真相源是 channel-aware 的 [subscriptionAvailableFor]：先由 `platform +
 /// DISTRIBUTION_CHANNEL` 决定 [clientPaymentChannel]（见 `client_distribution.dart`），
-/// 再看该渠道对应实现是否配置就绪（原生 RC key / 网页 Purchase Link）。
+/// 再看该渠道对应实现是否配置就绪（原生 RC key / Paddle 后端 API）。
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../../config/revenuecat_config.dart';
-import '../../../config/web_purchase_config.dart';
 import '../../../config/client_distribution.dart';
+import '../../../config/paddle_config.dart';
+import '../../../config/revenuecat_config.dart';
 
 part 'subscription_availability.g.dart';
 
@@ -28,7 +28,7 @@ bool subscriptionAvailability(Ref ref) => subscriptionAvailableFor(
       isRevenueCatConfigured ||
       (useLocalStoreKit &&
           clientPaymentChannel == ClientPaymentChannel.appleStore),
-  webConfigured: isWebCheckoutConfigured,
+  webConfigured: isPaddleCheckoutConfigured,
 );
 
 /// 根据本地渠道与对应实现的配置状态决定是否展示订阅能力。
@@ -45,14 +45,14 @@ bool subscriptionAvailableFor({
   };
 }
 
-/// 当前是否走「网页支付」渠道（侧载 APK / 桌面）。
+/// 当前是否走 Paddle 网页支付渠道（侧载 APK / 桌面）。
 ///
-/// Paywall 据此切换购买交互：true 时不展示商店套餐卡、改为「浏览器结账 + 回流对账」。
-/// 测试可 override 模拟网页渠道。
+/// Paywall 据此切换购买动作：套餐仍由统一 UI 展示，点击后改为
+/// 「服务端创建 Paddle checkout + 浏览器结账 + 回流对账」。
 @riverpod
 bool webCheckoutMode(Ref ref) => webCheckoutModeFor(
   channel: clientPaymentChannel,
-  webConfigured: isWebCheckoutConfigured,
+  webConfigured: isPaddleCheckoutConfigured,
 );
 
 /// 仅 direct 且网页结账配置完整时进入 Web checkout 模式。

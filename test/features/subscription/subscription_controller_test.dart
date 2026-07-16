@@ -65,6 +65,9 @@ class FakePurchaseService implements PurchaseService {
   /// restore 实际被调次数（验证 Web 渠道不穿透到底层恢复）。
   int restoreCalls = 0;
 
+  /// restore 后返回的 RevenueCat 原始 App User ID。
+  String? restoreOriginalAppUserId;
+
   /// invalidateCustomerInfoCache 调用次数（验证清缓存动作）。
   int invalidateCalls = 0;
 
@@ -93,9 +96,12 @@ class FakePurchaseService implements PurchaseService {
   }
 
   @override
-  Future<Entitlement> restore() async {
+  Future<RestorePurchaseResult> restore() async {
     restoreCalls++;
-    return restoreResult;
+    return RestorePurchaseResult(
+      entitlement: restoreResult,
+      originalAppUserId: restoreOriginalAppUserId,
+    );
   }
 
   @override
@@ -824,6 +830,96 @@ void main() {
       expect(
         container.read(subscriptionControllerProvider).status,
         EntitlementStatus.premium,
+      );
+    });
+  });
+
+  test('restore active 且归属为当前用户 → 应用权益', () async {
+    await withClock(Clock.fixed(now), () async {
+      final cache = FakeEntitlementCache();
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => Entitlement.free),
+        cache: cache,
+        purchases: FakePurchaseService()
+          ..restoreResult = proEntitlement
+          ..restoreOriginalAppUserId = 'u1',
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+      container.read(subscriptionControllerProvider);
+      await pumpEventQueue();
+
+      await container.read(subscriptionControllerProvider.notifier).restore();
+      await pumpEventQueue();
+
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.premium,
+      );
+      expect(cache.stored?.userId, 'u1');
+      expect(cache.stored?.entitlement.isPremium, isTrue);
+    });
+  });
+
+  test('restore active 但归属不是当前用户 → 抛错且不写入权益', () async {
+    await withClock(Clock.fixed(now), () async {
+      final cache = FakeEntitlementCache();
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => Entitlement.free),
+        cache: cache,
+        purchases: FakePurchaseService()
+          ..restoreResult = proEntitlement
+          ..restoreOriginalAppUserId = 'u_other',
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+      final controller = container.read(
+        subscriptionControllerProvider.notifier,
+      );
+      await pumpEventQueue();
+
+      await expectLater(
+        controller.restore(),
+        throwsA(
+          isA<PurchaseException>().having(
+            (e) => e.ownershipConflict,
+            'ownershipConflict',
+            isTrue,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        isNot(EntitlementStatus.premium),
+      );
+      expect(cache.stored?.entitlement.isPremium, isNot(isTrue));
+    });
+  });
+
+  test('restore free 且存在其他 originalAppUserId → 不触发归属冲突', () async {
+    await withClock(Clock.fixed(now), () async {
+      final container = makeContainer(
+        identity: signedIn,
+        repo: FakeEntitlementRepository((_) async => proEntitlement),
+        cache: FakeEntitlementCache(),
+        purchases: FakePurchaseService()
+          ..restoreResult = Entitlement.free
+          ..restoreOriginalAppUserId = 'u_other',
+        paymentChannel: ClientPaymentChannel.appleStore,
+      );
+      final controller = container.read(
+        subscriptionControllerProvider.notifier,
+      );
+      await pumpEventQueue();
+
+      await controller.restore();
+      await pumpEventQueue();
+
+      expect(
+        container.read(subscriptionControllerProvider).status,
+        EntitlementStatus.free,
       );
     });
   });
