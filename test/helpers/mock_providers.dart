@@ -351,6 +351,7 @@ class TestAppUpdate extends AppUpdate {
 /// 测试用 TranscriptionTaskManager — 不执行真实转录
 class TestTranscriptionTaskManager extends TranscriptionTaskManager {
   final Map<String, TranscriptionTaskState> _initialState;
+  int customTranscriptionCalls = 0;
 
   TestTranscriptionTaskManager([this._initialState = const {}]);
 
@@ -364,6 +365,15 @@ class TestTranscriptionTaskManager extends TranscriptionTaskManager {
     required String accessToken,
     bool autoMergeShortSentences = true,
   }) async {}
+
+  @override
+  Future<void> startCustomTranscription(
+    AudioItem audioItem,
+    String language, {
+    bool autoMergeShortSentences = true,
+  }) async {
+    customTranscriptionCalls += 1;
+  }
 
   @override
   void cancelTranscription(String audioId) {

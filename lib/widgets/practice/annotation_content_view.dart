@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/sign_in_required_dialog.dart';
+import '../../features/custom_api/custom_api_config.dart';
 import '../../features/subscription/widgets/feature_gate.dart';
 import '../../features/subscription/providers/ai_quota_limit_provider.dart';
 import '../../features/subscription/providers/subscription_identity.dart';
@@ -816,10 +817,11 @@ class _AnnotationContentViewState extends ConsumerState<AnnotationContentView> {
         .watch(supabaseSessionProvider)
         .valueOrNull
         ?.accessToken;
+    final customApiReady = ref.watch(customApiConfigNotifierProvider).isReady;
     final shouldAutoLoadSentenceAi =
         widget.autoLoadSentenceAi &&
-        accessToken != null &&
-        accessToken.isNotEmpty;
+        (customApiReady ||
+            (accessToken != null && accessToken.isNotEmpty));
 
     // 局部 watch 已收藏意群文本集合，避免全局重建
     final savedTextsAsync = ref.watch(savedSenseGroupTextsProvider);

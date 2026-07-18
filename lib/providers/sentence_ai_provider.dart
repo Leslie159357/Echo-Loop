@@ -211,6 +211,9 @@ class SentenceAiNotifier {
   final SentenceAiCacheDao _cacheDao;
   final SentenceAiApiClient _apiClient;
 
+  bool get _requiresAccessToken =>
+      _apiClient is! CustomSentenceAiApiClient;
+
   /// 额度闸：发起 L3 请求前调用。已登录但未解锁（非会员且免费试用用尽）时
   /// 抛 [AiFeatureQuotaExceededException]；会员或仍有试用额度则放行。
   /// 注入而非内联订阅依赖，保持数据层与订阅状态解耦（通过 [PremiumFeature] 中性枚举）。
@@ -313,15 +316,18 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
-      AppLogger.log('SentenceAI', '翻译 L3 需要登录，未发现 Supabase access token');
-      throw const AiFeatureAuthRequiredException();
+    if (_requiresAccessToken) {
+      if (accessToken == null || accessToken.isEmpty) {
+        AppLogger.log('SentenceAI', '翻译 L3 需要登录，未发现 Supabase access token');
+        throw const AiFeatureAuthRequiredException();
+      }
+      await _beforeApiRequest?.call(
+        PremiumFeature.aiTranslation,
+        respectLocalQuotaReset: respectLocalQuotaReset,
+      );
+      _guardFeature?.call(PremiumFeature.aiTranslation);
     }
-    await _beforeApiRequest?.call(
-      PremiumFeature.aiTranslation,
-      respectLocalQuotaReset: respectLocalQuotaReset,
-    );
-    _guardFeature?.call(PremiumFeature.aiTranslation);
+    final apiAccessToken = accessToken ?? '';
 
     final existing = _pendingTranslations[cacheKey];
     if (existing != null) {
@@ -341,7 +347,7 @@ class SentenceAiNotifier {
         previous: previous,
         next: next,
         targetLanguage: targetLanguage,
-        accessToken: accessToken,
+        accessToken: apiAccessToken,
       ),
     );
     yield* pending.subscribe();
@@ -418,8 +424,10 @@ class SentenceAiNotifier {
           l2Type,
           jsonEncode({'translation': finalTranslation.translation}),
         );
-        await _onApiSucceeded?.call(PremiumFeature.aiTranslation);
-        _onConsumeTrial?.call(PremiumFeature.aiTranslation);
+        if (_requiresAccessToken) {
+          await _onApiSucceeded?.call(PremiumFeature.aiTranslation);
+          _onConsumeTrial?.call(PremiumFeature.aiTranslation);
+        }
       }
       await pending.close();
     } catch (e, stackTrace) {
@@ -477,15 +485,18 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
-      AppLogger.log('SentenceAI', '解析 L3 需要登录，未发现 Supabase access token');
-      throw const AiFeatureAuthRequiredException();
+    if (_requiresAccessToken) {
+      if (accessToken == null || accessToken.isEmpty) {
+        AppLogger.log('SentenceAI', '解析 L3 需要登录，未发现 Supabase access token');
+        throw const AiFeatureAuthRequiredException();
+      }
+      await _beforeApiRequest?.call(
+        PremiumFeature.aiAnalysis,
+        respectLocalQuotaReset: respectLocalQuotaReset,
+      );
+      _guardFeature?.call(PremiumFeature.aiAnalysis);
     }
-    await _beforeApiRequest?.call(
-      PremiumFeature.aiAnalysis,
-      respectLocalQuotaReset: respectLocalQuotaReset,
-    );
-    _guardFeature?.call(PremiumFeature.aiAnalysis);
+    final apiAccessToken = accessToken ?? '';
 
     final existing = _pendingAnalyses[cacheKey];
     if (existing != null) {
@@ -503,7 +514,7 @@ class SentenceAiNotifier {
         l2Type: l2Type,
         text: text,
         targetLanguage: targetLanguage,
-        accessToken: accessToken,
+        accessToken: apiAccessToken,
       ),
     );
     yield* pending.subscribe();
@@ -573,8 +584,10 @@ class SentenceAiNotifier {
           l2Type,
           jsonEncode(finalAnalysis.toJson()),
         );
-        await _onApiSucceeded?.call(PremiumFeature.aiAnalysis);
-        _onConsumeTrial?.call(PremiumFeature.aiAnalysis);
+        if (_requiresAccessToken) {
+          await _onApiSucceeded?.call(PremiumFeature.aiAnalysis);
+          _onConsumeTrial?.call(PremiumFeature.aiAnalysis);
+        }
       } else if (finalAnalysis != null) {
         AppLogger.log('SentenceAI', '解析最终结果为空，不落缓存（可重试）');
       }
@@ -638,15 +651,18 @@ class SentenceAiNotifier {
     }
 
     // L3: 流式 API 调用
-    if (accessToken == null || accessToken.isEmpty) {
-      AppLogger.log('SenseGroup', 'L3 需要登录，未发现 Supabase access token');
-      throw const AiFeatureAuthRequiredException();
+    if (_requiresAccessToken) {
+      if (accessToken == null || accessToken.isEmpty) {
+        AppLogger.log('SenseGroup', 'L3 需要登录，未发现 Supabase access token');
+        throw const AiFeatureAuthRequiredException();
+      }
+      await _beforeApiRequest?.call(
+        PremiumFeature.aiSenseGroup,
+        respectLocalQuotaReset: respectLocalQuotaReset,
+      );
+      _guardFeature?.call(PremiumFeature.aiSenseGroup);
     }
-    await _beforeApiRequest?.call(
-      PremiumFeature.aiSenseGroup,
-      respectLocalQuotaReset: respectLocalQuotaReset,
-    );
-    _guardFeature?.call(PremiumFeature.aiSenseGroup);
+    final apiAccessToken = accessToken ?? '';
 
     final existing = _pendingSenseGroups[hash];
     if (existing != null) {
@@ -661,7 +677,7 @@ class SentenceAiNotifier {
         pending,
         hash: hash,
         text: text,
-        accessToken: accessToken,
+        accessToken: apiAccessToken,
       ),
     );
     yield* pending.subscribe();
@@ -734,8 +750,10 @@ class SentenceAiNotifier {
           'sense_groups',
           jsonEncode(finalResult.toJson()),
         );
-        await _onApiSucceeded?.call(PremiumFeature.aiSenseGroup);
-        _onConsumeTrial?.call(PremiumFeature.aiSenseGroup);
+        if (_requiresAccessToken) {
+          await _onApiSucceeded?.call(PremiumFeature.aiSenseGroup);
+          _onConsumeTrial?.call(PremiumFeature.aiSenseGroup);
+        }
       } else if (finalResult != null) {
         AppLogger.log('SenseGroup', '最终结果空或 concat 校验失败，不落缓存（可重试）');
       }

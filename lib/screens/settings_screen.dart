@@ -31,10 +31,7 @@ import '../providers/tag_provider.dart';
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
 import '../config/app_store_config.dart';
-import '../features/auth/providers/auth_providers.dart';
-import '../features/auth/screens/account_screen.dart';
-import '../features/subscription/providers/subscription_availability.dart';
-import '../features/subscription/providers/subscription_controller.dart';
+import '../features/custom_api/custom_api_config.dart';
 import '../services/app_update_launcher.dart';
 import '../features/subscription/screens/subscription_debug_screen.dart';
 import '../router/app_router.dart';
@@ -54,6 +51,7 @@ import '../providers/dictionary/visible_sources_provider.dart';
 import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
 import 'asr_test_screen.dart';
+import 'custom_api_settings_screen.dart';
 import 'dictionary_settings_screen.dart';
 import 'tts_settings_screen.dart';
 import 'learning_settings_screen.dart';
@@ -89,7 +87,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.m),
         children: [
-          _buildAccountSection(context, l10n),
+          _buildPersonalAiSection(context),
           const SizedBox(height: AppSpacing.m),
           _buildSection(
             context,
@@ -128,116 +126,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 构建账号分组：登录入口 + 订阅入口（登录 item 下方）。
-  Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
-    final session = ref.watch(supabaseSessionProvider).valueOrNull;
-    final isSignedIn = session != null;
-    final accountSubtitle = session == null
-        ? null
-        : switch (authDisplayProviderForSession(session)) {
-            AuthDisplayProvider.apple => l10n.authSignedInWithApple,
-            AuthDisplayProvider.google => l10n.authSignedInWithGoogle,
-            AuthDisplayProvider.email ||
-            AuthDisplayProvider.unknown => compactAccountListIdentifier(
-              session.user.email ?? session.user.id,
-            ),
-          };
+  /// 个人版只保留本地能力与用户自带的 AI 服务，不展示账号或订阅入口。
+  Widget _buildPersonalAiSection(BuildContext context) {
+    final config = ref.watch(customApiConfigNotifierProvider);
+    final isChinese = Localizations.localeOf(context).languageCode == 'zh';
+    final title = isChinese ? 'AI 服务' : 'AI service';
+    final subtitle = config.isReady
+        ? '${config.textModel} · ${config.transcriptionModel}'
+        : (isChinese ? '未配置' : 'Not configured');
 
     return _buildSection(
       context,
-      title: l10n.account,
+      title: title,
       children: [
         ListTile(
-          leading: _emojiIcon('👤'),
-          title: Text(l10n.account),
-          subtitle: accountSubtitle == null
-              ? null
-              : Text(
-                  accountSubtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isSignedIn ? l10n.authSignedInStatus : l10n.authSignedOutStatus,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
-          onTap: () =>
-              context.push(isSignedIn ? AppRoutes.account : AppRoutes.login),
-        ),
-        // 当前平台未启用订阅（未注入 RC key）时隐藏入口。
-        if (ref.watch(subscriptionAvailabilityProvider))
-          _buildSubscriptionTile(context, l10n),
-      ],
-    );
-  }
-
-  /// 构建订阅入口（账户分组内、登录 item 下方）。
-  ///
-  /// 保持简洁：只展示标题 + 状态徽章，详情（套餐、续费、管理）留给点击后的 Paywall。
-  /// 未订阅：右侧高亮金色「升级」徽章，提示开通会员。
-  /// 已订阅：右侧弱化「会员」描边徽章。
-  /// 点击统一进入 Paywall（其内部按 isPremium 区分购买页 / 管理订阅区）。
-  Widget _buildSubscriptionTile(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final gold = AppTheme.premiumGold(theme.brightness);
-    final isPremium = ref.watch(subscriptionControllerProvider).isActive;
-    final upgradeBadgeBackground = theme.brightness == Brightness.dark
-        ? const Color(0xFFD8B11E)
-        : const Color(0xFFFCE76B);
-    const upgradeBadgeTextColor = Color(0xFF111111);
-
-    return ListTile(
-      leading: Icon(Icons.workspace_premium, color: gold),
-      title: Text(l10n.premiumEntryTitle),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isPremium)
-            // 已订阅：弱化徽章（描边，不再金底高亮），不再上销。
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: gold.withValues(alpha: 0.6)),
-              ),
-              child: Text(
-                l10n.premiumEntryBadgeActive,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: gold,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            )
-          else
-            // 未订阅：与订阅页优惠条统一为高对比实底徽章，引导开通。
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: upgradeBadgeBackground,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                l10n.premiumEntryBadgeUpgrade,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: upgradeBadgeTextColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+          leading: const Icon(Icons.api_outlined),
+          title: Text(title),
+          subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const CustomApiSettingsScreen(),
             ),
-          const SizedBox(width: AppSpacing.xs),
-          const Icon(Icons.chevron_right),
-        ],
-      ),
-      onTap: () => context.push(AppRoutes.paywall),
+          ),
+        ),
+      ],
     );
   }
 

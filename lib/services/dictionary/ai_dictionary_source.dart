@@ -73,9 +73,12 @@ class AiDictionarySource implements DictionarySource {
     CancelToken? cancelToken,
   }) async* {
     final token = request.accessToken;
-    if (token == null || token.isEmpty) {
+    final apiClient = _apiClient();
+    if (apiClient is! CustomSentenceAiApiClient &&
+        (token == null || token.isEmpty)) {
       throw const DictionaryAuthRequiredException();
     }
+    final apiAccessToken = token ?? '';
     final language = request.targetLanguage ?? _defaultLanguage;
     // request.word 保留大小写进入后端 prompt；缓存键用小写词形，
     // 确保 NASA/nasa 复用同一 L1/L2/L3 缓存。
@@ -113,17 +116,16 @@ class AiDictionarySource implements DictionarySource {
     }
 
     // L3 流式 API：按 isPhrase 分流到单词/词组端点
-    final apiClient = _apiClient();
     final stream = isPhrase
         ? apiClient.lookupPhraseStreamFrames(
             word,
-            accessToken: token,
+            accessToken: apiAccessToken,
             targetLanguage: language,
             cancelToken: cancelToken,
           )
         : apiClient.lookupWordStreamFrames(
             word,
-            accessToken: token,
+            accessToken: apiAccessToken,
             targetLanguage: language,
             cancelToken: cancelToken,
           );

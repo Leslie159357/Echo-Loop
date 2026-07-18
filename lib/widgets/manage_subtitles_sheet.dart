@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_io/io.dart';
 import '../analytics/models/event_names.dart';
+import '../features/custom_api/custom_api_config.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/auth/sign_in_required_dialog.dart';
 import '../features/subscription/models/premium_feature.dart';
@@ -566,6 +567,16 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       'connection' => l10n.transcriptionErrorConnection,
       'timeout' => l10n.transcriptionErrorTimeout,
       'server' => l10n.transcriptionErrorServer,
+      'file_not_found' => l10n.audioFileNotFound,
+      'file_too_large' => l10n.transcriptionErrorFileTooLarge(25),
+      'unsupported_model' =>
+        Localizations.localeOf(context).languageCode == 'zh'
+            ? '该模型不能生成同步字幕，请改用分段转录或 Whisper。'
+            : 'This model cannot create timed subtitles. Choose diarized transcription or Whisper.',
+      'not_configured' =>
+        Localizations.localeOf(context).languageCode == 'zh'
+            ? '请先在设置中填写 API 地址和 API Key。'
+            : 'Configure the API URL and API key in Settings first.',
       _ => l10n.transcriptionErrorUnknown,
     };
   }
@@ -1746,22 +1757,46 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     AudioItem audioItem,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    final accessToken = (await ref.read(
-      supabaseSessionProvider.future,
-    ))?.accessToken;
+    final customConfigNotifier = ref.read(
+      customApiConfigNotifierProvider.notifier,
+    );
+    await customConfigNotifier.ready;
     if (!mounted || !context.mounted) return;
-    if (accessToken == null || accessToken.isEmpty) {
-      await _showTranscriptionSignInDialog(context);
-      return;
-    }
-    // 已登录但未解锁（非会员且 AI 转录试用用尽）→ 引导订阅升级。
-    if (!ref.read(featureAccessProvider(PremiumFeature.aiTranscription))) {
-      await openPaywall(context, ref);
-      return;
+    final customConfig = ref.read(customApiConfigNotifierProvider);
+    final useCustomApi = customConfig.enabled;
+    String? accessToken;
+
+    if (useCustomApi) {
+      if (!customConfig.isReady) {
+        _showInlineError(
+          _InlineError(
+            _UploadErrorKind.generic,
+            Localizations.localeOf(context).languageCode == 'zh'
+                ? '请先在设置中填写 API 地址和 API Key。'
+                : 'Configure the API URL and API key in Settings first.',
+          ),
+        );
+        return;
+      }
+    } else {
+      accessToken = (await ref.read(
+        supabaseSessionProvider.future,
+      ))?.accessToken;
+      if (!mounted || !context.mounted) return;
+      if (accessToken == null || accessToken.isEmpty) {
+        await _showTranscriptionSignInDialog(context);
+        return;
+      }
+      // 原后端路径仍保留兼容；个人自定义 API 路径不受登录和订阅额度限制。
+      if (!ref.read(featureAccessProvider(PremiumFeature.aiTranscription))) {
+        await openPaywall(context, ref);
+        return;
+      }
     }
 
-    // 检查时长限制
-    if (audioItem.totalDuration > _maxDurationSeconds) {
+    // 30 分钟 / 50 MB 是原 Echo Loop 后端限制，自定义 API 仅由官方 25 MB
+    // 上传限制约束，并由任务服务统一校验。
+    if (!useCustomApi && audioItem.totalDuration > _maxDurationSeconds) {
       _showInlineError(
         _InlineError(
           _UploadErrorKind.generic,
@@ -1771,25 +1806,26 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       return;
     }
 
-    // 检查文件大小限制
-    final fullPath = await audioItem.getFullAudioPath();
-    if (fullPath == null) {
+    if (!useCustomApi) {
+      final fullPath = await audioItem.getFullAudioPath();
+      if (fullPath == null) {
+        if (!mounted) return;
+        _showInlineError(
+          _InlineError(_UploadErrorKind.generic, l10n.audioFileNotFound),
+        );
+        return;
+      }
+      final fileSize = await File(fullPath).length();
       if (!mounted) return;
-      _showInlineError(
-        _InlineError(_UploadErrorKind.generic, l10n.audioFileNotFound),
-      );
-      return;
-    }
-    final fileSize = await File(fullPath).length();
-    if (!mounted) return;
-    if (fileSize > _maxFileSize) {
-      _showInlineError(
-        _InlineError(
-          _UploadErrorKind.generic,
-          l10n.transcriptionErrorFileTooLarge(50),
-        ),
-      );
-      return;
+      if (fileSize > _maxFileSize) {
+        _showInlineError(
+          _InlineError(
+            _UploadErrorKind.generic,
+            l10n.transcriptionErrorFileTooLarge(50),
+          ),
+        );
+        return;
+      }
     }
 
     // 疑似空音频（解码失败 / 全程静音）拦截：用确认而非硬拦截，规避检测误判
@@ -1838,6 +1874,29 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       if (confirmed != true) return;
     }
 
+    if (useCustomApi) {
+      ref
+          .read(transcriptionTaskManagerProvider.notifier)
+          .startCustomTranscription(
+            audioItem,
+            _selectedLanguage,
+            autoMergeShortSentences: _autoMergeShortSentences,
+          );
+      ref
+          .read(usageTrackerProvider)
+          .record(
+            UsageEvent.aiTranscriptionStarted,
+            analyticsParams: {
+              EventParams.audioId: audioItem.id,
+              EventParams.audioName: audioItem.name,
+            },
+          );
+      return;
+    }
+
+    final backendAccessToken = accessToken;
+    if (backendAccessToken == null || backendAccessToken.isEmpty) return;
+
     // 消耗一次免费试用（会员无限不计数）。转录为后台任务，于发起时计数。
     if (!ref.read(subscriptionControllerProvider).isActive) {
       ref
@@ -1851,7 +1910,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         .startTranscription(
           audioItem,
           _selectedLanguage,
-          accessToken: accessToken,
+          accessToken: backendAccessToken,
           autoMergeShortSentences: _autoMergeShortSentences,
         );
     ref

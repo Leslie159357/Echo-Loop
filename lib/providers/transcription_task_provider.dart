@@ -15,6 +15,8 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../database/providers.dart';
 import '../features/audio_import/audio_finalization_service.dart';
+import '../features/custom_api/custom_api_config.dart';
+import '../features/custom_api/custom_cloud_transcription_service.dart';
 import '../models/audio_item.dart';
 import '../models/word_timestamp.dart';
 import '../providers/audio_library_provider.dart';
@@ -39,6 +41,9 @@ class TranscriptionFileOps {
 
   /// 获取文件大小
   Future<int> getFileSize(String filePath) => File(filePath).length();
+
+  /// 检查音频文件是否存在。
+  Future<bool> fileExists(String filePath) => File(filePath).exists();
 
   /// 获取应用数据目录
   Future<Directory> getDataDir() => getAppDataDirectory();
@@ -278,6 +283,104 @@ class TranscriptionTaskManager extends _$TranscriptionTaskManager {
     } catch (e, st) {
       AppLogger.log('Transcription', '❌ 转录失败(非网络) | $e\n$st');
       _updateState(audioId, const TranscriptionFailed(message: 'unknown'));
+    }
+  }
+
+  /// 使用用户自己的 OpenAI 兼容 API 直接转录，不需要登录或订阅额度。
+  Future<void> startCustomTranscription(
+    AudioItem audioItem,
+    String language, {
+    bool autoMergeShortSentences = true,
+  }) async {
+    final audioId = audioItem.id;
+    final current = state[audioId];
+    if (current is TranscriptionHashing ||
+        current is TranscriptionUploading ||
+        current is TranscriptionProcessing) {
+      return;
+    }
+
+    final cancelToken = CancelToken();
+    _cancelTokens[audioId] = cancelToken;
+    try {
+      final configNotifier = ref.read(
+        customApiConfigNotifierProvider.notifier,
+      );
+      await configNotifier.ready;
+      final config = ref.read(customApiConfigNotifierProvider);
+      if (!config.isReady) {
+        throw const CustomCloudTranscriptionException('not_configured');
+      }
+      final relativeAudioPath = audioItem.audioPath;
+      if (relativeAudioPath == null || relativeAudioPath.isEmpty) {
+        throw const CustomCloudTranscriptionException('file_not_found');
+      }
+
+      final fileOps = ref.read(transcriptionFileOpsProvider);
+      _updateState(audioId, const TranscriptionHashing());
+      final dataDir = await fileOps.getDataDir();
+      final fullPath = p.join(dataDir.path, relativeAudioPath);
+      if (!await fileOps.fileExists(fullPath)) {
+        throw const CustomCloudTranscriptionException('file_not_found');
+      }
+      if (await fileOps.getFileSize(fullPath) >
+          customTranscriptionMaxFileBytes) {
+        throw const CustomCloudTranscriptionException('file_too_large');
+      }
+      final sha256 =
+          audioItem.audioSha256 ?? await fileOps.computeSha256(fullPath);
+      if (cancelToken.isCancelled) return;
+
+      _updateState(audioId, const TranscriptionUploading());
+      final service = ref.read(customCloudTranscriptionServiceProvider);
+      final transcript = await service.transcribe(
+        filePath: fullPath,
+        model: config.transcriptionModel,
+        language: language,
+        mergeShortSentences: autoMergeShortSentences,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (cancelToken.isCancelled || total <= 0) return;
+          _updateState(
+            audioId,
+            TranscriptionUploading(progress: sent / total),
+          );
+        },
+      );
+      if (cancelToken.isCancelled) return;
+
+      _updateState(
+        audioId,
+        const TranscriptionProcessing(jobId: 'custom-api'),
+      );
+      await _saveTranscriptAndFinish(
+        audioItem,
+        transcript,
+        language,
+        sha256,
+      );
+    } on CustomCloudTranscriptionException catch (error) {
+      _updateState(audioId, TranscriptionFailed(message: error.code));
+    } on DioException catch (error) {
+      if (error.type == DioExceptionType.cancel) return;
+      AppLogger.log(
+        'CustomTranscription',
+        '云端转录失败 | type=${error.type} status=${error.response?.statusCode}',
+      );
+      _updateState(
+        audioId,
+        TranscriptionFailed(message: _userFriendlyError(error)),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'CustomTranscription',
+        '云端转录失败 | $error\n$stackTrace',
+      );
+      _updateState(audioId, const TranscriptionFailed(message: 'server'));
+    } finally {
+      if (state[audioId] is! TranscriptionCompleted) {
+        _cancelTokens.remove(audioId);
+      }
     }
   }
 

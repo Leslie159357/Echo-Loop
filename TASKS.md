@@ -1,6 +1,6 @@
 # Echo Loop 任务清单
 
-> 最后更新：2026-07-16（收口顶部优惠条展示优先级）
+> 最后更新：2026-07-18（个人 iOS 自定义 AI 与云端转录）
 > 当前焦点：Android 结束录音闪退（离线 ASR / Silero VAD）——仍未解决
 
 ## 当前优先级
@@ -60,6 +60,7 @@
 
 ## 最近完成（保留近两周）
 
+- [x] 2026-07-18：个人 iOS 版新增自定义 OpenAI 兼容 API：API Key 存 iOS Keychain，`gpt-5.6` 直连翻译/解析/意群/AI 词典，云端音频直连分段转录或 Whisper 逐词时间戳；设置页隐藏账号/订阅入口，并新增无签名 IPA 的 GitHub Actions 构建。
 - [x] 2026-07-16 15:04：降低 direct/Paddle checkout 后权益确认轮询频次：`/api/entitlements` 轮询间隔由 3 秒改为 5 秒，保持总等待约 2 分钟，并补充轮询间隔 widget 断言。
 - [x] 2026-07-16 14:39：修复 direct/Paddle 支付等待态深色主题加载圈可见性：等待按钮禁用时保留 Premium 蓝底，spinner 使用蓝底对比色，并补充深色主题 widget 断言。
 - [x] 2026-07-16 14:26：简化 direct/Paddle 支付等待态：打开 checkout 后主订阅按钮切换为禁用加载态，移除额外等待 label 与“我已完成支付”按钮，并补充 widget 回归断言。

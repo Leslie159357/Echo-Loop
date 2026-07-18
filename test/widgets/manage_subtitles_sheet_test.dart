@@ -13,6 +13,7 @@ import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/transcription_task_provider.dart';
 import 'package:echo_loop/providers/local_transcription_task_provider.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/custom_api/custom_api_config.dart';
 import 'package:echo_loop/services/transcription_api_client.dart';
 import 'package:echo_loop/widgets/manage_subtitles_sheet.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
@@ -22,6 +23,29 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
+
+class _TestCustomApiConfigStore implements CustomApiConfigStore {
+  CustomApiConfig config;
+  String apiKey;
+
+  _TestCustomApiConfigStore({required this.config, this.apiKey = ''});
+
+  @override
+  Future<void> clearApiKey() async => apiKey = '';
+
+  @override
+  Future<CustomApiConfig> load() async =>
+      config.copyWith(hasApiKey: apiKey.isNotEmpty);
+
+  @override
+  Future<String> readApiKey() async => apiKey;
+
+  @override
+  Future<void> save(CustomApiConfig value, {String? apiKey}) async {
+    config = value;
+    if (apiKey != null) this.apiKey = apiKey;
+  }
+}
 
 void main() {
   Session signedInSession() {
@@ -50,6 +74,9 @@ void main() {
       AppSettingsState appSettingsState = const AppSettingsState(
         locale: Locale('en'),
       ),
+      CustomApiConfig customApiConfig = const CustomApiConfig(),
+      String customApiKey = '',
+      TestTranscriptionTaskManager? transcriptionTaskManager,
       List<Override> extraOverrides = const [],
     }) {
       final libraryState = AudioLibraryState(audioItems: [audioItem]);
@@ -86,7 +113,16 @@ void main() {
           learningSessionProvider.overrideWith(() => TestLearningSession()),
           blindListenPlayerProvider.overrideWith(() => TestBlindListenPlayer()),
           transcriptionTaskManagerProvider.overrideWith(
-            () => TestTranscriptionTaskManager(),
+            () =>
+                transcriptionTaskManager ?? TestTranscriptionTaskManager(),
+          ),
+          customApiConfigNotifierProvider.overrideWith(
+            (ref) => CustomApiConfigNotifier(
+              _TestCustomApiConfigStore(
+                config: customApiConfig,
+                apiKey: customApiKey,
+              ),
+            ),
           ),
           transcriptionApiClientProvider.overrideWith(
             (ref) => createTestTranscriptionApiClient(),
@@ -293,6 +329,30 @@ void main() {
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         expect(find.text('Sign in to use AI transcription'), findsNothing);
+      });
+
+      testWidgets('自定义 API 已配置时无需登录并走直连转录', (tester) async {
+        final taskManager = TestTranscriptionTaskManager();
+        final item = createTestAudioItem(transcriptPath: null);
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            customApiConfig: const CustomApiConfig(enabled: true),
+            customApiKey: 'personal-key',
+            transcriptionTaskManager: taskManager,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Start Transcription'),
+        );
+        await tester.pump();
+
+        expect(find.text('Sign in to use AI transcription'), findsNothing);
+        expect(taskManager.customTranscriptionCalls, 1);
       });
 
       testWidgets('AI 转录音频过长时在弹窗内显示 5 秒错误提示', (tester) async {

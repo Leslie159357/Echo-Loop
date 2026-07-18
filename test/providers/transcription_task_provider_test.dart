@@ -15,6 +15,8 @@ import 'package:echo_loop/database/app_database.dart' as db;
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/features/audio_import/audio_finalization_service.dart';
 import 'package:echo_loop/features/audio_import/audio_import_models.dart';
+import 'package:echo_loop/features/custom_api/custom_api_config.dart';
+import 'package:echo_loop/features/custom_api/custom_cloud_transcription_service.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/word_timestamp.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
@@ -35,6 +37,32 @@ class MockTranscriptionFileOps extends Mock implements TranscriptionFileOps {}
 
 class MockSubtitleAutoAlignService extends Mock
     implements SubtitleAutoAlignService {}
+
+class MockCustomCloudTranscriptionService extends Mock
+    implements CustomCloudTranscriptionService {}
+
+class _MemoryCustomApiConfigStore implements CustomApiConfigStore {
+  _MemoryCustomApiConfigStore(this.config, this.apiKey);
+
+  CustomApiConfig config;
+  String apiKey;
+
+  @override
+  Future<void> clearApiKey() async => apiKey = '';
+
+  @override
+  Future<CustomApiConfig> load() async =>
+      config.copyWith(hasApiKey: apiKey.isNotEmpty);
+
+  @override
+  Future<String> readApiKey() async => apiKey;
+
+  @override
+  Future<void> save(CustomApiConfig value, {String? apiKey}) async {
+    config = value;
+    if (apiKey != null) this.apiKey = apiKey;
+  }
+}
 
 class FakeAudioItem extends Fake implements AudioItem {}
 
@@ -102,6 +130,8 @@ ProviderContainer _createContainer({
   required db.AppDatabase database,
   MockSubtitleAutoAlignService? mockAutoAlignService,
   AudioFinalizationService? finalizationService,
+  CustomCloudTranscriptionService? customTranscriptionService,
+  CustomApiConfigStore? customApiConfigStore,
   List<AudioItem>? audioItems,
 }) {
   final overrides = <Override>[
@@ -123,6 +153,20 @@ ProviderContainer _createContainer({
   if (mockAutoAlignService != null) {
     overrides.add(
       subtitleAutoAlignServiceProvider.overrideWithValue(mockAutoAlignService),
+    );
+  }
+  if (customTranscriptionService != null) {
+    overrides.add(
+      customCloudTranscriptionServiceProvider.overrideWithValue(
+        customTranscriptionService,
+      ),
+    );
+  }
+  if (customApiConfigStore != null) {
+    overrides.add(
+      customApiConfigNotifierProvider.overrideWith(
+        (ref) => CustomApiConfigNotifier(customApiConfigStore),
+      ),
     );
   }
   final container = ProviderContainer(overrides: overrides);
@@ -259,6 +303,65 @@ void main() {
       );
       expect(notifier.getTaskState('unknown'), isA<TranscriptionIdle>());
       container.dispose();
+    });
+
+    test('自定义 API 直连转录后复用现有字幕保存流程', () async {
+      final audioItem = _testAudioItem();
+      await _seedAudioRows(database, [audioItem]);
+      final customService = MockCustomCloudTranscriptionService();
+      when(
+        () => mockFileOps.fileExists(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => mockFileOps.getFileSize(any()),
+      ).thenAnswer((_) async => 1024);
+      when(
+        () => mockFileOps.computeSha256(any()),
+      ).thenAnswer((_) async => 'custom-sha');
+      when(
+        () => customService.transcribe(
+          filePath: any(named: 'filePath'),
+          model: any(named: 'model'),
+          language: any(named: 'language'),
+          mergeShortSentences: any(named: 'mergeShortSentences'),
+          cancelToken: any(named: 'cancelToken'),
+          onSendProgress: any(named: 'onSendProgress'),
+        ),
+      ).thenAnswer(
+        (_) async => const TranscriptResult(
+          sentences: [
+            TranscriptSentence(
+              text: 'Direct cloud result.',
+              startTime: Duration.zero,
+              endTime: Duration(seconds: 2),
+            ),
+          ],
+          fullText: 'Direct cloud result.',
+        ),
+      );
+      final container = _createContainer(
+        mockApi: mockApi,
+        mockFileOps: mockFileOps,
+        database: database,
+        customTranscriptionService: customService,
+        customApiConfigStore: _MemoryCustomApiConfigStore(
+          const CustomApiConfig(enabled: true),
+          'personal-key',
+        ),
+        audioItems: [audioItem],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(transcriptionTaskManagerProvider.notifier)
+          .startCustomTranscription(audioItem, 'en');
+
+      expect(
+        container.read(transcriptionTaskManagerProvider)[audioItem.id],
+        isA<TranscriptionCompleted>(),
+      );
+      final saved = await database.audioItemDao.getTranscriptSrt(audioItem.id);
+      expect(saved, contains('Direct cloud result.'));
     });
 
     test('防止重复发起 — Hashing 状态下忽略新请求', () async {

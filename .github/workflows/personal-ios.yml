@@ -1,0 +1,59 @@
+name: Personal iOS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [personal-ios]
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze personal API changes
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Test personal API changes
+        run: |
+          flutter test test/features/custom_api
+          flutter test test/widgets/manage_subtitles_sheet_test.dart
+          flutter test test/providers/sentence_ai_provider_test.dart
+          flutter test test/providers/transcription_task_provider_test.dart
+          flutter test test/services/dictionary/ai_dictionary_source_test.dart
+
+      - name: Install CocoaPods
+        run: cd ios && pod install
+
+      - name: Build iOS without code signing
+        run: flutter build ios --release --no-codesign --flavor=prod
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ios/unsigned/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/
+          cd build/ios/unsigned
+          ditto -c -k --sequesterRsrc --keepParent Payload Echo-Loop-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Echo-Loop-personal-ios-${{ github.run_number }}
+          path: build/ios/unsigned/Echo-Loop-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14

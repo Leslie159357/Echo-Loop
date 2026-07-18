@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
+import 'package:echo_loop/features/custom_api/custom_ai_service.dart';
 import 'package:echo_loop/features/subscription/models/premium_feature.dart';
 import 'package:echo_loop/models/sense_group_result.dart';
 import 'package:echo_loop/models/sentence_ai_result.dart';
@@ -15,6 +16,8 @@ import 'package:echo_loop/utils/text_normalize.dart';
 class MockCacheDao extends Mock implements SentenceAiCacheDao {}
 
 class MockApiClient extends Mock implements SentenceAiApiClient {}
+
+class MockCustomAiService extends Mock implements CustomAiService {}
 
 /// 结构化解析样例
 const _analysisSample = SentenceAnalysis(
@@ -84,6 +87,38 @@ void main() {
 
   group('getTranslationStream', () {
     const text = 'Hello world';
+
+    test('个人自定义 API 无登录 token 也可请求且不触发额度闸', () async {
+      final customService = MockCustomAiService();
+      final customClient = CustomSentenceAiApiClient(customService);
+      addTearDown(customClient.dispose);
+      notifier = SentenceAiNotifier(
+        cacheDao: mockDao,
+        apiClient: customClient,
+        guardFeature: (_) => throw StateError('quota guard should be skipped'),
+      );
+      when(
+        () => mockDao.getByHash(any(), l2TranslationType),
+      ).thenAnswer((_) async => null);
+      when(
+        () => mockDao.upsert(any(), l2TranslationType, any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => customService.translate(
+          text: text,
+          targetLanguage: lang,
+          previousText: any(named: 'previousText'),
+          nextText: any(named: 'nextText'),
+          cancelToken: any(named: 'cancelToken'),
+        ),
+      ).thenAnswer((_) async => {'translation': '你好，世界'});
+
+      final result = await notifier
+          .getTranslationStream(text, targetLanguage: lang)
+          .toList();
+
+      expect(result.single.translation, '你好，世界');
+    });
 
     test('后端 402（本月额度用尽）→ 抛 AiFeatureQuotaExceededException', () async {
       when(

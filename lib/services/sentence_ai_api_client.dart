@@ -14,6 +14,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
+import '../features/custom_api/custom_ai_service.dart';
+import '../features/custom_api/custom_api_config.dart';
 import '../providers/package_info_provider.dart';
 import 'ai_http_client_adapter.dart';
 import 'app_logger.dart';
@@ -565,13 +567,133 @@ class SentenceAiApiClient {
   }
 }
 
+/// 把一次性结构化响应适配为现有的流式 AI 客户端协议。
+class CustomSentenceAiApiClient extends SentenceAiApiClient {
+  final CustomAiService _customService;
+
+  CustomSentenceAiApiClient(this._customService) : super.withDio(Dio());
+
+  @override
+  Stream<SentenceTranslationStreamFrame> translateStream(
+    String text, {
+    required String accessToken,
+    String? previousText,
+    String? nextText,
+    String? targetLanguage,
+    CancelToken? cancelToken,
+  }) async* {
+    final data = await _customService.translate(
+      text: text,
+      targetLanguage: targetLanguage ?? 'zh-CN',
+      previousText: previousText,
+      nextText: nextText,
+      cancelToken: cancelToken,
+    );
+    yield SentenceTranslationStreamFrame(
+      translation: SentenceTranslation.fromJson(data),
+      isFinal: true,
+    );
+  }
+
+  @override
+  Stream<SentenceAnalysisStreamFrame> analyzeStream(
+    String text, {
+    required String accessToken,
+    String? targetLanguage,
+    CancelToken? cancelToken,
+  }) async* {
+    final data = await _customService.analyze(
+      text: text,
+      targetLanguage: targetLanguage ?? 'zh-CN',
+      cancelToken: cancelToken,
+    );
+    yield SentenceAnalysisStreamFrame(
+      analysis: SentenceAnalysis.fromJson(data),
+      isFinal: true,
+    );
+  }
+
+  @override
+  Stream<SenseGroupsStreamFrame> senseGroupsStream(
+    String text, {
+    required String accessToken,
+    CancelToken? cancelToken,
+  }) async* {
+    final data = await _customService.senseGroups(
+      text: text,
+      cancelToken: cancelToken,
+    );
+    yield SenseGroupsStreamFrame(
+      result: SenseGroupResult.fromJson(data),
+      isFinal: true,
+    );
+  }
+
+  @override
+  Stream<AiDictionaryStreamFrame> lookupWordStreamFrames(
+    String word, {
+    required String accessToken,
+    String? targetLanguage,
+    CancelToken? cancelToken,
+  }) async* {
+    final data = await _customService.lookupWord(
+      word: word,
+      targetLanguage: targetLanguage ?? 'zh-CN',
+      cancelToken: cancelToken,
+    );
+    yield AiDictionaryStreamFrame(
+      entry: DictionaryEntry.fromJson(data),
+      isFinal: true,
+    );
+  }
+
+  @override
+  Stream<AiDictionaryStreamFrame> lookupPhraseStreamFrames(
+    String phrase, {
+    required String accessToken,
+    String? targetLanguage,
+    CancelToken? cancelToken,
+  }) async* {
+    final data = await _customService.lookupPhrase(
+      phrase: phrase,
+      targetLanguage: targetLanguage ?? 'zh-CN',
+      cancelToken: cancelToken,
+    );
+    yield AiDictionaryStreamFrame(
+      entry: MultiWordDictionaryEntry.fromJson(data),
+      isFinal: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    _customService.dispose();
+    super.dispose();
+  }
+}
+
 /// AI API 客户端单例 Provider
 @Riverpod(keepAlive: true)
 SentenceAiApiClient sentenceAiApiClient(Ref ref) {
-  final client = SentenceAiApiClient(
-    baseUrl: apiBaseUrl,
-    appVersion: readAppVersion(ref),
-  );
+  final config = ref.watch(customApiConfigNotifierProvider);
+  final SentenceAiApiClient client;
+  if (config.isReady) {
+    final apiKey = ref
+        .read(customApiConfigNotifierProvider.notifier)
+        .apiKey;
+    client = CustomSentenceAiApiClient(
+      CustomAiService(
+        baseUrl: config.baseUrl,
+        apiKey: apiKey,
+        model: config.textModel,
+      ),
+    );
+  } else {
+    client = SentenceAiApiClient(
+      baseUrl: apiBaseUrl,
+      appVersion: readAppVersion(ref),
+    );
+  }
   ref.onDispose(client.dispose);
   return client;
 }
