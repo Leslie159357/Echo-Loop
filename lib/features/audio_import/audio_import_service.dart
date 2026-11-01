@@ -28,6 +28,9 @@ typedef AudioImportProgressCallback =
 class AudioImportService {
   static const _logTag = 'AudioImport';
 
+  static const _defaultPodcastUserAgent =
+      'Podcasts/1750.31 CFNetwork/1410.0.3 Darwin/22.4.0';
+
   AudioImportService({
     Dio? dio,
     Uuid? uuid,
@@ -37,7 +40,12 @@ class AudioImportService {
     AudioRegistrationService? registrationService,
     AudioTranscodeService? transcodeService,
     BackgroundFileDownloadService? backgroundDownloader,
-  }) : _dio = dio ?? Dio(),
+  }) : _dio = dio ??
+           Dio(
+             BaseOptions(
+               headers: {'User-Agent': _defaultPodcastUserAgent},
+             ),
+           ),
        _uuid = uuid ?? const Uuid(),
        _resolveDataDir = resolveDataDir ?? getAppDataDirectory,
        _readDurationSeconds = readDurationSeconds ?? getMediaDurationSeconds,
@@ -315,6 +323,7 @@ class AudioImportService {
           uri: resolved.uri,
           savePath: downloadedFile.path,
           displayName: resolved.displayName,
+          headers: {'User-Agent': _defaultPodcastUserAgent},
           cancelToken: cancelToken,
           onProgress: (received, total) => onProgress?.call(received, total),
         );
