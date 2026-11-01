@@ -7,7 +7,7 @@ const globalModelCdnBaseUrl = 'https://cdn.echo-loop.top';
 /// 中国 API 可通过 `API_CHINA_BASE_URL` 编译期变量覆盖。
 const chinaApiBaseUrl = String.fromEnvironment(
   'API_CHINA_BASE_URL',
-  defaultValue: 'https://www.echo-loop.cn',
+  defaultValue: defaultSelfHostedUrl,
 );
 const chinaModelCdnBaseUrl = 'https://cdn.echo-loop.cn/';
 

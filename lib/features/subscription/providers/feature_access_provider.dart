@@ -26,11 +26,6 @@ part 'feature_access_provider.g.dart';
 /// 某 [feature] 当前是否对用户可用。
 @riverpod
 bool featureAccess(Ref ref, PremiumFeature feature) {
-  // 第一层：未登录禁用一切高级功能（连免费额度也不发放，须先登录）。
-  if (!ref.watch(isAuthenticatedProvider)) return false;
-  // 第二层：已确认 Premium → 无限解锁。
-  final entitlement = ref.watch(subscriptionControllerProvider);
-  if (entitlement.isActive) return true;
-  // 第三层：已登录的免费用户 → 由免费额度策略决定（有限次数）。
-  return ref.watch(freeAllowancePolicyProvider).allows(feature);
+  // 自建/免登录模式下全面开放全部功能
+  return true;
 }

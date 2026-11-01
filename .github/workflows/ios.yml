@@ -1,39 +1,76 @@
-# iOS 未签名 IPA 构建工作流
-#
-# 手动触发：Actions → Build iOS → Run workflow
-# 产出：未签名 IPA（可用 AltStore / SideStore 侧载，7 天有效期）
-#
-# dart-define 留空时 App 自动以离线模式运行（无需 Supabase / RevenueCat）。
-name: Build iOS
-on: workflow_dispatch
+name: Build iOS (German Edition)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+      - 'pubspec.yaml'
+
 env:
   FLUTTER_VERSION: '3.41.5'
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      - run: flutter pub get
-      - name: CocoaPods install
-        run: cd ios && pod install
-      - name: Build iOS (no codesign)
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: CocoaPods Install
+        run: |
+          cd ios
+          pod install
+
+      - name: Build Unsigned iOS App
         run: |
           flutter build ios --release --no-codesign --flavor=prod \
-            --dart-define=API_BASE_URL= \
+            --dart-define=API_BASE_URL=https://echoloop.1122275.xyz \
+            --dart-define=API_CHINA_BASE_URL=https://echoloop.1122275.xyz \
             --dart-define=SUPABASE_URL= \
             --dart-define=SUPABASE_PUBLISHABLE_KEY= \
             --dart-define=REVENUECAT_API_KEY_APPLE=
-      - name: Package IPA
+
+      - name: Package Unsigned IPA
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r EchoLoop.ipa Payload/
-      - uses: actions/upload-artifact@v4
+          zip -r -9 EchoLoop-de-unsigned.ipa Payload/
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: EchoLoop.ipa
-          path: EchoLoop.ipa
-          retention-days: 7
+          name: EchoLoop-de-unsigned.ipa
+          path: EchoLoop-de-unsigned.ipa
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.45-de
+          name: Echo Loop 德语版 (v1.0.45-de)
+          body: |
+            ### Echo Loop 德语特化版
+            - 默认识别语言设为 Deutsch (德语)，支持转录语言选择
+            - 扩展德语特殊字符（ä/ö/ü/ß）跟读比对与词形宽容度匹配
+            - 全面解开会员与登录限制，支持免登录自建转录/AI 网关
+            - 预置自建网关：https://echoloop.1122275.xyz
+          files: EchoLoop-de-unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
