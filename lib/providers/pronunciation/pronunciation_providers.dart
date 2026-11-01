@@ -168,12 +168,8 @@ class PronunciationLibraryNotifier extends Notifier<PronunciationLibraryState> {
 
 final pronunciationClipsProvider =
     Provider.family<List<PronunciationClip>, String>((ref, word) {
-      // 订阅状态变化以便安装完成后刷新；重新下载期间 repository 仍保持旧版连接，
-      // 不因 UI 状态切到 downloading 而中断已有离线发音。
-      ref.watch(pronunciationLibraryProvider);
-      final repository = ref.read(pronunciationRepositoryProvider);
-      if (!repository.isAvailable) return const [];
-      return repository.lookupSingleWord(normalizeWord(word));
+      // 德语定制版禁用英语离线音频库，避免 Bad/fast/kind 等同形词误播美音
+      return const [];
     });
 
 class TextPlaybackState {

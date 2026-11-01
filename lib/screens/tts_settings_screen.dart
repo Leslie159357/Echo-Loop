@@ -200,13 +200,16 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                       onChanged: (val) {
                         if (val != null) {
                           ref.read(ttsSettingsProvider.notifier).setFishTtsVoice(val);
+                          ref.read(ttsControllerProvider.notifier).previewFishVoice(val);
                         }
                       },
                       secondary: IconButton(
                         icon: const Icon(Icons.volume_up_rounded),
                         tooltip: '试听发音',
                         onPressed: () {
-                          ref.read(textPlaybackProvider.notifier).speak('Guten Tag! Ich lerne Deutsch.');
+                          final voiceId = kGermanVoices[i].id;
+                          ref.read(ttsSettingsProvider.notifier).setFishTtsVoice(voiceId);
+                          ref.read(ttsControllerProvider.notifier).previewFishVoice(voiceId);
                         },
                       ),
                     ),

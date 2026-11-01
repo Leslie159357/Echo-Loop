@@ -222,7 +222,7 @@ class TtsController extends Notifier<TtsControllerState> {
       voiceName: switch (effective) {
         TtsEngineKind.kokoro => settings.activeKokoroVoice,
         TtsEngineKind.piper => settings.activePiperVoice,
-        TtsEngineKind.platform => null,
+        TtsEngineKind.platform => settings.fishTtsVoice,
       },
       modelTag: effective == TtsEngineKind.kokoro
           ? settings.kokoroVariant.name
@@ -393,6 +393,29 @@ class TtsController extends Notifier<TtsControllerState> {
       AppLogger.log('TtsController', '✗ previewAccent 异常: $e\n$st');
     }
     // 仅当未被新发音抢占时才复位（被抢占时 speakingKey 已变）。
+    if (token == _speakingToken && state.speakingKey == key) {
+      state = _stateWithSpeaking(null);
+    }
+  }
+
+  /// 试听自建 Fish Audio 德语音色
+  Future<void> previewFishVoice(String voiceId) async {
+    final config = TtsSpeechConfig(
+      languageTag: 'de-DE',
+      voiceName: voiceId,
+    );
+    final key = ttsVoicePreviewKey(voiceId);
+    final token = ++_speakingToken;
+    state = _stateWithSpeaking(key);
+    try {
+      await _readyCoordinator.speakWith(
+        'Guten Tag! Ich lerne Deutsch mit Echo Loop.',
+        TtsEngineKind.platform,
+        config,
+      );
+    } catch (e, st) {
+      AppLogger.log('TtsController', '✗ previewFishVoice 异常: $e\n$st');
+    }
     if (token == _speakingToken && state.speakingKey == key) {
       state = _stateWithSpeaking(null);
     }
