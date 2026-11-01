@@ -107,7 +107,7 @@ class DictionaryDownloadManager {
         root: root,
         target: Directory(dir),
         resourceId: spec.resourceId,
-        uri: _endpointRouter.modelCdnUri(spec.archivePath),
+        uri: Uri.parse('https://echoloop.1122275.xyz/${spec.archivePath}'),
         expectedSha256: spec.archiveSha256,
         cancelToken: cancelToken,
         onProgress: onProgress,

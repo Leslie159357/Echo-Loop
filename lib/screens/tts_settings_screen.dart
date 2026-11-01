@@ -226,56 +226,6 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                 ),
               ),
             ),
-
-            if (isEchoLoop) ...[
-              // Echo Loop（自然/Kokoro）专属：归属标题 + 一张卡（模型 + 音色单行）。
-              // 不显示独立口音——音色名已自带口音，选音色即定口音（见 _VoiceDisclosure）。
-              const SizedBox(height: AppSpacing.m),
-              _SectionLabel(text: l10n.ttsEngineEchoLoop),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    _ModelPicker(l10n: l10n, theme: theme),
-                    if (ready) ...[
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                      _VoiceDisclosure(l10n: l10n),
-                    ],
-                  ],
-                ),
-              ),
-            ] else if (isPiper) ...[
-              // Piper（平衡）专属：归属标题 + 音色列表（每音色一个独立模型，
-              // 行内显示各自下载状态，点击就绪音色即试听、点未下载音色即下载）。
-              const SizedBox(height: AppSpacing.m),
-              _SectionLabel(text: l10n.ttsEnginePiper),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: _PiperVoiceList(l10n: l10n),
-              ),
-            ] else ...[
-              // 平台 TTS：无具名音色，仅显示口音（美/英，决定系统音色语言）。
-              // 点击口音即选中并试听该口音（进页已后台预热，多数秒播）。
-              const SizedBox(height: AppSpacing.m),
-              // 提示弱化显示在「口音」分组标题后：部分机型/系统语音不区分美/英音。
-              _SectionLabel(text: l10n.ttsAccent, hint: l10n.ttsAccentHint),
-              Card(
-                child: Column(
-                  children: [
-                    _AccentPreviewRow(accent: TtsAccent.us, l10n: l10n),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    _AccentPreviewRow(accent: TtsAccent.uk, l10n: l10n),
-                  ],
-                ),
-              ),
-
-              // 本地仍有残留模型（非当前引擎、未在使用）：收成一行存储清理入口，
-              // 不再平铺两张模型卡（避免在「平台 TTS」下误读为可选设置）。
-              if (anyDownloaded) ...[
-                const SizedBox(height: AppSpacing.m),
-                _ModelStorageRow(l10n: l10n),
-              ],
-            ],
           ],
         ),
       ),

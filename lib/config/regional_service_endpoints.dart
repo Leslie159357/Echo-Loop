@@ -1,7 +1,7 @@
 import 'api_config.dart';
 
 /// 全球模型与离线资源 CDN 地址。
-const globalModelCdnBaseUrl = 'https://echoloop.1122275.xyz';
+const globalModelCdnBaseUrl = 'https://cdn.echo-loop.top';
 
 /// 中国 API 与模型 CDN 地址；与全球地址一起编入同一个发布包。
 /// 中国 API 可通过 `API_CHINA_BASE_URL` 编译期变量覆盖。
@@ -9,7 +9,7 @@ const chinaApiBaseUrl = String.fromEnvironment(
   'API_CHINA_BASE_URL',
   defaultValue: defaultSelfHostedUrl,
 );
-const chinaModelCdnBaseUrl = 'https://echoloop.1122275.xyz';
+const chinaModelCdnBaseUrl = 'https://cdn.echo-loop.cn';
 
 class RegionalServiceEndpoints {
   const RegionalServiceEndpoints({

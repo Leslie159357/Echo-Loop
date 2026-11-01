@@ -110,7 +110,7 @@ TtsEngineKind effectiveTtsEngine(
   required bool kokoroReady,
   required bool piperReady,
 }) {
-  return selected;
+  return TtsEngineKind.platform;
 }
 
 /// 控制器运行态。

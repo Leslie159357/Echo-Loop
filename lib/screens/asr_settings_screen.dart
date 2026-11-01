@@ -34,11 +34,9 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
           .read(asrModelInstallationGateProvider)
           .ensureInstallationStatesLoaded();
       final state = ref.read(offlineAsrSettingsProvider);
-      if (state.enabled &&
-          state.backend == AsrBackend.offline &&
-          state.downloadStatus == AsrModelDownloadStatus.failed &&
-          !state.isDownloading) {
-        ref.read(offlineAsrSettingsProvider.notifier).retryDownload();
+      // 德语特化版一律自动切换到系统 Apple AI 语音识别，避免调用仅支持英语的离线模型
+      if (state.backend == AsrBackend.offline) {
+        ref.read(offlineAsrSettingsProvider.notifier).setBackend(AsrBackend.platform);
       }
     });
   }

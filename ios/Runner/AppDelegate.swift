@@ -196,7 +196,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
       return
     }
 
-    let localeIdentifier = (arguments?["locale"] as? String) ?? "en-US"
+    let localeIdentifier = (arguments?["locale"] as? String) ?? "de-DE"
     if recognitionEnabled {
       cachedRecognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier))
     }
@@ -251,7 +251,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
       return
     }
 
-    let localeIdentifier = (arguments?["locale"] as? String) ?? "en-US"
+    let localeIdentifier = (arguments?["locale"] as? String) ?? "de-DE"
 
     // 引擎已常驻：轻量启动，只创建句子级资源。
     if isEngineRunning, let engine = audioEngine {

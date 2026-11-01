@@ -137,7 +137,7 @@ class TtsSettings {
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
   factory TtsSettings.fromPrefsSync(SharedPreferences prefs) {
     return TtsSettings(
-      engine: _engineFromName(prefs.getString(TtsSettingsKeys.engine)),
+      engine: TtsEngineKind.platform,
       accent: _accentFromName(prefs.getString(TtsSettingsKeys.accent)),
       kokoroVoiceUs: _voiceOrDefault(
         prefs.getString(TtsSettingsKeys.kokoroVoiceUs),
@@ -184,13 +184,7 @@ class TtsSettings {
   }
 
   static TtsEngineKind _engineFromName(String? name) {
-    if (name == TtsSettingsKeys.legacyEchoLoopEngineValue) {
-      return TtsEngineKind.kokoro;
-    }
-    return TtsEngineKind.values.firstWhere(
-      (e) => e.name == name,
-      orElse: () => TtsEngineKind.kokoro,
-    );
+    return TtsEngineKind.platform;
   }
 
   static TtsAccent _accentFromName(String? name) {

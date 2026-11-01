@@ -79,12 +79,12 @@ abstract class SpeechPracticeBackend {
   Future<void> setRecognitionEnabled(bool enabled);
 
   /// 预热引擎：页面进入时调用，提前初始化 AVAudioEngine + tap。
-  Future<void> warmup({String locale = 'en-US'});
+  Future<void> warmup({String locale = 'de-DE'});
 
   /// 开始 live ASR 录音。
   Future<String> startSession({
     required String promptId,
-    String locale = 'en-US',
+    String locale = 'de-DE',
   });
 
   /// 停止 live ASR 录音。
@@ -184,7 +184,7 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
   }
 
   @override
-  Future<void> warmup({String locale = 'en-US'}) async {
+  Future<void> warmup({String locale = 'de-DE'}) async {
     _ensureSupported();
     AppLogger.log('SpeechPlatform', '┌ warmup locale=$locale');
     await _invokeMap('warmup', {'locale': locale});
@@ -194,7 +194,7 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
   @override
   Future<String> startSession({
     required String promptId,
-    String locale = 'en-US',
+    String locale = 'de-DE',
   }) async {
     _ensureSupported();
     AppLogger.log(

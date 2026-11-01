@@ -751,11 +751,12 @@ OfflineAsrSettingsState offlineAsrSettingsStateFromPrefs({
   required AsrBackend defaultBackend,
 }) {
   final backendName = prefs.getString(_backendKey);
-  final backend = backendName == AsrBackend.offline.name
-      ? AsrBackend.offline
-      : backendName == AsrBackend.platform.name
+  // iOS/macOS 德语特化版一律默认并优先使用 Apple AI 系统引擎（0MB 下载，德语高精度）
+  final backend = (!kIsWeb && (Platform.isIOS || Platform.isMacOS))
       ? AsrBackend.platform
-      : defaultBackend;
+      : (backendName == AsrBackend.offline.name
+          ? AsrBackend.offline
+          : defaultBackend);
   final selectedModelId = prefs.getString(_selectedModelKey);
   final selectedModel = availableModels.firstWhere(
     (m) => m.id == selectedModelId,
