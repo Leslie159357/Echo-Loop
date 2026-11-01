@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/pronunciation/pronunciation_providers.dart';
 import '../providers/tts/kokoro_model_provider.dart';
 import '../providers/tts/piper_model_provider.dart';
 import '../providers/tts/tts_controller_provider.dart';
@@ -179,57 +180,49 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
               ),
             ),
 
-            // 合成引擎
-            _SectionLabel(text: l10n.ttsEngine),
+            // 德语专属 Fish Audio 神经发音人选择
+            _SectionLabel(text: '德语发音人 (Fish Audio 神经语音)'),
             Card(
-              child: RadioGroup<TtsEngineKind>(
-                groupValue: settings.engine,
-                onChanged: _onEngineChanged,
-                child: Column(
-                  children: [
-                    if (showPlatformEngine) ...[
-                      RadioListTile<TtsEngineKind>(
-                        title: Text(platformSpeechEngineName(l10n)),
-                        subtitle: Text(
-                          l10n.ttsEnginePlatformDescription,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.6),
-                          ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < kGermanVoices.length; i++) ...[
+                    RadioListTile<String>(
+                      title: Text(kGermanVoices[i].name),
+                      subtitle: Text(
+                        kGermanVoices[i].description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
-                        value: TtsEngineKind.platform,
-                        selected: settings.engine == TtsEngineKind.platform,
                       ),
+                      value: kGermanVoices[i].id,
+                      groupValue: settings.fishTtsVoice,
+                      selected: settings.fishTtsVoice == kGermanVoices[i].id,
+                      onChanged: (val) {
+                        if (val != null) {
+                          ref.read(ttsSettingsProvider.notifier).setFishTtsVoice(val);
+                        }
+                      },
+                      secondary: IconButton(
+                        icon: const Icon(Icons.volume_up_rounded),
+                        tooltip: '试听发音',
+                        onPressed: () {
+                          ref.read(textPlaybackProvider.notifier).speak('Guten Tag! Ich lerne Deutsch.');
+                        },
+                      ),
+                    ),
+                    if (i < kGermanVoices.length - 1)
                       const Divider(height: 1, indent: 16, endIndent: 16),
-                    ],
-                    RadioListTile<TtsEngineKind>(
-                      title: Text(l10n.ttsEnginePiper),
-                      subtitle: Text(
-                        l10n.ttsEnginePiperDescription,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                      ),
-                      value: TtsEngineKind.piper,
-                      selected: settings.engine == TtsEngineKind.piper,
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    RadioListTile<TtsEngineKind>(
-                      title: Text(l10n.ttsEngineEchoLoop),
-                      subtitle: Text(
-                        l10n.ttsEngineEchoLoopDescription,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                      ),
-                      value: TtsEngineKind.kokoro,
-                      selected: settings.engine == TtsEngineKind.kokoro,
-                    ),
                   ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
+              child: Text(
+                '发音已直连自建 Fish Audio 德语真声网关，免下载本地模型，点击喇叭即可即时发音。',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
             ),

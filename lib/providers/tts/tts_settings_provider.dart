@@ -60,6 +60,22 @@ Future<void> migrateAndroidPlatformTtsPreference(
   await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.kokoro.name);
 }
 
+class GermanTtsVoice {
+  final String id;
+  final String name;
+  final String description;
+  const GermanTtsVoice({required this.id, required this.name, required this.description});
+}
+
+const kGermanVoices = [
+  GermanTtsVoice(id: 'de1', name: '男声 · 清晰朗读 (Vorlesen)', description: '推荐：字正腔圆，最接近教材标准录音'),
+  GermanTtsVoice(id: 'de2', name: '女声 · 清亮播读 (Christa)', description: '年轻清亮女声，自然流畅'),
+  GermanTtsVoice(id: 'de3', name: '男声 · 专业平稳 (German)', description: '成熟稳重男中音，纪录片风格'),
+  GermanTtsVoice(id: 'de4', name: '女声 · 播报清晰 (Ansagestimme)', description: '德国电台新闻播报腔'),
+  GermanTtsVoice(id: 'de5', name: '中性 · Catrinja', description: '现代德语口语声线'),
+  GermanTtsVoice(id: 'de6', name: '女声 · C13', description: '自然德语女声'),
+];
+
 /// TTS 设置不可变值对象。
 class TtsSettings {
   /// 合成引擎（默认 Echo Loop AI Advanced）。
@@ -83,6 +99,9 @@ class TtsSettings {
   /// Piper（平衡档）英音音色 id（默认 [piperDefaultVoiceUk]）。
   final String piperVoiceUk;
 
+  /// Fish Audio 自建德语音色
+  final String fishTtsVoice;
+
   const TtsSettings({
     this.engine = TtsEngineKind.platform,
     this.accent = TtsAccent.us,
@@ -91,6 +110,7 @@ class TtsSettings {
     this.kokoroVariant = KokoroModelVariant.fp32,
     this.piperVoiceUs = piperDefaultVoiceUs,
     this.piperVoiceUk = piperDefaultVoiceUk,
+    this.fishTtsVoice = 'de1',
   });
 
   /// 当前德语特化版对应的语言标签。
@@ -111,12 +131,7 @@ class TtsSettings {
   /// 平台引擎不带 voiceName/modelTag（用语言标签选系统音色）。语速本期固定 0.45。
   TtsSpeechConfig toSpeechConfig() => TtsSpeechConfig(
     languageTag: languageTag,
-    voiceName: switch (engine) {
-      TtsEngineKind.kokoro => activeKokoroVoice,
-      TtsEngineKind.piper => activePiperVoice,
-      TtsEngineKind.platform => null,
-    },
-    modelTag: engine == TtsEngineKind.kokoro ? kokoroVariant.name : null,
+    voiceName: fishTtsVoice,
   );
 
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
@@ -143,6 +158,7 @@ class TtsSettings {
         prefs.getString(TtsSettingsKeys.piperVoiceUk),
         TtsAccent.uk,
       ),
+      fishTtsVoice: prefs.getString('fish_tts_voice') ?? 'de1',
     );
   }
 
@@ -192,6 +208,7 @@ class TtsSettings {
     KokoroModelVariant? kokoroVariant,
     String? piperVoiceUs,
     String? piperVoiceUk,
+    String? fishTtsVoice,
   }) {
     return TtsSettings(
       engine: engine ?? this.engine,
@@ -201,6 +218,7 @@ class TtsSettings {
       kokoroVariant: kokoroVariant ?? this.kokoroVariant,
       piperVoiceUs: piperVoiceUs ?? this.piperVoiceUs,
       piperVoiceUk: piperVoiceUk ?? this.piperVoiceUk,
+      fishTtsVoice: fishTtsVoice ?? this.fishTtsVoice,
     );
   }
 
@@ -236,6 +254,13 @@ class TtsSettings {
 class TtsSettingsNotifier extends Notifier<TtsSettings> {
   @override
   TtsSettings build() => ref.read(initialTtsSettingsProvider);
+
+  /// 切换 Fish Audio 德语音色，写 SP + 更新 state。
+  Future<void> setFishTtsVoice(String voice) async {
+    if (state.fishTtsVoice == voice) return;
+    state = state.copyWith(fishTtsVoice: voice);
+    await _persist('fish_tts_voice', voice);
+  }
 
   /// 切换合成引擎，写 SP + 更新 state。
   Future<void> setEngine(TtsEngineKind engine) async {

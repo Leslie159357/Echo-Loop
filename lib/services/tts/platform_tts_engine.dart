@@ -169,9 +169,10 @@ class PlatformTtsEngine implements TtsEngine {
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+      final targetVoice = config?.voiceName ?? 'de1';
       final resp = await dio.post<List<int>>(
         'https://tts.1122275.xyz/v1/audio/speech',
-        data: {'input': text, 'voice': 'de1'},
+        data: {'input': text, 'voice': targetVoice},
         options: Options(responseType: ResponseType.bytes),
       );
       if (resp.statusCode == 200 && resp.data != null && resp.data!.isNotEmpty) {
