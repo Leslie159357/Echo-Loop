@@ -24,8 +24,8 @@ class DictionarySettings {
   /// 是否在网页词典中启用通用广告过滤
   final bool adFilteringEnabled;
 
-  /// 默认源 id 缺省值
-  static const defaultId = 'local';
+  /// 默认源 id 缺省值（德语优先德语助手，其次本地离线）
+  static const defaultId = 'dehelper';
 
   DictionarySettings({
     this.defaultSourceId = defaultId,
