@@ -83,23 +83,9 @@ final ttsPlaybackModelStateProvider = Provider<TtsPlaybackModelState>((ref) {
 });
 
 /// 发音前检查当前本地 TTS 模型。
-///
-/// 返回 true 才允许本次发音；下载中、未下载或失败均只展示全局状态弹窗，返回 false。
+/// 自建云端 Fish Audio 模式下无需下载任何本地模型，直接放行。
 Future<bool> ensureTtsModelReadyForPlayback(Ref ref) async {
-  await ref
-      .read(ttsModelInstallationGateProvider)
-      .ensureInstallationStatesLoaded();
-  final state = ref.read(ttsPlaybackModelStateProvider);
-  if (state.isReady) return true;
-
-  final context = rootNavigatorKey.currentContext;
-  if (context == null || !context.mounted) return false;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (_) => const TtsModelDownloadDialog(),
-  );
-  return false;
+  return true;
 }
 
 /// 只检查指定 TTS 配置是否可用，不弹窗、不下载，供后台 warmup 使用。
