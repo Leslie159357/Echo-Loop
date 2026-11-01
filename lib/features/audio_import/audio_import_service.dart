@@ -347,7 +347,7 @@ class AudioImportService {
         );
       } catch (error) {
         // 用户主动取消立即释放已落盘的部分文件；自然失败则保留，供下次继续。
-        if (CancelToken.isCancel(error)) {
+        if (error is DioException && CancelToken.isCancel(error)) {
           await _deleteIfExists(downloadedFile);
           throw const AudioImportException(
             AudioImportFailureCode.canceled,
