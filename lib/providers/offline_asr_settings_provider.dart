@@ -35,10 +35,13 @@ const _selectedModelKey = 'offline_asr_selected_model_id';
 
 /// 语音识别后端类型。
 enum AsrBackend {
-  /// 平台原生 ASR（iOS/macOS 的 SFSpeechRecognizer）。
+  /// 平台原生 ASR（iOS/macOS 的 SFSpeechRecognizer，免下载）。
   platform,
 
-  /// 离线自建模型 ASR（sherpa-onnx）。
+  /// 自建独服云端 Whisper 大模型打分（Large-v3-Turbo，德语天花板）。
+  server,
+
+  /// 离线自建模型 ASR（sherpa-onnx 德语离线包）。
   offline,
 }
 
@@ -751,12 +754,12 @@ OfflineAsrSettingsState offlineAsrSettingsStateFromPrefs({
   required AsrBackend defaultBackend,
 }) {
   final backendName = prefs.getString(_backendKey);
-  // iOS/macOS 德语特化版一律默认并优先使用 Apple AI 系统引擎（0MB 下载，德语高精度）
-  final backend = (!kIsWeb && (Platform.isIOS || Platform.isMacOS))
-      ? AsrBackend.platform
-      : (backendName == AsrBackend.offline.name
-          ? AsrBackend.offline
-          : defaultBackend);
+  final backend = switch (backendName) {
+    'server' => AsrBackend.server,
+    'offline' => AsrBackend.offline,
+    'platform' => AsrBackend.platform,
+    _ => defaultBackend,
+  };
   final selectedModelId = prefs.getString(_selectedModelKey);
   final selectedModel = availableModels.firstWhere(
     (m) => m.id == selectedModelId,

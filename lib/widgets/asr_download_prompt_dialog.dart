@@ -20,22 +20,51 @@ import '../utils/download_failure_message.dart';
 import '../utils/file_size.dart';
 
 /// 判断某个学习子阶段是否会进入依赖本地 ASR 的录音流程。
-/// 德语特化版直接走 Apple AI 系统原生语音识别，免下载离线模型，直接返回 false。
 bool requiresAsrBeforeEnteringSubStage(
   SubStageType subStage, {
   bool listenAndRepeatRatingEnabled = true,
   bool retellRatingEnabled = true,
 }) {
-  return false;
+  return switch (subStage) {
+    SubStageType.listenAndRepeat => listenAndRepeatRatingEnabled,
+    SubStageType.reviewDifficultPractice => listenAndRepeatRatingEnabled,
+    SubStageType.retell => retellRatingEnabled,
+    SubStageType.reviewRetellParagraph => retellRatingEnabled,
+    SubStageType.reviewRetellSummary => retellRatingEnabled,
+    _ => false,
+  };
 }
 
 /// 在进入语音练习前检查本地 ASR 是否已就绪。
-/// 德语特化版无需本地 Whisper 离线模型，直接放行进入跟读/难句练习。
+/// 非离线模型（Apple AI 或 自建独服）直接放行；仅离线模式且未下载时弹窗提示下载。
 Future<bool> ensureAsrReadyBeforeSpeechPractice(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  return true;
+  final state = ref.read(offlineAsrSettingsProvider);
+  if (state.backend != AsrBackend.offline) return true;
+
+  await ref
+      .read(asrModelInstallationGateProvider)
+      .ensureInstallationStatesLoaded();
+  if (!context.mounted) return false;
+
+  if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
+    unawaited(_ensureEngineLoaded(ref));
+    return true;
+  }
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => _AsrModelDownloadDialog(
+      modelId: state.selectedModel.id,
+      intro: AppLocalizations.of(context)!.speechRecognitionRequiredMessage,
+      startDownload: () =>
+          ref.read(offlineAsrSettingsProvider.notifier).enable(),
+    ),
+  );
+  return false;
 }
 
 /// 在发起本地转录前检查指定 Whisper 档位模型。

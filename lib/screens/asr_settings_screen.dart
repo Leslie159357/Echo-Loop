@@ -33,11 +33,6 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
       ref
           .read(asrModelInstallationGateProvider)
           .ensureInstallationStatesLoaded();
-      final state = ref.read(offlineAsrSettingsProvider);
-      // 德语特化版一律自动切换到系统 Apple AI 语音识别，避免调用仅支持英语的离线模型
-      if (state.backend == AsrBackend.offline) {
-        ref.read(offlineAsrSettingsProvider.notifier).setBackend(AsrBackend.platform);
-      }
     });
   }
 
@@ -115,9 +110,9 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
       child: Column(
         children: [
           RadioListTile<AsrBackend>(
-            title: Text(l10n.asrBackendPlatform),
+            title: const Text('Apple AI (免下载系统引擎)'),
             subtitle: Text(
-              l10n.asrBackendPlatformDescription,
+              '使用 iOS 原生德语识别，免下载、零延迟、省电',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant.withValues(
                   alpha: 0.6,
@@ -128,9 +123,22 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
           ),
           const Divider(height: 1, indent: 16, endIndent: 16),
           RadioListTile<AsrBackend>(
-            title: Text(l10n.asrBackendOffline),
+            title: const Text('自建独服 (Cloud Large-v3-Turbo)'),
             subtitle: Text(
-              l10n.asrBackendOfflineDescription,
+              '上传独服 Whisper 大模型转录打分，德语识别最准天花板',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.6,
+                ),
+              ),
+            ),
+            value: AsrBackend.server,
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          RadioListTile<AsrBackend>(
+            title: const Text('Echo Loop AI (离线本地模型)'),
+            subtitle: Text(
+              '下载德语 Whisper 离线模型，无网环境离线打分',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant.withValues(
                   alpha: 0.6,
