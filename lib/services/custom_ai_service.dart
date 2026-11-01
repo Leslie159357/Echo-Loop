@@ -325,35 +325,22 @@ class CustomAiService {
     final systemPrompt = type == 'word'
         ? '你是一个英语词典助手。请用$lang解释以下英语单词。\n\n'
             '按以下 JSON 格式输出（只输出 JSON，不要额外文字）：\n'
-            '{
-'
-            '  "headword": "单词原形",
-'
-            '  "pronunciation": {"uk": "英式音标", "us": "美式音标"},
-'
-            '  "meanings": [{"partOfSpeech": "词性", "definition": "英文释义", "examples": [{"sentence": "例句", "translation": "翻译"}], "synonyms": ["近义词"], "antonyms": ["反义词"]}],
-'
-            '  "etymology": "词源简注",
-'
-            '  "learnerTips": ["学习提示"]
-'
+            '{\n'
+            '  "headword": "单词原形",\n'
+            '  "pronunciation": {"uk": "英式音标", "us": "美式音标"},\n'
+            '  "meanings": [{"partOfSpeech": "词性", "definition": "英文释义", "examples": [{"sentence": "例句", "translation": "翻译"}], "synonyms": ["近义词"], "antonyms": ["反义词"]}],\n'
+            '  "etymology": "词源简注",\n'
+            '  "learnerTips": ["学习提示"]\n'
             '}'
         : '你是一个英语词典助手。请用$lang解释以下英语短语。\n\n'
             '按以下 JSON 格式输出（只输出 JSON，不要额外文字）：\n'
             '{\n'
-            '{
-'
-            '  "originalExpression": "短语本体",
-'
-            '  "naturalness": "",
-'
-            '  "category": "搭配/习惯/短语动词",
-'
-            '  "keyPoints": [{"point": "核心要点", "example": {"sentence": "例句", "translation": "翻译"}}],
-'
-            '  "meanings": [{"meaning": "含义", "usage": "用法", "examples": [{"sentence": "例句", "translation": "翻译"}]}]
-'
-            '}'
+            '  "originalExpression": "短语本体",\n'
+            '  "naturalness": "",\n'
+            '  "category": "搭配/习惯/短语动词",\n'
+            '  "keyPoints": [{"point": "核心要点", "example": {"sentence": "例句", "translation": "翻译"}}],\n'
+            '  "meanings": [{"meaning": "含义", "usage": "用法", "examples": [{"sentence": "例句", "translation": "翻译"}]}]\n'
+            '}';
     String fullContent = '';
     try {
       await for (final chunk in _streamChat(systemPrompt, query)) {
