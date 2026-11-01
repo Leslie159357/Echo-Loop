@@ -84,7 +84,7 @@ class TtsSettings {
   final String piperVoiceUk;
 
   const TtsSettings({
-    this.engine = TtsEngineKind.kokoro,
+    this.engine = TtsEngineKind.platform,
     this.accent = TtsAccent.us,
     this.kokoroVoiceUs = kokoroDefaultVoiceUs,
     this.kokoroVoiceUk = kokoroDefaultVoiceUk,
@@ -93,8 +93,8 @@ class TtsSettings {
     this.piperVoiceUk = piperDefaultVoiceUk,
   });
 
-  /// 当前口音对应的语言标签。
-  String get languageTag => accent == TtsAccent.uk ? 'en-GB' : 'en-US';
+  /// 当前德语特化版对应的语言标签。
+  String get languageTag => 'de-DE';
 
   /// 当前口音下生效的 Kokoro 音色 id。
   String get activeKokoroVoice =>
