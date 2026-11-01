@@ -332,6 +332,29 @@ class AudioImportService {
     );
     try {
       try {
+        await _dio.download(
+          resolved.uri.toString(),
+          downloadedFile.path,
+          cancelToken: cancelToken,
+          onReceiveProgress: (received, total) => onProgress?.call(
+            received,
+            total > 0 ? total : null,
+          ),
+          options: Options(
+            headers: {'User-Agent': _defaultPodcastUserAgent},
+            followRedirects: true,
+          ),
+        );
+      } catch (error) {
+        // 用户主动取消立即释放已落盘的部分文件；自然失败则保留，供下次继续。
+        if (CancelToken.isCancel(error)) {
+          await _deleteIfExists(downloadedFile);
+          throw const AudioImportException(
+            AudioImportFailureCode.canceled,
+            'Audio import canceled',
+          );
+        }
+        AppLogger.log(_logTag, 'Dio direct download failed: $error, trying fallback...');
         await _backgroundDownloader.download(
           uri: resolved.uri,
           savePath: downloadedFile.path,
@@ -340,12 +363,6 @@ class AudioImportService {
           cancelToken: cancelToken,
           onProgress: (received, total) => onProgress?.call(received, total),
         );
-      } catch (error) {
-        // 用户主动取消立即释放已落盘的部分文件；自然失败则保留，供下次继续。
-        if (error is BackgroundFileDownloadException && error.isCanceled) {
-          await _deleteIfExists(downloadedFile);
-        }
-        rethrow;
       }
       return p.join('tmp', 'audio_import', p.basename(downloadedFile.path));
     } on BackgroundFileDownloadException catch (e) {
