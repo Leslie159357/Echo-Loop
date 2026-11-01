@@ -84,10 +84,34 @@ class WebDictionarySource implements DictionarySource {
   }
 }
 
+// URL 模板（顶层函数，便于 const 配置引用）。`w` 为已 URL 编码的查询词。
+String _dehelperUrl(String w) => 'https://dict.eudic.net/mdicts/de/$w';
+String _dudenUrl(String w) => 'https://www.duden.de/suchen/dudenonline/$w';
+String _dwdsUrl(String w) => 'https://www.dwds.de/wb/$w';
+
 /// 全部网页词典配置（顺序即切换器排列顺序）。
-///
-/// Macmillan 未纳入：其官网已于 2023-06-30 永久关停，仅存手机 App。
 const List<WebDictConfig> kWebDictConfigs = [
+  WebDictConfig(
+    id: 'dehelper',
+    displayName: '德语助手',
+    icon: Icons.menu_book_rounded,
+    color: Color(0xFF2D6FA3),
+    buildUrl: _dehelperUrl,
+  ),
+  WebDictConfig(
+    id: 'duden',
+    displayName: 'Duden',
+    icon: Icons.auto_stories_rounded,
+    color: Color(0xFFE2001A),
+    buildUrl: _dudenUrl,
+  ),
+  WebDictConfig(
+    id: 'dwds',
+    displayName: 'DWDS',
+    icon: Icons.library_books_rounded,
+    color: Color(0xFF1B5E20),
+    buildUrl: _dwdsUrl,
+  ),
   WebDictConfig(
     id: 'cambridge',
     displayName: 'Cambridge',
