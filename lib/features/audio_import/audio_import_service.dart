@@ -68,7 +68,17 @@ class AudioImportService {
   final AudioRegistrationService _registrationService;
   final AudioFinalizationService _finalizationService;
 
-  static const supportedExtensions = {'mp3', 'wav', 'm4a', 'aac', 'flac'};
+  static const supportedExtensions = {
+    'mp3',
+    'wav',
+    'm4a',
+    'aac',
+    'flac',
+    'mp4',
+    'mov',
+    'm4v',
+    'mkv',
+  };
 
   Future<AudioItem> importFromUrl({
     required String url,
@@ -266,7 +276,10 @@ class AudioImportService {
     final extFromUrl = _extensionFromUri(uri);
     final extFromMime = _extensionFromMimeType(mimeType);
     final extension = extFromUrl ?? extFromMime;
-    final isAudioMime = mimeType == null || mimeType.startsWith('audio/');
+    final isAudioMime = mimeType == null ||
+        mimeType.startsWith('audio/') ||
+        mimeType.startsWith('video/') ||
+        mimeType == 'application/octet-stream';
 
     if (extension == null) {
       if (!isAudioMime) {
