@@ -12,9 +12,6 @@ class LogOnlyChannel implements AnalyticsChannel {
   static const _tag = 'Analytics';
 
   @override
-  String get name => 'LogOnly';
-
-  @override
   Future<void> initialize() async {
     AppLogger.log(_tag, 'LogOnlyChannel initialized (debug mode)');
   }
@@ -34,6 +31,13 @@ class LogOnlyChannel implements AnalyticsChannel {
   @override
   Future<void> setUserProperty(String name, String? value) async {
     AppLogger.log(_tag, 'setUserProperty: $name=$value');
+  }
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
+    }
   }
 
   @override

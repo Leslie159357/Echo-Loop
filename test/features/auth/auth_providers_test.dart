@@ -1,15 +1,19 @@
 /// `supabaseSessionProvider` / `isAuthenticatedProvider` 基线测试。
 ///
 /// 步骤 0 阶段：Supabase 凭据未通过 `--dart-define` 注入，
-/// `isAuthConfigured == false`，provider 走 fallback 分支永远 emit `null`。
+/// 所选 Supabase 配置不完整时，provider 走 fallback 分支永远 emit `null`。
 /// 验证 fallback 分支不崩、行为合理，避免后续步骤回归。
 library;
+
+import 'dart:async';
 
 import 'package:echo_loop/analytics/analytics_providers.dart';
 import 'package:echo_loop/analytics/analytics_service.dart';
 import 'package:echo_loop/features/auth/apple_sign_in_credentials.dart';
 import 'package:echo_loop/features/auth/google_sign_in_credentials.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
+import 'package:echo_loop/features/auth/supabase_startup_gate.dart';
+import 'package:echo_loop/providers/startup_bootstrap_provider.dart';
 import 'package:echo_loop/services/user_id_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,7 +72,11 @@ void main() {
 
   group('supabaseSessionProvider（Supabase 未配置 fallback 分支）', () {
     test('首值 emit null（匿名态）', () async {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [
+          supabaseAuthConfiguredProvider.overrideWith((ref) async => false),
+        ],
+      );
       addTearDown(container.dispose);
 
       await container.read(supabaseSessionProvider.future);
@@ -77,23 +85,82 @@ void main() {
       expect(value, isNull);
     });
 
-    test('Stream 完成且不抛错', () async {
-      final container = ProviderContainer();
+    test('Supabase 配置解析失败时回退为匿名 Session', () async {
+      final container = ProviderContainer(
+        overrides: [
+          supabaseAuthConfiguredProvider.overrideWith(
+            (ref) async => throw StateError('region resolution failed'),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
-      final future = container.read(supabaseSessionProvider.future);
-      expect(await future, isNull);
+      expect(await container.read(supabaseSessionProvider.future), isNull);
     });
   });
 
   group('isAuthenticatedProvider', () {
     test('未配置时为 false', () async {
-      final container = ProviderContainer();
+      final container = _unconfiguredSupabaseContainer();
       addTearDown(container.dispose);
 
       await container.read(supabaseSessionProvider.future);
 
       expect(container.read(isAuthenticatedProvider), isFalse);
+    });
+
+    test('地区配置尚未解析时 .future 保持 pending，解析后发出匿名值', () async {
+      final configGate = Completer<bool>();
+      final container = ProviderContainer(
+        overrides: [
+          supabaseAuthConfiguredProvider.overrideWith(
+            (ref) => configGate.future,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final sessionFuture = container.read(supabaseSessionProvider.future);
+
+      expect(container.read(supabaseSessionProvider).isLoading, isTrue);
+
+      configGate.complete(false);
+      expect(await sessionFuture, isNull);
+
+      expect(container.read(supabaseSessionProvider).hasValue, isTrue);
+      expect(container.read(supabaseSessionProvider).valueOrNull, isNull);
+    });
+
+    test('第三方启动失败时回退为匿名 Session', () async {
+      final container = ProviderContainer(
+        overrides: [
+          supabaseAuthConfiguredProvider.overrideWith((ref) async => true),
+          thirdPartyStartupProvider.overrideWith(
+            (ref) async => throw StateError('Supabase initialization failed'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(await container.read(supabaseSessionProvider.future), isNull);
+    });
+
+    test('Supabase SDK 未就绪时回退为匿名 Session', () async {
+      final container = ProviderContainer(
+        overrides: [
+          supabaseAuthConfiguredProvider.overrideWith((ref) async => true),
+          thirdPartyStartupProvider.overrideWith(
+            (ref) async => const ThirdPartyStartupReport(
+              issues: [],
+              isSupabaseReady: false,
+              isRevenueCatReady: false,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(await container.read(supabaseSessionProvider.future), isNull);
     });
   });
 
@@ -109,7 +176,7 @@ void main() {
         overrides: [
           authRepositoryProvider.overrideWithValue(repository),
           analyticsServiceProvider.overrideWithValue(analytics),
-          userIdProvider.overrideWithValue('anon-123'),
+          userIdProvider.overrideWithValue(Future<String>.value('anon-123')),
         ],
       );
     });
@@ -543,13 +610,14 @@ void main() {
       String? identityToken = 'apple-id-token',
       String? givenName = ' Ada ',
       String? familyName = ' Lovelace ',
+      String? email = ' apple@example.com ',
     }) {
       return AuthorizationCredentialAppleID(
         userIdentifier: 'apple-user-id',
         givenName: givenName,
         familyName: familyName,
         authorizationCode: 'authorization-code',
-        email: 'apple@example.com',
+        email: email,
         identityToken: identityToken,
         state: null,
       );
@@ -590,7 +658,7 @@ void main() {
       expect(appleProvider.receivedNonce, matches(RegExp(r'^[0-9a-f]{64}$')));
     });
 
-    test('首次返回姓名时写入 user metadata', () async {
+    test('首次返回姓名和邮箱时一并写入 user metadata', () async {
       final appleProvider = _FakeAppleCredentialsProvider(appleCredential());
       final repository = SupabaseAuthRepository(
         auth,
@@ -617,7 +685,60 @@ void main() {
         'full_name': 'Ada Lovelace',
         'given_name': 'Ada',
         'family_name': 'Lovelace',
+        'apple_email': 'apple@example.com',
       });
+      expect(attributes.email, isNull);
+    });
+
+    test('凭证只返回邮箱时仍写入 apple_email', () async {
+      final appleProvider = _FakeAppleCredentialsProvider(
+        appleCredential(givenName: null, familyName: null),
+      );
+      final repository = SupabaseAuthRepository(
+        auth,
+        appleCredentialsProvider: appleProvider,
+      );
+
+      when(
+        () => auth.signInWithIdToken(
+          provider: any(named: 'provider'),
+          idToken: any(named: 'idToken'),
+          nonce: any(named: 'nonce'),
+        ),
+      ).thenAnswer((_) async => AuthResponse(session: null, user: user));
+      when(
+        () => auth.updateUser(any()),
+      ).thenAnswer((_) async => UserResponse.fromJson(user.toJson()));
+
+      await repository.signInWithApple();
+
+      final attributes =
+          verify(() => auth.updateUser(captureAny())).captured.single
+              as UserAttributes;
+      expect(attributes.data, {'apple_email': 'apple@example.com'});
+    });
+
+    test('凭证无姓名无邮箱时不调用 updateUser', () async {
+      final appleProvider = _FakeAppleCredentialsProvider(
+        appleCredential(givenName: null, familyName: null, email: null),
+      );
+      final repository = SupabaseAuthRepository(
+        auth,
+        appleCredentialsProvider: appleProvider,
+      );
+
+      when(
+        () => auth.signInWithIdToken(
+          provider: any(named: 'provider'),
+          idToken: any(named: 'idToken'),
+          nonce: any(named: 'nonce'),
+        ),
+      ).thenAnswer((_) async => AuthResponse(session: null, user: user));
+
+      final response = await repository.signInWithApple();
+
+      expect(response.user?.id, 'apple-user-1');
+      verifyNever(() => auth.updateUser(any()));
     });
 
     test('缺少 identity token 时抛认证异常且不调用 Supabase', () async {
@@ -684,7 +805,7 @@ void main() {
       container = ProviderContainer(
         overrides: [
           analyticsServiceProvider.overrideWithValue(analytics),
-          userIdProvider.overrideWithValue('anon-123'),
+          userIdProvider.overrideWithValue(Future<String>.value('anon-123')),
         ],
       );
     });
@@ -806,4 +927,12 @@ void main() {
       verifyNever(() => analytics.setUserId(null));
     });
   });
+}
+
+ProviderContainer _unconfiguredSupabaseContainer() {
+  return ProviderContainer(
+    overrides: [
+      supabaseAuthConfiguredProvider.overrideWith((ref) async => false),
+    ],
+  );
 }

@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../database/app_database.dart';
 import '../database/providers.dart';
+import 'favorite_vocabulary_lifecycle_provider.dart';
 
 part 'saved_sense_group_provider.g.dart';
 
@@ -21,10 +22,11 @@ class SavedSenseGroupList extends _$SavedSenseGroupList {
   ///
   /// [phraseText] 归一化后的文本（小写 + trim + 去句末标点）。
   /// [displayText] 原始文本（保留大小写）。
+  /// [audioItemId] 必须指向收藏发生时存在的父音频。
   Future<void> saveSenseGroup({
     required String phraseText,
     required String displayText,
-    String? audioItemId,
+    required String audioItemId,
     int? sentenceIndex,
     String? sentenceText,
     int? sentenceStartMs,
@@ -32,25 +34,25 @@ class SavedSenseGroupList extends _$SavedSenseGroupList {
     int? groupStartMs,
     int? groupEndMs,
   }) async {
-    final dao = ref.read(savedSenseGroupDaoProvider);
-    await dao.saveSenseGroup(
-      phraseText: phraseText,
-      displayText: displayText,
-      audioItemId: audioItemId,
-      sentenceIndex: sentenceIndex,
-      sentenceText: sentenceText,
-      sentenceStartMs: sentenceStartMs,
-      sentenceEndMs: sentenceEndMs,
-      groupStartMs: groupStartMs,
-      groupEndMs: groupEndMs,
-    );
+    await ref
+        .read(favoriteVocabularyLifecycleProvider)
+        .saveSenseGroup(
+          phraseText: phraseText,
+          displayText: displayText,
+          audioItemId: audioItemId,
+          sentenceIndex: sentenceIndex,
+          sentenceText: sentenceText,
+          sentenceStartMs: sentenceStartMs,
+          sentenceEndMs: sentenceEndMs,
+          groupStartMs: groupStartMs,
+          groupEndMs: groupEndMs,
+        );
   }
 
   /// 取消收藏意群
-  Future<void> removeSenseGroup(String phraseText) async {
-    final dao = ref.read(savedSenseGroupDaoProvider);
-    await dao.removeSenseGroup(phraseText);
-  }
+  Future<void> removeSenseGroup(String phraseText) => ref
+      .read(favoriteVocabularyLifecycleProvider)
+      .removeSenseGroup(phraseText);
 }
 
 /// 监听已收藏意群的归一化文本集合（用于 badge 染色与正文收藏标记）

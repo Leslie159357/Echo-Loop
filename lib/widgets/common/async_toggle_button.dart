@@ -15,7 +15,7 @@ const _activeFillDark = Color(0xFF1A3A5C);
 
 /// 异步 toggle 按钮
 ///
-/// 按钮高度 36dp，圆角 8dp，图标 16dp + labelMedium 文字。
+/// 按钮高度 32dp，圆角 8dp，图标 16dp + labelMedium 文字。
 /// [onPressed] 返回 Future，按钮在 Future 完成前自动显示 loading。
 class AsyncToggleButton extends StatefulWidget {
   /// 按钮文字
@@ -120,43 +120,46 @@ class _AsyncToggleButtonState extends State<AsyncToggleButton> {
     return GestureDetector(
       onTap: _handleTap,
       child: Container(
-        height: 36,
+        height: 32,
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(8),
           border: border,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_effectiveLoading)
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foregroundColor,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_effectiveLoading)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: foregroundColor,
+                  ),
+                )
+              else
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: widget.isDisabled
+                      ? foregroundColor
+                      : (widget.iconColor ?? foregroundColor),
                 ),
-              )
-            else
-              Icon(
-                widget.icon,
-                size: 16,
-                color: widget.isDisabled
-                    ? foregroundColor
-                    : (widget.iconColor ?? foregroundColor),
-              ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                widget.label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: foregroundColor,
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  widget.label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: foregroundColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

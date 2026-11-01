@@ -9,9 +9,6 @@ library;
 /// 每个实现类封装一个第三方 SDK（Firebase Analytics、友盟等）。
 /// [AnalyticsService] 持有一个 Channel 实例，将事件转发到此接口。
 abstract class AnalyticsChannel {
-  /// 通道名称（用于日志和调试）
-  String get name;
-
   /// 初始化通道（如 SDK 初始化）
   Future<void> initialize();
 
@@ -26,6 +23,13 @@ abstract class AnalyticsChannel {
 
   /// 设置用户属性
   Future<void> setUserProperty(String name, String? value);
+
+  /// 批量更新用户属性；默认实现兼容只支持单字段的通道。
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
+    }
+  }
 
   /// 注册 super properties（事件级冻结属性）。
   ///

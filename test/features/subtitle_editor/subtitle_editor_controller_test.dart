@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:echo_loop/database/app_database.dart' show BookmarksCompanion;
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:echo_loop/features/subtitle_editor/subtitle_edit_engine.dart';
 import 'package:echo_loop/features/subtitle_editor/subtitle_editor_controller.dart';
+import 'package:echo_loop/providers/favorite_sentence_lifecycle_provider.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/learning_progress.dart';
@@ -314,16 +316,16 @@ void main() {
     await notifier.load();
     notifier.initZoomForViewport(360);
 
-    expect(state().maxWaveformZoomScale, closeTo(4.1994, 0.001));
+    expect(state().maxWaveformZoomScale, closeTo(10.4987, 0.001));
 
     notifier.setWaveformZoomScale(20);
-    expect(state().waveformZoomScale, closeTo(4.1994, 0.001));
+    expect(state().waveformZoomScale, closeTo(10.4987, 0.001));
 
     notifier.setWaveformZoomScale(0.2);
     expect(state().waveformZoomScale, 1.0);
   });
 
-  test('maxWaveformZoomScale 长音频按 2cm/秒自适应，不被固定上限截断', () async {
+  test('maxWaveformZoomScale 长音频按 5cm/秒自适应，不被固定上限截断', () async {
     final localAudioItem = createTestAudioItem(totalDuration: 1800);
     final localAudioEngine = _RecordingAudioEngine(
       duration: const Duration(minutes: 30),
@@ -352,8 +354,8 @@ void main() {
       );
 
       // 1cm ≈ 62.992 逻辑像素。30 分钟音频、360px 可用宽度下，最大缩放 =
-      // 1800s × 2cm/s × 62.992px/cm / 360px ≈ 629.92，旧固定 300x 会不够。
-      expect(st.maxWaveformZoomScale, closeTo(629.92, 0.01));
+      // 1800s × 5cm/s × 62.992px/cm / 360px ≈ 1574.80，旧固定 300x 会不够。
+      expect(st.maxWaveformZoomScale, closeTo(1574.80, 0.01));
     } finally {
       localSubscription.close();
       localContainer.dispose();
@@ -363,7 +365,7 @@ void main() {
 
   test('initZoomForViewport 按可视区宽度设置初始缩放（每厘米约 1 秒）', () async {
     final notifier = controller();
-    await notifier.load(); // totalDuration = 12s → maxZoom = 12.0
+    await notifier.load(); // totalDuration = 12s
 
     // 1 厘米 ≈ 62.992 逻辑像素；scale = 62.992 * 12 / 360 ≈ 2.1。
     notifier.initZoomForViewport(360);
@@ -386,14 +388,14 @@ void main() {
     expect(state().waveformZoomScale, closeTo(2.0997, 0.001));
   });
 
-  test('initZoomForViewport 同时设置初始缩放和 2cm/秒最大缩放', () async {
+  test('initZoomForViewport 同时设置初始缩放和 5cm/秒最大缩放', () async {
     final notifier = controller();
     await notifier.load();
 
     notifier.initZoomForViewport(360);
 
     expect(state().waveformZoomScale, closeTo(2.0997, 0.001));
-    expect(state().maxWaveformZoomScale, closeTo(4.1994, 0.001));
+    expect(state().maxWaveformZoomScale, closeTo(10.4987, 0.001));
   });
 
   test('sentenceCountChanged：调边界为 false，删除/合并为 true', () async {
@@ -430,25 +432,21 @@ void main() {
           word: 'I',
           startTime: Duration(milliseconds: 800),
           endTime: Duration(milliseconds: 1100),
-          confidence: 0.9,
         ),
         const WordTimestamp(
           word: 'finished',
           startTime: Duration(milliseconds: 1100),
           endTime: Duration(milliseconds: 2000),
-          confidence: 0.9,
         ),
         const WordTimestamp(
           word: '3',
           startTime: Duration(milliseconds: 2000),
           endTime: Duration(milliseconds: 2500),
-          confidence: 0.9,
         ),
         const WordTimestamp(
           word: 'reports.',
           startTime: Duration(milliseconds: 2500),
           endTime: Duration(milliseconds: 3900),
-          confidence: 0.9,
         ),
       ]);
       final notifier = controller();
@@ -767,19 +765,16 @@ void main() {
               word: 'one',
               startTime: Duration.zero,
               endTime: Duration(seconds: 1),
-              confidence: 1,
             ),
             WordTimestamp(
               word: 'two',
               startTime: Duration(seconds: 1),
               endTime: Duration(seconds: 2),
-              confidence: 1,
             ),
             WordTimestamp(
               word: 'three',
               startTime: Duration(seconds: 2),
               endTime: Duration(seconds: 3),
-              confidence: 1,
             ),
           ]);
     }
@@ -922,6 +917,7 @@ void main() {
       // 预置收藏与学习进度，用来验证保存后是否被清空。
       await bookmarkDao.addBookmark(
         BookmarksCompanion.insert(
+          memorySubjectId: const Value('subtitle-editor-test-subject'),
           audioItemId: audioItem.id,
           sentenceIndex: 1,
           sentenceText: 'Second sentence.',
@@ -963,6 +959,9 @@ void main() {
           audioItemDaoProvider.overrideWithValue(audioItemDao),
           audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
           listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
+          favoriteSentenceLifecycleProvider.overrideWith(
+            (ref) => _TestFavoriteSentenceLifecycle(ref),
+          ),
           learningProgressNotifierProvider.overrideWith(() => progressNotifier),
         ],
       );
@@ -1115,6 +1114,9 @@ void main() {
             listeningPracticeProvider.overrideWith(
               () => TestListeningPractice(),
             ),
+            favoriteSentenceLifecycleProvider.overrideWith(
+              (ref) => _TestFavoriteSentenceLifecycle(ref),
+            ),
             learningProgressNotifierProvider.overrideWith(
               () => progressNotifier,
             ),
@@ -1212,6 +1214,9 @@ void main() {
           audioItemDaoProvider.overrideWithValue(audioItemDao),
           audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
           listeningPracticeProvider.overrideWith(() => recordingLp),
+          favoriteSentenceLifecycleProvider.overrideWith(
+            (ref) => _TestFavoriteSentenceLifecycle(ref),
+          ),
           learningProgressNotifierProvider.overrideWith(() => progressNotifier),
         ],
       );
@@ -1234,6 +1239,17 @@ void main() {
       );
     });
   });
+}
+
+/// 测试用收藏生命周期，仅验证字幕保存触发的收藏清理，不依赖 FSRS 调度表。
+class _TestFavoriteSentenceLifecycle extends FavoriteSentenceLifecycle {
+  _TestFavoriteSentenceLifecycle(this._testRef) : super(_testRef);
+
+  final Ref _testRef;
+
+  @override
+  Future<void> removeAllForAudio(String audioItemId) =>
+      _testRef.read(bookmarkDaoProvider).removeAllForAudio(audioItemId);
 }
 
 /// 记录 loadAudio 的 forceTranscriptReload 入参，用于验证保存后是否强制重载 LP。

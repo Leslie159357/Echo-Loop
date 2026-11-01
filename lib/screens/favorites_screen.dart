@@ -4,40 +4,228 @@
 /// 通过 SegmentedButton 在句子/单词视图间切换。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../analytics/models/event_names.dart';
 import '../features/usage/usage_event.dart';
 import '../features/usage/usage_providers.dart';
 import '../database/app_database.dart';
+import '../database/daos/audio_item_dao.dart';
 import '../database/daos/bookmark_dao.dart';
-import '../database/enums.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
-import '../models/audio_item.dart' as model;
 import '../models/dict_entry.dart';
+import '../models/sentence.dart';
+import '../models/word_highlight_binding.dart';
 import '../screens/sentence_detail_screen.dart';
 import '../providers/audio_engine/audio_engine_provider.dart';
+import '../providers/short_audio_player_provider.dart';
 import '../providers/tts/tts_controller_provider.dart';
+import '../providers/pronunciation/pronunciation_providers.dart';
 import '../widgets/tts/speak_button.dart';
-import '../providers/flashcard/flashcard_provider.dart';
 import '../providers/learning_session/bookmark_review_provider.dart';
-import '../models/flashcard_item.dart';
+import '../providers/learning_session/favorite_vocabulary_review_provider.dart';
+import '../providers/learning_session/favorite_review_due_count_provider.dart';
+import '../providers/favorite_sentence_lifecycle_provider.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/saved_sense_group_provider.dart';
 import '../providers/saved_word_provider.dart';
 import '../services/dictionary_service.dart';
+import '../services/app_logger.dart';
+import '../services/pronunciation/local_audio_clip_player.dart';
+import '../services/pronunciation/local_audio_range_player.dart';
+import '../services/pronunciation/source_sentence_player.dart';
+import '../services/subtitle_parser.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
-import '../widgets/speech_permission_dialog.dart';
 import '../widgets/favorites/sentence_recycle_bin_sheet.dart';
 import '../widgets/favorites/vocabulary_recycle_bin_sheet.dart';
+import '../widgets/bookmark_review/bookmark_review_settings_sheet.dart';
+import '../widgets/common/app_popup_menu.dart';
+import '../widgets/common/prewarm_visibility.dart';
 import '../widgets/guide_flow.dart';
+
+/// 判断 tile 是否真实位于最近滚动视口内；`cacheExtent` 保留的离屏 widget 不预热。
+bool _isInScrollableViewport(BuildContext context) {
+  final renderObject = context.findRenderObject();
+  if (renderObject is! RenderBox || !renderObject.attached) return false;
+  final viewport = RenderAbstractViewport.maybeOf(renderObject);
+  if (viewport is! RenderBox) return true;
+  // RenderAbstractViewport 的公开工厂返回抽象类型；实际滚动视口同时是 RenderBox。
+  final viewportBox = viewport as RenderBox;
+  if (!viewportBox.hasSize) return true;
+  final rect = MatrixUtils.transformRect(
+    renderObject.getTransformTo(viewportBox),
+    Offset.zero & renderObject.size,
+  );
+  return (Offset.zero & viewportBox.size).overlaps(rect);
+}
 
 /// 收藏页面视图模式
 enum _FavoritesView { sentences, words }
+
+/// 收藏页分段控件中的标题与数量 badge。
+class _FavoritesSegmentLabel extends StatelessWidget {
+  final String title;
+  final int? count;
+  final Key badgeKey;
+
+  const _FavoritesSegmentLabel({
+    required this.title,
+    required this.count,
+    required this.badgeKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    final countValue = count;
+    final showCount = countValue != null && countValue > 0;
+    if (!showCount) return Text(title, style: textStyle);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: textStyle),
+        const SizedBox(width: 6),
+        Container(
+          key: badgeKey,
+          constraints: const BoxConstraints(
+            minWidth: 20,
+            minHeight: 20,
+            maxHeight: 20,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Center(
+            child: Text(
+              '$countValue',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 收藏页单个分段；使用固定等宽布局，避免标题和 badge 触发 intrinsic 错位。
+class _FavoritesSegment extends StatelessWidget {
+  final Key segmentKey;
+  final GuideStep? guideStep;
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final int? count;
+  final Key badgeKey;
+  final VoidCallback onTap;
+
+  const _FavoritesSegment({
+    required this.segmentKey,
+    this.guideStep,
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.count,
+    required this.badgeKey,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    // 图标作为辅助信息使用次要色，避免与标题争夺视觉焦点。
+    final foregroundColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.6);
+
+    final segment = Material(
+      key: segmentKey,
+      color: selected ? colorScheme.secondaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 42,
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: foregroundColor),
+                const SizedBox(width: 8),
+                _FavoritesSegmentLabel(
+                  title: title,
+                  count: count,
+                  badgeKey: badgeKey,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        inMutuallyExclusiveGroup: true,
+        child: guideStep == null
+            ? segment
+            : GuideTarget(step: guideStep!, child: segment),
+      ),
+    );
+  }
+}
+
+/// 收藏页 AppBar 的更多操作。
+enum _FavoritesMoreAction { recycleBin, reviewSettings }
+
+Future<AudioPlaybackResult> _playSourceSentence(
+  WidgetRef ref, {
+  required String key,
+  required String? audioItemId,
+  required int? sentenceIndex,
+  required String? sentenceText,
+  required int? sentenceStartMs,
+  required int? sentenceEndMs,
+}) {
+  AppLogger.log(
+    'FavoritesPlayback',
+    'source request key=$key text="$sentenceText" audio=$audioItemId',
+  );
+  final player = SourceSentencePlayer(
+    audioItemDao: ref.read(audioItemDaoProvider),
+    audioClipPlayer: ref.read(shortAudioPlayerProvider),
+    speak: (text, playbackKey) => ref
+        .read(ttsControllerProvider.notifier)
+        .speakWithResult(text, key: playbackKey),
+  );
+  return player.play(
+    audioItemId: audioItemId,
+    sentenceIndex: sentenceIndex,
+    sentenceText: sentenceText,
+    sentenceStartMs: sentenceStartMs,
+    sentenceEndMs: sentenceEndMs,
+    playbackKey: key,
+  );
+}
 
 /// 收藏页面
 class FavoritesScreen extends ConsumerStatefulWidget {
@@ -49,17 +237,63 @@ class FavoritesScreen extends ConsumerStatefulWidget {
 
 class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   _FavoritesView _currentView = _FavoritesView.sentences;
+  late final AppLifecycleListener _lifecycleListener;
 
-  /// 新手引导 step key（生命周期内稳定）
-  final GlobalKey _keySentencesList = GlobalKey();
-  final GlobalKey _keySentencesReviewBtn = GlobalKey();
-  final GlobalKey _keyWordsList = GlobalKey();
-  final GlobalKey _keyVocabReviewBtn = GlobalKey();
+  /// 收藏 Tab 新手引导 step key（生命周期内稳定）。
+  final GlobalKey _keySentencesTab = GlobalKey();
+  final GlobalKey _keyVocabularyTab = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: (state) {
+        // 应用回到前台时，到期时间可能已跨过当前时刻；重新读取当前入口数量。
+        if (state == AppLifecycleState.resumed) {
+          refreshFavoriteReviewDueCounts(ref);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  /// 收藏页重新可见时同时刷新两类入口，避免 StatefulShell 保留旧 Future。
+  void _refreshDueCounts() => refreshFavoriteReviewDueCounts(ref);
+
+  /// 打开收藏复习共享设置；收藏页不预展开任一内容分区。
+  Future<void> _openReviewSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => BookmarkReviewSettingsSheet(
+        task: FavoriteReviewSettingsTask.favorites,
+      ),
+    );
+  }
+
+  /// 打开当前收藏类型对应的回收站，并在返回后刷新待复习数量。
+  Future<void> _openRecycleBin() async {
+    if (_currentView == _FavoritesView.sentences) {
+      await showSentenceRecycleBinSheet(context: context);
+    } else {
+      await showVocabularyRecycleBinSheet(context: context);
+    }
+    if (mounted) _refreshDueCounts();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final isMainTabActive = MainTabVisibilityScope.isVisible(context, 2);
 
     // 获取收藏数量
     final bookmarksAsync = ref.watch(bookmarkListProvider);
@@ -69,83 +303,35 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         ref.watch(savedSenseGroupListProvider).valueOrNull?.length ?? 0;
     final vocabCount = wordCount + phraseCount;
 
-    final sentenceLabel = sentenceCount != null && sentenceCount > 0
-        ? '${l10n.favoritesSentences} ($sentenceCount)'
-        : l10n.favoritesSentences;
-    final wordLabel = vocabCount > 0
-        ? '${l10n.favoritesVocabulary} ($vocabCount)'
-        : l10n.favoritesVocabulary;
-
     // ----- 新手引导 flow 声明 -----
-    // 句子列表描述中嵌入真实的哑铃图标，让用户更易辨识 tap 目标
-    const iconPlaceholder = '{ICON}';
-    final sentencesListDescRaw = l10n.guideFavoritesSentencesListDescription(
-      iconPlaceholder,
-    );
-    final sentencesListDescParts = sentencesListDescRaw.split(iconPlaceholder);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tooltipDescColor = isDark
         ? const Color(0xFF9BA3AE)
         : const Color(0xFF5A6270);
     final stepSentencesList = GuideStep(
-      key: _keySentencesList,
-      description: sentencesListDescRaw,
-      descriptionWidget: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: sentencesListDescParts[0]),
-            WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Icon(
-                Icons.fitness_center,
-                size: 15,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            if (sentencesListDescParts.length > 1)
-              TextSpan(text: sentencesListDescParts[1]),
-          ],
-          style: TextStyle(
-            fontSize: 13,
-            height: 1.55,
-            fontWeight: FontWeight.w400,
-            color: tooltipDescColor,
-          ),
+      key: _keySentencesTab,
+      description: l10n.guideFavoritesSentencesListDescription,
+      descriptionWidget: Text(
+        l10n.guideFavoritesSentencesListDescription,
+        style: TextStyle(
+          fontSize: 13,
+          height: 1.55,
+          fontWeight: FontWeight.w400,
+          color: tooltipDescColor,
         ),
       ),
     );
-    final stepSentencesReviewBtn = GuideStep(
-      key: _keySentencesReviewBtn,
-      description: l10n.guideFavoritesSentencesReviewDescription,
-    );
     final stepWordsList = GuideStep(
-      key: _keyWordsList,
+      key: _keyVocabularyTab,
       description: l10n.guideFavoritesVocabularyListDescription,
     );
-    final stepFlashcardBtn = GuideStep(
-      key: _keyVocabReviewBtn,
-      description: l10n.guideFavoritesFlashcardDescription,
-    );
 
-    // 有效书签：过滤迁移遗留的无时长或空文本条目（复用 _FloatingSentenceReviewButton 同一规则）
-    final allBookmarks = bookmarksAsync.valueOrNull ?? const [];
-    final hasValidSentences = allBookmarks.any(
-      (b) =>
-          (b.bookmark.endTime - b.bookmark.startTime) > 0 &&
-          b.bookmark.sentenceText.isNotEmpty,
-    );
-    final hasVocab = vocabCount > 0;
     final flows = <GuideFlow>[
       GuideFlow(
-        flowId: GuideFlowIds.favoritesSentencesReview,
-        shouldRun:
-            _currentView == _FavoritesView.sentences && hasValidSentences,
-        steps: [stepSentencesList, stepSentencesReviewBtn],
-      ),
-      GuideFlow(
-        flowId: GuideFlowIds.favoritesVocabularyReview,
-        shouldRun: _currentView == _FavoritesView.words && hasVocab,
-        steps: [stepWordsList, stepFlashcardBtn],
+        flowId: GuideFlowIds.favoritesTabsOverview,
+        // 两个目标都是固定存在的 Tab；页面首次可见时连续展示，不依赖收藏数据。
+        shouldRun: true,
+        steps: [stepSentencesList, stepWordsList],
       ),
     ];
 
@@ -153,21 +339,52 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
       flows: flows,
       child: Scaffold(
         appBar: AppBar(
+          actionsPadding: const EdgeInsets.only(right: AppSpacing.s),
           title: Text(l10n.favorites),
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                icon: const Icon(Icons.restore),
-                tooltip: l10n.recycleBinTitle,
-                onPressed: () {
-                  if (_currentView == _FavoritesView.sentences) {
-                    showSentenceRecycleBinSheet(context: context);
-                  } else {
-                    showVocabularyRecycleBinSheet(context: context);
-                  }
-                },
+            IconButton(
+              key: const Key('favorites-statistics'),
+              icon: SvgPicture.asset(
+                'assets/icon/bar-chart.svg',
+                width: 21,
+                height: 21,
+                colorFilter: ColorFilter.mode(
+                  Theme.of(context).colorScheme.onSurfaceVariant,
+                  BlendMode.srcIn,
+                ),
               ),
+              tooltip: '复习统计',
+              onPressed: () async {
+                await context.push<void>(AppRoutes.reviewStatistics);
+                if (mounted) _refreshDueCounts();
+              },
+            ),
+            PopupMenuButton<_FavoritesMoreAction>(
+              key: const Key('favorites-more'),
+              icon: const Icon(Icons.more_horiz),
+              tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+              onSelected: (action) {
+                switch (action) {
+                  case _FavoritesMoreAction.recycleBin:
+                    unawaited(_openRecycleBin());
+                  case _FavoritesMoreAction.reviewSettings:
+                    unawaited(_openReviewSettings());
+                }
+              },
+              itemBuilder: (context) => [
+                appPopupMenuItem(
+                  context,
+                  value: _FavoritesMoreAction.reviewSettings,
+                  icon: const Icon(Icons.tune),
+                  label: l10n.bookmarkReviewSettingsTitle,
+                ),
+                appPopupMenuItem(
+                  context,
+                  value: _FavoritesMoreAction.recycleBin,
+                  icon: const Icon(Icons.restore),
+                  label: l10n.recycleBinTitle,
+                ),
+              ],
             ),
           ],
         ),
@@ -179,34 +396,48 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 horizontal: AppSpacing.m,
                 vertical: AppSpacing.s,
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<_FavoritesView>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: _FavoritesView.sentences,
-                      label: Text(sentenceLabel),
-                      icon: const Icon(Icons.format_quote, size: 18),
+              child: DecoratedBox(
+                key: const Key('favorites-segmented-control-shell'),
+                decoration: ShapeDecoration(
+                  color: theme.colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(21),
+                    side: BorderSide(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.8,
+                      ),
                     ),
-                    ButtonSegment(
-                      value: _FavoritesView.words,
-                      label: Text(wordLabel),
-                      icon: const Icon(Icons.abc, size: 18),
-                    ),
-                  ],
-                  selected: {_currentView},
-                  onSelectionChanged: (selected) {
-                    debugPrint('[PERF] tab 切换: ${selected.first}');
-                    final sw = Stopwatch()..start();
-                    setState(() => _currentView = selected.first);
-                    debugPrint(
-                      '[PERF] setState 完成: ${sw.elapsedMilliseconds}ms',
-                    );
-                  },
-                  style: SegmentedButton.styleFrom(
-                    textStyle: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(21),
+                  child: SizedBox(
+                    height: 42,
+                    child: Row(
+                      children: [
+                        _FavoritesSegment(
+                          guideStep: stepSentencesList,
+                          segmentKey: const Key('favorites-sentences-segment'),
+                          selected: _currentView == _FavoritesView.sentences,
+                          icon: Icons.subject,
+                          title: l10n.favoritesSentences,
+                          count: sentenceCount,
+                          badgeKey: const Key('favorites-sentences-count'),
+                          onTap: () =>
+                              _selectFavoritesView(_FavoritesView.sentences),
+                        ),
+                        _FavoritesSegment(
+                          guideStep: stepWordsList,
+                          segmentKey: const Key('favorites-vocabulary-segment'),
+                          selected: _currentView == _FavoritesView.words,
+                          icon: Icons.menu_book_outlined,
+                          title: l10n.favoritesVocabulary,
+                          count: vocabCount,
+                          badgeKey: const Key('favorites-vocabulary-count'),
+                          onTap: () =>
+                              _selectFavoritesView(_FavoritesView.words),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -219,25 +450,24 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 children: [
                   // 列表（IndexedStack 保留两个 tab 的状态，切换不重建）
                   IndexedStack(
-                    index: _currentView == _FavoritesView.sentences ? 0 : 1,
+                    index: _currentView.index,
                     children: [
-                      _SentencesView(firstItemStep: stepSentencesList),
+                      const _SentencesView(),
                       _WordsView(
-                        firstItemStep: stepWordsList,
                         // 仅词汇 tab 激活时才预热（IndexedStack 会同时构建两个 tab，
                         // 不门控则停在句子 tab 也会为词汇起引擎合成、浪费 CPU）。
-                        isActive: _currentView == _FavoritesView.words,
+                        isActive:
+                            isMainTabActive &&
+                            _currentView == _FavoritesView.words,
                       ),
                     ],
                   ),
 
                   // 底部悬浮复习按钮
                   if (_currentView == _FavoritesView.sentences)
-                    _FloatingSentenceReviewButton(
-                      guideStep: stepSentencesReviewBtn,
-                    )
-                  else
-                    _FloatingFlashcardButton(guideStep: stepFlashcardBtn),
+                    const _FloatingSentenceReviewButton()
+                  else if (_currentView == _FavoritesView.words)
+                    const _FloatingFlashcardButton(),
                 ],
               ),
             ),
@@ -245,6 +475,17 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         ),
       ),
     );
+  }
+
+  /// 切换收藏视图并刷新两个入口的待复习数量。
+  void _selectFavoritesView(_FavoritesView nextView) {
+    if (_currentView == nextView) return;
+    debugPrint('[PERF] tab 切换: $nextView');
+    final sw = Stopwatch()..start();
+    setState(() => _currentView = nextView);
+    // IndexedStack 会保留两个 Tab；显式失效避免复用旧 Future 结果。
+    _refreshDueCounts();
+    debugPrint('[PERF] setState 完成: ${sw.elapsedMilliseconds}ms');
   }
 }
 
@@ -254,36 +495,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
 /// 句子视图 — 按音频分组展示收藏的书签句子
 class _SentencesView extends ConsumerStatefulWidget {
-  /// 新手引导高亮目标：只包第一个音频分组卡片
-  final GuideStep? firstItemStep;
-
-  const _SentencesView({this.firstItemStep});
+  const _SentencesView();
 
   @override
   ConsumerState<_SentencesView> createState() => _SentencesViewState();
 }
 
 class _SentencesViewState extends ConsumerState<_SentencesView> {
-  /// 首个分组卡片的展开控制器：引导激活时自动展开
-  final ExpansibleController _firstGroupController = ExpansibleController();
-
-  @override
-  void initState() {
-    super.initState();
-    // 引导 flow 激活时主动展开第一条，让用户更直观看到内部内容
-    ref.listenManual<GuideControllerState>(guideControllerProvider, (
-      prev,
-      next,
-    ) {
-      if (next.activeFlowId != GuideFlowIds.favoritesSentencesReview) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_firstGroupController.isExpanded) return;
-        _firstGroupController.expand();
-      });
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final bookmarksAsync = ref.watch(bookmarkListProvider);
@@ -314,17 +532,11 @@ class _SentencesViewState extends ConsumerState<_SentencesView> {
             final audioId = grouped.keys.elementAt(index);
             final items = grouped[audioId]!;
             final audioName = items.first.audioName;
-            final isFirst = index == 0;
-
             final tile = _AudioBookmarkGroup(
               audioId: audioId,
               audioName: audioName,
               bookmarks: items,
-              expansionController: isFirst ? _firstGroupController : null,
             );
-            if (isFirst && widget.firstItemStep != null) {
-              return GuideTarget(step: widget.firstItemStep!, child: tile);
-            }
             return tile;
           },
         );
@@ -335,10 +547,7 @@ class _SentencesViewState extends ConsumerState<_SentencesView> {
 
 /// 底部悬浮句子复习按钮
 class _FloatingSentenceReviewButton extends ConsumerWidget {
-  /// 新手引导高亮 step，用于包裹按钮（仅有效书签非空时才渲染）
-  final GuideStep? guideStep;
-
-  const _FloatingSentenceReviewButton({this.guideStep});
+  const _FloatingSentenceReviewButton();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -352,12 +561,21 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
     }).toList();
     if (validBookmarks.isEmpty) return const SizedBox.shrink();
 
+    final dueCountAsync = ref.watch(favoriteSentenceDueCountProvider);
+    final dueCount = dueCountAsync.valueOrNull;
+    final l10n = AppLocalizations.of(context)!;
+
     return _FloatingReviewButton(
-      icon: Icons.fitness_center,
-      guideStep: guideStep,
-      label: AppLocalizations.of(
-        context,
-      )!.bookmarkReviewStartCount(validBookmarks.length),
+      leading: dueCount == 0
+          ? const Text('🎉', style: TextStyle(fontSize: 18))
+          : const Icon(Icons.style_outlined, size: 18),
+      // 待复习数量尚未加载时不回退显示总收藏数，避免切换 Tab 时文案闪烁。
+      label: dueCount == null
+          ? l10n.downloadLoading
+          : dueCount == 0
+          ? l10n.bookmarkReviewNothingToReview
+          : l10n.bookmarkReviewDueCount(dueCount),
+      enabled: dueCount != null && dueCount > 0,
       onPressed: () async {
         ref
             .read(usageTrackerProvider)
@@ -367,29 +585,23 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
                 EventParams.totalSentencesCount: validBookmarks.length,
               },
             );
-        final allowed = await ensureSpeechReadyForSubStage(
-          context,
-          ref,
-          SubStageType.reviewDifficultPractice,
-        );
-        if (!allowed || !context.mounted) return;
-
         final sw = Stopwatch()..start();
         final provider = ref.read(bookmarkReviewProvider.notifier);
-        final audioItemDao = ref.read(audioItemDaoProvider);
         debugPrint(
           '[PERF] bookmark review read providers: ${sw.elapsedMilliseconds}ms',
         );
-        provider.initialize(
-          allBookmarks,
-          getAudioItemById: (id) => audioItemDao.getById(id),
-        );
+        await provider.initialize();
         debugPrint(
           '[PERF] bookmark review initialize: ${sw.elapsedMilliseconds}ms',
         );
-        context.push(AppRoutes.bookmarkReview);
+        if (!context.mounted) return;
+        await context.push<void>(AppRoutes.bookmarkReview);
+        if (context.mounted) {
+          // 返回收藏页时重新计算，覆盖评分、取消收藏及会话停留期间到期的卡片。
+          refreshFavoriteReviewDueCounts(ref);
+        }
         debugPrint(
-          '[PERF] context.push bookmarkReview: ${sw.elapsedMilliseconds}ms',
+          '[PERF] bookmarkReview returned: ${sw.elapsedMilliseconds}ms',
         );
       },
     );
@@ -398,10 +610,7 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
 
 /// 底部悬浮 Flashcard 按钮
 class _FloatingFlashcardButton extends ConsumerWidget {
-  /// 新手引导高亮 step，仅当按钮真正渲染时才包裹
-  final GuideStep? guideStep;
-
-  const _FloatingFlashcardButton({this.guideStep});
+  const _FloatingFlashcardButton();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -415,35 +624,33 @@ class _FloatingFlashcardButton extends ConsumerWidget {
     if (totalCount == 0) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;
+    final dueCountAsync = ref.watch(favoriteVocabularyDueCountProvider);
+    final dueCount = dueCountAsync.valueOrNull;
     return _FloatingReviewButton(
-      icon: Icons.style_outlined,
-      guideStep: guideStep,
-      label: '${l10n.flashcardStartQuiz} ($totalCount)',
-      onPressed: () {
+      leading: dueCount == 0
+          ? const Text('🎉', style: TextStyle(fontSize: 18))
+          : const Icon(Icons.style_outlined, size: 18),
+      // 待复习数量尚未加载时不回退显示总收藏数，避免切换 Tab 时文案闪烁。
+      label: dueCount == null
+          ? l10n.downloadLoading
+          : dueCount == 0
+          ? l10n.favoriteReviewNothingToReview
+          : l10n.favoriteVocabularyReviewDueCount(dueCount),
+      enabled: dueCount != null && dueCount > 0,
+      onPressed: () async {
         ref
             .read(usageTrackerProvider)
             .record(
               UsageEvent.flashcardButtonTapped,
               analyticsParams: {EventParams.totalCards: totalCount},
             );
-        final sw = Stopwatch()..start();
-        // 构建 FlashcardItem 列表，按 createdAt 倒序
-        final items = <FlashcardItem>[
-          for (final w in words) FlashcardWordItem(savedWord: w),
-          for (final p in phrases) FlashcardPhraseItem(savedPhrase: p),
-        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        debugPrint(
-          '[PERF] 构建 FlashcardItem 列表: ${sw.elapsedMilliseconds}ms (${items.length} items)',
-        );
-
-        ref.read(flashcardNotifierProvider.notifier).initialize(items);
-        debugPrint(
-          '[PERF] flashcard initialize 已调用: ${sw.elapsedMilliseconds}ms',
-        );
-        context.push(AppRoutes.flashcard);
-        debugPrint(
-          '[PERF] context.push flashcard: ${sw.elapsedMilliseconds}ms',
-        );
+        await ref.read(favoriteVocabularyReviewProvider.notifier).initialize();
+        if (!context.mounted) return;
+        await context.push<void>(AppRoutes.favoriteVocabularyReview);
+        if (context.mounted) {
+          // 返回收藏页时重新计算，避免保留进入复习前的缓存数量。
+          refreshFavoriteReviewDueCounts(ref);
+        }
       },
     );
   }
@@ -451,42 +658,47 @@ class _FloatingFlashcardButton extends ConsumerWidget {
 
 /// 底部悬浮复习按钮 — 渐变遮罩 + 全宽 FilledButton
 class _FloatingReviewButton extends StatelessWidget {
-  final IconData icon;
+  final Widget leading;
   final String label;
   final VoidCallback onPressed;
 
-  /// 新手引导高亮 step，仅包裹按钮区域（不含渐变遮罩）
-  final GuideStep? guideStep;
+  final bool enabled;
 
   const _FloatingReviewButton({
-    required this.icon,
+    required this.leading,
     required this.label,
     required this.onPressed,
-    this.guideStep,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    Widget button = SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: onPressed,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 8),
-            Text(label),
-          ],
+    // 常规字号保持紧凑 36px；放大系统字体时允许按文本自然增高，
+    // 避免全局 FilledButton 的垂直内边距把复习文案裁切掉。
+    Widget button = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 36),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: enabled ? onPressed : null,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              leading,
+              const SizedBox(width: 8),
+              Flexible(child: Text(label, textAlign: TextAlign.center)),
+            ],
+          ),
         ),
       ),
     );
-    if (guideStep != null) {
-      button = GuideTarget(step: guideStep!, child: button);
-    }
-
     final buttonBox = Container(
       color: theme.colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(
@@ -530,23 +742,19 @@ class _FloatingReviewButton extends StatelessWidget {
 }
 
 /// 单个音频的书签分组卡片
-class _AudioBookmarkGroup extends ConsumerWidget {
+class _AudioBookmarkGroup extends StatelessWidget {
   final String audioId;
   final String audioName;
   final List<BookmarkWithAudio> bookmarks;
-
-  /// 展开控制器（可选）：用于新手引导时由外部主动展开
-  final ExpansibleController? expansionController;
 
   const _AudioBookmarkGroup({
     required this.audioId,
     required this.audioName,
     required this.bookmarks,
-    this.expansionController,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
@@ -554,7 +762,6 @@ class _AudioBookmarkGroup extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        controller: expansionController,
         initiallyExpanded: false,
         iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
         collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(
@@ -579,34 +786,6 @@ class _AudioBookmarkGroup extends ConsumerWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(width: 4),
-            // 练习该音频收藏句按钮
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: IconButton(
-                icon: const Icon(Icons.fitness_center, size: 18),
-                color: theme.colorScheme.primary,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () async {
-                  final allowed = await ensureSpeechReadyForSubStage(
-                    context,
-                    ref,
-                    SubStageType.reviewDifficultPractice,
-                  );
-                  if (!allowed || !context.mounted) return;
-
-                  final provider = ref.read(bookmarkReviewProvider.notifier);
-                  final audioItemDao = ref.read(audioItemDaoProvider);
-                  provider.initialize(
-                    bookmarks,
-                    getAudioItemById: (id) => audioItemDao.getById(id),
-                  );
-                  context.push(AppRoutes.bookmarkReview);
-                },
-              ),
-            ),
           ],
         ),
         children: [
@@ -623,6 +802,7 @@ class _AudioBookmarkGroup extends ConsumerWidget {
               bookmark: bookmarks[i].bookmark,
               audioId: audioId,
               audioName: audioName,
+              displayNumber: i + 1,
             ),
           ],
         ],
@@ -636,11 +816,13 @@ class _BookmarkSentenceTile extends ConsumerStatefulWidget {
   final Bookmark bookmark;
   final String audioId;
   final String audioName;
+  final int displayNumber;
 
   const _BookmarkSentenceTile({
     required this.bookmark,
     required this.audioId,
     required this.audioName,
+    required this.displayNumber,
   });
 
   @override
@@ -649,76 +831,41 @@ class _BookmarkSentenceTile extends ConsumerStatefulWidget {
 }
 
 class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
-  bool _isPlaying = false;
-
   /// 播放该句子的原声片段
   Future<void> _playSentence() async {
-    if (_isPlaying) {
-      ref.read(audioEngineProvider.notifier).stop();
-      setState(() => _isPlaying = false);
+    final key = 'saved-sentence:${widget.bookmark.id}';
+    final player = ref.read(shortAudioPlayerProvider);
+    if (player.state.playingKey == key) {
+      await player.stop();
       return;
     }
-
-    setState(() => _isPlaying = true);
-
     try {
-      final engine = ref.read(audioEngineProvider.notifier);
-      final engineState = ref.read(audioEngineProvider);
-
-      // 如果当前加载的不是同一音频，重新加载
-      if (engineState.currentAudioId != widget.audioId) {
-        final dao = ref.read(audioItemDaoProvider);
-        final row = await dao.getById(widget.audioId);
-        if (row == null || !mounted) {
-          setState(() => _isPlaying = false);
-          return;
-        }
-
-        final audioItem = model.AudioItem(
-          id: row.id,
-          name: row.name,
-          audioPath: row.audioPath,
-          transcriptPath: row.transcriptPath,
-          addedDate: row.addedDate,
-          totalDuration: row.totalDuration,
-          sentenceCount: row.sentenceCount,
-          wordCount: row.wordCount,
-          isPinned: row.isPinned,
-          transcriptSource: model.TranscriptSource.fromIndex(
-            row.transcriptSource,
-          ),
-          audioSha256: row.audioSha256,
-          originalAudioSha256: row.originalAudioSha256,
-          transcriptLanguage: row.transcriptLanguage,
-        );
-
-        await engine.loadAudio(audioItem, 1.0);
-      }
-
-      if (!mounted) return;
-
-      final sessionId = engine.newSession();
       final start = Duration(
         milliseconds: (widget.bookmark.startTime * 1000).round(),
       );
       final end = Duration(
         milliseconds: (widget.bookmark.endTime * 1000).round(),
       );
-      await engine.playRangeOnce(start, end, sessionId);
+      await LocalAudioRangePlayer(
+        audioItemDao: ref.read(audioItemDaoProvider),
+        audioClipPlayer: player,
+      ).play(
+        audioItemId: widget.audioId,
+        start: start,
+        end: end,
+        playbackKey: key,
+      );
     } catch (_) {
       // 忽略播放错误（音频文件不存在等）
-    } finally {
-      if (mounted) {
-        setState(() => _isPlaying = false);
-      }
     }
   }
 
   /// 跳转到句子详情页（单句精听）
   void _openDetail() {
     final bm = widget.bookmark;
-    context.push(
-      AppRoutes.sentenceDetail,
+    AppRoutes.pushNested(
+      context,
+      AppRoutes.sentenceDetailSegment,
       extra: SentenceDetailArgs(
         audioItemId: widget.audioId,
         audioName: widget.audioName,
@@ -726,6 +873,10 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
         sentenceIndex: bm.sentenceIndex,
         startTimeMs: (bm.startTime * 1000).round(),
         endTimeMs: (bm.endTime * 1000).round(),
+        wordHighlightSource: _audioEngineWordHighlightSource(
+          ref,
+          widget.audioId,
+        ),
       ),
     );
   }
@@ -735,8 +886,8 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
     final theme = Theme.of(context);
     final bm = widget.bookmark;
 
-    // 提前捕获 DAO，避免 Dismissible 销毁 widget 后 ref 失效
-    final bookmarkDao = ref.read(bookmarkDaoProvider);
+    // 提前捕获统一生命周期服务，避免 Dismissible 销毁 widget 后 ref 失效。
+    final sentenceLifecycle = ref.read(favoriteSentenceLifecycleProvider);
 
     return Dismissible(
       key: ValueKey('bookmark_${bm.id}'),
@@ -748,40 +899,223 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
         child: Icon(Icons.bookmark_remove, color: theme.colorScheme.onError),
       ),
       onDismissed: (_) {
-        bookmarkDao.removeBookmark(widget.audioId, bm.sentenceIndex);
+        unawaited(sentenceLifecycle.remove(widget.audioId, {bm.sentenceIndex}));
       },
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
-        leading: IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          icon: Icon(
-            _isPlaying ? Icons.stop_circle_outlined : Icons.play_circle_outline,
-            size: 28,
-          ),
-          color: _isPlaying
-              ? theme.colorScheme.error
-              : theme.colorScheme.primary,
-          onPressed: _playSentence,
-        ),
-        title: Text(bm.sentenceText, style: theme.textTheme.bodyMedium),
-        trailing: SizedBox(
-          width: 40,
-          height: 40,
-          child: IconButton(
-            padding: EdgeInsets.zero,
-            icon: Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-            ),
-            onPressed: _openDetail,
-          ),
-        ),
-        onTap: _playSentence,
+      child: _FavoriteSourceSentenceTile(
+        sentenceText: bm.sentenceText,
+        displayNumber: widget.displayNumber,
+        displayNumberKey: ValueKey('saved-sentence-number-${bm.id}'),
+        onPlay: _playSentence,
+        onOpenDetail: _openDetail,
       ),
     );
   }
+}
+
+/// 收藏句与词汇来源句共用的分段交互行。
+///
+/// 左侧正文负责来源句试听；右侧整块操作区进入句子讲解页，降低箭头误触。
+class _FavoriteSourceSentenceTile extends StatelessWidget {
+  final String sentenceText;
+  final int? displayNumber;
+  final Key? displayNumberKey;
+  final VoidCallback onPlay;
+  final VoidCallback? onOpenDetail;
+
+  const _FavoriteSourceSentenceTile({
+    super.key,
+    required this.sentenceText,
+    required this.onPlay,
+    this.displayNumber,
+    this.displayNumberKey,
+    this.onOpenDetail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final number = displayNumber;
+    final canOpenDetail = onOpenDetail != null;
+    final leftPadding = number == null ? 0.0 : AppSpacing.s;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onPlay,
+                child: Padding(
+                  // 无编号的来源句与外层释义、分隔线共用左边界；收藏句保留编号所需的内边距。
+                  padding: EdgeInsets.only(
+                    left: leftPadding,
+                    right: AppSpacing.s,
+                    top: 8,
+                    bottom: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      if (number != null) ...[
+                        SizedBox(
+                          key: displayNumberKey,
+                          width: 24,
+                          child: Text(
+                            '$number',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          sentenceText,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (canOpenDetail)
+              SizedBox(
+                key: const Key('favorite-source-sentence-open-action'),
+                width: 42,
+                child: Material(
+                  // 默认保持透明，仅由 InkWell 提供按下、悬停等即时反馈。
+                  color: Colors.transparent,
+                  child: Semantics(
+                    button: true,
+                    label: 'Open sentence explanation',
+                    child: InkWell(
+                      onTap: onOpenDetail,
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.55,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 解析收藏词汇来源句进入讲解页所需的位置。
+///
+/// 新数据直接使用持久化的句序和时间；旧数据缺少其中任一字段时，改从当前
+/// 材料字幕按句序或文本恢复，避免把错误的时间范围传给讲解页。
+Future<void> _openFavoriteSourceSentenceDetail({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String audioItemId,
+  required String sentenceText,
+  required int? sentenceIndex,
+  required int? sentenceStartMs,
+  required int? sentenceEndMs,
+}) async {
+  final audioItemDao = ref.read(audioItemDaoProvider);
+  final audio = await audioItemDao.getById(audioItemId);
+  if (audio == null) return;
+
+  final storedRangeIsValid =
+      sentenceStartMs != null &&
+      sentenceEndMs != null &&
+      sentenceEndMs - sentenceStartMs >= 200;
+  final storedIndexIsValid = sentenceIndex != null && sentenceIndex >= 0;
+  final storedLocation = storedRangeIsValid && storedIndexIsValid
+      ? (
+          sentenceIndex: sentenceIndex,
+          startTimeMs: sentenceStartMs,
+          endTimeMs: sentenceEndMs,
+        )
+      : null;
+  final location =
+      storedLocation ??
+      await _resolveSourceSentenceLocation(
+        audioItemDao: audioItemDao,
+        audioItemId: audioItemId,
+        sentenceText: sentenceText,
+        preferredSentenceIndex: sentenceIndex,
+      );
+  if (location == null || !context.mounted) return;
+
+  AppRoutes.pushNested(
+    context,
+    AppRoutes.sentenceDetailSegment,
+    extra: SentenceDetailArgs(
+      audioItemId: audioItemId,
+      audioName: audio.name,
+      sentenceText: sentenceText,
+      sentenceIndex: location.sentenceIndex,
+      startTimeMs: location.startTimeMs,
+      endTimeMs: location.endTimeMs,
+      wordHighlightSource: _audioEngineWordHighlightSource(ref, audioItemId),
+    ),
+  );
+}
+
+/// 收藏详情页的句子试听由全局音频引擎播放，因此显式绑定该引擎的时间轴。
+WordHighlightSource _audioEngineWordHighlightSource(
+  WidgetRef ref,
+  String audioItemId,
+) {
+  final engine = ref.read(audioEngineProvider.notifier);
+  return WordHighlightSource(
+    audioItemId: audioItemId,
+    positionStream: engine.absolutePositionStream,
+    currentPosition: engine.absoluteCurrentPosition,
+    playbackStatus: engine.wordHighlightPlaybackStatus,
+    playbackStatusStream: engine.wordHighlightPlaybackStatusStream,
+  );
+}
+
+/// 从材料字幕恢复来源句的位置；优先信任仍与文本一致的原句序。
+Future<({int sentenceIndex, int startTimeMs, int endTimeMs})?>
+_resolveSourceSentenceLocation({
+  required AudioItemDao audioItemDao,
+  required String audioItemId,
+  required String sentenceText,
+  required int? preferredSentenceIndex,
+}) async {
+  final srt = await audioItemDao.getTranscriptSrt(audioItemId);
+  if (srt == null || srt.isEmpty) return null;
+  final sentences = await SubtitleParser.parseSubtitleString(srt);
+  final normalizedText = sentenceText.trim();
+  if (normalizedText.isEmpty) return null;
+
+  final preferred =
+      preferredSentenceIndex != null &&
+          preferredSentenceIndex >= 0 &&
+          preferredSentenceIndex < sentences.length
+      ? sentences[preferredSentenceIndex]
+      : null;
+  final resolved = preferred?.text.trim() == normalizedText
+      ? preferred
+      : sentences.cast<Sentence?>().firstWhere(
+          (candidate) => candidate?.text.trim() == normalizedText,
+          orElse: () => null,
+        );
+  if (resolved == null) return null;
+  return (
+    sentenceIndex: resolved.index,
+    startTimeMs: resolved.startTime.inMilliseconds,
+    endTimeMs: resolved.endTime.inMilliseconds,
+  );
 }
 
 // ============================================================
@@ -792,14 +1126,11 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
 ///
 /// 批量预加载字典释义，所有释义一次性渲染（不会逐个闪烁）。
 class _WordsView extends ConsumerStatefulWidget {
-  /// 新手引导高亮目标：只包第一个词汇 tile
-  final GuideStep? firstItemStep;
-
   /// 词汇 tab 当前是否激活（IndexedStack 会同时构建两个 tab，用此门控预热——
   /// 仅激活时才为词汇起引擎合成，停在句子 tab 不预热）。
   final bool isActive;
 
-  const _WordsView({this.firstItemStep, this.isActive = false});
+  const _WordsView({this.isActive = false});
 
   @override
   ConsumerState<_WordsView> createState() => _WordsViewState();
@@ -812,29 +1143,74 @@ class _WordsViewState extends ConsumerState<_WordsView> {
   /// 上次触发查询的单词列表，用于去重
   List<String> _lastWordKeys = [];
 
-  /// 首个词汇卡片的展开控制器：引导激活时自动展开
-  final ExpansibleController _firstItemController = ExpansibleController();
-
   /// 统一 TTS 控制器（build 时缓存，供 dispose 取消预热——dispose 内不可用 ref，§7.14）。
   TtsController? _ttsController;
+  bool _isScrolling = false;
+  int _scrollSession = 0;
+  bool _hasWarmedCurrentEngine = false;
 
-  /// 上次预热的发音文本签名：仅当列表发音文本变化才重启预热批次（避免 rebuild 反复重启）。
-  String? _prewarmSignature;
-
-  @override
-  void initState() {
-    super.initState();
-    ref.listenManual<GuideControllerState>(guideControllerProvider, (
-      prev,
-      next,
-    ) {
-      if (next.activeFlowId != GuideFlowIds.favoritesVocabularyReview) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_firstItemController.isExpanded) return;
-        _firstItemController.expand();
-      });
+  void _scheduleEngineWarmup() {
+    if (!widget.isActive || _hasWarmedCurrentEngine) return;
+    _hasWarmedCurrentEngine = true;
+    final controller = _ttsController;
+    if (controller == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) {
+        controller.warmUpCurrentEngine();
+      }
     });
+  }
+
+  bool _handleScroll(ScrollNotification notification) {
+    if (!widget.isActive) return false;
+    if (notification is ScrollStartNotification && !_isScrolling) {
+      _isScrolling = true;
+      final startedSession = ++_scrollSession;
+      AppLogger.log(
+        'FavoritesTts',
+        'scroll start session=$startedSession: cancel prewarm',
+      );
+      _ttsController?.cancelTextsPrewarm();
+      // 让已创建的 tile 收到 isScrolling=true 并清除提交标记；滚动停止后
+      // 才能对当前视口重新提交预热。通知在布局期派发，延后重建避免 frame 异常。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.isActive &&
+            _isScrolling &&
+            _scrollSession == startedSession) {
+          setState(() {});
+        }
+      });
+    } else if (notification is ScrollEndNotification && _isScrolling) {
+      _isScrolling = false;
+      final completedSession = ++_scrollSession;
+      AppLogger.log(
+        'FavoritesTts',
+        'scroll end session=$completedSession: schedule visible tile prewarm',
+      );
+      // ScrollEndNotification 可能由 Viewport 布局期间派发，延后重建以避免在布局期
+      // 调度 build；会话号确保下一次滚动已开始时不恢复旧视口的预热。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.isActive &&
+            !_isScrolling &&
+            _scrollSession == completedSession) {
+          AppLogger.log(
+            'FavoritesTts',
+            'scroll restore session=$completedSession: rebuild visible tiles',
+          );
+          setState(() {});
+        } else {
+          AppLogger.log(
+            'FavoritesTts',
+            'scroll restore discarded session=$completedSession '
+                'active=${widget.isActive} scrolling=$_isScrolling '
+                'current=$_scrollSession',
+          );
+        }
+      });
+    }
+    return false;
   }
 
   @override
@@ -844,7 +1220,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
     // 激活时可再次触发（届时已缓存的命中即跳过，未完成的续上）。
     if (oldWidget.isActive && !widget.isActive) {
       _ttsController?.cancelTextsPrewarm();
-      _prewarmSignature = null;
+      _hasWarmedCurrentEngine = false;
     }
   }
 
@@ -853,29 +1229,6 @@ class _WordsViewState extends ConsumerState<_WordsView> {
     // 离开收藏页即停在途预热，避免继续占用 CPU 合成用不到的发音。
     _ttsController?.cancelTextsPrewarm();
     super.dispose();
-  }
-
-  /// 后台预热全部收藏单词 + 意群发音，进入页面即合成入缓存（列表点击/复习秒播）。
-  ///
-  /// 仅当发音文本集合变化时重启批次（签名去重，避免每次 rebuild 都重启）；用
-  /// postFrame 触发，避免在 build 期改 provider 态。空串由 [prewarmTexts] 内部跳过。
-  void _schedulePrewarm(List<SavedWord> words, List<SavedSenseGroup> phrases) {
-    // 仅词汇 tab 激活时预热：停在句子 tab 不为词汇起引擎合成（IndexedStack 仍会
-    // 构建本视图，故必须显式门控）。切到词汇 tab 时本视图重建、isActive=true 再触发。
-    if (!widget.isActive) return;
-    _ttsController = ref.read(ttsControllerProvider.notifier);
-    final speakTexts = <String>[
-      for (final w in words) w.word,
-      for (final p in phrases) p.displayText,
-    ];
-    final sig = speakTexts.join('');
-    if (sig == _prewarmSignature) return;
-    _prewarmSignature = sig;
-    final controller = _ttsController!;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      controller.prewarmTexts(speakTexts);
-    });
   }
 
   /// 当单词列表变化时，批量查询字典释义
@@ -921,45 +1274,51 @@ class _WordsViewState extends ConsumerState<_WordsView> {
     // 触发批量字典查询
     _loadDictEntries(words);
 
-    // 后台预热全部单词 + 意群发音（进入收藏词汇页即合成入缓存）。
-    _schedulePrewarm(words, phrases);
-
     // 合并并按 createdAt 倒序排列
     final items = <_VocabularyItem>[
       for (final w in words) _VocabularyWord(w),
       for (final p in phrases) _VocabularyPhrase(p),
     ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.m,
-        AppSpacing.s,
-        AppSpacing.m,
-        80,
+    // Tile 负责提交自己的预热；父视图保留同一控制器，以便切 tab 或离页时
+    // 取消尚未完成的增量预热队列。
+    if (widget.isActive) {
+      _ttsController = ref.read(ttsControllerProvider.notifier);
+      _scheduleEngineWarmup();
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handleScroll,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.m,
+          AppSpacing.s,
+          AppSpacing.m,
+          80,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final tile = switch (item) {
+            _VocabularyWord(word: final w) => _SavedWordTile(
+              key: ValueKey('w_${w.id}'),
+              savedWord: w,
+              dictEntry: _dictMap[w.word],
+              expansionController: null,
+              isActive: widget.isActive,
+              isScrolling: _isScrolling,
+            ),
+            _VocabularyPhrase(phrase: final p) => _SavedPhraseTile(
+              key: ValueKey('p_${p.id}'),
+              savedPhrase: p,
+              expansionController: null,
+              isActive: widget.isActive,
+              isScrolling: _isScrolling,
+            ),
+          };
+          return tile;
+        },
       ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final isFirst = index == 0;
-        final controller = isFirst ? _firstItemController : null;
-        final tile = switch (item) {
-          _VocabularyWord(word: final w) => _SavedWordTile(
-            key: ValueKey('w_${w.id}'),
-            savedWord: w,
-            dictEntry: _dictMap[w.word],
-            expansionController: controller,
-          ),
-          _VocabularyPhrase(phrase: final p) => _SavedPhraseTile(
-            key: ValueKey('p_${p.id}'),
-            savedPhrase: p,
-            expansionController: controller,
-          ),
-        };
-        if (isFirst && widget.firstItemStep != null) {
-          return GuideTarget(step: widget.firstItemStep!, child: tile);
-        }
-        return tile;
-      },
     );
   }
 }
@@ -984,8 +1343,75 @@ class _VocabularyPhrase extends _VocabularyItem {
 }
 
 /// 收藏意群列表项（可展开，样式与 _SavedWordTile 一致）
+/// 收藏单词、词组和意群共用的发音行，保证各平台的水平位置一致。
+class _FavoritePronunciationRow extends StatelessWidget {
+  const _FavoritePronunciationRow({
+    required this.rowKey,
+    required this.buttonKey,
+    required this.text,
+    this.phonetic,
+    this.speakKey,
+  });
+
+  final Key rowKey;
+  final Key buttonKey;
+  final String text;
+  final String? phonetic;
+  final String? speakKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedPhonetic = phonetic?.trim();
+    final speakButton = SpeakButton(
+      key: buttonKey,
+      text: text,
+      speakKey: speakKey,
+      size: 20,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.standard,
+      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+      style: IconButton.styleFrom(
+        fixedSize: const Size.square(36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+
+    return SizedBox(
+      key: rowKey,
+      width: double.infinity,
+      height: 44,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: normalizedPhonetic == null || normalizedPhonetic.isEmpty
+            ? speakButton
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      '/$normalizedPhonetic/',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  speakButton,
+                ],
+              ),
+      ),
+    );
+  }
+}
+
 class _SavedPhraseTile extends ConsumerStatefulWidget {
   final SavedSenseGroup savedPhrase;
+
+  /// 仅词汇 tab 激活时预热，避免 IndexedStack 预建子树造成后台合成。
+  final bool isActive;
+  final bool isScrolling;
 
   /// 展开控制器（可选）：用于新手引导时由外部主动展开
   final ExpansibleController? expansionController;
@@ -994,6 +1420,8 @@ class _SavedPhraseTile extends ConsumerStatefulWidget {
     super.key,
     required this.savedPhrase,
     this.expansionController,
+    required this.isActive,
+    required this.isScrolling,
   });
 
   @override
@@ -1001,14 +1429,57 @@ class _SavedPhraseTile extends ConsumerStatefulWidget {
 }
 
 class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
-  bool _isPlaying = false;
   bool _isExpanded = false;
   String? _audioName;
+  bool _sourceAudioResolved = false;
+  bool _hasSubmittedPrewarm = false;
+  int _lastPrewarmConfigurationVersion = -1;
 
   @override
   void initState() {
     super.initState();
+    _sourceAudioResolved = widget.savedPhrase.audioItemId == null;
     _loadAudioName();
+    _schedulePrewarm();
+  }
+
+  @override
+  void didUpdateWidget(_SavedPhraseTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.isActive && !widget.isActive) ||
+        (!oldWidget.isScrolling && widget.isScrolling)) {
+      _hasSubmittedPrewarm = false;
+    }
+    if ((!oldWidget.isActive && widget.isActive) ||
+        (oldWidget.isScrolling && !widget.isScrolling)) {
+      _schedulePrewarm();
+    }
+  }
+
+  /// Tile 被列表创建后才提交意群预热；增量接口负责跨 tile 去重与后台排队。
+  void _schedulePrewarm() {
+    final configurationVersion = ref.read(
+      ttsControllerProvider.select((state) => state.configurationVersion),
+    );
+    if (!widget.isActive ||
+        widget.isScrolling ||
+        (_hasSubmittedPrewarm &&
+            _lastPrewarmConfigurationVersion == configurationVersion)) {
+      return;
+    }
+    _hasSubmittedPrewarm = true;
+    _lastPrewarmConfigurationVersion = configurationVersion;
+    final text = widget.savedPhrase.displayText;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          widget.isActive &&
+          !widget.isScrolling &&
+          _isInScrollableViewport(context)) {
+        ref.read(ttsControllerProvider.notifier).prewarmTextsIncremental([
+          text,
+        ]);
+      }
+    });
   }
 
   Future<void> _loadAudioName() async {
@@ -1016,78 +1487,68 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
     if (audioId == null) return;
     final dao = ref.read(audioItemDaoProvider);
     final row = await dao.getById(audioId);
-    if (mounted && row != null) {
-      setState(() => _audioName = row.name);
+    if (mounted) {
+      setState(() {
+        _audioName = row?.name;
+        _sourceAudioResolved = true;
+      });
     }
   }
 
-  /// 播放意群片段（优先意群时间，回退句子时间）
-  Future<void> _playPhrase() async {
+  /// 打开来源句讲解；历史收藏缺少定位字段时由共享解析器回填。
+  Future<void> _openSourceSentenceDetail() {
     final phrase = widget.savedPhrase;
-    if (phrase.audioItemId == null) return;
+    final audioItemId = phrase.audioItemId;
+    final sentenceText = phrase.sentenceText;
+    if (audioItemId == null || sentenceText == null) return Future.value();
+    return _openFavoriteSourceSentenceDetail(
+      context: context,
+      ref: ref,
+      audioItemId: audioItemId,
+      sentenceText: sentenceText,
+      sentenceIndex: phrase.sentenceIndex,
+      sentenceStartMs: phrase.sentenceStartMs,
+      sentenceEndMs: phrase.sentenceEndMs,
+    );
+  }
+
+  /// 播放意群片段（优先意群时间，回退句子时间）
+  Future<void> _playSentence() async {
+    final phrase = widget.savedPhrase;
+    AppLogger.log(
+      'FavoritesPlayback',
+      'source sentence tap phraseId=${phrase.id} text="${phrase.sentenceText}"',
+    );
+    final key = 'saved-phrase-source:${phrase.id}';
+    final player = ref.read(shortAudioPlayerProvider);
 
     // 播放来源句子（非意群片段）
-    final startMs = phrase.sentenceStartMs;
-    final endMs = phrase.sentenceEndMs;
-    if (startMs == null || endMs == null) return;
-
-    if (_isPlaying) {
-      ref.read(audioEngineProvider.notifier).stop();
-      setState(() => _isPlaying = false);
+    if (player.state.playingKey == key) {
+      await player.stop();
       return;
     }
-
-    setState(() => _isPlaying = true);
-
-    try {
-      final engine = ref.read(audioEngineProvider.notifier);
-      final engineState = ref.read(audioEngineProvider);
-
-      final dao = ref.read(audioItemDaoProvider);
-      final row = await dao.getById(phrase.audioItemId!);
-      if (row == null || !mounted) {
-        setState(() => _isPlaying = false);
-        return;
-      }
-
-      final audioItem = model.AudioItem(
-        id: row.id,
-        name: row.name,
-        audioPath: row.audioPath,
-        transcriptPath: row.transcriptPath,
-        addedDate: row.addedDate,
-        totalDuration: row.totalDuration,
-        sentenceCount: row.sentenceCount,
-        wordCount: row.wordCount,
-        isPinned: row.isPinned,
-        transcriptSource: model.TranscriptSource.fromIndex(
-          row.transcriptSource,
-        ),
-        audioSha256: row.audioSha256,
-        originalAudioSha256: row.originalAudioSha256,
-        transcriptLanguage: row.transcriptLanguage,
-      );
-
-      if (engineState.currentAudioId != phrase.audioItemId) {
-        await engine.loadAudio(audioItem, 1.0);
-      }
-      if (!mounted) return;
-
-      final sessionId = engine.newSession();
-      await engine.playRangeOnce(
-        Duration(milliseconds: startMs),
-        Duration(milliseconds: endMs),
-        sessionId,
-      );
-    } catch (_) {
-      // 忽略播放错误
-    } finally {
-      if (mounted) setState(() => _isPlaying = false);
+    if (ref.read(ttsControllerProvider).speakingKey == key) {
+      await ref.read(ttsControllerProvider.notifier).stop();
+      return;
     }
+    await _playSourceSentence(
+      ref,
+      key: key,
+      audioItemId: phrase.audioItemId,
+      sentenceIndex: phrase.sentenceIndex,
+      sentenceText: phrase.sentenceText,
+      sentenceStartMs: phrase.sentenceStartMs,
+      sentenceEndMs: phrase.sentenceEndMs,
+    );
+    return;
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(
+      ttsControllerProvider.select((state) => state.configurationVersion),
+    );
+    _schedulePrewarm();
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final phrase = widget.savedPhrase;
@@ -1108,8 +1569,13 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: ExpansionTile(
           controller: widget.expansionController,
+          childrenPadding: EdgeInsets.zero,
+          dense: true,
+          minTileHeight: 40,
           iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(
             alpha: 0.4,
@@ -1118,7 +1584,7 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
           onExpansionChanged: (expanded) {
             setState(() => _isExpanded = expanded);
           },
-          // 收起状态：意群文本 + 来源句子预览
+          // 收起态仅预览一行来源句子，超长内容省略以保持列表紧凑。
           title: Text(
             phrase.displayText,
             style: theme.textTheme.titleSmall?.copyWith(
@@ -1139,79 +1605,52 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
           // 展开状态：来源句子 + 来源音频
           children: [
             SizedBox(
+              key: const Key('favorite-phrase-expanded-content'),
               width: double.infinity,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.m,
                   0,
                   AppSpacing.m,
-                  AppSpacing.m,
+                  AppSpacing.s,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 来源句子（可播放）
+                    // 词组和意群没有音标，播放入口与单词卡保持左对齐。
+                    _FavoritePronunciationRow(
+                      rowKey: const Key('favorite-phrase-pronunciation-row'),
+                      buttonKey: const Key('favorite_phrase_speak'),
+                      text: phrase.displayText,
+                      speakKey: 'favorite-phrase:${phrase.id}',
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    // 来源句复用收藏句行：正文试听，箭头打开讲解。
                     if (phrase.sentenceText != null) ...[
-                      InkWell(
-                        onTap: phrase.audioItemId != null ? _playPhrase : null,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Row(
-                          children: [
-                            if (phrase.audioItemId != null)
-                              Icon(
-                                _isPlaying
-                                    ? Icons.stop_circle_outlined
-                                    : Icons.play_circle_outline,
-                                size: 18,
-                                color: theme.colorScheme.primary,
-                              ),
-                            if (phrase.audioItemId != null)
-                              const SizedBox(width: AppSpacing.xs),
-                            Expanded(
-                              child: Text(
-                                phrase.sentenceText!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      _FavoriteSourceSentenceTile(
+                        key: const Key('favorite-phrase-source-sentence'),
+                        sentenceText: phrase.sentenceText!,
+                        onPlay: _playSentence,
+                        onOpenDetail: _audioName != null
+                            ? () => unawaited(_openSourceSentenceDetail())
+                            : null,
                       ),
                     ],
 
                     // 来源音频
                     if (_audioName != null && phrase.audioItemId != null) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: GestureDetector(
-                          onTap: () {
-                            context.push(
-                              AppRoutes.audioLearningPlan(phrase.audioItemId!),
-                            );
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.headphones,
-                                size: 12,
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.5),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                l10n.bookmarkReviewFromAudio(_audioName!),
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                          ),
+                      const SizedBox(height: AppSpacing.s),
+                      _SourceAudioReference(
+                        key: const Key('favorite-source-audio-reference'),
+                        label: l10n.bookmarkReviewFromAudio(_audioName!),
+                        onTap: () => context.push(
+                          AppRoutes.audioLearningPlan(phrase.audioItemId!),
                         ),
                       ),
+                    ] else if (phrase.sentenceText != null &&
+                        _sourceAudioResolved) ...[
+                      const SizedBox(height: AppSpacing.s),
+                      const _MissingSourceAudioReference(),
                     ],
                   ],
                 ),
@@ -1228,6 +1667,10 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
 class _SavedWordTile extends ConsumerStatefulWidget {
   final SavedWord savedWord;
 
+  /// 仅词汇 tab 激活时预热，避免 IndexedStack 预建子树造成后台合成。
+  final bool isActive;
+  final bool isScrolling;
+
   /// 由父组件批量预加载的字典条目，避免每个 tile 独立异步查询
   final DictEntry? dictEntry;
 
@@ -1239,6 +1682,8 @@ class _SavedWordTile extends ConsumerStatefulWidget {
     required this.savedWord,
     this.dictEntry,
     this.expansionController,
+    required this.isActive,
+    required this.isScrolling,
   });
 
   @override
@@ -1246,16 +1691,59 @@ class _SavedWordTile extends ConsumerStatefulWidget {
 }
 
 class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
-  bool _isPlaying = false;
   bool _isExpanded = false;
 
   /// 源音频名称（异步加载）
   String? _audioName;
+  bool _sourceAudioResolved = false;
+  bool _hasSubmittedPrewarm = false;
+  int _lastPrewarmConfigurationVersion = -1;
 
   @override
   void initState() {
     super.initState();
+    _sourceAudioResolved = widget.savedWord.audioItemId == null;
     _loadAudioName();
+    _schedulePrewarm();
+  }
+
+  @override
+  void didUpdateWidget(_SavedWordTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.isActive && !widget.isActive) ||
+        (!oldWidget.isScrolling && widget.isScrolling)) {
+      _hasSubmittedPrewarm = false;
+    }
+    if ((!oldWidget.isActive && widget.isActive) ||
+        (oldWidget.isScrolling && !widget.isScrolling)) {
+      _schedulePrewarm();
+    }
+  }
+
+  /// Tile 被列表创建后才预热；离线 Opus 命中时无需再生成同词的 TTS 缓存。
+  void _schedulePrewarm() {
+    final configurationVersion = ref.read(
+      ttsControllerProvider.select((state) => state.configurationVersion),
+    );
+    if (!widget.isActive ||
+        widget.isScrolling ||
+        (_hasSubmittedPrewarm &&
+            _lastPrewarmConfigurationVersion == configurationVersion)) {
+      return;
+    }
+    _hasSubmittedPrewarm = true;
+    _lastPrewarmConfigurationVersion = configurationVersion;
+    final word = widget.savedWord.word;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.isActive ||
+          widget.isScrolling ||
+          !_isInScrollableViewport(context) ||
+          ref.read(pronunciationClipsProvider(word)).isNotEmpty) {
+        return;
+      }
+      ref.read(ttsControllerProvider.notifier).prewarmTextsIncremental([word]);
+    });
   }
 
   /// 加载源音频名称
@@ -1264,9 +1752,29 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
     if (audioId == null) return;
     final dao = ref.read(audioItemDaoProvider);
     final row = await dao.getById(audioId);
-    if (mounted && row != null) {
-      setState(() => _audioName = row.name);
+    if (mounted) {
+      setState(() {
+        _audioName = row?.name;
+        _sourceAudioResolved = true;
+      });
     }
+  }
+
+  /// 打开来源句讲解；历史收藏缺少定位字段时由共享解析器回填。
+  Future<void> _openSourceSentenceDetail() {
+    final word = widget.savedWord;
+    final audioItemId = word.audioItemId;
+    final sentenceText = word.sentenceText;
+    if (audioItemId == null || sentenceText == null) return Future.value();
+    return _openFavoriteSourceSentenceDetail(
+      context: context,
+      ref: ref,
+      audioItemId: audioItemId,
+      sentenceText: sentenceText,
+      sentenceIndex: word.sentenceIndex,
+      sentenceStartMs: word.sentenceStartMs,
+      sentenceEndMs: word.sentenceEndMs,
+    );
   }
 
   /// 播放来源句子的原声片段
@@ -1275,125 +1783,38 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
   /// 仅在无时间信息时回退到加载字幕。
   Future<void> _playSentence() async {
     final word = widget.savedWord;
-    if (word.audioItemId == null) return;
-
-    // 需要时间信息：优先冗余字段，其次字幕文件
-    final hasStoredTiming =
-        word.sentenceStartMs != null && word.sentenceEndMs != null;
-    if (!hasStoredTiming && word.sentenceIndex == null) return;
-
-    if (_isPlaying) {
-      ref.read(audioEngineProvider.notifier).stop();
-      setState(() => _isPlaying = false);
+    final key = 'saved-word-source:${word.id}';
+    final player = ref.read(shortAudioPlayerProvider);
+    if (player.state.playingKey == key) {
+      await player.stop();
       return;
     }
-
-    setState(() => _isPlaying = true);
-
-    try {
-      final engine = ref.read(audioEngineProvider.notifier);
-      final engineState = ref.read(audioEngineProvider);
-
-      // 从数据库获取音频项
-      final dao = ref.read(audioItemDaoProvider);
-      final row = await dao.getById(word.audioItemId!);
-      if (row == null || !mounted) {
-        setState(() => _isPlaying = false);
-        return;
-      }
-
-      final audioItem = model.AudioItem(
-        id: row.id,
-        name: row.name,
-        audioPath: row.audioPath,
-        transcriptPath: row.transcriptPath,
-        addedDate: row.addedDate,
-        totalDuration: row.totalDuration,
-        sentenceCount: row.sentenceCount,
-        wordCount: row.wordCount,
-        isPinned: row.isPinned,
-        transcriptSource: model.TranscriptSource.fromIndex(
-          row.transcriptSource,
-        ),
-        audioSha256: row.audioSha256,
-        originalAudioSha256: row.originalAudioSha256,
-        transcriptLanguage: row.transcriptLanguage,
-      );
-
-      // 如果当前加载的不是同一音频，重新加载
-      if (engineState.currentAudioId != word.audioItemId) {
-        await engine.loadAudio(audioItem, 1.0);
-      }
-      if (!mounted) return;
-
-      Duration startTime;
-      Duration endTime;
-
-      /// 存储时间是否可信（最少 200ms）
-      const minDurationMs = 200;
-      final storedDurationOk =
-          hasStoredTiming &&
-          (word.sentenceEndMs! - word.sentenceStartMs!) >= minDurationMs;
-
-      if (hasStoredTiming && storedDurationOk) {
-        // 使用冗余存储的时间（不依赖字幕文件）
-        startTime = Duration(milliseconds: word.sentenceStartMs!);
-        endTime = Duration(milliseconds: word.sentenceEndMs!);
-      } else {
-        // 回退：加载字幕获取句子时间信息
-        if (word.sentenceIndex == null || row.transcriptPath == null) {
-          setState(() => _isPlaying = false);
-          return;
-        }
-        final sentences = await engine.loadTranscript(audioItem);
-        if (!mounted || sentences.isEmpty) {
-          setState(() => _isPlaying = false);
-          return;
-        }
-
-        // 优先用 sentenceIndex，但若字幕重新生成导致索引错位，
-        // 则通过 sentenceText 匹配找到正确句子
-        final idx = word.sentenceIndex!;
-        var sentence = idx < sentences.length ? sentences[idx] : null;
-        final storedText = word.sentenceText;
-
-        if (sentence != null &&
-            storedText != null &&
-            sentence.text.trim() != storedText.trim()) {
-          sentence = null;
-          for (final s in sentences) {
-            if (s.text.trim() == storedText.trim()) {
-              sentence = s;
-              break;
-            }
-          }
-        }
-
-        if (sentence == null) {
-          if (mounted) setState(() => _isPlaying = false);
-          return;
-        }
-        startTime = sentence.startTime;
-        endTime = sentence.endTime;
-      }
-
-      final sessionId = engine.newSession();
-      await engine.playRangeOnce(startTime, endTime, sessionId);
-    } catch (_) {
-      // 忽略播放错误（音频文件不存在等）
-    } finally {
-      if (mounted) {
-        setState(() => _isPlaying = false);
-      }
+    if (ref.read(ttsControllerProvider).speakingKey == key) {
+      await ref.read(ttsControllerProvider.notifier).stop();
+      return;
     }
+    await _playSourceSentence(
+      ref,
+      key: key,
+      audioItemId: word.audioItemId,
+      sentenceIndex: word.sentenceIndex,
+      sentenceText: word.sentenceText,
+      sentenceStartMs: word.sentenceStartMs,
+      sentenceEndMs: word.sentenceEndMs,
+    );
+    return;
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(
+      ttsControllerProvider.select((state) => state.configurationVersion),
+    );
+    _schedulePrewarm();
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final word = widget.savedWord;
-
+    final previewText = _collapsedPreviewText(word, widget.dictEntry);
     return Dismissible(
       key: ValueKey('word_${word.id}'),
       direction: DismissDirection.endToStart,
@@ -1408,8 +1829,13 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: ExpansionTile(
           controller: widget.expansionController,
+          childrenPadding: EdgeInsets.zero,
+          dense: true,
+          minTileHeight: 40,
           iconColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           collapsedIconColor: theme.colorScheme.onSurfaceVariant.withValues(
             alpha: 0.4,
@@ -1426,9 +1852,9 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
               letterSpacing: -0.2,
             ),
           ),
-          subtitle: !_isExpanded && widget.dictEntry != null
+          subtitle: !_isExpanded && previewText != null
               ? Text(
-                  _buildSubtitle(widget.dictEntry!),
+                  previewText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1439,43 +1865,27 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
           // 展开状态：完整释义（仅多行时）+ 柯林斯星级 + 考试标签 + 来源句子
           children: [
             SizedBox(
+              key: const Key('favorite-word-expanded-content'),
               width: double.infinity,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.m,
                   0,
                   AppSpacing.m,
-                  AppSpacing.m,
+                  AppSpacing.s,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 音标 + 完整释义
+                    // 播放入口不依赖本地词典命中，固定跟随音标左侧排列。
+                    _FavoritePronunciationRow(
+                      rowKey: const Key('favorite-word-pronunciation-row'),
+                      buttonKey: const Key('favorite_speak'),
+                      text: word.word,
+                      phonetic: widget.dictEntry?.phonetic,
+                    ),
+                    // 完整释义仅在本地词典精确命中时展示。
                     if (widget.dictEntry != null) ...[
-                      if (widget.dictEntry!.phonetic.isNotEmpty)
-                        Row(
-                          children: [
-                            Text(
-                              '/${widget.dictEntry!.phonetic}/',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            // TTS 发音按钮
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: AppSpacing.xs,
-                              ),
-                              child: SpeakButton(
-                                text: word.word,
-                                size: 18,
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                constraints: const BoxConstraints(),
-                              ),
-                            ),
-                          ],
-                        ),
                       if (widget.dictEntry!.translation != null) ...[
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -1496,84 +1906,40 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
                       _buildMetaTags(theme, widget.dictEntry!),
                     ],
 
-                    // 来源句子
+                    // 来源句复用收藏句行：正文试听，箭头打开讲解。
                     if (word.sentenceText != null) ...[
-                      const SizedBox(height: AppSpacing.s),
-                      const Divider(height: 1),
-                      const SizedBox(height: AppSpacing.s),
-                      InkWell(
-                        onTap:
-                            word.audioItemId != null &&
-                                word.sentenceIndex != null
-                            ? _playSentence
-                            : null,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Row(
-                          children: [
-                            if (word.audioItemId != null &&
-                                word.sentenceIndex != null)
-                              Icon(
-                                _isPlaying
-                                    ? Icons.stop_circle_outlined
-                                    : Icons.play_circle_outline,
-                                size: 18,
-                                color: theme.colorScheme.primary,
-                              ),
-                            if (word.audioItemId != null &&
-                                word.sentenceIndex != null)
-                              const SizedBox(width: AppSpacing.xs),
-                            Expanded(
-                              child: Text(
-                                word.sentenceText!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: AppSpacing.xs),
+                      Divider(
+                        height: 1,
+                        color: theme.colorScheme.outlineVariant.withValues(
+                          alpha: 0.7,
                         ),
+                      ),
+                      const SizedBox(height: 0),
+                      _FavoriteSourceSentenceTile(
+                        key: const Key('favorite-word-source-sentence'),
+                        sentenceText: word.sentenceText!,
+                        onPlay: _playSentence,
+                        onOpenDetail: _audioName != null
+                            ? () => unawaited(_openSourceSentenceDetail())
+                            : null,
                       ),
                     ],
 
                     // 源音频引用
                     if (_audioName != null && word.audioItemId != null) ...[
                       const SizedBox(height: AppSpacing.xs),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: GestureDetector(
-                          onTap: () {
-                            context.push(
-                              AppRoutes.audioLearningPlan(word.audioItemId!),
-                            );
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.headphones,
-                                size: 12,
-                                color: theme.colorScheme.outline.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  l10n.bookmarkReviewFromAudio(_audioName!),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 11,
-                                    color: theme.colorScheme.outline.withValues(
-                                      alpha: 0.6,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                      _SourceAudioReference(
+                        key: const Key('favorite-source-audio-reference'),
+                        label: l10n.bookmarkReviewFromAudio(_audioName!),
+                        onTap: () => context.push(
+                          AppRoutes.audioLearningPlan(word.audioItemId!),
                         ),
                       ),
+                    ] else if (word.sentenceText != null &&
+                        _sourceAudioResolved) ...[
+                      const SizedBox(height: AppSpacing.s),
+                      const _MissingSourceAudioReference(),
                     ],
                   ],
                 ),
@@ -1596,6 +1962,16 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       parts.add(firstLine);
     }
     return parts.join(' ');
+  }
+
+  /// 多词收藏优先预览来源句子，单词继续展示词典摘要。
+  String? _collapsedPreviewText(SavedWord word, DictEntry? dictEntry) {
+    final hasMultipleWords = word.word.trim().contains(RegExp(r'\s'));
+    if (hasMultipleWords && (word.sentenceText?.isNotEmpty ?? false)) {
+      return word.sentenceText;
+    }
+    if (dictEntry == null) return null;
+    return _buildSubtitle(dictEntry);
   }
 
   /// 柯林斯星级 + 考试标签 Wrap
@@ -1639,6 +2015,97 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
   }
 }
 
+/// 来源音频固定为单行右对齐，并以箭头提示该行可跳转。
+class _SourceAudioReference extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SourceAudioReference({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.outline.withValues(alpha: 0.7);
+    return Semantics(
+      button: true,
+      label: '打开来源材料 $label',
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xs,
+                vertical: 3,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.headphones, size: 14, color: color),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(color: color),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: color),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 已删除来源材料的只读提示，外观与可跳转的来源材料行保持一致。
+class _MissingSourceAudioReference extends StatelessWidget {
+  const _MissingSourceAudioReference();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.outline.withValues(alpha: 0.7);
+    final l10n = AppLocalizations.of(context)!;
+    return Semantics(
+      label: l10n.favoriteSourceMaterialNotFound,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: 3,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.headphones, size: 14, color: color),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                l10n.favoriteSourceMaterialNotFound,
+                style: theme.textTheme.labelSmall?.copyWith(color: color),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================
 // 共用空状态
 // ============================================================
@@ -1654,7 +2121,7 @@ Widget _buildEmptyState(BuildContext context, {required bool isSentences}) {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            isSentences ? Icons.format_quote : Icons.abc,
+            isSentences ? Icons.subject : Icons.menu_book_outlined,
             size: 56,
             color: theme.colorScheme.outline.withValues(alpha: 0.5),
           ),

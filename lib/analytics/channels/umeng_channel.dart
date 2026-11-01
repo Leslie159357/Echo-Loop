@@ -26,9 +26,6 @@ class UmengChannel implements AnalyticsChannel {
   static const _channel = 'flutter';
 
   @override
-  String get name => 'Umeng';
-
-  @override
   Future<void> initialize() async {
     await UmengCommonSdk.initCommon(_androidAppKey, _iosAppKey, _channel);
     // 手动页面采集模式，由 AnalyticsService 控制 screen_view 事件
@@ -61,6 +58,13 @@ class UmengChannel implements AnalyticsChannel {
         'property_name': name,
         'property_value': value,
       });
+    }
+  }
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
     }
   }
 

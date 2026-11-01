@@ -1,12 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/stage_settings_overrides.dart'
     show BriefingPauseChoice;
+import 'package:echo_loop/models/study_stage.dart';
 import 'package:echo_loop/widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
+import 'package:echo_loop/widgets/common/briefing_action_row.dart';
+import 'package:echo_loop/widgets/study/study_stage_visuals.dart';
 
 import '../helpers/test_app.dart';
 
 void main() {
+  testWidgets('顶部任务图标和颜色与学习任务列表一致', (tester) async {
+    await tester.pumpWidget(
+      createTestApp(
+        Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showIntensiveListenBriefingSheet(
+              context: context,
+              sentenceCount: 10,
+              onStartPractice: (_, _) {},
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    final sheetContext = tester.element(
+      find.byType(IntensiveListenBriefingSheet),
+    );
+    final expected = studyStageVisual(
+      StudyStage.intensiveListen,
+      AppLocalizations.of(sheetContext)!,
+    );
+    final heroIcon = tester.widget<Icon>(
+      find.byWidgetPredicate((widget) => widget is Icon && widget.size == 56),
+    );
+
+    expect(heroIcon.icon, expected.icon);
+    expect(heroIcon.color, expected.iconColor);
+  });
+
+  testWidgets('底部开始按钮避让 Android/iOS 底部安全区', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    await tester.pumpWidget(
+      createTestApp(
+        Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showIntensiveListenBriefingSheet(
+              context: context,
+              sentenceCount: 10,
+              onStartPractice: (_, _) {},
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    final actionRow = tester.getRect(find.byType(BriefingActionRow));
+    expect(actionRow.bottom, lessThanOrEqualTo(844 - 34));
+  });
+
   testWidgets('入口面板默认显示 1.0x 播放速度下拉菜单', (tester) async {
     await tester.pumpWidget(
       createTestApp(
@@ -90,11 +159,18 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('1.0x'));
+    await tester.tap(find.byType(DropdownButton<double>).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('1.5x').last);
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -240));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start Practice'));
+    await tester.tap(find.text('1.5x'));
+    await tester.pumpAndSettle();
+    final startButton = find.descendant(
+      of: find.byType(BriefingActionRow),
+      matching: find.byType(FilledButton),
+    );
+    await tester.ensureVisible(startButton);
+    await tester.tap(startButton);
     await tester.pumpAndSettle();
 
     expect(selectedSpeed, 1.5);
@@ -127,7 +203,7 @@ void main() {
     expect(find.text('Pause between sentences'), findsOneWidget);
     expect(find.text('Auto'), findsOneWidget);
 
-    await tester.tap(find.text('Start Practice'));
+    await tester.tap(find.text('Start Practicing'));
     await tester.pumpAndSettle();
 
     expect(selectedPause, const BriefingPauseChoice.smart());
@@ -223,7 +299,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('3x'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start Practice'));
+    await tester.tap(find.text('Start Practicing'));
     await tester.pumpAndSettle();
 
     expect(selectedPause, const BriefingPauseChoice.multiplier(3.0));
@@ -254,18 +330,18 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
-    // 打开停顿下拉,选「固定间隔 5s」——未点「开始练习」也应即时回调。
+    // 打开停顿下拉,选「固定间隔 2s」——未点「开始练习」也应即时回调。
     await tester.tap(find.text('Auto'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('5s'),
+      find.text('2s'),
       80,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('5s'));
+    await tester.tap(find.text('2s'));
     await tester.pumpAndSettle();
 
-    expect(changedPause, const BriefingPauseChoice.fixed(5));
+    expect(changedPause, const BriefingPauseChoice.fixed(2));
   });
 }

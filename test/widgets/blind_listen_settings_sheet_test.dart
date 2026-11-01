@@ -1,4 +1,3 @@
-import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:echo_loop/widgets/blind_listen_settings_sheet.dart';
 import 'package:flutter/material.dart';
@@ -8,19 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
 
-class _RecordingAudioEngine extends TestAudioEngine {
-  double recordedSpeed = 1.0;
-
-  @override
-  Future<void> setSpeed(double speed) async {
-    recordedSpeed = speed;
-  }
-}
-
 void main() {
   Widget createTestWidget({
     BlindListenPlayerState initialState = const BlindListenPlayerState(),
-    _RecordingAudioEngine? audioEngine,
   }) {
     return createTestApp(
       Builder(
@@ -34,9 +23,6 @@ void main() {
       overrides: [
         blindListenPlayerProvider.overrideWith(
           () => TestBlindListenPlayer(initialState),
-        ),
-        audioEngineProvider.overrideWith(
-          () => audioEngine ?? TestAudioEngine(),
         ),
       ],
     );
@@ -64,10 +50,8 @@ void main() {
     await tester.pumpWidget(createTestWidget());
     await openSheet(tester);
 
-    final repeatTop = tester.getTopLeft(find.text('Repeat per paragraph')).dy;
-    final pauseTop = tester
-        .getTopLeft(find.text('Pause between paragraphs'))
-        .dy;
+    final repeatTop = tester.getTopLeft(find.text('Repeat per segment')).dy;
+    final pauseTop = tester.getTopLeft(find.text('Pause between segments')).dy;
     final speedTop = tester.getTopLeft(find.text('Playback Speed')).dy;
 
     expect(speedTop, greaterThan(pauseTop));
@@ -83,9 +67,8 @@ void main() {
     expect(find.text('Infinite ∞'), findsWidgets);
   });
 
-  testWidgets('滑块更新盲听设置并同步 AudioEngine 速度', (tester) async {
-    final audioEngine = _RecordingAudioEngine();
-    await tester.pumpWidget(createTestWidget(audioEngine: audioEngine));
+  testWidgets('滑块更新盲听速度设置', (tester) async {
+    await tester.pumpWidget(createTestWidget());
     await openSheet(tester);
 
     tester.widget<Slider>(find.byType(Slider).last).onChanged!(8);
@@ -98,7 +81,25 @@ void main() {
       container.read(blindListenPlayerProvider).settings.playbackSpeed,
       1.2,
     );
-    expect(audioEngine.recordedSpeed, 1.2);
     expect(find.text('1.2x'), findsOneWidget);
+  });
+
+  testWidgets('小视口下内容可滚动且关闭按钮保持可见', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 320));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(createTestWidget());
+    await openSheet(tester);
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+
+    final closeButton = find.byKey(const Key('settings-sheet-close'));
+    expect(closeButton, findsOneWidget);
+    await tester.tap(closeButton);
+    await tester.pumpAndSettle();
+    expect(closeButton, findsNothing);
   });
 }

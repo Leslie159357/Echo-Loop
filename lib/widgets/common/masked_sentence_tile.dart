@@ -17,16 +17,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
+import '../../models/word_highlight_binding.dart';
+import '../../providers/reading_text_prefs_provider.dart';
 import '../../providers/saved_word_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/keyword_extraction.dart';
+import '../../utils/text_normalize.dart';
 import '../guide_flow.dart';
 import '../practice/sentence_word_selection.dart';
+import 'word_highlight_builder.dart';
+import 'sentence_action_icons.dart';
 
-/// 句子编号点击区 key 前缀（供 widget test 精准点击，避免点到文本本身）。
+/// 句子讲解按钮 key 前缀（供 widget test 精准点击，避免点到文本本身）。
 @visibleForTesting
-const String kMaskedSentenceNumberHitAreaKeyPrefix =
-    'masked-sentence-number-hit-area';
+const String kMaskedSentenceExplanationHitAreaKeyPrefix =
+    'masked-sentence-explanation-hit-area';
 
 /// 句子主体点击区 key 前缀（供 widget test 精准点击，避免受内部文本布局影响）。
 @visibleForTesting
@@ -44,9 +49,8 @@ const _wordSpacing = 4.0;
 /// 遮盖句子 Tile
 ///
 /// 三个独立点击区：
-/// - **编号区**（左侧 48dp 宽，撑满 tile 全高）：`onPlayFromTap`，点击从该句开播。
-///   当前播放句的编号位置渲染 ▶ play_arrow 图标，提示"点击=播放"。
-/// - **主体区**（中间 Expanded）：`onDetailTap`，点击进入句子讲解页。
+/// - **讲解区**（左侧 32dp 宽，撑满 tile 全高）：`onDetailTap`，点击进入句子讲解页。
+/// - **主体区**（中间 Expanded）：`onPlayFromTap`，点击从该句开始播放。
 /// - **收藏区**（右侧独立按钮）：`onBookmarkTap`，直接收藏/取消收藏。
 class MaskedSentenceTile extends ConsumerWidget {
   /// 句子数据
@@ -61,22 +65,28 @@ class MaskedSentenceTile extends ConsumerWidget {
   /// 是否为当前播放中的句子
   final bool isPlayingSentence;
 
+  /// 当前句子的原音时间轴；遮盖模式仍不会透露被遮住的词。
+  final WordHighlightBinding? wordHighlightBinding;
+
   /// 是否已收藏
   final bool isBookmarked;
 
-  /// 点击编号区回调：从该句开始播放
+  /// 点击句子主体回调：从该句开始播放
   final VoidCallback? onPlayFromTap;
 
-  /// 点击主体（文本/书签）区回调：进入句子讲解页
+  /// 长按或右键主体区时请求整句菜单，参数为触发点的全局坐标。
+  final ValueChanged<Offset>? onContextMenuRequested;
+
+  /// 点击左侧讲解按钮回调：进入句子讲解页
   final VoidCallback? onDetailTap;
 
   /// 点击右侧收藏按钮回调：直接切换收藏状态
   final VoidCallback? onBookmarkTap;
 
-  /// 新手引导：编号区 GuideStep（非空时包 GuideTarget 高亮编号区）
-  final GuideStep? numberAreaGuideStep;
+  /// 新手引导：讲解按钮 GuideStep（非空时包 GuideTarget 高亮左侧讲解按钮）
+  final GuideStep? explanationAreaGuideStep;
 
-  /// 新手引导：主体区 GuideStep（非空时包 GuideTarget 高亮文本区）
+  /// 新手引导：主体区 GuideStep（非空时包 GuideTarget 高亮可播放文本区）
   final GuideStep? bodyAreaGuideStep;
 
   const MaskedSentenceTile({
@@ -85,11 +95,13 @@ class MaskedSentenceTile extends ConsumerWidget {
     required this.displayMode,
     required this.keywordIndices,
     required this.isPlayingSentence,
+    this.wordHighlightBinding,
     this.isBookmarked = false,
     this.onPlayFromTap,
+    this.onContextMenuRequested,
     this.onDetailTap,
     this.onBookmarkTap,
-    this.numberAreaGuideStep,
+    this.explanationAreaGuideStep,
     this.bodyAreaGuideStep,
   });
 
@@ -101,6 +113,25 @@ class MaskedSentenceTile extends ConsumerWidget {
       sentence.text,
       ref.watch(savedTextIndexProvider),
     );
+    // 字幕正文样式：主题正文 + 用户的学习内容字号/字体偏好（每句只算一次）
+    final textStyle = ref
+        .watch(readingTextPrefsNotifierProvider)
+        .applyTo(theme.textTheme.bodyMedium ?? const TextStyle());
+    final words = tokenize(sentence.text);
+    final binding = wordHighlightBinding;
+    final Widget sentenceText = binding == null
+        ? _buildMaskedText(theme, textStyle, words, savedSegments, null)
+        : WordHighlightBuilder(
+            text: sentence.text,
+            binding: binding,
+            builder: (context, activeWordIndex) => _buildMaskedText(
+              theme,
+              textStyle,
+              words,
+              savedSegments,
+              activeWordIndex,
+            ),
+          );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -122,30 +153,31 @@ class MaskedSentenceTile extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _wrapWithGuide(
-              numberAreaGuideStep,
-              _SentenceNumberHitArea(
+              explanationAreaGuideStep,
+              _SentenceExplanationHitArea(
                 key: ValueKey(
-                  '$kMaskedSentenceNumberHitAreaKeyPrefix-${sentence.index}',
+                  '$kMaskedSentenceExplanationHitAreaKeyPrefix-${sentence.index}',
                 ),
-                displayNumber: sentence.index + 1,
-                isPlayingSentence: isPlayingSentence,
                 theme: theme,
-                onTap: onPlayFromTap,
+                label:
+                    AppLocalizations.of(context)?.viewSentenceExplanation ??
+                    'View sentence explanation',
+                onTap: onDetailTap,
               ),
             ),
             Expanded(
               child: _wrapWithGuide(
                 bodyAreaGuideStep,
-                _SentenceBodyHitArea(
-                  key: ValueKey(
-                    '$kMaskedSentenceBodyHitAreaKeyPrefix-${sentence.index}',
-                  ),
-                  theme: theme,
-                  onTap: onDetailTap,
-                  child: _buildMaskedText(
-                    theme,
-                    tokenize(sentence.text),
-                    savedSegments,
+                Semantics(
+                  identifier: 'sentence-body-${sentence.index}',
+                  child: _SentenceBodyHitArea(
+                    key: ValueKey(
+                      '$kMaskedSentenceBodyHitAreaKeyPrefix-${sentence.index}',
+                    ),
+                    theme: theme,
+                    onTap: onPlayFromTap,
+                    onContextMenuRequested: onContextMenuRequested,
+                    child: sentenceText,
                   ),
                 ),
               ),
@@ -170,8 +202,10 @@ class MaskedSentenceTile extends ConsumerWidget {
   /// 构建遮盖文本
   Widget _buildMaskedText(
     ThemeData theme,
+    TextStyle textStyle,
     List<String> words,
     Map<int, List<(int, int, bool)>> savedSegments,
+    int? activeWordIndex,
   ) {
     if (words.isEmpty) return const SizedBox.shrink();
 
@@ -187,7 +221,14 @@ class MaskedSentenceTile extends ConsumerWidget {
     return Wrap(
       spacing: _wordSpacing,
       runSpacing: 2,
-      children: _buildWordWidgets(words, shouldMask, theme, savedSegments),
+      children: _buildWordWidgets(
+        words,
+        shouldMask,
+        theme,
+        textStyle,
+        savedSegments,
+        activeWordIndex,
+      ),
     );
   }
 
@@ -199,73 +240,77 @@ class MaskedSentenceTile extends ConsumerWidget {
     List<String> words,
     bool Function(int index) shouldMask,
     ThemeData theme,
+    TextStyle textStyle,
     Map<int, List<(int, int, bool)>> savedSegments,
+    int? activeWordIndex,
   ) {
-    return [
-      for (var i = 0; i < words.length; i++)
+    var playbackWordIndex = 0;
+    final blocks = <Widget>[];
+    for (var i = 0; i < words.length; i++) {
+      final isWord = normalizeWord(words[i]).isNotEmpty;
+      blocks.add(
         _WordBlock(
           text: words[i],
           isMasked: shouldMask(i),
+          isActiveWord: isWord && playbackWordIndex == activeWordIndex,
           isPrevMasked: i > 0 && shouldMask(i) && shouldMask(i - 1),
           isNextMasked:
               i < words.length - 1 && shouldMask(i) && shouldMask(i + 1),
           savedSegments: savedSegments[i],
           theme: theme,
+          textStyle: textStyle,
         ),
-    ];
+      );
+      if (isWord) playbackWordIndex++;
+    }
+    return blocks;
   }
 }
 
-/// 编号点击区
+/// 左侧讲解按钮。
 ///
-/// 固定 40dp 宽，给正文释放更多横向空间，同时保留独立播放热区。
-/// 当前播放句渲染 ▶ play_arrow（与正在播放视觉绑定），否则渲染数字。
-class _SentenceNumberHitArea extends StatelessWidget {
-  final int displayNumber;
-  final bool isPlayingSentence;
+/// 固定 32dp 宽，给正文释放更多横向空间；热区随 tile 全高撑开。
+class _SentenceExplanationHitArea extends StatelessWidget {
   final VoidCallback? onTap;
   final ThemeData theme;
+  final String label;
 
-  const _SentenceNumberHitArea({
+  const _SentenceExplanationHitArea({
     super.key,
-    required this.displayNumber,
-    required this.isPlayingSentence,
     required this.theme,
+    required this.label,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final inner = SizedBox(
-      width: 40,
+      width: 32,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
-        child: Center(
-          child: isPlayingSentence
-              ? Icon(
-                  Icons.play_arrow,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                )
-              : Text(
-                  '$displayNumber',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-        ),
+        child: Center(child: const SentenceExplanationIcon()),
       ),
     );
 
-    if (onTap == null) return inner;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        // 背景在外层 AnimatedContainer 上，splash 会被遮挡，仅用 highlight 反馈
-        splashColor: Colors.transparent,
-        highlightColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-        child: inner,
+    return Semantics(
+      button: onTap != null,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: onTap == null
+            ? inner
+            : Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  // 背景在外层 AnimatedContainer 上，splash 会被遮挡，仅用 highlight 反馈
+                  splashColor: Colors.transparent,
+                  highlightColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.12,
+                  ),
+                  child: inner,
+                ),
+              ),
       ),
     );
   }
@@ -273,10 +318,11 @@ class _SentenceNumberHitArea extends StatelessWidget {
 
 /// 主体点击区（文本）
 ///
-/// 撑满剩余宽度，撑满 tile 全高。点击进入句子讲解页。
+/// 撑满剩余宽度，撑满 tile 全高。点击从该句开始播放。
 class _SentenceBodyHitArea extends StatelessWidget {
   final ThemeData theme;
   final VoidCallback? onTap;
+  final ValueChanged<Offset>? onContextMenuRequested;
   final Widget child;
 
   const _SentenceBodyHitArea({
@@ -284,6 +330,7 @@ class _SentenceBodyHitArea extends StatelessWidget {
     required this.theme,
     required this.child,
     this.onTap,
+    this.onContextMenuRequested,
   });
 
   @override
@@ -298,14 +345,24 @@ class _SentenceBodyHitArea extends StatelessWidget {
       child: child,
     );
 
-    if (onTap == null) return inner;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: Colors.transparent,
-        highlightColor: theme.colorScheme.primary.withValues(alpha: 0.08),
-        child: inner,
+    final requestMenu = onContextMenuRequested;
+    if (onTap == null && requestMenu == null) return inner;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: requestMenu == null
+          ? null
+          : (details) => requestMenu(details.globalPosition),
+      onSecondaryTapDown: requestMenu == null
+          ? null
+          : (details) => requestMenu(details.globalPosition),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: Colors.transparent,
+          highlightColor: theme.colorScheme.primary.withValues(alpha: 0.08),
+          child: inner,
+        ),
       ),
     );
   }
@@ -333,19 +390,18 @@ class _SentenceBookmarkHitArea extends StatelessWidget {
     final semanticLabel = isBookmarked
         ? (l10n?.intensiveListenMarkedDifficult ?? 'Marked difficult')
         : (l10n?.intensiveListenNotDifficult ?? 'Not marked difficult');
-    final iconColor = isBookmarked
-        ? Colors.amber
-        : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.28);
 
     final inner = SizedBox(
-      width: 38,
+      width: 32,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
         child: Center(
-          child: Icon(
-            isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+          child: SentenceBookmarkIcon(
+            isBookmarked: isBookmarked,
             size: 14,
-            color: iconColor,
+            unsavedColor: theme.colorScheme.onSurfaceVariant.withValues(
+              alpha: 0.28,
+            ),
             semanticLabel: semanticLabel,
           ),
         ),
@@ -383,6 +439,7 @@ class _SentenceBookmarkHitArea extends StatelessWidget {
 class _WordBlock extends StatelessWidget {
   final String text;
   final bool isMasked;
+  final bool isActiveWord;
   final bool isPrevMasked;
   final bool isNextMasked;
 
@@ -391,10 +448,15 @@ class _WordBlock extends StatelessWidget {
 
   final ThemeData theme;
 
+  /// 正文样式（已叠加学习内容字号/字体偏好）；遮盖词仅改颜色，尺寸不变。
+  final TextStyle textStyle;
+
   const _WordBlock({
     required this.text,
     required this.isMasked,
+    required this.isActiveWord,
     required this.theme,
+    required this.textStyle,
     this.isPrevMasked = false,
     this.isNextMasked = false,
     this.savedSegments,
@@ -413,6 +475,11 @@ class _WordBlock extends StatelessWidget {
                 left: isPrevMasked ? Radius.zero : const Radius.circular(3),
                 right: isNextMasked ? Radius.zero : const Radius.circular(3),
               ),
+            )
+          : isActiveWord
+          ? BoxDecoration(
+              color: AppTheme.wordHighlightBackgroundColor(theme.colorScheme),
+              borderRadius: BorderRadius.circular(3),
             )
           : null,
       child: _buildText(),
@@ -442,7 +509,7 @@ class _WordBlock extends StatelessWidget {
   ///
   /// 下划线必须显式设 decorationColor（默认会跟随文字色）。
   Widget _buildText() {
-    final baseStyle = theme.textTheme.bodyMedium?.copyWith(
+    final baseStyle = textStyle.copyWith(
       color: isMasked ? Colors.transparent : null,
     );
     final segments = savedSegments;

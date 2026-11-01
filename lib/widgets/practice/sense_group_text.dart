@@ -1,7 +1,8 @@
 /// 意群标注文本组件
 ///
 /// 将句子按意群渲染为内联 badge 样式，保持自然文本排版。
-/// 所有意群使用统一背景色，可点击播放对应音频片段。
+/// 未收藏意群使用透明背景，以边框区分播放状态；已收藏意群保留橙色背景。
+/// 所有意群均可点击播放对应音频片段。
 /// 支持四种视觉状态：空闲 / 播放中 / 已播放 / 已收藏。
 ///
 /// 已收藏的单词/词组在 badge 内文本上渲染橙色点状下划线（与
@@ -13,10 +14,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/speech_practice_models.dart';
+import '../../providers/reading_text_prefs_provider.dart';
 import '../../providers/saved_word_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/saved_text_index.dart';
 import '../../utils/sense_group_timing.dart';
+import '../../utils/text_normalize.dart';
 import '../common/text_context_menu.dart';
 import 'sentence_word_selection.dart';
 
@@ -25,20 +28,7 @@ const _matchedColor = Color(0xFF2E9B51);
 
 /// 提取英文单词（与 [SpeechTranscriptMatcher] 规则一致，保留撇号）
 final _englishWordPattern = RegExp(r"[A-Za-z]+(?:'[A-Za-z]+)?");
-
-/// 意群 badge 空闲态背景色（亮色主题）
-///
-/// 用中性灰，搭配跟读完成后的绿色匹配字，也避免蓝底误导用户。
-const _groupColorLight = Color(0xFFEDEFF2); // 中性浅灰
-
-/// 意群 badge 空闲态背景色（暗色主题）
-const _groupColorDark = Color(0xFF26262A); // 中性深灰
-
-/// 播放中意群背景色（暗色主题）
-///
-/// 比空闲态更亮一档的实色蓝，凸显"正在播放"；替代 M3 primaryContainer
-/// （低饱和灰蓝在纯黑上发雾），与空闲态保持同色系。
-const _playingColorDark = Color(0xFF1E4A70); // 亮蓝（播放中）
+final _playbackWordPattern = RegExp(r'\S+');
 
 /// 已收藏意群背景色（亮色主题）
 final _savedColorLight = Colors.orange.shade50;
@@ -86,6 +76,9 @@ class SenseGroupText extends ConsumerStatefulWidget {
   /// 为 null 或空时不做单词高亮，意群 badge 用纯文本渲染。
   final List<SpeechTranscriptSegment>? highlightedSegments;
 
+  /// 当前原音播放词在整句中的序号；null 时不显示播放高亮。
+  final int? activeWordIndex;
+
   const SenseGroupText({
     super.key,
     required this.chunks,
@@ -96,6 +89,7 @@ class SenseGroupText extends ConsumerStatefulWidget {
     this.onTapGroupWithRect,
     this.savedGroupTexts = const {},
     this.highlightedSegments,
+    this.activeWordIndex,
   });
 
   @override
@@ -128,10 +122,14 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final baseStyle = theme.textTheme.titleMedium?.copyWith(
+    final rawStyle = theme.textTheme.titleMedium?.copyWith(
       height: 1.4,
       color: colorScheme.onSurface,
     );
+    // 学习内容字号偏好：与句子正文同一缩放规则
+    final baseStyle = rawStyle == null
+        ? null
+        : ref.watch(readingTextPrefsNotifierProvider).applyTo(rawStyle);
 
     // 收藏索引流式监听：加载中/降级（测试环境无 DB）时为空索引 = 无标记
     final savedMasks = _buildSavedMasks(ref.watch(savedTextIndexProvider));
@@ -141,8 +139,9 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
     final chunkSpans = _buildChunkSpans(savedMasks, savedColor);
 
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      // 与讲解工具栏使用同一紧凑间距，保证意群换行后横纵留白一致。
+      spacing: AppSpacing.s,
+      runSpacing: AppSpacing.s,
       children: [
         for (var i = 0; i < widget.chunks.length; i++)
           _buildGroupBadge(
@@ -190,15 +189,21 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
     List<bool> mask,
     Color savedColor, {
     Color? color,
+    bool isActiveWord = false,
   }) {
     return [
       for (final (subStart, subEnd, saved) in splitByMask(start, end, mask))
         TextSpan(
           text: text.substring(subStart, subEnd),
-          style: (color == null && !saved)
+          style: (color == null && !saved && !isActiveWord)
               ? null
               : TextStyle(
                   color: color,
+                  backgroundColor: isActiveWord
+                      ? AppTheme.wordHighlightBackgroundColor(
+                          Theme.of(context).colorScheme,
+                        )
+                      : null,
                   decoration: saved ? TextDecoration.underline : null,
                   decorationStyle: saved ? TextDecorationStyle.dotted : null,
                   decorationColor: saved ? savedColor : null,
@@ -206,6 +211,35 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
                 ),
         ),
     ];
+  }
+
+  /// 在间隔文本中同时按活动词和收藏掩码切分，覆盖数字等非英文 token。
+  List<InlineSpan> _activeAwareSpans(
+    String text,
+    int start,
+    int end,
+    List<bool> savedMask,
+    Color savedColor,
+    List<bool> activeMask,
+  ) {
+    final spans = <InlineSpan>[];
+    for (final (subStart, subEnd, isActive) in splitByMask(
+      start,
+      end,
+      activeMask,
+    )) {
+      spans.addAll(
+        _savedAwareSpans(
+          text,
+          subStart,
+          subEnd,
+          savedMask,
+          savedColor,
+          isActiveWord: isActive,
+        ),
+      );
+    }
+    return spans;
   }
 
   /// 把高亮片段拍平为有序的单词匹配标志列表。
@@ -235,27 +269,47 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
     Color savedColor,
   ) {
     final wordFlags = _buildWordFlags();
-    if (wordFlags == null) {
+    if (wordFlags == null && widget.activeWordIndex == null) {
       return null;
     }
 
     var wordCursor = 0;
+    var playbackWordCursor = 0;
     final result = <List<InlineSpan>>[];
     for (var ci = 0; ci < widget.chunks.length; ci++) {
       final text = widget.chunks[ci].trim();
       final mask = savedMasks[ci];
       final spans = <InlineSpan>[];
+      final activeMask = List<bool>.filled(text.length, false);
+      for (final match in _playbackWordPattern.allMatches(text)) {
+        final token = match.group(0) ?? '';
+        if (normalizeWord(token).isEmpty) continue;
+        if (playbackWordCursor == widget.activeWordIndex) {
+          for (var offset = match.start; offset < match.end; offset++) {
+            activeMask[offset] = true;
+          }
+        }
+        playbackWordCursor++;
+      }
       // 与普通模式一致：只给纯英文单词上色，单词外字符（空格/标点/连字符）原样保留
       var last = 0;
       for (final match in _englishWordPattern.allMatches(text)) {
         if (match.start > last) {
           spans.addAll(
-            _savedAwareSpans(text, last, match.start, mask, savedColor),
+            _activeAwareSpans(
+              text,
+              last,
+              match.start,
+              mask,
+              savedColor,
+              activeMask,
+            ),
           );
         }
         // 按单词顺序消费匹配标志，越界按未匹配处理
         final isMatched =
-            wordCursor < wordFlags.length && wordFlags[wordCursor];
+            wordCursor < (wordFlags?.length ?? 0) &&
+            (wordFlags?[wordCursor] ?? false);
         wordCursor++;
         spans.addAll(
           _savedAwareSpans(
@@ -265,13 +319,21 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
             mask,
             savedColor,
             color: isMatched ? _matchedColor : null,
+            isActiveWord: activeMask[match.start],
           ),
         );
         last = match.end;
       }
       if (last < text.length) {
         spans.addAll(
-          _savedAwareSpans(text, last, text.length, mask, savedColor),
+          _activeAwareSpans(
+            text,
+            last,
+            text.length,
+            mask,
+            savedColor,
+            activeMask,
+          ),
         );
       }
       result.add(spans);
@@ -298,16 +360,14 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
       normalizeSenseGroupPhrase(chunk),
     );
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderAlpha = isDark ? 0.6 : 0.3;
 
-    // 背景色优先级：播放中 > 已收藏 > 默认
-    final Color bgColor;
-    if (isPlaying) {
-      bgColor = isDark ? _playingColorDark : colorScheme.primaryContainer;
-    } else if (isSaved) {
-      bgColor = isDark ? _savedColorDark : _savedColorLight;
-    } else {
-      bgColor = isDark ? _groupColorDark : _groupColorLight;
-    }
+    // 普通态和播放态保持透明底；仅非播放中的已收藏意群保留橙色提示。
+    final Color? bgColor = isSaved && !isPlaying
+        ? isDark
+              ? _savedColorDark
+              : _savedColorLight
+        : null;
 
     // 边框优先级：播放中 > 已收藏 > 已播放 > 默认
     final Color borderColor;
@@ -316,9 +376,9 @@ class _SenseGroupTextState extends ConsumerState<SenseGroupText> {
     } else if (isSaved) {
       borderColor = _savedBorderColor;
     } else if (isPlayed) {
-      borderColor = colorScheme.primary.withValues(alpha: 0.3);
+      borderColor = colorScheme.primary.withValues(alpha: borderAlpha);
     } else {
-      borderColor = colorScheme.outline.withValues(alpha: 0.3);
+      borderColor = colorScheme.outline.withValues(alpha: borderAlpha);
     }
     final border = Border.all(color: borderColor, width: 1.5);
 

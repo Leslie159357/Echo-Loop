@@ -19,7 +19,7 @@ import 'package:echo_loop/providers/tts/tts_settings_provider.dart';
 import 'package:echo_loop/services/tts/kokoro_model_manager.dart'
     show AsrModelDownloadStatus;
 import 'package:echo_loop/services/tts/kokoro_voices.dart';
-import 'package:echo_loop/services/tts/piper_voices.dart';
+import 'package:echo_loop/services/tts/piper_model_catalog.dart';
 import 'package:echo_loop/services/tts/tts_engine.dart';
 
 /// 受控 Kokoro notifier：注入初值，下载相关方法仅占位（不做真实下载）。
@@ -30,8 +30,13 @@ class _FixedKokoroNotifier extends KokoroModelNotifier {
   @override
   KokoroModelsState build() => _initial;
 
+  void updateState(KokoroModelsState next) => state = next;
+
   @override
   Future<void> ensureDownloaded(KokoroModelVariant variant) async {}
+
+  @override
+  Future<void> refreshInstalledStates({bool Function()? shouldCommit}) async {}
 }
 
 /// 受控 Piper notifier：注入初值，下载相关方法仅占位（不做真实下载）。
@@ -44,12 +49,15 @@ class _FixedPiperNotifier extends PiperModelNotifier {
 
   @override
   Future<void> ensureDownloaded(String voiceId) async {}
+
+  @override
+  Future<void> refreshInstalledStates({bool Function()? shouldCommit}) async {}
 }
 
 /// 记录是否被调用的引擎工厂；返回空操作引擎（合成返回 null，不播放/不入库）。
 class _RecordingFactory {
   int calls = 0;
-  TtsEngine make(TtsEngineKind kind) {
+  TtsEngine make(TtsEngineKind kind, TtsSpeechConfig config) {
     calls++;
     return _NoopEngine();
   }
@@ -103,6 +111,16 @@ class _GateEngine implements TtsEngine {
   Future<void> dispose() async {}
 }
 
+/// 等待 fake 引擎收到指定数量的合成请求，避免测试依赖固定 event queue 次数。
+Future<void> _waitForGateCount(_GateEngine engine, int count) async {
+  await expectLater(
+    Stream<void>.periodic(
+      const Duration(milliseconds: 1),
+    ).map((_) => engine.gates.length),
+    emitsThrough(count),
+  );
+}
+
 class _FakeTtsCacheDao implements TtsCacheDao {
   @override
   Future<TtsCacheData?> getByKey(String cacheKey, {Duration? slideTtl}) async =>
@@ -119,6 +137,9 @@ class _FakePathProvider extends PathProviderPlatform
 
   @override
   Future<String?> getApplicationCachePath() async => rootPath;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => rootPath;
 }
 
 KokoroModelsState _ready() => const KokoroModelsState({
@@ -176,7 +197,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
       );
@@ -202,7 +223,7 @@ void main() {
       final c = ProviderContainer(
         overrides: [
           initialTtsSettingsProvider.overrideWithValue(
-            const TtsSettings(engine: TtsEngineKind.echoLoop),
+            const TtsSettings(engine: TtsEngineKind.kokoro),
           ),
           kokoroModelProvider.overrideWith(
             () => _FixedKokoroNotifier(_ready()),
@@ -210,7 +231,7 @@ void main() {
           piperModelProvider.overrideWith(
             () => _FixedPiperNotifier(PiperModelsState.initial()),
           ),
-          ttsEngineFactoryProvider.overrideWithValue((_) => engine),
+          ttsEngineFactoryProvider.overrideWithValue((_, __) => engine),
           ttsCacheDaoProvider.overrideWithValue(dao),
         ],
       );
@@ -219,8 +240,7 @@ void main() {
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
       final first = notifier.speak('first text', key: 'same_voice');
-      await pumpEventQueue();
-      expect(engine.gates, hasLength(1));
+      await _waitForGateCount(engine, 1);
 
       final second = notifier.speak('second text', key: 'same_voice');
       await pumpEventQueue();
@@ -229,8 +249,7 @@ void main() {
       expect(c.read(ttsControllerProvider).speakingKey, 'same_voice');
 
       engine.gates[0].complete();
-      await pumpEventQueue();
-      expect(engine.gates, hasLength(2));
+      await _waitForGateCount(engine, 2);
       await first;
       expect(c.read(ttsControllerProvider).speakingKey, 'same_voice');
 
@@ -245,7 +264,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(), // 平台 TTS
+        settings: const TtsSettings(engine: TtsEngineKind.platform),
         models: _ready(),
         factory: factory,
       );
@@ -272,7 +291,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(), // 平台 TTS
+        settings: const TtsSettings(engine: TtsEngineKind.platform),
         models: _ready(),
         factory: factory,
       );
@@ -286,7 +305,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
       );
@@ -298,11 +317,43 @@ void main() {
   });
 
   group('prewarmVoicePreviews 门控', () {
+    test('模型下载完成后 ready 变化会自动加载当前引擎', () async {
+      SharedPreferences.setMockInitialValues({});
+      final factory = _RecordingFactory();
+      final kokoroNotifier = _FixedKokoroNotifier(KokoroModelsState.initial());
+      final c = ProviderContainer(
+        overrides: [
+          initialTtsSettingsProvider.overrideWithValue(
+            const TtsSettings(engine: TtsEngineKind.kokoro),
+          ),
+          kokoroModelProvider.overrideWith(() => kokoroNotifier),
+          piperModelProvider.overrideWith(
+            () => _FixedPiperNotifier(PiperModelsState.initial()),
+          ),
+          ttsEngineFactoryProvider.overrideWithValue(factory.make),
+          ttsCacheDaoProvider.overrideWithValue(dao),
+        ],
+      );
+      addTearDown(c.dispose);
+
+      c.read(ttsControllerProvider.notifier);
+      await Future<void>.delayed(Duration.zero);
+      expect(factory.calls, 0);
+
+      kokoroNotifier.updateState(_ready());
+      await expectLater(
+        Stream<void>.periodic(
+          const Duration(milliseconds: 1),
+        ).map((_) => factory.calls),
+        emitsThrough(greaterThanOrEqualTo(1)),
+      );
+    });
+
     test('Echo Loop 且就绪 → 触发合成路径（构建引擎）', () async {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
       );
@@ -316,7 +367,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(), // 平台 TTS
+        settings: const TtsSettings(engine: TtsEngineKind.platform),
         models: _ready(),
         factory: factory,
       );
@@ -330,7 +381,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: KokoroModelsState.initial(),
         factory: factory,
       );
@@ -344,7 +395,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
       );
@@ -360,7 +411,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
       );
@@ -399,7 +450,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final factory = _RecordingFactory();
       final c = makeContainer(
-        settings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+        settings: const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _ready(),
         factory: factory,
         piperModels: piperReadyState(),

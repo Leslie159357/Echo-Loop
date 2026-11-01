@@ -15,12 +15,24 @@ enum TtsEngineKind {
   /// 平台 TTS（flutter_tts，封装系统 TTS）。本期唯一可用。
   platform,
 
-  /// Echo Loop TTS（本地 Kokoro 82M）。质量最佳，CPU 推理偏慢。
-  echoLoop,
+  /// Kokoro TTS（Echo Loop AI Advanced，本地 Kokoro 82M）。质量最佳，CPU 推理偏慢。
+  kokoro,
 
   /// Piper VITS（本地，均衡档）。质量优于系统 TTS、速度远快于 Kokoro；
-  /// 每个音色为一个独立单说话人模型，按音色单独下载（见 `piper_voices.dart`）。
+  /// 每个音色为一个独立单说话人模型，按音色单独下载（见 `piper_model_catalog.dart`）。
   piper,
+}
+
+/// 供诊断日志显示的实际 TTS 后端名。
+///
+/// [TtsEngineKind.kokoro] 是 Echo Loop AI Advanced 的实际 Kokoro 实现；
+/// 日志输出实现名以便排障。
+extension TtsEngineKindDiagnostics on TtsEngineKind {
+  String get diagnosticName => switch (this) {
+    TtsEngineKind.platform => 'platform',
+    TtsEngineKind.kokoro => 'kokoro',
+    TtsEngineKind.piper => 'piper',
+  };
 }
 
 /// 发音口音。
@@ -149,7 +161,7 @@ abstract interface class TtsEngine {
   Future<void> applyConfig(TtsSpeechConfig config);
 
   /// 把 [text] 合成为本地音频文件，写入 [outputDir] 下、基名为 [baseName]
-  /// 的文件（扩展名由引擎按平台决定，如 Android `wav` / iOS·macOS `caf`）。
+  /// 的文件（扩展名由引擎按平台决定，如 Android/macOS `wav` / iOS `caf`）。
   ///
   /// [config] 为本次合成的完整配置（音色/口音/语速）。显式传入而非依赖引擎环境态，
   /// 使同一引擎可在并发下安全地为不同音色合成（试听/预热）——见 [TtsCoordinator]。
@@ -177,4 +189,5 @@ abstract interface class TtsEngine {
 }
 
 /// 引擎工厂：按种类创建引擎实例。
-typedef TtsEngineFactory = TtsEngine Function(TtsEngineKind kind);
+typedef TtsEngineFactory =
+    TtsEngine Function(TtsEngineKind kind, TtsSpeechConfig config);

@@ -78,6 +78,7 @@ void main() {
               'latestVersion': '1.1.1',
               'minimumVersion': '1.0.3',
               'downloadUrl': 'https://cdn.example.com/app-1.1.1.apk',
+              'downloadUrlChina': 'https://cdn-cn.example.com/app-1.1.1.apk',
             },
           },
         },
@@ -99,41 +100,27 @@ void main() {
         info.platforms.android.apk.downloadUrl,
         'https://cdn.example.com/app-1.1.1.apk',
       );
-    });
-  });
-
-  group('AppUpdateState', () {
-    test('AppUpdateInitial 类型检查', () {
-      const state = AppUpdateInitial();
-      expect(state, isA<AppUpdateState>());
-    });
-
-    test('AppUpdateChecking 类型检查', () {
-      const state = AppUpdateChecking();
-      expect(state, isA<AppUpdateState>());
-    });
-
-    test('AppUpdateResult 携带数据', () {
-      const state = AppUpdateResult(type: AppUpdateType.softUpdate);
-      expect(state.type, AppUpdateType.softUpdate);
-      expect(state.info, isNull);
-    });
-
-    test('AppUpdateResult 携带 info', () {
-      const info = AppUpdateInfo(
-        latestVersion: '1.1.0',
-        minimumVersion: '1.0.0',
+      expect(
+        info.platforms.android.apk.downloadUrlChina,
+        'https://cdn-cn.example.com/app-1.1.1.apk',
       );
-      const state = AppUpdateResult(
-        type: AppUpdateType.forceUpdate,
-        info: info,
-      );
-      expect(state.info?.latestVersion, '1.1.0');
     });
 
-    test('AppUpdateDismissed 类型检查', () {
-      const state = AppUpdateDismissed();
-      expect(state, isA<AppUpdateState>());
+    test('中国 APK 地址缺失或为空时解析为 null', () {
+      final info = AppUpdateInfo.fromJson({
+        'latestVersion': '1.1.0',
+        'minimumVersion': '1.0.0',
+        'platforms': {
+          'android': {
+            'apk': {
+              'downloadUrl': 'https://cdn.example.com/app.apk',
+              'downloadUrlChina': '',
+            },
+          },
+        },
+      });
+
+      expect(info.platforms.android.apk.downloadUrlChina, isNull);
     });
   });
 }

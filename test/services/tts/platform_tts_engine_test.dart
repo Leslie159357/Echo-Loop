@@ -76,6 +76,34 @@ void main() {
   });
 
   group('synthesize', () {
+    test('默认合成格式使用 WAV', () async {
+      final tempDir = await Directory.systemTemp.createTemp('synth_default');
+      addTearDown(() => tempDir.delete(recursive: true));
+      when(() => tts.synthesizeToFile(any(), any(), any())).thenAnswer((
+        _,
+      ) async {
+        await File('${tempDir.path}/abc.wav').writeAsBytes([1, 2, 3]);
+        return 1;
+      });
+
+      final engine = PlatformTtsEngine(
+        ttsFactory: () => tts,
+        useNativeMacosSynth: () => false,
+      );
+      final result = await engine.synthesize(
+        'Hello',
+        outputDir: tempDir.path,
+        baseName: 'abc',
+      );
+
+      expect(result, isNotNull);
+      expect(result?.format, 'wav');
+      expect(result?.filePath, '${tempDir.path}/abc.wav');
+      verify(
+        () => tts.synthesizeToFile('Hello', '${tempDir.path}/abc.wav', true),
+      ).called(1);
+    });
+
     test('成功写盘 → 返回结果(路径+格式)', () async {
       final tempDir = await Directory.systemTemp.createTemp('synth_ok');
       addTearDown(() => tempDir.delete(recursive: true));
@@ -160,13 +188,13 @@ void main() {
   });
 
   group('macOS 原生合成（绕过 flutter_tts 漏设 voice）', () {
-    test('原生合成成功写盘 → 返回 caf 结果，不调 flutter_tts.synthesizeToFile', () async {
+    test('原生合成成功写盘 → 返回 wav 结果，不调 flutter_tts.synthesizeToFile', () async {
       final tempDir = await Directory.systemTemp.createTemp('synth_native');
       addTearDown(() => tempDir.delete(recursive: true));
 
       String? gotLang;
       final engine = buildEngine(
-        format: 'caf',
+        format: 'wav',
         useNativeMacosSynth: true,
         nativeMacosSynth:
             ({
@@ -190,8 +218,8 @@ void main() {
       );
 
       expect(result, isNotNull);
-      expect(result!.format, 'caf');
-      expect(result.filePath, '${tempDir.path}/abc.caf');
+      expect(result!.format, 'wav');
+      expect(result.filePath, '${tempDir.path}/abc.wav');
       expect(await File(result.filePath).exists(), isTrue);
       // 口音经 config 透传到原生层。
       expect(gotLang, 'en-GB');
@@ -201,11 +229,13 @@ void main() {
     });
 
     test('原生合成返回 false → synthesize 返回 null（降级 speakLive）', () async {
-      final tempDir = await Directory.systemTemp.createTemp('synth_native_fail');
+      final tempDir = await Directory.systemTemp.createTemp(
+        'synth_native_fail',
+      );
       addTearDown(() => tempDir.delete(recursive: true));
 
       final engine = buildEngine(
-        format: 'caf',
+        format: 'wav',
         useNativeMacosSynth: true,
         nativeMacosSynth:
             ({
@@ -231,7 +261,7 @@ void main() {
       addTearDown(() => tempDir.delete(recursive: true));
 
       final engine = buildEngine(
-        format: 'caf',
+        format: 'wav',
         useNativeMacosSynth: true,
         nativeMacosSynth:
             ({

@@ -14,9 +14,6 @@ class _RecordingChannel implements AnalyticsChannel {
   final List<({String name, Map<String, Object>? params})> events = [];
 
   @override
-  String get name => 'Recording';
-
-  @override
   Future<void> initialize() async {}
 
   @override
@@ -29,6 +26,9 @@ class _RecordingChannel implements AnalyticsChannel {
 
   @override
   Future<void> setUserProperty(String name, String? value) async {}
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {}
 
   @override
   Future<void> registerSuperProperties(Map<String, Object> properties) async {}

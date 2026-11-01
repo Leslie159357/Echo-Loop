@@ -1,7 +1,6 @@
 /// 词典下载与本地存储管理
 ///
-/// 负责从 CDN 下载词典文件、检查版本更新、管理本地缓存。
-/// 下载地址和版本信息从后端 version.json 获取，不硬编码在客户端。
+/// 负责从固定 CDN 下载词典 ZIP、解压安装并管理本地缓存。
 library;
 
 import 'dart:io';
@@ -10,37 +9,49 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../config/api_config.dart';
+import 'dictionary/dictionary_catalog.dart';
 import 'app_logger.dart';
-
-/// 单个词典的远程版本信息
-class DictionaryVersionInfo {
-  final String url;
-  final DateTime updatedAt;
-
-  const DictionaryVersionInfo({required this.url, required this.updatedAt});
-}
+import 'archive_extraction.dart';
+import 'reliable_http_downloader.dart';
+import 'resource_archive_installer.dart';
+import 'resource_install_manifest.dart';
+import 'runtime_endpoint_router.dart';
 
 /// 词典下载管理器
 class DictionaryDownloadManager {
-  DictionaryDownloadManager()
-    : _dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(minutes: 5),
-        ),
-      );
+  DictionaryDownloadManager({
+    this.specs = dictionarySpecs,
+    RuntimeEndpointRouter? endpointRouter,
+  }) : _endpointRouter = endpointRouter ?? runtimeEndpointRouter,
+       _dio = Dio(
+         BaseOptions(
+           connectTimeout: const Duration(seconds: 15),
+           receiveTimeout: const Duration(minutes: 5),
+         ),
+       ) {
+    _downloader = DioReliableHttpDownloader(dio: _dio);
+    _installer = ResourceArchiveInstaller(_downloader);
+  }
 
   /// 测试用构造器
   @visibleForTesting
-  DictionaryDownloadManager.withDio(this._dio);
+  DictionaryDownloadManager.withDio(
+    this._dio, {
+    this.specs = dictionarySpecs,
+    RuntimeEndpointRouter? endpointRouter,
+  }) : _endpointRouter = endpointRouter ?? runtimeEndpointRouter {
+    _downloader = DioReliableHttpDownloader(dio: _dio);
+    _installer = ResourceArchiveInstaller(_downloader);
+  }
 
   final Dio _dio;
+  final RuntimeEndpointRouter _endpointRouter;
+  final Map<String, DictionarySpec> specs;
 
-  /// SharedPreferences key 前缀：记录各词典的本地下载时间
-  static const _downloadedAtKeyPrefix = 'dictionary_downloaded_at_';
+  /// `ReliableHttpDownloader` 接口本身不提供释放能力，[dispose] 需要靠持有
+  /// 同一个 [_dio] 来关闭底层 HTTP 客户端。
+  late final ReliableHttpDownloader _downloader;
+  late final ResourceArchiveInstaller _installer;
 
   /// 获取词典本地存储目录
   Future<String> _dictionaryDir(String langKey) async {
@@ -52,63 +63,25 @@ class DictionaryDownloadManager {
   Future<String> dictionaryPath(String nativeLanguage) async {
     final langKey = 'en_$nativeLanguage';
     final dir = await _dictionaryDir(langKey);
-    return p.join(dir, 'dict.db');
+    return p.join(dir, 'dict.sqlite');
   }
 
-  /// 检查本地是否已有指定语言的词典
+  /// 检查本地数据库与统一安装清单是否匹配当前 catalog 版本。
   Future<bool> isDictionaryDownloaded(String nativeLanguage) async {
-    final path = await dictionaryPath(nativeLanguage);
-    return File(path).existsSync();
-  }
-
-  /// 从后端 version.json 获取词典版本信息
-  ///
-  /// 失败时返回 null（网络错误等静默处理）。
-  Future<DictionaryVersionInfo?> fetchVersionInfo(String nativeLanguage) async {
+    final spec = _specOf(nativeLanguage);
+    final directory = Directory(await _dictionaryDir('en_$nativeLanguage'));
+    final database = File(p.join(directory.path, 'dict.sqlite'));
+    if (!database.existsSync()) return false;
     try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        '$apiBaseUrl/version.json',
-        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      final manifest = await readResourceInstallManifest(directory);
+      return manifest?.resourceId == spec.resourceId;
+    } on FormatException catch (error) {
+      AppLogger.log(
+        'Dict',
+        'invalid install manifest lang=$nativeLanguage error=$error',
       );
-      final data = response.data;
-      if (data == null) return null;
-
-      final dictionary = data['dictionary'] as Map<String, dynamic>?;
-      if (dictionary == null) return null;
-
-      final langKey = 'en_$nativeLanguage';
-      final entry = dictionary[langKey] as Map<String, dynamic>?;
-      if (entry == null) return null;
-
-      return DictionaryVersionInfo(
-        url: entry['url'] as String,
-        updatedAt: DateTime.parse(entry['updatedAt'] as String),
-      );
-    } catch (e) {
-      AppLogger.log('Dict', 'version check failed: $e');
-      return null;
+      return false;
     }
-  }
-
-  /// 检查是否需要更新词典
-  ///
-  /// 对比远程 updatedAt 与本地记录的下载时间。
-  Future<bool> needsUpdate(String nativeLanguage) async {
-    final isDownloaded = await isDictionaryDownloaded(nativeLanguage);
-    if (!isDownloaded) return true;
-
-    final versionInfo = await fetchVersionInfo(nativeLanguage);
-    if (versionInfo == null) return false; // 无法检查，不更新
-
-    final prefs = await SharedPreferences.getInstance();
-    final langKey = 'en_$nativeLanguage';
-    final localDownloadedAtMs = prefs.getInt('$_downloadedAtKeyPrefix$langKey');
-    if (localDownloadedAtMs == null) return true;
-
-    final localDownloadedAt = DateTime.fromMillisecondsSinceEpoch(
-      localDownloadedAtMs,
-    );
-    return versionInfo.updatedAt.isAfter(localDownloadedAt);
   }
 
   /// 下载词典文件
@@ -121,58 +94,96 @@ class DictionaryDownloadManager {
     void Function(double progress)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    // 1. 获取下载地址
-    final versionInfo = await fetchVersionInfo(nativeLanguage);
-    if (versionInfo == null) {
-      throw StateError(
-        'Failed to fetch dictionary version info for $nativeLanguage',
-      );
-    }
-
-    // 2. 准备本地目录
-    final langKey = 'en_$nativeLanguage';
-    final dir = await _dictionaryDir(langKey);
-    await Directory(dir).create(recursive: true);
-    final dbPath = p.join(dir, 'dict.db');
-    final tempPath = '$dbPath.tmp';
-    final tempFile = File(tempPath);
-
+    final stopwatch = Stopwatch()..start();
     try {
-      // 3. 下载到临时文件
-      AppLogger.log('Dict', 'downloading url=${versionInfo.url} → $dbPath');
-      await _dio.download(
-        versionInfo.url,
-        tempPath,
+      final spec = _specOf(nativeLanguage);
+
+      // 2. 准备本地目录
+      final langKey = 'en_$nativeLanguage';
+      final dir = await _dictionaryDir(langKey);
+      final dbPath = p.join(dir, 'dict.sqlite');
+      final root = Directory(p.dirname(dir));
+      await _installer.install(
+        root: root,
+        target: Directory(dir),
+        resourceId: spec.resourceId,
+        uri: _endpointRouter.modelCdnUri(spec.archivePath),
+        expectedSha256: spec.archiveSha256,
         cancelToken: cancelToken,
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            onProgress?.call((received / total).clamp(0.0, 1.0));
+        onProgress: onProgress,
+        extractAndValidate: (archive, staging) async {
+          await extractArchiveInBackground(archive.path, staging.path);
+          await _removeMacOsMetadata(staging);
+          final extracted = await _findDatabaseFile(staging);
+          if (extracted == null) {
+            throw StateError('Dictionary database missing after extraction');
+          }
+          final installedDatabase = File(p.join(staging.path, 'dict.sqlite'));
+          if (extracted.path != installedDatabase.path) {
+            await extracted.rename(installedDatabase.path);
           }
         },
       );
 
-      // 4. 原子替换
-      final dbFile = File(dbPath);
-      if (dbFile.existsSync()) {
-        await dbFile.delete();
-      }
-      await tempFile.rename(dbPath);
-
-      // 5. 记录下载时间
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-        '$_downloadedAtKeyPrefix$langKey',
-        DateTime.now().millisecondsSinceEpoch,
+      AppLogger.log(
+        'Dict',
+        'download finished lang=$nativeLanguage '
+            'elapsedMs=${stopwatch.elapsedMilliseconds}',
       );
-
       return dbPath;
-    } catch (e) {
-      // 清理临时文件
-      if (tempFile.existsSync()) {
-        await tempFile.delete();
-      }
+    } catch (error) {
+      AppLogger.log(
+        'Dict',
+        'download failed lang=$nativeLanguage '
+            'elapsedMs=${stopwatch.elapsedMilliseconds} error=$error',
+      );
       rethrow;
+    } finally {
+      final spec = _specOf(nativeLanguage);
+      final dir = await _dictionaryDir('en_$nativeLanguage');
+      final root = p.dirname(dir);
+      final archiveFile = File(
+        p.join(root, '_download_${spec.resourceId}.zip'),
+      );
+      final staging = Directory(p.join(root, '_staging_${spec.resourceId}'));
+      if (archiveFile.existsSync()) {
+        await archiveFile.delete();
+      }
+      if (staging.existsSync()) await staging.delete(recursive: true);
     }
+  }
+
+  Future<File?> _findDatabaseFile(Directory directory) async {
+    File? found;
+    await for (final entity in directory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is! File) continue;
+      final name = p.basename(entity.path).toLowerCase();
+      if (name.endsWith('.sqlite') || name.endsWith('.db')) {
+        if (found != null) {
+          throw StateError(
+            'Dictionary archive contains multiple database files',
+          );
+        }
+        found = entity;
+      }
+    }
+    return found;
+  }
+
+  DictionarySpec _specOf(String nativeLanguage) {
+    final spec = specs[nativeLanguage];
+    if (spec == null) {
+      throw ArgumentError.value(nativeLanguage, 'nativeLanguage');
+    }
+    return spec;
+  }
+
+  Future<void> _removeMacOsMetadata(Directory directory) async {
+    final metadata = Directory(p.join(directory.path, '__MACOSX'));
+    if (metadata.existsSync()) await metadata.delete(recursive: true);
   }
 
   /// 删除非当前语言的词典文件（清缓存时调用）
@@ -207,10 +218,6 @@ class DictionaryDownloadManager {
         }
       }
       await entity.delete(recursive: true);
-
-      // 清理对应的 SharedPreferences 记录
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('$_downloadedAtKeyPrefix$dirName');
     }
 
     return freedBytes;

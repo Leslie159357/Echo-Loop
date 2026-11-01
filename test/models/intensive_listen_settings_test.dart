@@ -8,8 +8,9 @@ void main() {
       const settings = IntensiveListenSettings();
 
       expect(settings.repeatCount, 1);
+      expect(settings.annotationReplayUsesRepeatCount, false);
       expect(settings.pauseMode, PauseMode.smart);
-      expect(settings.fixedPauseSeconds, 5);
+      expect(settings.fixedPauseSeconds, 3);
       expect(settings.pauseMultiplier, 2.0);
       expect(settings.playbackSpeed, 1.0);
     });
@@ -19,6 +20,15 @@ void main() {
       final updated = settings.copyWith(playbackSpeed: 1.3);
 
       expect(updated.playbackSpeed, 1.3);
+      expect(updated.repeatCount, 1);
+    });
+
+    test('copyWith 可更新讲解页循环开关', () {
+      final updated = const IntensiveListenSettings().copyWith(
+        annotationReplayUsesRepeatCount: true,
+      );
+
+      expect(updated.annotationReplayUsesRepeatCount, true);
       expect(updated.repeatCount, 1);
     });
 
@@ -55,7 +65,7 @@ void main() {
 
       expect(updated.repeatCount, 3);
       expect(updated.pauseMode, PauseMode.smart);
-      expect(updated.fixedPauseSeconds, 5);
+      expect(updated.fixedPauseSeconds, 3);
       expect(updated.pauseMultiplier, 2.0);
     });
 
@@ -95,6 +105,7 @@ void main() {
 
       final json = settings.toJson();
       expect(json['repeatCount'], 3);
+      expect(json['annotationReplayUsesRepeatCount'], false);
       expect(json['pauseMode'], 'fixed');
       expect(json['fixedPauseSeconds'], 10);
       expect(json['pauseMultiplier'], 1.5);
@@ -115,13 +126,22 @@ void main() {
       expect(restored.pauseMultiplier, original.pauseMultiplier);
     });
 
+    test('fromJson 往返讲解页循环开关', () {
+      const original = IntensiveListenSettings(
+        annotationReplayUsesRepeatCount: true,
+      );
+
+      final restored = IntensiveListenSettings.fromJson(original.toJson());
+      expect(restored.annotationReplayUsesRepeatCount, true);
+    });
+
     test('fromJson 默认值往返', () {
       const original = IntensiveListenSettings();
       final restored = IntensiveListenSettings.fromJson(original.toJson());
 
       expect(restored.repeatCount, 1);
       expect(restored.pauseMode, PauseMode.smart);
-      expect(restored.fixedPauseSeconds, 5);
+      expect(restored.fixedPauseSeconds, 3);
       expect(restored.pauseMultiplier, 2.0);
     });
 
@@ -131,7 +151,7 @@ void main() {
 
         expect(settings.repeatCount, 1);
         expect(settings.pauseMode, PauseMode.smart);
-        expect(settings.fixedPauseSeconds, 5);
+        expect(settings.fixedPauseSeconds, 3);
         expect(settings.pauseMultiplier, 2.0);
       });
 
@@ -142,7 +162,14 @@ void main() {
         expect(settings.repeatCount, 1);
       });
 
-      test('repeatCount 支持 0=∞ 且超出范围被 clamp', () {
+      test('讲解页循环开关非 bool 回退关闭', () {
+        final settings = IntensiveListenSettings.fromJson({
+          'annotationReplayUsesRepeatCount': 'true',
+        });
+        expect(settings.annotationReplayUsesRepeatCount, false);
+      });
+
+      test('repeatCount 支持新增档位、0=∞ 且超出范围被 clamp', () {
         expect(
           IntensiveListenSettings.fromJson({'repeatCount': 0}).repeatCount,
           0,
@@ -151,9 +178,17 @@ void main() {
           IntensiveListenSettings.fromJson({'repeatCount': -5}).repeatCount,
           1,
         );
+        for (final count in [20, 30, 40, 50]) {
+          expect(
+            IntensiveListenSettings.fromJson({
+              'repeatCount': count,
+            }).repeatCount,
+            count,
+          );
+        }
         expect(
-          IntensiveListenSettings.fromJson({'repeatCount': 20}).repeatCount,
-          10,
+          IntensiveListenSettings.fromJson({'repeatCount': 99}).repeatCount,
+          50,
         );
       });
 
@@ -168,18 +203,18 @@ void main() {
         );
       });
 
-      test('fixedPauseSeconds 不在可选列表中回退 5', () {
+      test('fixedPauseSeconds 不在可选列表中回退 3', () {
         expect(
           IntensiveListenSettings.fromJson({
-            'fixedPauseSeconds': 2,
+            'fixedPauseSeconds': 4,
           }).fixedPauseSeconds,
-          5,
+          3,
         );
         expect(
           IntensiveListenSettings.fromJson({
             'fixedPauseSeconds': 'abc',
           }).fixedPauseSeconds,
-          5,
+          3,
         );
       });
 
@@ -219,8 +254,9 @@ void main() {
 
     test('fixedPauseOptions 包含预期值', () {
       expect(IntensiveListenSettings.fixedPauseOptions, contains(1));
+      expect(IntensiveListenSettings.fixedPauseOptions, contains(2));
       expect(IntensiveListenSettings.fixedPauseOptions, contains(60));
-      expect(IntensiveListenSettings.fixedPauseOptions.length, 15);
+      expect(IntensiveListenSettings.fixedPauseOptions.length, 16);
     });
 
     test('multiplierOptions 包含预期值', () {

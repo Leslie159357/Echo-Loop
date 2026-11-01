@@ -30,7 +30,6 @@ import '../../services/recording_service.dart';
 import '../../services/speech_completion_detector.dart';
 import '../../services/speech_practice_matcher.dart';
 import '../../services/speech_practice_platform.dart';
-import '../../services/study_event_recorder.dart';
 import '../learning_settings_provider.dart';
 import '../offline_asr_settings_provider.dart';
 
@@ -229,8 +228,11 @@ final speechRecordingControllerProvider =
 /// - 评估仅用覆盖率，不使用 embedding 相似度
 class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   // ── 服务 ──
-  late RecordingService _recordingService;
+  RecordingService? _recordingService;
+  void Function(Duration duration)? _recordingCompletionHandler;
   StreamSubscription<SpeechPracticeEvent>? _eventSub;
+  int _roundGeneration = 0;
+  Future<void> _cleanupTail = Future<void>.value();
 
   // ── 计时器 ──
   Timer? _awaitingSpeechTimer;
@@ -264,28 +266,29 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   @override
   SpeechRecordingState build() {
-    final backend = ref.watch(speechPracticeBackendProvider);
-    _recordingService = RecordingService(backend);
-
     final lifecycleListener = AppLifecycleListener(
       onStateChange: _handleAppLifecycleChange,
     );
     ref.onDispose(() {
       lifecycleListener.dispose();
       _cancelAllTimers();
+      ++_roundGeneration;
       _eventSub?.cancel();
-      _recordingService.dispose();
+      final service = _recordingService;
+      if (service != null) unawaited(service.dispose());
     });
     return const SpeechRecordingState();
   }
 
   // ========== 配置方法 ==========
 
-  /// 设置学习事件记录器（Provider 进入模式时注入，退出时传 null 清除）
+  /// 设置录音完成回调，供新学习统计链路接收有效输出时长。
   ///
-  /// 录音完成后自动通过 recorder 记录说的时长。
-  void setRecorder(StudyEventRecorder? recorder) {
-    _recordingService.recorder = recorder;
+  /// 回调只会在录音正常停止且有效时长大于零时触发；取消录音不会触发。
+  void setRecordingCompletionHandler(
+    void Function(Duration duration)? handler,
+  ) {
+    _recordingCompletionHandler = handler;
   }
 
   /// 设置手动控制模式
@@ -310,18 +313,14 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     required String referenceText,
     Duration? referenceDuration,
   }) async {
-    final backend = ref.read(speechPracticeBackendProvider);
-    if (state.promptId == promptId && state.isActive) {
+    final existingService = _recordingService;
+    if (state.isRecordingPrompt(promptId) ||
+        (existingService?.isRecording ?? false)) {
       AppLogger.log('SpeechRec', '⏭ startRecording 跳过: 已在录音中 ($promptId)');
       return;
     }
 
-    // 清理上一次录音的临时文件（避免重录时旧文件泄漏）
-    final oldFilePath = state.currentAttempt?.filePath;
-    if (oldFilePath != null && oldFilePath.isNotEmpty) {
-      unawaited(_recordingService.deleteRecording(oldFilePath));
-    }
-
+    final generation = ++_roundGeneration;
     _cancelAllTimers();
     _isStopping = false;
     _hasDetectedSpeech = false;
@@ -333,13 +332,23 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     _voicedDuration = Duration.zero;
     _lastVoicedTimestamp = null;
 
+    // 先切断旧回合的所有入口，再串行释放其服务；新回合不会与旧服务并存。
+    final oldFilePath = state.currentAttempt?.filePath;
+    _recordingService = null;
+    final cleanup = _enqueueCleanup(() async {
+      await _eventSub?.cancel();
+      _eventSub = null;
+      if (existingService != null) {
+        await existingService.cancelRecording();
+        await existingService.dispose();
+        if (oldFilePath != null && oldFilePath.isNotEmpty) {
+          await existingService.deleteRecording(oldFilePath);
+        }
+      }
+    });
+
     AppLogger.log('SpeechRec', '┌ startRecording (manual=$_isManualMode)');
     AppLogger.log('SpeechRec', '│ promptId=$promptId');
-    AppLogger.log(
-      'SpeechRec',
-      '│ backend=${backend.runtimeType} permissions=${state.permissions.microphone.name}/${state.permissions.speech.name}',
-    );
-
     state = SpeechRecordingState(
       phase: SpeechRecordingPhase.awaitingSpeech,
       promptId: promptId,
@@ -347,21 +356,35 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       permissions: state.permissions,
     );
 
+    await cleanup;
+    if (generation != _roundGeneration) return;
+
+    final backend = ref.read(speechPracticeBackendProvider);
+    AppLogger.log(
+      'SpeechRec',
+      '│ backend=${backend.runtimeType} permissions=${state.permissions.microphone.name}/${state.permissions.speech.name}',
+    );
+    final service = RecordingService(backend);
+    _recordingService = service;
     try {
       final asrSettings = ref.read(offlineAsrSettingsProvider);
-      final ratingEnabled = ref
-          .read(learningSettingsProvider)
-          .listenAndRepeatRatingEnabled;
-      await _recordingService.startRecording(
+      await service.startRecording(
         promptId: promptId,
-        recognitionEnabled:
-            ratingEnabled && asrSettings.backend == AsrBackend.platform,
+        // Apple 实时转录同时服务自动结束检测；关闭评级只跳过最终评分，
+        // 不能关闭该检测通道而退化为固定静音兜底。
+        recognitionEnabled: asrSettings.backend == AsrBackend.platform,
       );
-      _eventSub?.cancel();
-      _eventSub = _recordingService.events.listen(_handleRecordingEvent);
+      if (generation != _roundGeneration) {
+        await service.cancelRecording();
+        return;
+      }
+      _eventSub = service.events.listen(
+        (event) => _handleRecordingEvent(event, generation),
+      );
 
-      state = state.copyWith(permissions: _recordingService.permissions);
+      state = state.copyWith(permissions: service.permissions);
     } on SpeechPracticePlatformException catch (error) {
+      if (generation != _roundGeneration || error.code == 'cancelled') return;
       AppLogger.log('SpeechRec', '└ 录音启动失败: ${error.code} → idle');
       state = state.copyWith(
         phase: SpeechRecordingPhase.idle,
@@ -369,7 +392,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
           status: _statusFromError(error.code),
           errorMessage: error.message,
         ),
-        permissions: _recordingService.permissions,
+        permissions: service.permissions,
       );
       return;
     }
@@ -382,6 +405,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       );
       _scheduleMaxDurationTimer(
         promptId: promptId,
+        generation: generation,
         maxDuration: _manualModeInitialMax,
       );
     } else {
@@ -400,29 +424,40 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   Future<void> stopAndEvaluate({required String referenceText}) async {
     final promptId = state.promptId;
     if (promptId == null) return;
+    final generation = _roundGeneration;
 
     AppLogger.log('SpeechRec', '● 手动停止录音');
     _isStopping = true;
     _cancelAllTimers();
-    await _doStopAndEvaluate(promptId: promptId, referenceText: referenceText);
+    await _doStopAndEvaluate(
+      promptId: promptId,
+      referenceText: referenceText,
+      generation: generation,
+    );
   }
 
   /// 取消当前录音
   Future<void> cancelActiveRecording() async {
-    if (!_recordingService.isRecording) return;
-
+    final service = _recordingService;
+    final generation = ++_roundGeneration;
     _cancelAllTimers();
     _speechStartTime = null;
-    await _eventSub?.cancel();
-    _eventSub = null;
-    await _recordingService.cancelRecording();
-
+    _recordingService = null;
     state = state.copyWith(
       phase: SpeechRecordingPhase.idle,
       clearLiveTranscript: true,
       hasDetectedSpeech: false,
       silenceDuration: Duration.zero,
     );
+    await _enqueueCleanup(() async {
+      await _eventSub?.cancel();
+      _eventSub = null;
+      if (service != null) {
+        await service.cancelRecording();
+        await service.dispose();
+      }
+    });
+    if (generation != _roundGeneration) return;
   }
 
   // ========== 清理方法 ==========
@@ -430,25 +465,34 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   /// 清除当前回合状态（保留配置），并删除已完成录音的临时文件。
   Future<void> clearRecording() async {
     AppLogger.log('SpeechRec', '● clearRecording → idle');
+    ++_roundGeneration;
     _cancelAllTimers();
     _isStopping = false;
     _hasDetectedSpeech = false;
     _lastKnownTranscript = null;
-    _eventSub?.cancel();
-    _eventSub = null;
+    final service = _recordingService;
+    _recordingService = null;
     // 先读取文件路径，再立即重置状态（避免 await 延迟状态重置导致自动录音触发失败）
     final filePath = state.currentAttempt?.filePath;
     state = SpeechRecordingState(permissions: state.permissions);
-    // 异步删除录音临时文件（fire-and-forget）
-    if (filePath != null && filePath.isNotEmpty) {
-      unawaited(_recordingService.deleteRecording(filePath));
-    }
+    // 先完成录音服务收尾，再让调用方开始下一次播放。
+    await _enqueueCleanup(() async {
+      await _eventSub?.cancel();
+      _eventSub = null;
+      if (service != null) {
+        await service.cancelRecording();
+        if (filePath != null && filePath.isNotEmpty) {
+          await service.deleteRecording(filePath);
+        }
+        await service.dispose();
+      }
+    });
   }
 
   /// 完全重置（页面 dispose 时调用）
   Future<void> fullReset() async {
-    await cancelActiveRecording();
     await clearRecording();
+    await _cleanupTail;
     _isManualMode = false;
     _cachedReferenceText = null;
     _maxRecordingDuration = _defaultMaxRecordingDuration;
@@ -456,7 +500,21 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   /// 删除指定录音文件
   Future<void> deleteRecording(String filePath) async {
-    await _recordingService.deleteRecording(filePath);
+    await _recordingService?.deleteRecording(filePath);
+  }
+
+  Future<void> _enqueueCleanup(Future<void> Function() cleanup) async {
+    final previous = _cleanupTail;
+    final next = () async {
+      try {
+        await previous;
+      } catch (_) {
+        // 前一回合的收尾失败不能阻塞后续回合，但必须继续执行本次收尾。
+      }
+      await cleanup();
+    }();
+    _cleanupTail = next.catchError((_) {});
+    await next;
   }
 
   // ========== 内部方法 ==========
@@ -472,7 +530,15 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   Future<void> _doStopAndEvaluate({
     required String promptId,
     required String referenceText,
+    required int generation,
   }) async {
+    final service = _recordingService;
+    if (service == null) {
+      AppLogger.log('SpeechRec', '✗ 停止录音失败: RecordingService 不存在');
+      state = state.copyWith(phase: SpeechRecordingPhase.idle);
+      return;
+    }
+    if (!_isCurrentRound(generation, promptId)) return;
     final backend = ref.read(speechPracticeBackendProvider);
     final ratingEnabled = ref
         .read(learningSettingsProvider)
@@ -493,10 +559,14 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
           );
 
     // ── 阶段 1：停止录音（立即返回）──
-    final stopResult = await _recordingService.stopSession(
+    final stopResult = await service.stopSession(
       promptId: promptId,
       effectiveDurationMs: effectiveDurationMs,
     );
+    if (!_isCurrentRound(generation, promptId)) {
+      await service.cancelRecording();
+      return;
+    }
     final filePath = stopResult.filePath;
     AppLogger.log('SpeechRec', '│ backend=${backend.runtimeType}');
 
@@ -514,11 +584,13 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       );
       return;
     }
+    _recordCompletionDuration(stopResult.recordedDuration);
 
     // ── 跟读评级关闭：直接存录音，不等转录 ──
     if (!ratingEnabled) {
       AppLogger.log('SpeechRec', '● 跟读评级关闭，保留录音，跳过转录与评分');
-      await _recordingService.shutdown();
+      await service.shutdown();
+      if (!_isCurrentRound(generation, promptId)) return;
       state = state.copyWith(
         phase: SpeechRecordingPhase.idle,
         currentAttempt: SpeechPracticeAttempt(promptId: promptId).copyWith(
@@ -536,9 +608,8 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     _enterProcessing(promptId);
 
     // ── 阶段 3：等待转录结果 ──
-    final result = await _recordingService.waitForTranscript(
-      filePath: filePath,
-    );
+    final result = await service.waitForTranscript(filePath: filePath);
+    if (!_isCurrentRound(generation, promptId)) return;
     AppLogger.log(
       'SpeechRec',
       '│ transcript filePath=$filePath '
@@ -660,6 +731,15 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     );
   }
 
+  void _recordCompletionDuration(Duration duration) {
+    if (duration > Duration.zero) {
+      _recordingCompletionHandler?.call(duration);
+    }
+  }
+
+  bool _isCurrentRound(int generation, String promptId) =>
+      generation == _roundGeneration && state.promptId == promptId;
+
   void _enterProcessing(String promptId) {
     if (state.promptId != promptId) return;
     _cancelAllTimers();
@@ -668,9 +748,13 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   // ── 事件处理 ──
 
-  void _handleRecordingEvent(SpeechPracticeEvent event) {
+  void _handleRecordingEvent(SpeechPracticeEvent event, int generation) {
     final promptId = state.promptId;
-    if (promptId == null || event.promptId != promptId) return;
+    if (promptId == null ||
+        event.promptId != promptId ||
+        !_isCurrentRound(generation, promptId)) {
+      return;
+    }
     if (_isStopping) return;
     if (state.phase != SpeechRecordingPhase.awaitingSpeech &&
         state.phase != SpeechRecordingPhase.speaking) {
@@ -679,18 +763,19 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
     switch (event.type) {
       case SpeechPracticeEventType.partialTranscriptUpdated:
-        _handlePartialTranscript(event);
+        _handlePartialTranscript(event, generation);
       case SpeechPracticeEventType.speechStarted:
-        _handleSpeechStarted(event);
+        _handleSpeechStarted(event, generation);
       case SpeechPracticeEventType.silenceProgress:
-        _handleSilenceProgress(event);
+        _handleSilenceProgress(event, generation);
       case SpeechPracticeEventType.finalTranscriptReady ||
           SpeechPracticeEventType.error:
         break; // RecordingService 内部处理
     }
   }
 
-  void _handlePartialTranscript(SpeechPracticeEvent event) {
+  void _handlePartialTranscript(SpeechPracticeEvent event, int generation) {
+    if (!_isCurrentRound(generation, event.promptId)) return;
     final text = (event.transcript ?? '').trim();
     final prevText = state.liveTranscript?.trim() ?? '';
     if (text.isNotEmpty && text != prevText) {
@@ -701,10 +786,11 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       silenceDuration: Duration.zero,
     );
 
-    _checkSpeechAndAutoStop(text);
+    _checkSpeechAndAutoStop(text, generation);
   }
 
-  void _handleSpeechStarted(SpeechPracticeEvent event) {
+  void _handleSpeechStarted(SpeechPracticeEvent event, int generation) {
+    if (!_isCurrentRound(generation, event.promptId)) return;
     _speechStartTime ??= DateTime.now();
     _lastVoicedTimestamp ??= DateTime.now();
     state = state.copyWith(
@@ -713,18 +799,19 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     );
 
     if (!_hasDetectedSpeech) {
-      _handleSpeechDetected(state.promptId!);
+      _handleSpeechDetected(state.promptId!, generation);
     }
   }
 
-  void _handleSilenceProgress(SpeechPracticeEvent event) {
+  void _handleSilenceProgress(SpeechPracticeEvent event, int generation) {
+    if (!_isCurrentRound(generation, event.promptId)) return;
     final silence = event.silenceDuration ?? Duration.zero;
     state = state.copyWith(silenceDuration: silence);
 
     // 累加有声时长
     _updateVoicedDuration(silence);
 
-    _checkAutoStopOnSilence(silence);
+    _checkAutoStopOnSilence(silence, generation);
   }
 
   /// 根据 silenceProgress 事件累加有声时长。
@@ -760,15 +847,15 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   }
 
   /// 检查语音检测 + 自动停止
-  void _checkSpeechAndAutoStop(String liveText) {
+  void _checkSpeechAndAutoStop(String liveText, int generation) {
     final promptId = state.promptId;
-    if (promptId == null) return;
+    if (promptId == null || !_isCurrentRound(generation, promptId)) return;
 
     final hasVoiceInput = state.hasDetectedSpeech || liveText.isNotEmpty;
 
     // 首次检测到语音
     if (!_hasDetectedSpeech && hasVoiceInput) {
-      _handleSpeechDetected(promptId);
+      _handleSpeechDetected(promptId, generation);
     }
 
     if (_isManualMode || !_hasDetectedSpeech) return;
@@ -778,6 +865,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       _lastKnownTranscript = liveText;
       _resetTranscriptStaleTimer(
         promptId: promptId,
+        generation: generation,
         referenceText: _cachedReferenceText!,
         transcript: liveText,
       );
@@ -785,9 +873,14 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   }
 
   /// 静音时的自动停止检测
-  void _checkAutoStopOnSilence(Duration currentSilence) {
+  void _checkAutoStopOnSilence(Duration currentSilence, int generation) {
     final promptId = state.promptId;
-    if (promptId == null || _isManualMode || !_hasDetectedSpeech) return;
+    if (promptId == null ||
+        !_isCurrentRound(generation, promptId) ||
+        _isManualMode ||
+        !_hasDetectedSpeech) {
+      return;
+    }
 
     final liveTranscript = state.liveTranscript?.trim() ?? '';
     final referenceText = _cachedReferenceText;
@@ -814,6 +907,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
       if (currentSilence >= required) {
         _stopForEvaluation(
           promptId: promptId,
+          generation: generation,
           reason: '用户读完，静音${currentSilence.inMilliseconds}ms',
         );
         return;
@@ -834,6 +928,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
           : '';
       _stopForEvaluation(
         promptId: promptId,
+        generation: generation,
         reason:
             '静音兜底 ${fallback.inSeconds}s '
             '(有声${_voicedDuration.inMilliseconds}ms, '
@@ -846,9 +941,10 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   /// 60s 内未检测到语音 → 取消录音，回到 idle。
   void _scheduleAwaitingSpeechTimer(String promptId) {
+    final generation = _roundGeneration;
     _awaitingSpeechTimer?.cancel();
     _awaitingSpeechTimer = Timer(_awaitingSpeechTimeout, () async {
-      if (state.promptId != promptId ||
+      if (!_isCurrentRound(generation, promptId) ||
           state.phase != SpeechRecordingPhase.awaitingSpeech) {
         return;
       }
@@ -861,7 +957,8 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   }
 
   /// 首次检测到语音的处理
-  void _handleSpeechDetected(String promptId) {
+  void _handleSpeechDetected(String promptId, int generation) {
+    if (!_isCurrentRound(generation, promptId)) return;
     _hasDetectedSpeech = true;
     _awaitingSpeechTimer?.cancel();
     _awaitingSpeechTimer = null;
@@ -882,6 +979,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     );
     _scheduleMaxDurationTimer(
       promptId: promptId,
+      generation: generation,
       maxDuration: effectiveMaxDuration,
     );
   }
@@ -889,6 +987,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
   /// 转录停滞定时器：使用 [SpeechPracticeCompletionHeuristic] 计算阈值。
   void _resetTranscriptStaleTimer({
     required String promptId,
+    required int generation,
     required String referenceText,
     required String transcript,
   }) {
@@ -908,10 +1007,11 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
           '${detailed.description}',
     );
     _transcriptStaleTimer = Timer(threshold, () {
-      if (state.promptId != promptId || _isStopping) return;
+      if (!_isCurrentRound(generation, promptId) || _isStopping) return;
       if (state.phase != SpeechRecordingPhase.speaking) return;
       _stopForEvaluation(
         promptId: promptId,
+        generation: generation,
         reason: '转录停滞 ${threshold.inMilliseconds}ms',
       );
     });
@@ -927,22 +1027,32 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
 
   void _scheduleMaxDurationTimer({
     required String promptId,
+    required int generation,
     required Duration maxDuration,
   }) {
     _maxDurationTimer?.cancel();
     _maxDurationTimer = Timer(maxDuration, () {
-      if (state.promptId != promptId) return;
+      if (!_isCurrentRound(generation, promptId)) return;
       if (state.phase == SpeechRecordingPhase.awaitingSpeech ||
           state.phase == SpeechRecordingPhase.speaking) {
         AppLogger.log('SpeechRec', '⏰ 最大录音时长 ${maxDuration.inSeconds}s');
-        _stopForEvaluation(promptId: promptId, reason: '最大录音时长');
+        _stopForEvaluation(
+          promptId: promptId,
+          generation: generation,
+          reason: '最大录音时长',
+        );
       }
     });
   }
 
   // ── 自动停止 ──
 
-  void _stopForEvaluation({required String promptId, String reason = ''}) {
+  void _stopForEvaluation({
+    required String promptId,
+    required int generation,
+    String reason = '',
+  }) {
+    if (!_isCurrentRound(generation, promptId)) return;
     AppLogger.log('SpeechRec', '⏹ 自动停止录音 ($reason)');
     _isStopping = true;
     _cancelAllTimers();
@@ -954,7 +1064,11 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     }
 
     unawaited(
-      _doStopAndEvaluate(promptId: promptId, referenceText: referenceText),
+      _doStopAndEvaluate(
+        promptId: promptId,
+        referenceText: referenceText,
+        generation: generation,
+      ),
     );
   }
 
@@ -965,13 +1079,7 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
         appState == AppLifecycleState.hidden) {
       AppLogger.log('SpeechRec', 'App 进入后台 → idle');
       _cancelAllTimers();
-      _isStopping = false;
-      _hasDetectedSpeech = false;
-      _lastKnownTranscript = null;
-      _lastSilenceLogDesc = null;
-      _eventSub?.cancel();
-      _eventSub = null;
-      unawaited(_recordingService.cancelRecording());
+      unawaited(cancelActiveRecording());
       // 保留 currentAttempt（评级 badge）和 permissions
       state = SpeechRecordingState(
         phase: SpeechRecordingPhase.idle,

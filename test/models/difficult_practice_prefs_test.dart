@@ -19,7 +19,7 @@ void main() {
       expect(s.blindListenRepeatCount, 1);
       expect(s.shadowReadingRepeatCount, 3);
       expect(s.pauseMode, PauseMode.smart);
-      expect(s.fixedPauseSeconds, 5);
+      expect(s.fixedPauseSeconds, 3);
       expect(s.pauseMultiplier, 2.0);
     });
 
@@ -111,13 +111,21 @@ void main() {
       expect(prefs, const DifficultPracticePrefs.empty());
     });
 
-    test('遍数 > 10 截到 10', () {
+    test('遍数 > 50 截到 50，新增档位可保留', () {
       final prefs = DifficultPracticePrefs.fromJson(const {
         'blindListenRepeatCount': 99,
         'shadowReadingRepeatCount': 50,
       });
-      expect(prefs.blindListenRepeatCount, 10);
-      expect(prefs.shadowReadingRepeatCount, 10);
+      expect(prefs.blindListenRepeatCount, 50);
+      expect(prefs.shadowReadingRepeatCount, 50);
+      for (final count in [20, 30, 40, 50]) {
+        final value = DifficultPracticePrefs.fromJson({
+          'blindListenRepeatCount': count,
+          'shadowReadingRepeatCount': count,
+        });
+        expect(value.blindListenRepeatCount, count);
+        expect(value.shadowReadingRepeatCount, count);
+      }
     });
 
     test('遍数 0 表示无限,合法保留', () {

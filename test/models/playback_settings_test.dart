@@ -1,9 +1,30 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/playback_settings.dart';
+import 'package:echo_loop/models/repeat_count_options.dart';
 
 void main() {
   group('PlaybackSettings', () {
     group('默认值正确性', () {
+      test('循环次数选项顺序包含新增档位和无限', () {
+        expect(kRepeatCountOptions, const [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          20,
+          30,
+          40,
+          50,
+          0,
+        ]);
+      });
+
       test('Free Player 支持的速度档位符合预期', () {
         expect(kFreePlayerPlaybackSpeeds, const [
           0.4,
@@ -49,25 +70,24 @@ void main() {
     });
 
     group('toJson / fromJson 往返序列化', () {
-      test('循环开关不持久化：往返后恒为关', () {
+      test('循环开关与循环参数往返保留', () {
         const settings = PlaybackSettings(
           loopWhole: true,
-          loopSentence: true,
+          loopSentence: false,
           playbackSpeed: 1.5,
         );
         final restored = PlaybackSettings.fromJson(settings.toJson());
 
-        // 开关不落盘，还原后一律为关
-        expect(restored.loopWhole, isFalse);
+        expect(restored.loopWhole, isTrue);
         expect(restored.loopSentence, isFalse);
       });
 
-      test('toJson 不含循环开关键，但含循环参数键', () {
+      test('toJson 同时包含循环开关和循环参数键', () {
         const settings = PlaybackSettings(loopWhole: true, loopSentence: true);
         final json = settings.toJson();
 
-        expect(json.containsKey('loopWhole'), isFalse);
-        expect(json.containsKey('loopSentence'), isFalse);
+        expect(json['loopWhole'], isTrue);
+        expect(json['loopSentence'], isTrue);
         expect(json.containsKey('wholeLoopCount'), isTrue);
         expect(json.containsKey('sentenceLoopCount'), isTrue);
         expect(json.containsKey('wholeInterval'), isTrue);
@@ -116,8 +136,8 @@ void main() {
       });
     });
 
-    group('旧字段兼容（开关不恢复，仅迁移参数）', () {
-      test('旧 repeatMode=one 仅迁移单句循环参数，开关恒关', () {
+    group('旧字段兼容（缺失开关时默认关闭，仅迁移参数）', () {
+      test('旧 repeatMode=one 仅迁移单句循环参数，开关默认关闭', () {
         final settings = PlaybackSettings.fromJson({
           'repeatMode': 'one',
           'loopCount': 5,
@@ -129,7 +149,7 @@ void main() {
         expect(settings.loopWhole, isFalse);
       });
 
-      test('旧 repeatMode=all 不再开启整篇循环', () {
+      test('旧 repeatMode=all 不会开启整篇循环', () {
         final settings = PlaybackSettings.fromJson({'repeatMode': 'all'});
         expect(settings.loopWhole, isFalse);
         expect(settings.loopSentence, isFalse);
@@ -141,24 +161,24 @@ void main() {
         expect(settings.loopSentence, isFalse);
       });
 
-      test('更旧 loopEnabled=true 不再开启循环', () {
+      test('更旧 loopEnabled=true 不会开启循环', () {
         final settings = PlaybackSettings.fromJson({'loopEnabled': true});
         expect(settings.loopSentence, isFalse);
         expect(settings.loopWhole, isFalse);
       });
 
-      test('更旧 loopAudioEnabled=true 不再开启循环', () {
+      test('更旧 loopAudioEnabled=true 不会开启循环', () {
         final settings = PlaybackSettings.fromJson({'loopAudioEnabled': true});
         expect(settings.loopWhole, isFalse);
         expect(settings.loopSentence, isFalse);
       });
 
-      test('迁移时旧 loopCount 超范围截断到 10', () {
+      test('迁移时旧 loopCount 在新上限内保留', () {
         final settings = PlaybackSettings.fromJson({
           'repeatMode': 'one',
           'loopCount': 18,
         });
-        expect(settings.sentenceLoopCount, 10);
+        expect(settings.sentenceLoopCount, 18);
       });
 
       test('仅含参数键的 JSON 被识别为新 schema，参数保留', () {
@@ -189,9 +209,15 @@ void main() {
         expect(settings.sentenceLoopCount, 0);
       });
 
-      test('次数 > 10 截断为 10', () {
+      test('次数 > 50 截断为 50，新增档位可读取', () {
+        for (final count in [20, 30, 40, 50]) {
+          expect(
+            PlaybackSettings.fromJson({'wholeLoopCount': count}).wholeLoopCount,
+            count,
+          );
+        }
         final settings = PlaybackSettings.fromJson({'wholeLoopCount': 100});
-        expect(settings.wholeLoopCount, 10);
+        expect(settings.wholeLoopCount, 50);
       });
 
       test('次数为负重置为默认 3', () {

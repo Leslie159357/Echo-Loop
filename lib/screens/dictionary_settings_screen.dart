@@ -36,6 +36,25 @@ class DictionarySettingsScreen extends ConsumerWidget {
           vertical: AppSpacing.s,
         ),
         children: [
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.volume_up_outlined),
+                  title: Text(l10n.dictionaryAutoSpeakOnLookup),
+                  value: settings.autoSpeakOnLookup,
+                  onChanged: notifier.setAutoSpeakOnLookup,
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.block_outlined),
+                  title: Text(l10n.dictionaryAdFilterTitle),
+                  value: settings.adFilteringEnabled,
+                  onChanged: notifier.setAdFilteringEnabled,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.m),
           _SectionHeader(
             title: l10n.dictionaryDefault,
             description: l10n.dictionaryDefaultDescription,
@@ -76,41 +95,6 @@ class DictionarySettingsScreen extends ConsumerWidget {
                     onChanged: (v) => notifier.setDisabled(s.id, !v),
                   ),
               ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s),
-          _WebAdsNotice(text: l10n.dictionaryWebAdsNotice),
-        ],
-      ),
-    );
-  }
-}
-
-/// 在线词典广告提醒：在线源为第三方网站，可能自带广告，与 Echo Loop 无关。
-class _WebAdsNotice extends StatelessWidget {
-  final String text;
-  const _WebAdsNotice({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 16,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
             ),
           ),
         ],

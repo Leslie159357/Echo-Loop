@@ -7,15 +7,22 @@ library;
 
 import 'dart:async';
 
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/models/playback_settings.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/models/study_stage.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/services/app_logger.dart';
+import 'package:echo_loop/services/study_activity_gate.dart';
+import 'package:echo_loop/services/study_time_service.dart';
 import '../../helpers/mock_providers.dart';
 
 /// 可控 AudioEngine：真实 session 计数 + position/playerState 流 + 调用记录。
@@ -172,6 +179,8 @@ class _FlowAudioEngine extends TestAudioEngine {
 
 /// 复用真实 ListeningPractice 逻辑，只开放测试 seed 入口并屏蔽真实持久化。
 class _FlowListeningPractice extends ListeningPractice {
+  int saveCurrentPlaybackStateCount = 0;
+
   void seed({
     required List<Sentence> sentences,
     required PlaybackSettings settings,
@@ -199,7 +208,28 @@ class _FlowListeningPractice extends ListeningPractice {
   }
 
   @override
-  Future<void> saveCurrentPlaybackState({bool silent = false}) async {}
+  Future<void> saveCurrentPlaybackState({bool silent = false}) async {
+    saveCurrentPlaybackStateCount += 1;
+  }
+}
+
+class _FailOnceStudyTimeService extends FakeStudyTimeService {
+  bool failNextSessionDuration = false;
+  int sessionDurationCalls = 0;
+
+  @override
+  Future<void> recordSessionDurations({
+    required Duration studyDuration,
+    Duration inputDuration = Duration.zero,
+    required StudyStage stage,
+    DateTime? date,
+  }) async {
+    sessionDurationCalls += 1;
+    if (failNextSessionDuration) {
+      failNextSessionDuration = false;
+      throw StateError('simulated final statistics flush failure');
+    }
+  }
 }
 
 void main() {
@@ -241,6 +271,11 @@ void main() {
   late ProviderContainer container;
   late _FlowAudioEngine engine;
   late _FlowListeningPractice lp;
+  late StudyActivityGate activityGate;
+  late _FailOnceStudyTimeService studyTimeService;
+  AppDatabase? statisticsDatabase;
+  StudyTimeService? statisticsService;
+  int? studyPageGeneration;
 
   Future<void> flushBoundary() async {
     await Future<void>.delayed(Duration.zero);
@@ -263,16 +298,79 @@ void main() {
   /// 模拟整篇 gapless 一遍自然播完（解析 [_FlowAudioEngine.playToEnd] 的挂起）。
   /// 不强制设回 isPlaying——续播是否发生由协程的 play() 决定。
   Future<void> completeWhole() async {
+    engine.emitPosition(sentences.last.endTime);
     engine.emitCompleted();
     await flushBoundary();
+  }
+
+  Future<void> waitForInputStatistics() async {
+    final database = statisticsDatabase;
+    if (database == null) {
+      throw StateError('Statistics database is not configured.');
+    }
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      final record = await database.dailyStudyRecordDao.getByDate(
+        DateTime.now(),
+      );
+      if ((record?.studyTimeMilliseconds ?? 0) >= 1000 &&
+          (record?.inputWords ?? 0) >= 2 &&
+          (record?.inputTimeMilliseconds ?? 0) >= 1000 &&
+          (record?.inputTimeMilliseconds ?? 0) <=
+              (record?.studyTimeMilliseconds ?? 0)) {
+        return;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    fail('Timed out waiting for the asynchronous study duration write.');
+  }
+
+  Future<void> useRecordingStatisticsRecorder() async {
+    container.dispose();
+    activityGate.dispose();
+    await engine.closeStreams();
+
+    engine = _FlowAudioEngine();
+    final database = AppDatabase(NativeDatabase.memory());
+    statisticsDatabase = database;
+    activityGate = StudyActivityGate();
+    final studyTimeService = StudyTimeService(
+      database.dailyStudyRecordDao,
+      database.dailyStageStudyRecordDao,
+      statisticsDao: database.studyStatisticsDao,
+    );
+    statisticsService = studyTimeService;
+    container = ProviderContainer(
+      overrides: [
+        audioEngineProvider.overrideWith(() => engine),
+        studyTimeServiceProvider.overrideWithValue(studyTimeService),
+        studyActivityGateProvider.overrideWithValue(activityGate),
+        listeningPracticeProvider.overrideWith(() => _FlowListeningPractice()),
+      ],
+    );
+    lp =
+        container.read(listeningPracticeProvider.notifier)
+            as _FlowListeningPractice;
+    studyPageGeneration = lp.beginStudyPage();
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  Future<void> finishStudyPage() async {
+    final generation = studyPageGeneration;
+    if (generation == null) return;
+    await lp.endStudyPage(generation);
+    studyPageGeneration = null;
   }
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     engine = _FlowAudioEngine();
+    activityGate = StudyActivityGate();
+    studyTimeService = _FailOnceStudyTimeService();
     container = ProviderContainer(
       overrides: [
         audioEngineProvider.overrideWith(() => engine),
+        studyTimeServiceProvider.overrideWithValue(studyTimeService),
+        studyActivityGateProvider.overrideWithValue(activityGate),
         listeningPracticeProvider.overrideWith(() => _FlowListeningPractice()),
       ],
     );
@@ -282,9 +380,55 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   });
 
+  test('finishStudyPage 等待未 checkpoint 的最终学习时长写入', () async {
+    await useRecordingStatisticsRecorder();
+    final generation = studyPageGeneration;
+    expect(generation, isNotNull);
+
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    await lp.finishStudyPage(generation: generation);
+    studyPageGeneration = null;
+
+    final record = await statisticsDatabase!.dailyStudyRecordDao.getByDate(
+      DateTime.now(),
+    );
+    expect(record?.studyTimeMilliseconds, greaterThanOrEqualTo(1000));
+  });
+
+  test('统计 flush 失败时音频退出仍暂停并完成断点保存', () async {
+    AppLogger.instance.clear();
+    lp.seed(sentences: sentences, settings: const PlaybackSettings());
+    studyPageGeneration = lp.beginStudyPage();
+    await start();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    studyTimeService.failNextSessionDuration = true;
+
+    await lp.finishStudyPage(generation: studyPageGeneration);
+    studyPageGeneration = null;
+
+    expect(engine.isPlaying, isFalse);
+    expect(lp.saveCurrentPlaybackStateCount, greaterThan(0));
+    expect(studyTimeService.sessionDurationCalls, 1);
+    expect(
+      AppLogger.instance.entries.any(
+        (entry) =>
+            entry.tag == 'StudyExit' &&
+            entry.message.contains('timer flush failed'),
+      ),
+      isTrue,
+    );
+  });
+
   tearDown(() async {
+    final generation = studyPageGeneration;
+    if (generation != null) {
+      await lp.endStudyPage(generation);
+      studyPageGeneration = null;
+    }
     container.dispose();
+    activityGate.dispose();
     await engine.closeStreams();
+    await statisticsDatabase?.close();
   });
 
   test('reattachLockScreen 自愈：夺回锁屏回调并清除任务残留的逻辑播放态/保活', () async {
@@ -321,6 +465,79 @@ void main() {
     expect(engine.lastClipStart, isNull);
   });
 
+  test('按句播放自然完成后异步记录时长、词数和词汇', () async {
+    await useRecordingStatisticsRecorder();
+    lp.seed(
+      sentences: sentences,
+      settings: const PlaybackSettings(
+        loopSentence: true,
+        sentenceLoopCount: 1,
+        sentenceInterval: Duration.zero,
+      ),
+    );
+
+    await start();
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    await completeClip();
+    await lp.pause();
+    await finishStudyPage();
+    await waitForInputStatistics();
+    final database = statisticsDatabase;
+    final service = statisticsService;
+    if (service == null || database == null) {
+      throw StateError('Statistics service test fixture is unavailable.');
+    }
+    await service.flush();
+
+    final record = await database.dailyStudyRecordDao.getByDate(DateTime.now());
+    expect(record?.studyTimeMilliseconds, greaterThanOrEqualTo(1000));
+    expect(record?.inputTimeMilliseconds, greaterThanOrEqualTo(1000));
+    expect(
+      record?.inputTimeMilliseconds,
+      lessThanOrEqualTo(record?.studyTimeMilliseconds ?? 0),
+    );
+    expect(record?.inputWords, 2);
+    final stageRecord = (await database.dailyStageStudyRecordDao.getByDate(
+      DateTime.now(),
+    )).singleWhere((item) => item.stage == StudyStage.freePlayer);
+    expect(stageRecord.studyTimeMilliseconds, greaterThanOrEqualTo(1000));
+    expect(
+      stageRecord.inputTimeMilliseconds,
+      lessThanOrEqualTo(stageRecord.studyTimeMilliseconds),
+    );
+    expect(await database.learnedWordFormDao.countAll(), 2);
+  });
+
+  test('连续播放自然完成后记录总时长、听力时长、词数和词汇', () async {
+    await useRecordingStatisticsRecorder();
+    lp.seed(sentences: sentences, settings: const PlaybackSettings());
+
+    await start();
+    await completeWhole();
+    await finishStudyPage();
+    await Future<void>.delayed(Duration.zero);
+
+    final database = statisticsDatabase;
+    final service = statisticsService;
+    if (database == null) {
+      throw StateError('Statistics recorder test fixture is unavailable.');
+    }
+    if (service == null) {
+      throw StateError('Statistics service test fixture is unavailable.');
+    }
+    await service.flush();
+
+    final record = await database.dailyStudyRecordDao.getByDate(DateTime.now());
+    expect(record, isNotNull);
+    expect(record?.studyTimeMilliseconds, greaterThan(0));
+    expect(
+      record?.inputTimeMilliseconds,
+      lessThanOrEqualTo(record?.studyTimeMilliseconds ?? 0),
+    );
+    expect(record?.inputWords, 16);
+    expect(await database.learnedWordFormDao.countAll(), 14);
+  });
+
   test('外部暂停会回写逻辑播放态且保留当前播放会话', () async {
     lp.seed(sentences: sentences, settings: const PlaybackSettings());
 
@@ -352,6 +569,68 @@ void main() {
     await flushBoundary();
 
     expect(container.read(listeningPracticeProvider).isPlaying, isTrue);
+  });
+
+  test('playing 短暂抖动复用同一个学习计时会话', () async {
+    AppLogger.instance.clear();
+    studyPageGeneration = lp.beginStudyPage();
+    lp.seed(sentences: sentences, settings: const PlaybackSettings());
+
+    await start();
+    engine.emitPlayerState(
+      playing: false,
+      processingState: ja.ProcessingState.ready,
+    );
+    engine.emitPlayerState(
+      playing: true,
+      processingState: ja.ProcessingState.ready,
+    );
+    await flushBoundary();
+
+    final messages = AppLogger.instance.entries
+        .where((entry) => entry.tag == 'FreePlayerAudioTimer')
+        .map((entry) => entry.message)
+        .toList();
+
+    expect(
+      messages.where((message) => message.startsWith('session.start')).length,
+      1,
+    );
+    expect(
+      messages.where((message) => message.startsWith('session.pause')).length,
+      0,
+    );
+    expect(
+      messages.where((message) => message.startsWith('session.resume')).length,
+      0,
+    );
+    expect(
+      messages.where((message) => message.startsWith('session.stop')).length,
+      0,
+    );
+
+    await lp.stop();
+    expect(
+      AppLogger.instance.entries
+          .where(
+            (entry) =>
+                entry.tag == 'FreePlayerAudioTimer' &&
+                entry.message.startsWith('session.stop'),
+          )
+          .length,
+      0,
+    );
+    await finishStudyPage();
+    expect(
+      AppLogger.instance.entries
+          .where(
+            (entry) =>
+                entry.tag == 'FreePlayerAudioTimer' &&
+                entry.message.startsWith('session.stop'),
+          )
+          .length,
+      1,
+    );
   });
 
   test('resumeListeners 重复调用保持幂等：只恢复一套订阅', () async {

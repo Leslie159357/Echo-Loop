@@ -1,8 +1,10 @@
 import AVFoundation
+import Darwin
 import Flutter
 import NaturalLanguage
 import PostHog
 import Speech
+import StoreKit
 import UIKit
 import UserNotifications
 
@@ -43,6 +45,8 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   private var hasDetectedSpeech = false
   private var silenceStartAt: Date?
   private var lastReportedSilenceMs = -1
+  /// 有声判定门槛，按环境底噪自适应（替代旧固定门槛 0.015）。
+  private let vadThreshold = AdaptiveVadThreshold()
   private var recordedDurationMs = 0.0
   private var firstDetectedSpeechMs: Double?
   private var lastDetectedSpeechMs: Double?
@@ -427,7 +431,10 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     if let fileURL = currentFileURL {
       trimRecordingIfNeeded(fileURL: fileURL)
     }
-    result(["filePath": currentFileURL?.path as Any])
+    result([
+      "filePath": currentFileURL?.path as Any,
+      "diagnostics": vadThreshold.describe(),
+    ])
 
     // 纯录音模式（无 ASR）：手动发空 finalTranscriptReady，与 Android 行为对齐。
     if !recognitionEnabled, let promptId = currentPromptId {
@@ -572,36 +579,9 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     }
   }
 
+  /// 有声判定：buffer 原始 RMS 与自适应门槛比较（见 `AdaptiveVadThreshold`）。
   private func isSpeechDetected(in buffer: AVAudioPCMBuffer) -> Bool {
-    let threshold: Float = 0.015
-
-    if let channelData = buffer.floatChannelData {
-      let frameLength = Int(buffer.frameLength)
-      guard frameLength > 0 else { return false }
-      var sum: Float = 0
-      let channel = channelData[0]
-      for frame in 0..<frameLength {
-        let sample = channel[frame]
-        sum += sample * sample
-      }
-      let rms = sqrt(sum / Float(frameLength))
-      return rms >= threshold
-    }
-
-    if let channelData = buffer.int16ChannelData {
-      let frameLength = Int(buffer.frameLength)
-      guard frameLength > 0 else { return false }
-      var sum: Float = 0
-      let channel = channelData[0]
-      for frame in 0..<frameLength {
-        let normalized = Float(channel[frame]) / Float(Int16.max)
-        sum += normalized * normalized
-      }
-      let rms = sqrt(sum / Float(frameLength))
-      return rms >= threshold
-    }
-
-    return false
+    vadThreshold.isVoiced(rms: rmsLevel(of: buffer))
   }
 
   private func trimRecordingIfNeeded(fileURL: URL) {
@@ -785,6 +765,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     recordedDurationMs = 0
     firstDetectedSpeechMs = nil
     lastDetectedSpeechMs = nil
+    vadThreshold.reset()
   }
 
   /// 引擎级清理：removeTap + engine.stop + 释放全部引擎资源 + 恢复 playback session。
@@ -811,6 +792,7 @@ private final class IOSSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     recordedDurationMs = 0
     firstDetectedSpeechMs = nil
     lastDetectedSpeechMs = nil
+    vadThreshold.reset()
     self.audioFile = audioFile
     recognitionRequest = request
   }
@@ -1194,12 +1176,108 @@ private final class IOSAudioDecodeHandler: NSObject {
       }
     }
 
+    let subscriptionManagementChannel = FlutterMethodChannel(
+      name: "top.echo-loop/subscription_management",
+      binaryMessenger: controller.binaryMessenger
+    )
+    subscriptionManagementChannel.setMethodCallHandler { [weak self] (call, result) in
+      if call.method == "openManageSubscriptions" {
+        self?.openManageSubscriptions(result: result)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let deviceInfoChannel = FlutterMethodChannel(
+      name: "top.echo-loop/device_info",
+      binaryMessenger: controller.binaryMessenger
+    )
+    deviceInfoChannel.setMethodCallHandler { (call, result) in
+      if call.method == "getDeviceInfo" {
+        result(self.deviceInfo())
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     speechPracticeHandler = IOSSpeechPracticeHandler(binaryMessenger: controller.binaryMessenger)
     textEmbeddingHandler = IOSTextEmbeddingHandler(binaryMessenger: controller.binaryMessenger)
     audioDecodeHandler = IOSAudioDecodeHandler(binaryMessenger: controller.binaryMessenger)
     notificationPermissionHandler = NotificationPermissionHandler(binaryMessenger: controller.binaryMessenger)
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  private func deviceInfo() -> [String: Any] {
+    let device = UIDevice.current
+    return [
+      "deviceName": device.name,
+      "deviceModel": device.model,
+      "modelIdentifier": modelIdentifier(),
+      "systemName": device.systemName,
+      "systemVersion": device.systemVersion,
+      "isPhysicalDevice": !isSimulator()
+    ]
+  }
+
+  private func modelIdentifier() -> String {
+    var systemInfo = utsname()
+    uname(&systemInfo)
+    let mirror = Mirror(reflecting: systemInfo.machine)
+    let identifier = mirror.children.reduce(into: "") { result, element in
+      guard let value = element.value as? Int8, value != 0 else { return }
+      result.append(String(UnicodeScalar(UInt8(value))))
+    }
+    return identifier
+  }
+
+  private func isSimulator() -> Bool {
+    #if targetEnvironment(simulator)
+    return true
+    #else
+    return false
+    #endif
+  }
+
+  /// 打开 iOS 系统订阅管理页。
+  ///
+  /// 使用 StoreKit 原生入口而不是浏览器 URL；Dart 侧会在本方法不可用或失败时回退
+  /// App Store 订阅管理链接，兼容旧系统与异常场景。
+  private func openManageSubscriptions(result: @escaping FlutterResult) {
+    guard #available(iOS 15.0, *) else {
+      result(FlutterError(
+        code: "unsupported",
+        message: "StoreKit subscription management requires iOS 15 or later",
+        details: nil
+      ))
+      return
+    }
+
+    let foregroundScene = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .first { $0.activationState == .foregroundActive }
+
+    guard let scene = foregroundScene else {
+      result(FlutterError(
+        code: "no_scene",
+        message: "No foreground UIWindowScene for subscription management",
+        details: nil
+      ))
+      return
+    }
+
+    Task { @MainActor in
+      do {
+        try await AppStore.showManageSubscriptions(in: scene)
+        result(true)
+      } catch {
+        result(FlutterError(
+          code: "open_failed",
+          message: error.localizedDescription,
+          details: nil
+        ))
+      }
+    }
   }
 
   /// 从 Info.plist 读取 API Key/Host，构造完整 PostHog 配置（含 Session Replay）并启动 SDK。

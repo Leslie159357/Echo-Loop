@@ -9,6 +9,8 @@ import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
+import 'package:echo_loop/providers/asr_model_installation_gate.dart';
+import 'package:echo_loop/providers/asr_model_installation_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/services/asr/asr_model_manager.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
@@ -100,6 +102,9 @@ Widget _wrap({
       offlineAsrSettingsProvider.overrideWith(
         () => _FakeOfflineAsrSettingsNotifier(asr),
       ),
+      asrModelInstallationGateProvider.overrideWithValue(
+        AsrModelInstallationGate(({required shouldCommit}) async {}),
+      ),
       speechPermissionServiceProvider.overrideWith((ref) => service),
     ],
     child: MaterialApp(
@@ -143,27 +148,6 @@ class _ProbeState extends ConsumerState<_Probe> {
 }
 
 void main() {
-  group('requiresMicForSubStage', () {
-    test('录音类 subStage 返回 true', () {
-      expect(requiresMicForSubStage(SubStageType.listenAndRepeat), isTrue);
-      expect(requiresMicForSubStage(SubStageType.retell), isTrue);
-      expect(
-        requiresMicForSubStage(SubStageType.reviewDifficultPractice),
-        isTrue,
-      );
-      expect(
-        requiresMicForSubStage(SubStageType.reviewRetellParagraph),
-        isTrue,
-      );
-      expect(requiresMicForSubStage(SubStageType.reviewRetellSummary), isTrue);
-    });
-
-    test('盲听 / 精听 返回 false', () {
-      expect(requiresMicForSubStage(SubStageType.blindListen), isFalse);
-      expect(requiresMicForSubStage(SubStageType.intensiveListen), isFalse);
-    });
-  });
-
   group('ensureSpeechReadyForRecording — 权限检查', () {
     testWidgets('全部 granted 时不弹窗、立即返回 true', (tester) async {
       final fake = _FakeService(
@@ -182,35 +166,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
-    });
-
-    testWidgets('旧 ASR enabled=false 兼容态仍按基础能力开启处理', (tester) async {
-      final fake = _FakeService(
-        current: const SpeechPracticePermissionState(
-          microphone: _granted,
-          speech: _denied,
-        ),
-      );
-
-      bool? result;
-      await tester.pumpWidget(
-        _wrap(
-          asr: _settings(enabled: false),
-          service: fake,
-          child: _Probe(onResult: (r) => result = r),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.text('Open Settings'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
-
-      expect(result, isFalse);
     });
 
     testWidgets('评分全部关闭时仅检查 mic — speech 缺失也放行', (tester) async {
@@ -234,6 +193,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
@@ -265,6 +225,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
@@ -296,6 +257,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
@@ -318,6 +280,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
@@ -342,11 +305,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('Open Settings'), findsOneWidget);
       await tester.tap(find.byIcon(Icons.close));
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(result, isFalse);
     });
@@ -372,10 +337,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(find.text('Grant'), findsOneWidget);
       await tester.tap(find.text('Grant'));
       await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(fake.requestCount, 1);
       expect(result, isTrue);

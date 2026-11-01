@@ -6,9 +6,13 @@ import 'package:drift/native.dart';
 import '../utils/app_data_dir.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'enums.dart' show LearningStage;
 import '../services/app_logger.dart';
+import '../features/memory_scheduler/adapters/fsrs/fsrs_memory_model_adapter.dart';
+import '../features/memory_scheduler/config/memory_profiles.dart';
+import '../features/memory_scheduler/domain/memory_namespaces.dart';
 
 import 'tables/audio_items.dart';
 import 'tables/collections.dart';
@@ -26,6 +30,9 @@ import 'tables/learned_word_forms.dart';
 import 'tables/daily_study_records.dart';
 import 'tables/daily_stage_study_records.dart';
 import 'tables/tts_cache.dart';
+import 'tables/memory_schedules.dart';
+import 'tables/memory_review_events.dart';
+import 'tables/memory_review_queue_entries.dart';
 import '../models/study_stage.dart';
 import 'daos/audio_item_dao.dart';
 import 'daos/collection_dao.dart';
@@ -40,7 +47,10 @@ import 'daos/saved_sense_group_dao.dart';
 import 'daos/learned_word_form_dao.dart';
 import 'daos/daily_study_record_dao.dart';
 import 'daos/daily_stage_study_record_dao.dart';
+import 'daos/study_statistics_dao.dart';
 import 'daos/tts_cache_dao.dart';
+import 'daos/memory_schedule_dao.dart';
+import 'daos/favorite_review_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -67,6 +77,9 @@ part 'app_database.g.dart';
     DailyStudyRecords,
     DailyStageStudyRecords,
     TtsCache,
+    MemorySchedules,
+    MemoryReviewEvents,
+    MemoryReviewQueueEntries,
   ],
   daos: [
     AudioItemDao,
@@ -82,17 +95,41 @@ part 'app_database.g.dart';
     LearnedWordFormDao,
     DailyStudyRecordDao,
     DailyStageStudyRecordDao,
+    StudyStatisticsDao,
     TtsCacheDao,
+    MemoryScheduleDao,
+    FavoriteReviewDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 当前 schema 版本（静态访问，用于导入前版本检查）
-  static const currentSchemaVersion = 46;
+  static const currentSchemaVersion = 64;
 
   @override
   int get schemaVersion => currentSchemaVersion;
+
+  /// 使用 SQLite `VACUUM INTO` 创建当前数据库的一致性备份快照。
+  ///
+  /// 该操作由现有 Drift 连接执行，因此无需关闭数据库，也不依赖直接复制可能仍
+  /// 带有 WAL 的主数据库文件。SQLite 会在事务中调用或磁盘写入失败时抛出异常；
+  /// 无论失败发生在哪个阶段，都删除不完整的目标文件。
+  Future<void> createBackupSnapshot(File target) async {
+    await target.parent.create(recursive: true);
+    if (await target.exists()) {
+      await target.delete();
+    }
+
+    try {
+      await customStatement('VACUUM INTO ?', [target.path]);
+    } catch (_) {
+      if (await target.exists()) {
+        await target.delete();
+      }
+      rethrow;
+    }
+  }
 
   @override
   MigrationStrategy get migration {
@@ -108,6 +145,222 @@ class AppDatabase extends _$AppDatabase {
         await _ensurePodcastColumns();
       },
       onUpgrade: (Migrator m, int from, int to) async {
+        // v51→v52：增加整数毫秒字段，保留旧秒字段兼容历史查询。
+        if (from < 52) {
+          for (final table in [
+            'daily_study_records',
+            'daily_stage_study_records',
+          ]) {
+            await _addColumnIfNotExists(
+              table,
+              'study_time_milliseconds',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfNotExists(
+              table,
+              'input_time_milliseconds',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            await _addColumnIfNotExists(
+              table,
+              'output_time_milliseconds',
+              'INTEGER NOT NULL DEFAULT 0',
+            );
+            if (await _tableExists(table)) {
+              await customStatement('''
+                UPDATE $table
+                SET study_time_milliseconds = study_time_seconds * 1000,
+                    input_time_milliseconds = input_time_seconds * 1000,
+                    output_time_milliseconds = output_time_seconds * 1000
+                WHERE study_time_milliseconds = 0
+                  AND input_time_milliseconds = 0
+                  AND output_time_milliseconds = 0
+              ''');
+            }
+          }
+        }
+        // v52→v53：毫秒字段成为统计时长的唯一业务真值。
+        // v52 迁移在极端的部分写入数据库上可能只完成了部分回填；这里按列
+        // 独立修复，旧秒字段继续保留给旧备份/历史迁移兼容，但不再参与业务计算。
+        if (from < 53) {
+          for (final table in [
+            'daily_study_records',
+            'daily_stage_study_records',
+          ]) {
+            if (!await _tableExists(table)) continue;
+            await customStatement('''
+              UPDATE $table
+              SET study_time_milliseconds = study_time_seconds * 1000
+              WHERE study_time_milliseconds = 0
+                AND study_time_seconds > 0
+            ''');
+            await customStatement('''
+              UPDATE $table
+              SET input_time_milliseconds = input_time_seconds * 1000
+              WHERE input_time_milliseconds = 0
+                AND input_time_seconds > 0
+            ''');
+            await customStatement('''
+              UPDATE $table
+              SET output_time_milliseconds = output_time_seconds * 1000
+              WHERE output_time_milliseconds = 0
+                AND output_time_seconds > 0
+            ''');
+          }
+        }
+        // v53→v54：合集命名统一为社区内容。旧数据库中的 source 值和索引都要
+        // 一次性迁移，确保已订阅合集继续通过同一个 remoteId 被 v2 API 更新。
+        if (from < 54) {
+          await _addColumnIfNotExists(
+            'collections',
+            'source',
+            "TEXT NOT NULL DEFAULT 'local'",
+          );
+          // 某些开发版数据库虽然 user_version 已经较新，但表是由历史 fixture
+          // 重建的。这里幂等补齐 v29/v31 的身份列，保证这些数据库也能继续打开。
+          await _addColumnIfNotExists('collections', 'remote_id', 'TEXT');
+          await _addColumnIfNotExists('collections', 'cover_url', 'TEXT');
+          await _addColumnIfNotExists('collections', 'description', 'TEXT');
+          await _addColumnIfNotExists(
+            'collections',
+            'deprecated_at',
+            'INTEGER',
+          );
+          await _addColumnIfNotExists('audio_items', 'remote_audio_id', 'TEXT');
+          await _addColumnIfNotExists(
+            'audio_items',
+            'original_date',
+            'INTEGER',
+          );
+          await customStatement(
+            'DROP INDEX IF EXISTS idx_collections_remote_id_official',
+          );
+          await customStatement(
+            "UPDATE collections SET source = 'community' WHERE source = 'official'",
+          );
+          await customStatement('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_remote_id_community
+            ON collections(remote_id)
+            WHERE source = 'community' AND remote_id IS NOT NULL AND deleted_at IS NULL
+          ''');
+        }
+        // v54→v55：保留已有学习记录的社区文件下架状态，避免媒体被删除后再次
+        // 自动下载，并允许文件重新出现在 v2 列表时恢复。
+        if (from < 55) {
+          await _addColumnIfNotExists(
+            'audio_items',
+            'community_unavailable_at',
+            'INTEGER',
+          );
+        }
+        // v55→v56：缓存社区合集发布者昵称，保证资源库详情离线可展示。
+        if (from < 56) {
+          await _addColumnIfNotExists('collections', 'author_nickname', 'TEXT');
+        }
+        // v56→v57：保存社区合集发布日期，资源库离线时仍可展示完整元信息。
+        if (from < 57) {
+          await _addColumnIfNotExists('collections', 'published_at', 'INTEGER');
+        }
+        // v58→v59：缓存社区合集封面的中国 CDN 镜像地址。
+        if (from < 59) {
+          await _addColumnIfNotExists('collections', 'cover_url_china', 'TEXT');
+        }
+        // v59→v60：缓存社区媒体的 CEFR 难度，普通媒体保持 NULL。
+        if (from < 60) {
+          await _addColumnIfNotExists(
+            'audio_items',
+            'community_difficulty',
+            'TEXT',
+          );
+        }
+        // v60→v61：播客单集保存 RSS 字幕地址与格式，下载音频时一并取字幕。
+        if (from < 61) {
+          await _addColumnIfNotExists(
+            'audio_items',
+            'podcast_transcript_url',
+            'TEXT',
+          );
+          await _addColumnIfNotExists(
+            'audio_items',
+            'podcast_transcript_format',
+            'TEXT',
+          );
+        }
+        // v61→v62：音频新增通用文件描述字段，社区合集文件同步时写入。
+        if (from < 62) {
+          await _addColumnIfNotExists('audio_items', 'description', 'TEXT');
+        }
+        // v49→v50：为收藏单词/意群补稳定的记忆主体 ID，并把收藏句专属的每日
+        // 入队去重表泛化为带 namespace 的通用表，供词汇复习共用同一张表。
+        if (from < 50) {
+          await _addColumnIfNotExists(
+            'saved_words',
+            'memory_subject_id',
+            'TEXT',
+          );
+          await _addColumnIfNotExists(
+            'saved_sense_groups',
+            'memory_subject_id',
+            'TEXT',
+          );
+          for (final table in ['saved_words', 'saved_sense_groups']) {
+            if (!await _tableExists(table)) continue;
+            final rows = await customSelect(
+              'SELECT id FROM $table WHERE memory_subject_id IS NULL OR trim(memory_subject_id) = \'\'',
+            ).get();
+            for (final row in rows) {
+              await customStatement(
+                'UPDATE $table SET memory_subject_id = ? WHERE id = ?',
+                [const Uuid().v4(), row.data['id']],
+              );
+            }
+          }
+          if (await _tableExists('bookmark_review_queue_entries')) {
+            await customStatement(
+              'ALTER TABLE bookmark_review_queue_entries RENAME TO memory_review_queue_entries',
+            );
+            await _addColumnIfNotExists(
+              'memory_review_queue_entries',
+              'namespace',
+              'TEXT',
+            );
+            await customStatement(
+              "UPDATE memory_review_queue_entries SET namespace = 'saved_sentence' WHERE namespace IS NULL OR trim(namespace) = ''",
+            );
+            await customStatement(
+              'DROP INDEX IF EXISTS idx_bookmark_review_queue_subject_day',
+            );
+          } else {
+            await m.createTable(memoryReviewQueueEntries);
+          }
+          await customStatement('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_review_queue_namespace_subject_day
+            ON memory_review_queue_entries(namespace, subject_id, local_date)
+          ''');
+        }
+        // v48→v49：为收藏句补稳定的记忆主体 ID，并建立每日入队去重表。
+        if (from < 49) {
+          await _addColumnIfNotExists('bookmarks', 'memory_subject_id', 'TEXT');
+          if (await _tableExists('bookmarks')) {
+            final rows = await customSelect(
+              'SELECT id FROM bookmarks WHERE memory_subject_id IS NULL OR trim(memory_subject_id) = \'\'',
+            ).get();
+            for (final row in rows) {
+              await customStatement(
+                'UPDATE bookmarks SET memory_subject_id = ? WHERE id = ?',
+                [const Uuid().v4(), row.data['id']],
+              );
+            }
+          }
+          // memory_review_queue_entries 的建表/改名/索引已由上面 v50 分支统一
+          // 处理（该分支对任何 from < 50 都会先执行一次），此处不再重复建表。
+        }
+        // v47→v48：新增通用记忆调度快照与只追加评分事件；不回填既有业务数据。
+        if (from < 48) {
+          await m.createTable(memorySchedules);
+          await m.createTable(memoryReviewEvents);
+          await _createMemorySchedulerIndexes();
+        }
         // v43→v44：tts_cache 新增 text 列（原始文本，便于调试）。
         // TTS 仍在开发阶段、缓存可丢弃，直接重建表即可（无需保留旧数据）。
         if (from >= 43 && from < 44) {
@@ -203,6 +456,15 @@ class AppDatabase extends _$AppDatabase {
               WHERE type LIKE 'translation:%'
             ''');
           }
+        }
+        // v46→v47：learning_progresses 新增 manual_unlock_at
+        // （「立即解锁」当前复习轮的时刻，null = 未手动解锁）。
+        if (from < 47) {
+          await _addColumnIfNotExists(
+            'learning_progresses',
+            'manual_unlock_at',
+            'INTEGER',
+          );
         }
         // v14→v15：新增 saved_words 表（收藏单词）
         if (from < 15) {
@@ -420,10 +682,10 @@ class AppDatabase extends _$AppDatabase {
             'ALTER TABLE collections RENAME COLUMN is_starred TO is_pinned',
           );
         }
-        // v28→v29：官方合集支持字段
+        // v28→v29：社区合集支持字段
         // - collections 加：source / remoteId / coverUrl / description / deprecatedAt
         // - audio_items 加：remoteAudioId / isAudioDownloaded（默认 true 兼容老数据）
-        // - 唯一索引：(remote_id) WHERE source='official' AND remote_id IS NOT NULL
+        // - 唯一索引：(remote_id) WHERE source='community' AND remote_id IS NOT NULL
         if (from < 29) {
           await _addColumnIfNotExists(
             'collections',
@@ -444,11 +706,11 @@ class AppDatabase extends _$AppDatabase {
             'is_audio_downloaded',
             'INTEGER NOT NULL DEFAULT 1',
           );
-          // 避免并发 enroll 写入重复的官方合集行
+          // 避免并发 enroll 写入重复的社区合集行
           await customStatement('''
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_remote_id_official
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_remote_id_community
             ON collections(remote_id)
-            WHERE source = 'official' AND remote_id IS NOT NULL
+            WHERE source = 'community' AND remote_id IS NOT NULL
           ''');
           // 同步时按 remoteAudioId 反查
           await customStatement('''
@@ -457,7 +719,7 @@ class AppDatabase extends _$AppDatabase {
             WHERE remote_audio_id IS NOT NULL
           ''');
         }
-        // v30→v31：audio_items 加 original_date（音频原始发布/播出日期，官方合集用）
+        // v30→v31：audio_items 加 original_date（音频原始发布/播出日期，社区合集用）
         //
         // 注意：这里必须在 v29→v30 的 alterTable 之前执行。Drift 的
         // TableMigration 会按当前表定义重建 audio_items，当前表已包含
@@ -632,7 +894,234 @@ class AppDatabase extends _$AppDatabase {
             await _clearUnstartedV1FirstLearnProgress();
           }
         }
+        // v58：补齐 v51-v57 期间可能缺少主体 ID 或活动调度快照的收藏。
+        // 此后复习队列从 memory_schedules 直接联表读取，因此升级前统一收敛一次。
+        if (from < 58) {
+          await _createFavoriteReviewIndexes();
+          await _migrateLegacyFavoriteMemorySchedules();
+        }
+        // v62→v63：播客简介并入通用 description 字段，删除 podcast_description 列。
+        // 放在最后执行：从 v37 升级时 from<38 才会补回该列，必须先于删除。
+        if (from < 63) {
+          await _migratePodcastDescriptionToDescription();
+        }
+        // v63→v64：社区难度字段泛化为通用 difficulty（列 community_difficulty → difficulty）。
+        if (from < 64) {
+          await _renameColumnIfExists(
+            'audio_items',
+            'community_difficulty',
+            'difficulty',
+          );
+        }
       },
+    );
+  }
+
+  /// 一次性收敛旧收藏与 FSRS 调度快照的生命周期。
+  ///
+  /// 必须在 schema v58 升级事务内执行：任一数据异常都会使 Drift 回滚升级，
+  /// 避免把部分完成的回填标记为成功。运行期收藏入口已负责后续新增、恢复和
+  /// 取消收藏的调度生命周期，这里只处理升级前的历史遗留数据。
+  Future<void> _migrateLegacyFavoriteMemorySchedules() async {
+    final migratedAt = DateTime.now().toUtc();
+    final state = FsrsMemoryModelAdapter().createInitialState(
+      profile: kFsrsDefaultProfile,
+      createdAt: migratedAt,
+    );
+    final activeAudioIds = (await select(audioItems).get())
+        .where((audio) => audio.deletedAt == null)
+        .map((audio) => audio.id)
+        .toSet();
+    final subjectsByNamespace = <String, Set<String>>{
+      kSavedSentenceNamespace: <String>{},
+      kSavedWordOrPhraseNamespace: <String>{},
+      kSavedSenseGroupNamespace: <String>{},
+    };
+    var created = 0;
+    var archived = 0;
+    var restored = 0;
+
+    Future<void> reconcile({
+      required String namespace,
+      required String subjectId,
+      required bool shouldBeActive,
+      required bool createArchivedWhenMissing,
+    }) async {
+      final existing =
+          await (select(memorySchedules)..where(
+                (schedule) =>
+                    schedule.namespace.equals(namespace) &
+                    schedule.subjectId.equals(subjectId),
+              ))
+              .getSingleOrNull();
+      if (shouldBeActive) {
+        if (existing == null) {
+          await into(memorySchedules).insert(
+            _legacyScheduleCompanion(
+              id: const Uuid().v4(),
+              namespace: namespace,
+              subjectId: subjectId,
+              modelStateJson: jsonEncode(state.values),
+              at: migratedAt,
+            ),
+          );
+          created += 1;
+        } else if (existing.status == 'archived') {
+          await (update(
+            memorySchedules,
+          )..where((schedule) => schedule.id.equals(existing.id))).write(
+            MemorySchedulesCompanion(
+              status: const Value('active'),
+              archivedAt: const Value(null),
+              updatedAt: Value(migratedAt),
+              revision: Value(existing.revision + 1),
+            ),
+          );
+          restored += 1;
+        }
+        return;
+      }
+
+      if (existing == null) {
+        if (!createArchivedWhenMissing) return;
+        await into(memorySchedules).insert(
+          _legacyScheduleCompanion(
+            id: const Uuid().v4(),
+            namespace: namespace,
+            subjectId: subjectId,
+            modelStateJson: jsonEncode(state.values),
+            at: migratedAt,
+            status: 'archived',
+            revision: 1,
+          ),
+        );
+        archived += 1;
+      } else if (existing.status == 'active') {
+        await (update(
+          memorySchedules,
+        )..where((schedule) => schedule.id.equals(existing.id))).write(
+          MemorySchedulesCompanion(
+            status: const Value('archived'),
+            archivedAt: Value(migratedAt),
+            updatedAt: Value(migratedAt),
+            revision: Value(existing.revision + 1),
+          ),
+        );
+        archived += 1;
+      }
+    }
+
+    for (final bookmark in await select(bookmarks).get()) {
+      var subjectId = bookmark.memorySubjectId;
+      if (subjectId == null || subjectId.trim().isEmpty) {
+        subjectId = const Uuid().v4();
+        await (update(bookmarks)..where((row) => row.id.equals(bookmark.id)))
+            .write(BookmarksCompanion(memorySubjectId: Value(subjectId)));
+      }
+      subjectsByNamespace[kSavedSentenceNamespace]!.add(subjectId);
+      final isReviewable =
+          bookmark.sentenceText.trim().isNotEmpty &&
+          bookmark.endTime > bookmark.startTime;
+      final hasActiveAudio = activeAudioIds.contains(bookmark.audioItemId);
+      await reconcile(
+        namespace: kSavedSentenceNamespace,
+        subjectId: subjectId,
+        shouldBeActive:
+            bookmark.deletedAt == null && hasActiveAudio && isReviewable,
+        createArchivedWhenMissing: bookmark.deletedAt != null,
+      );
+    }
+
+    for (final word in await select(savedWords).get()) {
+      var subjectId = word.memorySubjectId;
+      if (subjectId == null || subjectId.trim().isEmpty) {
+        subjectId = const Uuid().v4();
+        await (update(savedWords)..where((row) => row.id.equals(word.id)))
+            .write(SavedWordsCompanion(memorySubjectId: Value(subjectId)));
+      }
+      subjectsByNamespace[kSavedWordOrPhraseNamespace]!.add(subjectId);
+      await reconcile(
+        namespace: kSavedWordOrPhraseNamespace,
+        subjectId: subjectId,
+        shouldBeActive: word.deletedAt == null && word.word.trim().isNotEmpty,
+        createArchivedWhenMissing: word.deletedAt != null,
+      );
+    }
+
+    for (final group in await select(savedSenseGroups).get()) {
+      var subjectId = group.memorySubjectId;
+      if (subjectId == null || subjectId.trim().isEmpty) {
+        subjectId = const Uuid().v4();
+        await (update(
+          savedSenseGroups,
+        )..where((row) => row.id.equals(group.id))).write(
+          SavedSenseGroupsCompanion(memorySubjectId: Value(subjectId)),
+        );
+      }
+      subjectsByNamespace[kSavedSenseGroupNamespace]!.add(subjectId);
+      await reconcile(
+        namespace: kSavedSenseGroupNamespace,
+        subjectId: subjectId,
+        shouldBeActive:
+            group.deletedAt == null && group.phraseText.trim().isNotEmpty,
+        createArchivedWhenMissing: group.deletedAt != null,
+      );
+    }
+
+    for (final schedule in await select(memorySchedules).get()) {
+      if (schedule.status != 'active') continue;
+      final knownSubjects = subjectsByNamespace[schedule.namespace];
+      if (knownSubjects == null || knownSubjects.contains(schedule.subjectId)) {
+        continue;
+      }
+      await (update(
+        memorySchedules,
+      )..where((row) => row.id.equals(schedule.id))).write(
+        MemorySchedulesCompanion(
+          status: const Value('archived'),
+          archivedAt: Value(migratedAt),
+          updatedAt: Value(migratedAt),
+          revision: Value(schedule.revision + 1),
+        ),
+      );
+      archived += 1;
+    }
+
+    AppLogger.log(
+      'DB.migrate',
+      'v58 favorite schedules: created=$created restored=$restored archived=$archived',
+    );
+  }
+
+  /// 构造旧收藏迁移使用的初始快照；删除来源的历史项直接以归档态落库。
+  MemorySchedulesCompanion _legacyScheduleCompanion({
+    required String id,
+    required String namespace,
+    required String subjectId,
+    required String modelStateJson,
+    required DateTime at,
+    String status = 'active',
+    int revision = 0,
+  }) {
+    final isArchived = status == 'archived';
+    return MemorySchedulesCompanion.insert(
+      id: id,
+      namespace: namespace,
+      subjectId: subjectId,
+      profileId: kFsrsDefaultProfileRef.profileId,
+      profileVersion: kFsrsDefaultProfileRef.profileVersion,
+      modelId: 'fsrs',
+      modelStateVersion: 1,
+      modelStateJson: Value(modelStateJson),
+      phase: 'newItem',
+      status: status,
+      dueAt: at,
+      reviewCount: const Value(0),
+      lapseCount: const Value(0),
+      revision: Value(revision),
+      createdAt: at,
+      updatedAt: at,
+      archivedAt: Value(isArchived ? at : null),
     );
   }
 
@@ -882,10 +1371,13 @@ class AppDatabase extends _$AppDatabase {
         DailyStudyRecordsCompanion.insert(
           date: date,
           studyTimeSeconds: Value(data['study_time_'] ?? 0),
+          studyTimeMilliseconds: Value((data['study_time_'] ?? 0) * 1000),
           inputWords: Value(data['input_words_'] ?? 0),
           outputWords: Value(data['output_words_'] ?? 0),
           inputTimeSeconds: Value(data['input_time_'] ?? 0),
+          inputTimeMilliseconds: Value((data['input_time_'] ?? 0) * 1000),
           outputTimeSeconds: Value(data['output_time_'] ?? 0),
+          outputTimeMilliseconds: Value((data['output_time_'] ?? 0) * 1000),
         ),
         mode: InsertMode.insertOrIgnore,
       );
@@ -929,6 +1421,40 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  /// v62→v63：把播客简介迁入通用 description 字段，再删除 podcast_description。
+  ///
+  /// 只补写 description 为空的行，不覆盖已有值；旧列不存在时直接跳过。
+  /// DROP COLUMN 需要 SQLite 3.35+，sqlite3_flutter_libs 自带的版本满足要求。
+  Future<void> _migratePodcastDescriptionToDescription() async {
+    final columns = await customSelect(
+      "SELECT COUNT(*) AS cnt FROM pragma_table_info('audio_items') WHERE name = 'podcast_description'",
+    ).getSingle();
+    if (columns.data['cnt'] == 0) return;
+
+    await customStatement(
+      'UPDATE audio_items SET description = podcast_description '
+      'WHERE description IS NULL AND podcast_description IS NOT NULL',
+    );
+    await customStatement(
+      'ALTER TABLE audio_items DROP COLUMN podcast_description',
+    );
+  }
+
+  /// 重命名列：旧列存在且新列不存在时才执行，保证幂等。
+  Future<void> _renameColumnIfExists(
+    String table,
+    String from,
+    String to,
+  ) async {
+    if (!await _tableExists(table)) return;
+    final columns = await customSelect(
+      "SELECT name FROM pragma_table_info('$table')",
+    ).get();
+    final names = columns.map((row) => row.data['name']).toSet();
+    if (!names.contains(from) || names.contains(to)) return;
+    await customStatement('ALTER TABLE $table RENAME COLUMN $from TO $to');
+  }
+
   /// 确保 v38 podcast 合集/episode 字段存在。
   ///
   /// 该方法故意保持幂等：正常迁移路径和启动自愈路径共用它，避免 schema
@@ -950,7 +1476,6 @@ class AppDatabase extends _$AppDatabase {
       'podcast_enclosure_type',
       'TEXT',
     );
-    await _addColumnIfNotExists('audio_items', 'podcast_description', 'TEXT');
     await _addColumnIfNotExists('audio_items', 'podcast_image_url', 'TEXT');
     await _addColumnIfNotExists('audio_items', 'podcast_link', 'TEXT');
   }
@@ -1029,11 +1554,11 @@ class AppDatabase extends _$AppDatabase {
       WHERE is_pinned = 0
     ''');
 
-    // 官方合集 remoteId 唯一（防并发 enroll 重复）
+    // 社区合集 remoteId 唯一（防并发 enroll 重复）
     await customStatement('''
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_remote_id_official
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_remote_id_community
       ON collections(remote_id)
-      WHERE source = 'official'
+      WHERE source = 'community'
         AND remote_id IS NOT NULL
         AND deleted_at IS NULL
     ''');
@@ -1049,6 +1574,55 @@ class AppDatabase extends _$AppDatabase {
       ON audio_items(remote_audio_id)
       WHERE remote_audio_id IS NOT NULL
         AND deleted_at IS NULL
+    ''');
+
+    await _createMemorySchedulerIndexes();
+    await _createFavoriteReviewIndexes();
+  }
+
+  /// 为从到期调度反查收藏主体建立轻量部分索引。
+  Future<void> _createFavoriteReviewIndexes() async {
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_active_memory_subject
+      ON bookmarks(memory_subject_id)
+      WHERE deleted_at IS NULL AND memory_subject_id IS NOT NULL
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_saved_words_active_memory_subject
+      ON saved_words(memory_subject_id)
+      WHERE deleted_at IS NULL AND memory_subject_id IS NOT NULL
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_saved_sense_groups_active_memory_subject
+      ON saved_sense_groups(memory_subject_id)
+      WHERE deleted_at IS NULL AND memory_subject_id IS NOT NULL
+    ''');
+  }
+
+  /// 创建记忆调度快照和事件的查询索引。
+  Future<void> _createMemorySchedulerIndexes() async {
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_memory_schedules_active_namespace_due
+      ON memory_schedules(namespace, due_at, id)
+      WHERE status = 'active'
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_memory_schedules_active_due
+      ON memory_schedules(due_at, id)
+      WHERE status = 'active'
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_memory_schedules_active_phase_due
+      ON memory_schedules(phase, due_at, id)
+      WHERE status = 'active'
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_memory_schedules_profile
+      ON memory_schedules(profile_id, profile_version)
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_memory_review_events_schedule_reviewed
+      ON memory_review_events(schedule_id, reviewed_at, sequence)
     ''');
   }
 }

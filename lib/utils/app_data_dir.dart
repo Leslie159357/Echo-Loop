@@ -14,6 +14,14 @@ Future<Directory> getAppDataDirectory() async {
   return _cached ??= await _resolve();
 }
 
+/// 应用级缓存根目录；各 feature 必须在此目录下使用独立命名空间。
+Future<Directory> resolveAppCacheDirectory() async {
+  final base = await getApplicationSupportDirectory();
+  final dir = Directory('${base.path}/cache');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  return dir;
+}
+
 /// 仅用于测试：覆盖 [getAppDataDirectory] 的返回值。
 ///
 /// 设为 `null` 恢复默认行为。
@@ -34,18 +42,17 @@ Future<Directory> _resolve() async {
   return dir;
 }
 
-/// 持久化日志文件路径（落盘日志，跨进程/跨崩溃保留，供日志页导出）。
-Future<String> appLogFilePath() async {
+/// 持久化日志目录（落盘日志，跨进程保留，供日志页查看和导出）。
+///
+/// 目录仅由日志输出管理，避免轮转清理误触应用数据目录内的其他诊断文件。
+Future<String> appLogDirectoryPath() async {
   final dir = await getAppDataDirectory();
-  return '${dir.path}/app.log';
+  return '${dir.path}/logs';
 }
 
-/// ASR 推理崩溃面包屑文件路径。
-///
-/// Worker isolate 在调用 native 推理前同步写入、成功后清除；
-/// 若进程在 native 层 abort（SIGABRT，不可捕获）被杀，该文件残留，
-/// 下次启动据此判定"上次疑似崩在 ASR 推理"。
-Future<String> asrCrashMarkerPath() async {
-  final dir = await getAppDataDirectory();
-  return '${dir.path}/asr_crash.marker';
+/// ASR 推理诊断文件目录。
+Future<String> asrInferenceLogDirectoryPath() async {
+  final dir = Directory('${(await getAppDataDirectory()).path}/logs');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  return dir.path;
 }

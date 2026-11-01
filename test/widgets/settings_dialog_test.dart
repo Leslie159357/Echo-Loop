@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:echo_loop/widgets/settings_dialog.dart';
 import 'package:echo_loop/models/playback_settings.dart';
+import 'package:echo_loop/models/repeat_count_options.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
@@ -46,7 +47,7 @@ void main() {
 
         // 浮层不再显示「循环设置」标题
         expect(find.text('Loop Settings'), findsNothing);
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
         expect(find.text('Single-sentence loop'), findsOneWidget);
         expect(find.byType(Switch), findsNWidgets(2));
       });
@@ -75,6 +76,22 @@ void main() {
         expect(find.text('Interval Duration'), findsOneWidget);
         expect(find.text('3s'), findsWidgets);
         expect(find.text('3x'), findsWidgets);
+      });
+
+      testWidgets('循环次数滑块包含 20/30/40/50 和无限位置', (tester) async {
+        await tester.pumpWidget(
+          _buildLoopPopupTest(
+            practiceState: const ListeningPracticeState(
+              settings: PlaybackSettings(loopWhole: true),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final slider = tester.widget<Slider>(find.byType(Slider).first);
+        expect(slider.min, 0);
+        expect(slider.max, kRepeatCountOptions.length - 1);
+        expect(slider.divisions, kRepeatCountOptions.length - 1);
       });
 
       testWidgets('两组循环同时开启时展开 4 个滑块', (tester) async {
@@ -134,7 +151,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
         expect(find.text('Single-sentence loop'), findsNothing);
         expect(find.byType(Switch), findsOneWidget);
       });

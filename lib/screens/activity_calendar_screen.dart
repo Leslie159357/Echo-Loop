@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/study/activity_day_cell.dart';
 import '../widgets/study/day_stage_breakdown_sheet.dart';
 import '../widgets/study/monthly_summary_card.dart';
+import '../widgets/study/study_duration_chart.dart';
 
 /// 活动日历页面
 ///
@@ -93,22 +94,25 @@ class _ActivityCalendarScreenState
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: recordsAsync.when(
-                      data: (records) =>
-                          _buildCalendar(records, locale, service, isZh),
-                      loading: () => _buildCalendar({}, locale, service, isZh),
-                      error: (_, __) =>
-                          _buildCalendar({}, locale, service, isZh),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        recordsAsync.when(
+                          data: (records) =>
+                              _buildCalendar(records, locale, service, isZh),
+                          loading: () =>
+                              _buildCalendar({}, locale, service, isZh),
+                          error: (_, __) =>
+                              _buildCalendar({}, locale, service, isZh),
+                        ),
+                        // 图例与对应的日历保持在同一张卡片内。
+                        _buildLegend(theme, isZh),
+                      ],
                     ),
                   ),
                 ),
-                // 颜色深浅图例 / 空月份提示
-                recordsAsync.whenOrNull(
-                      data: (records) => records.isNotEmpty
-                          ? _buildLegend(theme, isZh)
-                          : _buildEmptyHint(theme, l10n),
-                    ) ??
-                    const SizedBox.shrink(),
+                const SizedBox(height: AppSpacing.s),
+                const StudyDurationChart(),
               ],
             ),
           ),
@@ -117,7 +121,7 @@ class _ActivityCalendarScreenState
     );
   }
 
-  /// 构建日历组件
+  /// 构建月视图日历，仅接管横向切月手势，将纵向滚动交给页面。
   Widget _buildCalendar(
     Map<int, MonthDayRecord> records,
     String locale,
@@ -132,6 +136,7 @@ class _ActivityCalendarScreenState
       lastDay: DateTime.now(),
       locale: locale,
       calendarFormat: CalendarFormat.month,
+      availableGestures: AvailableGestures.horizontalSwipe,
       availableCalendarFormats: const {CalendarFormat.month: 'Month'},
       startingDayOfWeek: StartingDayOfWeek.monday,
       headerStyle: HeaderStyle(
@@ -307,20 +312,6 @@ class _ActivityCalendarScreenState
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// 空月份提示
-  Widget _buildEmptyHint(ThemeData theme, AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.l),
-      child: Text(
-        l10n.noActivityThisMonth,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        textAlign: TextAlign.center,
       ),
     );
   }

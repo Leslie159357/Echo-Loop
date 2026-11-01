@@ -19,6 +19,9 @@ import 'package:echo_loop/database/app_database.dart'
     hide AudioItem, Collection;
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/remote_config/remote_config.dart';
+import 'package:echo_loop/features/user_region/user_region_bootstrapper.dart';
+import 'package:echo_loop/features/user_region/user_region_providers.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/main.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
@@ -29,13 +32,19 @@ import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/database/enums.dart' show LearningStage;
 import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:echo_loop/providers/package_info_provider.dart';
+import 'package:echo_loop/providers/startup_bootstrap_provider.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/providers/saved_sense_group_provider.dart';
+import 'package:echo_loop/providers/study_task_provider.dart';
 import 'package:echo_loop/providers/tag_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/audio_engine/foreground_audio_engine_provider.dart';
+import 'package:echo_loop/providers/media_engine/media_engine_provider.dart';
+import 'package:echo_loop/providers/media_playback/media_playback_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
@@ -43,11 +52,18 @@ import 'package:echo_loop/providers/learning_session/intensive_listen_player_pro
 import 'package:echo_loop/providers/learning_session/retell_player_provider.dart';
 import 'package:echo_loop/providers/learning_session/review_difficult_practice_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
-import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
 import 'package:echo_loop/providers/transcription_task_provider.dart';
+import 'package:echo_loop/router/app_router.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/utils/saved_text_index.dart';
 
 import 'mock_providers.dart';
+
+// 所有轻量 widget 测试共享一份内存数据库，避免每次 pump 都创建 Drift 数据库，
+// 导致异步查询流在 ProviderScope 销毁时留下 pending timer。
+final _testAppDatabase = AppDatabase(
+  NativeDatabase.memory(setup: (db) => db.execute('PRAGMA foreign_keys = ON')),
+);
 
 /// 创建测试用 App 包装器
 ///
@@ -56,6 +72,7 @@ import 'mock_providers.dart';
 /// [size] 用于设置窗口大小模拟不同设备。
 Widget createTestApp(
   Widget child, {
+  Key? key,
   List<Override>? overrides,
   Locale locale = const Locale('en'),
   ThemeMode themeMode = ThemeMode.light,
@@ -71,6 +88,7 @@ Widget createTestApp(
         AppSettingsState(themeMode: themeMode, locale: locale),
       ),
     ),
+    guideEnabledProvider.overrideWith(() => _DisabledGuideEnabledNotifier()),
     audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
     collectionListProvider.overrideWith(() => TestCollectionList()),
     tagListProvider.overrideWith(() => TestTagList()),
@@ -79,6 +97,16 @@ Widget createTestApp(
     foregroundAudioEngineProvider.overrideWith(
       () => TestForegroundAudioEngine(),
     ),
+    // media engine 在生产中 keep-alive，但测试 App 每次都必须拥有独立实例，
+    // 避免上一用例的异步生命周期队列污染下一用例。
+    mediaEngineProvider.overrideWith(MediaEngine.new),
+    mediaPlaybackProvider.overrideWith(MediaPlayback.new),
+    // 收藏生命周期、播放断点等 Provider 会在 widget 测试中读取数据库；
+    // 默认注入独立内存库，避免测试意外依赖生产启动流程的全局数据库。
+    appDatabaseProvider.overrideWithValue(_testAppDatabase),
+    // 轻量 widget 测试不验证收藏数据流，固定为空索引可避免销毁 ProviderScope
+    // 时 Drift 查询流留下 pending timer；需要验证收藏的测试可在 overrides 覆盖。
+    savedTextIndexProvider.overrideWithValue(const SavedTextIndex.empty()),
     learningProgressNotifierProvider.overrideWith(
       () => TestLearningProgressNotifier(),
     ),
@@ -89,7 +117,11 @@ Widget createTestApp(
   // 合并自定义 overrides（覆盖同名 provider）
   final allOverrides = <Override>[...defaultOverrides, ...(overrides ?? [])];
 
+  // 需要显式隔离同一用例内的 Provider 状态时可传入 key；默认保留
+  // Flutter 的子树更新语义，让同一用例内重建 App 时 StatefulWidget 状态
+  // 可以继续存在。
   return ProviderScope(
+    key: key ?? UniqueKey(),
     overrides: allOverrides,
     child: Builder(
       builder: (context) {
@@ -119,6 +151,7 @@ Widget createTestApp(
 Widget createTestScreen(
   Widget screen, {
   List<Override>? overrides,
+  List<NavigatorObserver> navigatorObservers = const [],
   Locale locale = const Locale('en'),
 }) {
   final defaultOverrides = <Override>[
@@ -128,6 +161,7 @@ Widget createTestScreen(
     appSettingsProvider.overrideWith(
       () => TestAppSettings(AppSettingsState(locale: locale)),
     ),
+    guideEnabledProvider.overrideWith(() => _DisabledGuideEnabledNotifier()),
     audioLibraryProvider.overrideWith(() => TestAudioLibrary()),
     collectionListProvider.overrideWith(() => TestCollectionList()),
     tagListProvider.overrideWith(() => TestTagList()),
@@ -136,12 +170,18 @@ Widget createTestScreen(
     foregroundAudioEngineProvider.overrideWith(
       () => TestForegroundAudioEngine(),
     ),
+    // 屏幕测试也必须注入内存数据库；否则收藏、播放断点等 Provider 会
+    // 在测试环境读取尚未由应用启动流程初始化的全局数据库。
+    appDatabaseProvider.overrideWithValue(_testAppDatabase),
   ];
 
   // 合并自定义 overrides
   final allOverrides = <Override>[...defaultOverrides, ...(overrides ?? [])];
 
-  final router = createTestRouter(screen);
+  final router = createTestRouter(
+    screen,
+    navigatorObservers: navigatorObservers,
+  );
 
   return ProviderScope(
     overrides: allOverrides,
@@ -204,6 +244,9 @@ Future<void> pumpFullApp(
         isFirstLaunchProvider.overrideWithValue(false),
         sharedPreferencesProvider.overrideWithValue(prefs),
         initialOnboardingCompletedProvider.overrideWithValue(true),
+        guideEnabledProvider.overrideWith(
+          () => _DisabledGuideEnabledNotifier(),
+        ),
         // 隐藏 AI section，避免 ASR 相关 Provider 未实现导致 UnimplementedError
         showOfflineAsrSectionProvider.overrideWithValue(false),
         offlineAsrOverride(),
@@ -228,7 +271,6 @@ Future<void> pumpFullApp(
         reviewDifficultPracticeProvider.overrideWith(
           () => TestReviewDifficultPractice(),
         ),
-        flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
         transcriptionTaskManagerProvider.overrideWith(
           () => TestTranscriptionTaskManager(),
         ),
@@ -249,6 +291,55 @@ Future<void> pumpFullApp(
       child: const EchoLoopApp(),
     ),
   );
+}
+
+class _DisabledGuideEnabledNotifier extends GuideEnabledNotifier {
+  @override
+  bool build() => false;
+
+  @override
+  Future<void> setEnabled(bool enabled) async {
+    state = false;
+  }
+}
+
+/// 完整 App 的路由测试使用已完成的地区决策和失败的本地启动结果。
+///
+/// 这样启动门禁会挂载路由树，同时避免测试运行真实数据库初始化、远程配置
+/// 请求和本地启动成功后的后台副作用。
+List<Override> fullAppRouteTestStartupOverrides() => [
+  localStartupProvider.overrideWith(_FailedLocalStartupController.new),
+  userRegionBootstrapProvider.overrideWith(
+    (ref) async => const UserRegionBootstrapResult(
+      isChinaUser: false,
+      source: UserRegionDecisionSource.systemFallback,
+      remoteConfig: RemoteConfig.defaults,
+    ),
+  ),
+  bookmarkListProvider.overrideWith((ref) => Stream.value(const [])),
+  savedWordListProvider.overrideWith(_EmptySavedWordList.new),
+  savedSenseGroupListProvider.overrideWith(_EmptySavedSenseGroupList.new),
+  savedTextIndexProvider.overrideWithValue(const SavedTextIndex.empty()),
+  studyRecommendationProvider.overrideWithValue(
+    const AsyncData<AudioItem?>(null),
+  ),
+];
+
+class _FailedLocalStartupController extends LocalStartupController {
+  @override
+  Future<StartupReport> build() async => throw StateError(
+    'Local startup is outside the scope of this full-app route test.',
+  );
+}
+
+class _EmptySavedWordList extends SavedWordList {
+  @override
+  Stream<List<SavedWord>> build() => Stream.value(const []);
+}
+
+class _EmptySavedSenseGroupList extends SavedSenseGroupList {
+  @override
+  Stream<List<SavedSenseGroup>> build() => Stream.value(const []);
 }
 
 /// 在 flutter_test 中渲染完整 [EchoLoopApp] 并预置一份音频学习数据。
@@ -346,9 +437,13 @@ Future<void> pumpFullAppWithAudio(
 ///
 /// 将传入的 [screen] 作为初始路由页面，
 /// 并添加常用的 stub 路由用于导航测试。
-GoRouter createTestRouter(Widget screen) {
+GoRouter createTestRouter(
+  Widget screen, {
+  List<NavigatorObserver> navigatorObservers = const [],
+}) {
   return GoRouter(
     initialLocation: '/',
+    observers: navigatorObservers,
     routes: [
       GoRoute(path: '/', builder: (context, state) => screen),
       // stub 路由，用于验证导航跳转
@@ -363,6 +458,11 @@ GoRouter createTestRouter(Widget screen) {
       GoRoute(
         path: '/paywall',
         builder: (context, state) => const Scaffold(body: Text('Paywall')),
+      ),
+      GoRoute(
+        path: AppRoutes.podcastSubscribe,
+        builder: (context, state) =>
+            const Scaffold(body: Text('Podcast Subscribe')),
       ),
       GoRoute(
         path: '/sentence-detail',

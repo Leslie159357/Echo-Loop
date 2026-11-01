@@ -40,6 +40,7 @@ void main() {
         Events.reminderUpdated,
         Events.asrSettingChanged,
         Events.studyTimeViewed,
+        Events.subscriptionPageViewed,
       ];
 
       for (final name in events) {
@@ -84,6 +85,7 @@ void main() {
         Events.reminderUpdated,
         Events.asrSettingChanged,
         Events.studyTimeViewed,
+        Events.subscriptionPageViewed,
       ];
 
       final unique = events.toSet();
@@ -127,6 +129,7 @@ void main() {
         Events.reminderUpdated,
         Events.asrSettingChanged,
         Events.studyTimeViewed,
+        Events.subscriptionPageViewed,
       ];
 
       final pattern = RegExp(r'^[a-z][a-z0-9_]*$');
@@ -210,6 +213,12 @@ void main() {
 
       final unique = params.toSet();
       expect(unique.length, params.length, reason: '存在重复的参数名');
+    });
+  });
+
+  group('UserProperties 常量', () {
+    test('安装来源属性名正确', () {
+      expect(UserProperties.installSource, 'install_source');
     });
   });
 }

@@ -10,9 +10,11 @@ import '../common/setting_labeled_row.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/intensive_listen_settings.dart';
+import '../../models/repeat_count_options.dart';
 import '../../providers/learning_session/intensive_listen_player_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/playback_speed.dart';
+import '../common/settings_sheet_scaffold.dart';
 
 /// 显示精听设置底部弹窗
 void showIntensiveListenSettingsSheet({required BuildContext context}) {
@@ -38,86 +40,55 @@ class _IntensiveListenSettingsSheet extends ConsumerWidget {
       intensiveListenPlayerProvider.select((s) => s.settings),
     );
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.l,
-          AppSpacing.s,
-          AppSpacing.l,
-          AppSpacing.l,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 拖拽条
-            Center(
-              child: Container(
-                width: 32,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.m),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.4,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+    return SettingsSheetScaffold(
+      title: l10n.intensiveListenSettings,
+      subtitle: l10n.intensiveListenSettingsTemporaryHint,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 控制模式
+          _buildControlModeSection(l10n, theme, settings, ref),
+          const SizedBox(height: AppSpacing.l),
+
+          // 播放速度（手动/自动模式下都生效）
+          _buildPlaybackSpeedSection(l10n, theme, settings, ref),
+
+          const SizedBox(height: AppSpacing.l),
+
+          // 两种控制模式共用循环次数与停顿设置。
+          _buildRepeatCountRow(l10n, theme, settings, ref),
+          if (settings.repeatCount != 1)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.intensiveListenAnnotationReplayUsesRepeatCount),
+              value: settings.annotationReplayUsesRepeatCount,
+              onChanged: (value) {
+                ref
+                    .read(intensiveListenPlayerProvider.notifier)
+                    .updateSettings(
+                      settings.copyWith(annotationReplayUsesRepeatCount: value),
+                    );
+              },
             ),
+          const SizedBox(height: AppSpacing.l),
 
-            // 标题
-            Text(
-              l10n.intensiveListenSettings,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          // 句间停顿
+          Text(
+            l10n.intensiveListenPauseLabel,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: AppSpacing.xs),
+          ),
+          const SizedBox(height: AppSpacing.s),
 
-            // 临时提示
-            Text(
-              l10n.intensiveListenSettingsTemporaryHint,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(
-                  alpha: 0.6,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.l),
+          // 模式切换
+          _buildPauseModeSelector(l10n, settings, ref),
+          const SizedBox(height: AppSpacing.m),
 
-            // 控制模式
-            _buildControlModeSection(l10n, theme, settings, ref),
-            const SizedBox(height: AppSpacing.l),
-
-            // 播放速度（手动/自动模式下都生效）
-            _buildPlaybackSpeedSection(l10n, theme, settings, ref),
-
-            // 循环次数和停顿设置仅在自动模式下显示
-            if (!settings.isManualMode) ...[
-              const SizedBox(height: AppSpacing.l),
-
-              // 每句循环次数
-              _buildRepeatCountRow(l10n, theme, settings, ref),
-              const SizedBox(height: AppSpacing.l),
-
-              // 句间停顿
-              Text(
-                l10n.intensiveListenPauseLabel,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s),
-
-              // 模式切换
-              _buildPauseModeSelector(l10n, settings, ref),
-              const SizedBox(height: AppSpacing.m),
-
-              // 模式详情
-              _buildPauseModeDetail(l10n, theme, settings, ref),
-            ],
-          ],
-        ),
+          // 模式详情
+          _buildPauseModeDetail(l10n, theme, settings, ref),
+        ],
       ),
     );
   }
@@ -249,11 +220,17 @@ class _IntensiveListenSettingsSheet extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(l10n.intensiveListenRepeatCount, style: theme.textTheme.bodyLarge),
+        Expanded(
+          child: Text(
+            l10n.intensiveListenRepeatCount,
+            style: theme.textTheme.bodyLarge,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.s),
         AppDropdown<int>(
           value: settings.repeatCount,
           items: [
-            ...List.generate(10, (i) => i + 1).map((count) {
+            ...kRepeatCountOptions.where((count) => count != 0).map((count) {
               return DropdownMenuItem(
                 value: count,
                 child: Text(l10n.intensiveListenRepeatCountValue(count)),
@@ -340,7 +317,7 @@ class _IntensiveListenSettingsSheet extends ConsumerWidget {
       case PauseMode.fixed:
         final options = IntensiveListenSettings.fixedPauseOptions;
         var idx = options.indexOf(settings.fixedPauseSeconds);
-        if (idx < 0) idx = 2; // 回退到 5 秒
+        if (idx < 0) idx = 2; // 回退到 3 秒
         return Row(
           children: [
             Expanded(

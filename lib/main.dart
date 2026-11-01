@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -11,82 +9,106 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'l10n/app_localizations.dart';
 import 'utils/time_format.dart';
+import 'utils/echo_loop_scroll_behavior.dart';
 import 'database/app_database.dart';
 import 'database/providers.dart';
-import 'database/migration/sp_to_drift_migration.dart';
+import 'config/client_distribution.dart';
 import 'providers/package_info_provider.dart';
 import 'providers/dictionary_provider.dart';
+import 'providers/download_provider.dart';
+import 'providers/pronunciation/pronunciation_providers.dart';
 import 'providers/settings_provider.dart';
+import 'providers/startup_bootstrap_provider.dart';
 import 'router/app_router.dart';
-import 'services/bundled_example_installer.dart';
-import 'services/temp_cleanup_service.dart';
 import 'theme/app_theme.dart';
-import 'package:purchases_flutter/purchases_flutter.dart';
-import 'config/api_config.dart';
-import 'config/auth_config.dart' as auth_config;
-import 'config/revenuecat_config.dart' as revenuecat_config;
-import 'config/web_purchase_config.dart' as web_purchase_config;
 import 'providers/review_reminder_provider.dart';
 import 'services/notification_tap_router_bridge.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'analytics/analytics_providers.dart';
-import 'analytics/permission_snapshot.dart';
-import 'services/network_permission_trigger.dart';
-import 'services/user_id_service.dart';
-import 'firebase_options.dart';
+import 'analytics/analytics_service.dart';
+import 'analytics/models/event_names.dart';
 import 'providers/learning_settings_provider.dart';
-import 'providers/tts/kokoro_model_provider.dart';
-import 'providers/tts/piper_model_provider.dart';
 import 'providers/tts/tts_settings_provider.dart';
 import 'providers/intensive_listen_prefs_provider.dart';
 import 'providers/blind_listen_prefs_provider.dart';
 import 'providers/retell_prefs_provider.dart';
 import 'providers/difficult_practice_prefs_provider.dart';
 import 'providers/new_user_guide_provider.dart';
-import 'providers/offline_asr_settings_provider.dart';
-import 'package:path_provider/path_provider.dart';
-import 'services/asr/asr_model_manager.dart';
-import 'services/asr/offline_asr_engine.dart';
 import 'services/app_logger.dart';
-import 'services/tts/kokoro_model_manager.dart';
-import 'services/tts/piper_model_manager.dart';
-import 'services/tts/piper_voices.dart';
-import 'services/tts/tts_cache_store.dart';
-import 'utils/app_data_dir.dart';
-import 'services/speech_practice_platform.dart';
-import 'services/storage_migration_service.dart';
-import 'services/background_audio_handler.dart';
-import 'features/official_collections/data/official_catalog_service.dart';
-import 'features/official_collections/data/trigger_official_sync.dart';
-import 'features/official_collections/download/official_download_notifier.dart';
+import 'services/app_deep_link_router.dart';
+import 'services/app_window_service.dart';
+import 'services/startup_trace.dart';
+import 'services/app_update_migration.dart';
+import 'services/media_kit_debug_initializer.dart';
+import 'services/user_id_service.dart';
+import 'widgets/app_notice_presenter.dart';
+import 'widgets/app_startup_gate.dart';
+import 'features/community_collections/data/trigger_community_sync.dart';
+import 'features/community_collections/download/community_download_notifier.dart';
 import 'features/onboarding_survey/data/onboarding_survey_storage.dart';
 import 'features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'features/onboarding_survey/providers/user_onboarding_sync_provider.dart';
 import 'features/auth/providers/auth_providers.dart';
+import 'features/remote_config/remote_config_providers.dart';
+import 'features/remote_config/remote_config_service.dart';
+import 'features/user_region/user_region_providers.dart';
 import 'features/subscription/providers/subscription_controller.dart';
 import 'features/subscription/providers/subscription_plans_provider.dart';
+import 'features/subscription/services/paddle_deep_link_handler.dart';
+import 'features/user_region/user_region_bootstrapper.dart';
+import 'features/user_preferences/providers/user_preferences_sync_providers.dart';
 
 void main() async {
+  final startupTrace = StartupTrace();
+  registerStartupTrace(startupTrace);
+  startupTrace.mark('dart_main_enter');
   WidgetsFlutterBinding.ensureInitialized();
-  initTimeago();
+  startupTrace.mark('flutter_binding_ready');
+  final appWindowActivator = WindowManagerAppWindowActivator();
+  await appWindowActivator.initialize();
+  startupTrace.runSync('timeago_initialize', initTimeago);
 
-  // 开启日志落盘：每条日志同步写入文件并 flush，崩溃（含 native SIGABRT）前的
-  // 日志仍保留在磁盘，供日志页导出排查。失败静默忽略，不影响启动。
-  try {
-    await AppLogger.initFileSink(await appLogFilePath());
-  } catch (_) {}
-
-  final packageInfo = await PackageInfo.fromPlatform();
-
-  // 数据目录迁移（Documents → Application Support）
-  try {
-    await migrateToAppSupportDirectory();
-  } catch (e) {
-    AppLogger.log('App', '数据目录迁移失败，下次启动重试: $e');
-  }
+  final packageInfo = await startupTrace.run(
+    'package_info',
+    PackageInfo.fromPlatform,
+  );
 
   // 检查是否处于演示模式
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await startupTrace.run(
+    'shared_preferences',
+    SharedPreferences.getInstance,
+  );
+  // SecureStorage 在新装设备上可能较慢。立即并行启动匿名 ID 初始化，但不能让它
+  // 阻塞 PostHog channel ready 或首帧；完成后再注册为事件 super property。
+  final anonymousIdReady = startUserIdService(prefs);
+  final analyticsService = await startupTrace.run(
+    'analytics_initialize',
+    () => initializeAnalyticsWithFallback(prefs),
+  );
+  final distribution = clientDistribution;
+  if (distribution != null) {
+    try {
+      // 安装来源是用户属性，不创建额外事件；启动时设置可覆盖匿名用户和已有用户。
+      await analyticsService.setUserProperty(
+        UserProperties.installSource,
+        distribution.headerValue,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.log('Analytics', 'install source registration failed: $error');
+      AppLogger.log('Analytics', stackTrace.toString());
+    }
+  }
+  unawaited(_registerAnonymousIdWhenReady(anonymousIdReady, analyticsService));
+  // 应用升级迁移由自身记录结构化日志，不包装成普通 StartupTrace 步骤，
+  // 避免日志看起来像启动阶段重复执行了一次迁移。
+  await runAppUpdateMigrations(prefs);
   final isDemoMode = prefs.getBool('demo_mode') ?? false;
+
+  // 远程配置：启动期只同步读取本地缓存/默认值，不触发网络请求，避免网络慢阻塞首帧。
+  // 下游 UI 只读取 provider 暴露的 resolved config；远端刷新由 MainShell 首帧后后台执行。
+  final initialRemoteConfig = RemoteConfigService.create(
+    prefs: prefs,
+    appVersion: packageInfo.version,
+  ).loadInitialFromCache();
 
   // 首次启动检测：哨兵 key `first_launch_done` 不存在即视为首次启动，
   // 立即写入 true。后续所有启动都会读到该 key = true，即非首启。
@@ -94,7 +116,10 @@ void main() async {
   // 需要业务层额外用数据是否为空等 gate 兜底区分升级用户。
   final isFirstLaunch = !(prefs.getBool('first_launch_done') ?? false);
   if (isFirstLaunch) {
-    await prefs.setBool('first_launch_done', true);
+    await startupTrace.run(
+      'first_launch_marker_write',
+      () => prefs.setBool('first_launch_done', true),
+    );
   }
 
   // Onboarding 问卷"是否已完成"同步预读：GoRouter redirect 是同步函数，
@@ -104,13 +129,8 @@ void main() async {
     prefs,
   );
 
-  // 旧“语音识别总开关”迁移到两个练习评分开关，须在学习设置预读前完成。
-  await migrateLegacyOfflineAsrEnabledToRatingSettings(prefs);
-
   // 学习设置（自动跳过复述）同步预读：plan / progress 启动期就需要拿到值。
   final initialLearningSettings = LearningSettings.fromPrefsSync(prefs);
-  // 清理历史 SP key（开发期数据卫生，幂等无副作用）。
-  await cleanupLegacyLearningSettingsKeys(prefs);
 
   // 语音合成设置（引擎/口音）同步预读：闪卡翻面等同步发音路径需立即拿到口音，
   // 避免异步 hydrate 前先用默认美音发声。
@@ -136,215 +156,19 @@ void main() async {
   final dbFileName = isDemoMode ? 'echo_loop_demo.db' : 'echo_loop.db';
   final database = AppDatabase(openConnectionWithName(dbFileName));
   initAppDatabase(database);
+  startupTrace.mark(
+    'database_instance_registered',
+    fields: {'demoMode': isDemoMode},
+  );
 
-  // 执行 SP → Drift 迁移（仅对生产数据库）
-  if (!isDemoMode) {
-    final migration = SpToDriftMigration(
-      database,
-      prefs,
-      subtitleLoader: defaultSubtitleLoader,
-    );
-    try {
-      await migration.migrate();
-    } catch (e) {
-      print('SP → Drift 迁移失败，下次启动重试: $e');
-    }
-
-    // 首次启动时安装内置示例内容
-    try {
-      await BundledExampleInstaller(database, prefs).installOnFirstLaunch();
-    } catch (e) {
-      print('内置示例安装失败: $e');
-    }
-  }
-
-  await initEchoLoopAudioHandler();
-
-  // iOS: 通过原生网络栈触发系统网络权限弹窗。
-  // 启动时立即触发（包括 Onboarding 期间的新用户），原因：埋点上报
-  // （app_permission_snapshot / onboarding_survey_shown 等）依赖网络通畅，
-  // 推迟会丢失事件。系统弹窗由 OS 决定具体呈现时机，可能延后。
-  if (!kIsWeb && Platform.isIOS) {
-    unawaited(NetworkPermissionTrigger.trigger(prefs, apiBaseUrl));
-  }
-
-  // 初始化 Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // 初始化 Supabase（认证 + 未来云同步用）
-  //
-  // 仅在 --dart-define 注入了 SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY 时才初始化；
-  // 未配置时跳过，登录功能不可用但 app 仍可匿名运行（渐进式登录策略）。
-  // Session 默认走 SharedPreferences 持久化，重启自动恢复。
-  // 已恢复的登录用户 ID（若有）。用于给 RevenueCat configure 直接带上 appUserID，
-  // 让已登录老用户冷启动跳过匿名态；未登录 / 未配置认证时为 null。
-  String? restoredUserId;
-  if (auth_config.isAuthConfigured) {
-    try {
-      await Supabase.initialize(
-        url: auth_config.supabaseUrl,
-        anonKey: auth_config.supabasePublishableKey,
-      );
-      // Supabase 启动时自动从 SharedPreferences 恢复上次 session；此处读回恢复的用户 ID。
-      restoredUserId = Supabase.instance.client.auth.currentSession?.user.id;
-    } catch (e) {
-      AppLogger.log('App', 'Supabase 初始化失败，认证功能不可用: $e');
-    }
-  } else {
-    AppLogger.log(
-      'App',
-      'Supabase 未配置（缺 SUPABASE_URL/SUPABASE_PUBLISHABLE_KEY），跳过初始化',
-    );
-  }
-
-  // 初始化 RevenueCat（IAP 订阅）
-  //
-  // 仅在 --dart-define 注入了当前平台的 REVENUECAT_API_KEY_* 时才初始化；
-  // 未配置时跳过，订阅功能不可用但 app 仍可匿名运行。
-  // 用户身份绑定（Purchases.logIn）由 SubscriptionController 监听登录态后处理，
-  // 这里只做 SDK 配置。
-  if (revenuecat_config.useLocalStoreKit) {
-    // 本地 StoreKit 测试模式：**不初始化 RevenueCat**，购买走 in_app_purchase
-    // 直连 .storekit，避免本地交易被 RC SDK 捕获上报（不污染 RC Sandbox）。
-    AppLogger.log('App', '本地 StoreKit 测试模式：跳过 RevenueCat 初始化');
-  } else if (web_purchase_config.isWebCheckoutConfigured) {
-    // 网页支付渠道（侧载 APK / 桌面）：无可用 RC 原生 SDK，购买走浏览器结账、
-    // 权益经后端 /api/entitlements 读回，**不初始化 RevenueCat SDK**。
-    AppLogger.log('App', '网页支付渠道：跳过 RevenueCat 初始化（权益经后端读回）');
-  } else if (revenuecat_config.isRevenueCatConfigured) {
-    try {
-      // Debug 构建打开 RevenueCat 详细日志，便于定位 Offerings 为空等问题。
-      if (kDebugMode) {
-        await Purchases.setLogLevel(LogLevel.debug);
-      }
-      // 若已有恢复的登录 session，直接以真实用户 ID 配置，跳过匿名态；
-      // 否则匿名 configure（行为同旧版），后续由 SubscriptionController.logIn 绑定。
-      final configuration = PurchasesConfiguration(
-        revenuecat_config.revenueCatApiKey,
-      );
-      if (restoredUserId != null) {
-        configuration.appUserID = restoredUserId;
-      }
-      await Purchases.configure(configuration);
-      AppLogger.log(
-        'App',
-        restoredUserId != null
-            ? 'RevenueCat 以已登录身份 configure（appUserID=$restoredUserId）'
-            : 'RevenueCat 匿名 configure',
-      );
-    } catch (e) {
-      AppLogger.log('App', 'RevenueCat 初始化失败，订阅功能不可用: $e');
-    }
-  } else {
-    AppLogger.log('App', 'RevenueCat 未配置（缺平台 API Key），跳过初始化');
-  }
-
-  // 初始化用户 ID（SecureStorage 持久化，卸载重装可恢复）
-  final userId = await initUserIdService(prefs);
-
-  // 初始化分析服务（根据 geo 选择 Firebase/友盟/Log 通道）
-  final analyticsService = await initAnalyticsService(prefs, userId: userId);
-  initAnalytics(analyticsService);
-
-  // 上报 4 类系统授权状态（mic / speech / notification / network）：
-  // super properties + person properties + app_permission_snapshot 三路写入。
-  // 失败不影响启动；底层方法已各自做 consent gate + try/catch。
-  try {
-    final snapshot = await PermissionSnapshot.capture(prefs);
-    await analyticsService.reportPermissionSnapshot(snapshot);
-  } catch (e) {
-    AppLogger.log('App', '权限状态埋点失败: $e');
-  }
-
-  // 清理上次残留的录音临时文件（沙盒/tmp/ 中超过 60 秒的文件），不阻塞启动
-  unawaited(cleanupRecordingTempFiles());
-
-  // 清理超过 1 天的 PDF 分享临时目录（分享后不能立即删，见 temp_cleanup_service）
-  unawaited(cleanupStalePdfExportTemp());
-
-  // 启动后延迟清理 TTS 合成缓存（过期 + 超量 LRU），不拖首屏。
-  Future.delayed(const Duration(seconds: 8), () {
-    TtsCacheStore(
-      resolveDao: () => database.ttsCacheDao,
-      resolveCacheDir: getApplicationCacheDirectory,
-    ).cleanup();
-  });
-
-  // 词典由 dictionaryProvider 管理下载和打开，
-  // 在 EchoLoopApp.initState 中 eagerly read 触发初始化。
-
-  // 离线 ASR 初始化（全平台）。
-  // Android 固定 offline 后端，iOS/macOS 默认 platform 后端（可切换）。
-  AsrModelInfo? recommendedAsrModel;
-  OfflineAsrSettingsState? initialOfflineAsrSettingsState;
-  if (!kIsWeb) {
-    final defaultBackend = Platform.isAndroid
-        ? AsrBackend.offline
-        : AsrBackend.platform;
-    AppLogger.log(
-      'App',
-      'ASR: platform=${Platform.operatingSystem}, defaultBackend=${defaultBackend.name}',
-    );
-    final platform = SpeechPracticePlatform.instance;
-    final ramBytes = platform.isSupported
-        ? await platform.getDeviceRamBytes()
-        : 0;
-    final modelManager = AsrModelManager();
-    recommendedAsrModel = modelManager.recommendModel(ramBytes: ramBytes);
-    initialOfflineAsrSettingsState = await loadInitialOfflineAsrSettingsState(
-      prefs: prefs,
-      modelManager: modelManager,
-      recommendedModel: recommendedAsrModel,
-      defaultBackend: defaultBackend,
-    );
-    // 清理历史废弃 ASR 模型目录；保留当前版本所有可选模型。
-    unawaited(modelManager.cleanupUnknownModels());
-  }
-
-  // Echo Loop TTS（Kokoro）模型初始状态：用持久化标记 + 文件系统校验恢复，
-  // 使启动后若已选 Echo Loop 且模型就绪能立即生效（全平台，Web 除外）。
-  KokoroModelsState? initialKokoroModelState;
-  if (!kIsWeb) {
-    final managers = <KokoroModelVariant, KokoroModelManager>{
-      for (final v in KokoroModelVariant.values)
-        v: KokoroModelManager(spec: kokoroSpecOf(v)),
-    };
-    initialKokoroModelState = await loadInitialKokoroModelState(
-      prefs: prefs,
-      managerOf: (v) => managers[v]!,
-    );
-    for (final m in managers.values) {
-      m.dispose();
-    }
-  }
-
-  // Piper（Echo Loop TTS 平衡档）模型初始状态：每音色一个独立模型，用持久化标记 +
-  // 文件系统校验恢复各音色就绪态（全平台，Web 除外）。
-  PiperModelsState? initialPiperModelState;
-  if (!kIsWeb) {
-    final managers = <String, PiperModelManager>{
-      for (final v in piperVoices) v.id: PiperModelManager(voice: v),
-    };
-    initialPiperModelState = await loadInitialPiperModelState(
-      prefs: prefs,
-      managerOf: (id) => managers[id]!,
-    );
-    for (final m in managers.values) {
-      m.dispose();
-    }
-  }
-
-  // 清理上次运行残留的官方合集音频下载 tmp 文件（异步）
-  unawaited(cleanupOfficialDownloadTmp());
-
+  // 至此仅完成了绑定、同步 UI 偏好和数据库对象注册。首帧后的本地与第三方
+  // 任务由 ProviderScope 内的标准 Riverpod 启动 provider 编排。
+  startupTrace.mark('run_app_invoked');
   runApp(
-    // PostHogWidget：posthog_flutter 5.x Session Replay 必需的根包装。
-    // 负责 Flutter 端变更检测 + 截图并桥接原生 SDK 上报 $snapshot 事件；
-    // 不包的话即便 PostHogConfig.sessionReplay=true 也不会生成录像。
-    // 当前通道非 PostHog 时 Posthog().config 为 null，此组件会直接跳过，不影响其他通道。
     PostHogWidget(
       child: ProviderScope(
         overrides: [
+          analyticsServiceProvider.overrideWithValue(analyticsService),
           packageInfoProvider.overrideWithValue(packageInfo),
           isFirstLaunchProvider.overrideWithValue(isFirstLaunch),
           sharedPreferencesProvider.overrideWithValue(prefs),
@@ -369,29 +193,36 @@ void main() async {
           initialAiTranscriptionAutoMergeEnabledProvider.overrideWithValue(
             initialAiTranscriptionAutoMergeEnabled,
           ),
-          if (recommendedAsrModel != null)
-            recommendedAsrModelProvider.overrideWithValue(recommendedAsrModel),
-          if (initialOfflineAsrSettingsState != null)
-            initialOfflineAsrSettingsStateProvider.overrideWithValue(
-              initialOfflineAsrSettingsState,
-            ),
-          if (initialKokoroModelState != null)
-            initialKokoroModelStateProvider.overrideWithValue(
-              initialKokoroModelState,
-            ),
-          if (initialPiperModelState != null)
-            initialPiperModelStateProvider.overrideWithValue(
-              initialPiperModelState,
-            ),
+          initialRemoteConfigProvider.overrideWithValue(initialRemoteConfig),
+          startupDemoModeProvider.overrideWithValue(isDemoMode),
         ],
-        child: const EchoLoopApp(),
+        child: EchoLoopApp(windowActivator: appWindowActivator),
       ),
     ),
   );
 }
 
+/// 匿名 ID 是附加事件属性，不是 PostHog distinct ID；其迟到不得丢弃已入 SDK 队列
+/// 的早期事件，也不得阻塞首帧。
+Future<void> _registerAnonymousIdWhenReady(
+  Future<String> anonymousIdReady,
+  AnalyticsService analyticsService,
+) async {
+  try {
+    final anonymousId = await anonymousIdReady;
+    await analyticsService.registerSuperProperties({
+      'app_anonymous_id': anonymousId,
+    });
+  } catch (error, stackTrace) {
+    AppLogger.log('Analytics', 'anonymous ID initialization failed: $error');
+    AppLogger.log('Analytics', stackTrace.toString());
+  }
+}
+
 class EchoLoopApp extends ConsumerStatefulWidget {
-  const EchoLoopApp({super.key});
+  const EchoLoopApp({super.key, this.windowActivator});
+
+  final AppWindowActivator? windowActivator;
 
   @override
   ConsumerState<EchoLoopApp> createState() => _EchoLoopAppState();
@@ -401,13 +232,69 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
     with WidgetsBindingObserver {
   StreamSubscription<NotificationIntent>? _intentSubscription;
   ProviderSubscription<AsyncValue<Session?>>? _authSessionSubscription;
+  ProviderSubscription<AsyncValue<StartupReport>>? _localStartupSubscription;
+  ProviderSubscription<AsyncValue<UserRegionBootstrapResult>>?
+  _userRegionStartupSubscription;
+  ProviderSubscription<AsyncValue<ThirdPartyStartupReport>>?
+  _thirdPartyStartupSubscription;
+  AppDeepLinkRouter? _appDeepLinkRouter;
   late final ShowcaseView _showcase;
+  bool _hasLoggedRouterCreated = false;
+  bool _didStartLocalEffects = false;
+  Future<void>? _thirdPartyEffectsFuture;
 
   @override
   void initState() {
     super.initState();
+    activeStartupTrace?.mark('app_widget_init_state');
+    _localStartupSubscription = ref.listenManual<AsyncValue<StartupReport>>(
+      localStartupProvider,
+      (_, next) {
+        if (next.hasValue) unawaited(_startAfterLocalDataReady());
+      },
+      fireImmediately: true,
+    );
+    _userRegionStartupSubscription = ref
+        .listenManual<AsyncValue<UserRegionBootstrapResult>>(
+          userRegionBootstrapProvider,
+          (_, next) {
+            final result = next.valueOrNull;
+            if (result == null) return;
+            ref
+                .read(remoteConfigProvider.notifier)
+                .adoptStartupConfig(result.remoteConfig);
+            unawaited(_startAfterLocalDataReady());
+          },
+          fireImmediately: true,
+        );
+    _thirdPartyStartupSubscription = ref
+        .listenManual<AsyncValue<ThirdPartyStartupReport>>(
+          thirdPartyStartupProvider,
+          (_, next) {
+            if (next.hasValue) unawaited(_ensureThirdPartyDependentTasks());
+          },
+          fireImmediately: true,
+        );
 
     WidgetsBinding.instance.addObserver(this);
+    final windowActivator =
+        widget.windowActivator ?? WindowManagerAppWindowActivator();
+
+    final paddleDeepLinkHandler = PaddleDeepLinkHandler(
+      refreshEntitlements: () async {
+        await _ensureThirdPartyDependentTasks();
+        if (!mounted || !ref.read(thirdPartyStartupProvider).hasValue) return;
+        await ref
+            .read(subscriptionControllerProvider.notifier)
+            .refreshAfterExternalCheckout();
+      },
+    );
+    final appDeepLinkRouter = AppDeepLinkRouter.forCurrentPlatform(
+      routes: [paddleDeepLinkHandler.route],
+      beforeDispatch: windowActivator.activate,
+    );
+    _appDeepLinkRouter = appDeepLinkRouter;
+    unawaited(appDeepLinkRouter.start());
 
     // 新手引导 showcase 控制器全局注册（替代旧的 ShowCaseWidget InheritedWidget）。
     // 整段 tour 走完或被 dismiss 时，通过 GuideShowcaseBus 触发 controller 的
@@ -417,22 +304,107 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
       onFinish: GuideShowcaseBus.fireEnd,
       onDismiss: (_) => GuideShowcaseBus.fireEnd(),
     );
+  }
 
-    // 预加载词典（触发下载或打开本地词典）
+  /// 依次启动所有不属于首帧关键路径的本地预热任务。
+  Future<void> _startAfterLocalDataReady() async {
+    if (!mounted || _didStartLocalEffects) return;
+    if (!ref.read(localStartupProvider).hasValue ||
+        !ref.read(userRegionBootstrapProvider).hasValue) {
+      return;
+    }
+    _didStartLocalEffects = true;
+    activeStartupTrace?.mark('main_navigation_released');
+
+    // 下载注册表和词典预热都可能访问文件系统，统一放到首帧后。
+    unawaited(startRegisteredDownloads(ref));
+    _scheduleMediaKitPrewarm();
     ref.read(dictionaryProvider);
+    ref.read(pronunciationLibraryProvider);
 
-    // 启动即建订阅控制器：配合其 fireImmediately 监听，在启动阶段就把 RevenueCat
-    // 身份绑定到当前登录用户（执行 logIn），不必等用户打开付费墙才触发；
-    // 也修复已受影响用户——下次启动即重绑 / 把匿名购买 Transfer 到其 Supabase UUID。
+    final bridge = ref.read(notificationTapRouterBridgeProvider);
+    _intentSubscription = bridge.intents.listen(_handleNotificationIntent);
+    final pendingIntent = bridge.takePendingIntent();
+    if (pendingIntent != null) _handleNotificationIntent(pendingIntent);
+
+    Future.delayed(const Duration(seconds: 3), _triggerCommunitySync);
+  }
+
+  /// 业务内容提交后再预热，不让原生播放器依赖阻塞进入学习页。
+  void _scheduleMediaKitPrewarm() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        Future<void>(() {
+          activeStartupTrace?.runSync(
+            'media_kit_initialize',
+            ensureMediaKitInitialized,
+          );
+        }).catchError((Object _) {}),
+      );
+    });
+  }
+
+  /// 等待后台 SDK 初始化完成后再创建其依赖的订阅与认证控制器。
+  Future<void> _ensureThirdPartyDependentTasks() {
+    final existing = _thirdPartyEffectsFuture;
+    if (existing != null) return existing;
+
+    final operation = _startThirdPartyDependentTasks();
+    _thirdPartyEffectsFuture = operation;
+    return operation;
+  }
+
+  Future<void> _startThirdPartyDependentTasks() async {
+    try {
+      await ref.read(thirdPartyStartupProvider.future);
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'ThirdPartyStartup',
+        '等待第三方启动失败，跳过依赖任务 error=$error stack=$stackTrace',
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    // RevenueCat 与 Supabase 已完成后台串行初始化；先让 session provider
+    // 重新读取 SDK 当前快照，再创建订阅 controller，避免 controller 首次构造时
+    // 先按匿名身份发起一次无效权益对账。
+    ref.invalidate(supabaseSessionProvider);
+    try {
+      // Supabase.initialize() 返回不代表 auth.currentSession 已完成恢复；
+      // 等待 provider 收到 initialSession，避免启动预热仍抢跑到匿名态。
+      await ref.read(supabaseSessionProvider.future);
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'AuthSession',
+        '等待 initialSession 失败，保留 pending 语义 error=$error stack=$stackTrace',
+      );
+    }
+    if (!mounted) return;
     ref.read(subscriptionControllerProvider);
-
-    // RevenueCat configure 后尽早预热套餐；Provider 保留本次会话的最后成功价格，
-    // 用户首次打开订阅页时可直接渲染，无需等待临时网络请求。
     ref.read(subscriptionPlansProvider);
-
     _authSessionSubscription = ref.listenManual<AsyncValue<Session?>>(
       supabaseSessionProvider,
       (previous, next) {
+        if (next.hasValue) {
+          unawaited(
+            ref
+                .read(onboardingSyncProvider)
+                .onSessionChanged(isSignedIn: next.valueOrNull != null),
+          );
+          unawaited(
+            ref
+                .read(userPreferencesSyncServiceProvider)
+                .onSessionChanged(next.valueOrNull?.user.id)
+                .catchError((Object error, StackTrace stackTrace) {
+                  AppLogger.log(
+                    'UserPreferencesSync',
+                    '更新登录用户状态失败: $error\n$stackTrace',
+                  );
+                }),
+          );
+        }
         unawaited(
           ref
               .read(authAnalyticsSyncProvider)
@@ -444,40 +416,21 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
       },
       fireImmediately: true,
     );
-
-    // 启动时先尝试从磁盘加载已缓存的 catalog（让 Discover 页一进来就有数据）。
-    // 失败静默，下面的 syncAll 会按需重新拉网络。
-    unawaited(
-      ref.read(officialCatalogServiceProvider).loadCachedCatalog().then((_) {
-        if (mounted) {
-          ref.invalidate(cachedCatalogProvider);
-        }
-      }),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final bridge = ref.read(notificationTapRouterBridgeProvider);
-      _intentSubscription = bridge.intents.listen(_handleNotificationIntent);
-
-      final pendingIntent = bridge.takePendingIntent();
-      if (pendingIntent != null) {
-        _handleNotificationIntent(pendingIntent);
-      }
-    });
-
-    // 冷启动后异步触发 catalog 同步。force=true 绕过本地 10min 节流，
-    // 避免运营刚调整精选合集后启动仍停留在旧磁盘缓存。
-    Future.delayed(
-      const Duration(seconds: 3),
-      () => _triggerCatalogSync(force: true),
-    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _intentSubscription?.cancel();
+    final appDeepLinkRouter = _appDeepLinkRouter;
+    _appDeepLinkRouter = null;
+    if (appDeepLinkRouter != null) {
+      unawaited(appDeepLinkRouter.dispose());
+    }
     _authSessionSubscription?.close();
+    _localStartupSubscription?.close();
+    _userRegionStartupSubscription?.close();
+    _thirdPartyStartupSubscription?.close();
     _showcase.unregister();
     super.dispose();
   }
@@ -485,17 +438,37 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    activeStartupTrace?.mark(
+      'app_lifecycle_changed',
+      fields: {'state': state.name},
+    );
+    AppLogger.log('Lifecycle', 'state=${state.name}');
     switch (state) {
       case AppLifecycleState.resumed:
-        _triggerCatalogSync();
-        // 回前台时重对账订阅权益：用户可能刚在系统订阅页退订 / 换 plan / 续费，
-        // 或退款生效。RevenueCat 有约 5 分钟缓存，频繁切前台基本命中缓存、近零成本。
-        unawaited(ref.read(subscriptionControllerProvider.notifier).refresh());
-        // 同时检查商店 storefront。跨区时立即撤下旧币种价格并重新读取商品；
-        // 同区则遵循五分钟 TTL，避免每次短暂切后台都重复查询。
-        unawaited(
-          ref.read(subscriptionPlansProvider.notifier).refreshIfStale(),
-        );
+        if (ref.read(localStartupProvider).hasValue) {
+          _triggerCommunitySync();
+        }
+        final session = ref.read(supabaseSessionProvider).valueOrNull;
+        if (session != null) {
+          unawaited(ref.read(onboardingSyncProvider).onAppResumed());
+          unawaited(
+            ref.read(userPreferencesSyncServiceProvider).onAppResumed(),
+          );
+        }
+        // 回前台时条件重对账订阅权益（E8）。单一来源下每次刷新都是真实后端请求
+        // （不再有 RC SDK 客户端缓存兜着），且退款/退订分歧主要靠 E6/E7 在后端
+        // 交互时被动收敛，故仅在状态陈旧 / 越过到期点 / 超过 24h 新鲜窗（兜住
+        // 长期无后端流量的用户）时才回源，频繁切前台不盲查。
+        if (ref.read(thirdPartyStartupProvider).hasValue) {
+          unawaited(
+            ref.read(subscriptionControllerProvider.notifier).refreshIfStale(),
+          );
+          // 同时检查商店 storefront。跨区时立即撤下旧币种价格并重新读取商品；
+          // 同区则遵循五分钟 TTL，避免每次短暂切后台都重复查询。
+          unawaited(
+            ref.read(subscriptionPlansProvider.notifier).refreshIfStale(),
+          );
+        }
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
         // 立即刷新 PostHog 埋点队列，避免 Application Backgrounded 等事件
@@ -509,13 +482,12 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
     }
   }
 
-  /// 全局唯一同步入口；inflight + 10min 节流防止重复请求。
-  /// updated 时由 helper 自动 loadLibrary + loadCollections + invalidate catalog。
-  void _triggerCatalogSync({bool force = false}) {
+  /// 全局唯一社区合集同步入口；后台调用由 service 统一执行 2h 节流。
+  void _triggerCommunitySync({bool force = false}) {
     if (!mounted) return;
     unawaited(
-      triggerOfficialSync(ref, force: force).then((outcome) {
-        AppLogger.log('main', 'OfficialSync outcome=$outcome');
+      triggerCommunitySync(ref, force: force).then((outcome) {
+        AppLogger.log('main', 'CommunitySync outcome=${outcome.runtimeType}');
       }),
     );
   }
@@ -538,10 +510,15 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
     final router = ref.watch(appRouterProvider);
+    if (!_hasLoggedRouterCreated) {
+      _hasLoggedRouterCreated = true;
+      activeStartupTrace?.mark('router_created');
+    }
 
     return MaterialApp.router(
       title: 'Echo Loop',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const EchoLoopScrollBehavior(),
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: settings.themeMode,
@@ -554,7 +531,10 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: router,
-      scaffoldMessengerKey: officialDownloadScaffoldMessengerKey,
+      builder: (context, child) => AppStartupGate(
+        child: AppNoticePresenter(child: child ?? const SizedBox.shrink()),
+      ),
+      scaffoldMessengerKey: communityDownloadScaffoldMessengerKey,
     );
   }
 }

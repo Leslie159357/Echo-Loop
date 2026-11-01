@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/tts/kokoro_model_provider.dart';
+import 'package:echo_loop/providers/tts/piper_model_provider.dart';
 import 'package:echo_loop/providers/tts/tts_settings_provider.dart';
 import 'package:echo_loop/services/download/download_failure.dart';
 import 'package:echo_loop/screens/tts_settings_screen.dart';
@@ -42,6 +43,17 @@ class _TestKokoroNotifier extends KokoroModelNotifier {
   Future<void> deleteModel(KokoroModelVariant v) async => deleted.add(v);
 }
 
+class _TestPiperNotifier extends PiperModelNotifier {
+  _TestPiperNotifier(this._initial);
+  final PiperModelsState _initial;
+
+  @override
+  PiperModelsState build() => _initial;
+
+  @override
+  Future<void> ensureDownloaded(String voiceId) async {}
+}
+
 /// 构造仅含指定变体状态的 KokoroModelsState。
 KokoroModelsState _models({KokoroModelState? fp32, KokoroModelState? int8}) {
   return KokoroModelsState({
@@ -54,6 +66,7 @@ Widget _wrap(
   TtsSettings settings, {
   KokoroModelsState? models,
   _TestKokoroNotifier? notifier,
+  PiperModelsState? piperModels,
 }) {
   return ProviderScope(
     overrides: [
@@ -62,6 +75,9 @@ Widget _wrap(
         () =>
             notifier ??
             _TestKokoroNotifier(models ?? const KokoroModelsState({})),
+      ),
+      piperModelProvider.overrideWith(
+        () => _TestPiperNotifier(piperModels ?? const PiperModelsState({})),
       ),
     ],
     child: const MaterialApp(
@@ -86,7 +102,7 @@ void main() {
     localSizeBytes: 1024,
   );
 
-  testWidgets('渲染引擎与口音两组单选，Echo Loop 现为可选项', (tester) async {
+  testWidgets('默认渲染 Advanced 高质量模型配置', (tester) async {
     await tester.pumpWidget(_wrap(const TtsSettings()));
     await tester.pumpAndSettle();
 
@@ -94,33 +110,20 @@ void main() {
     expect(find.text(_platformEngineLabel), findsOneWidget);
     // Echo Loop 现拆为两档可选：Balanced(Piper) / Advanced(Kokoro)。
     expect(find.text('Echo Loop AI (Balanced)'), findsOneWidget);
-    expect(find.text('Echo Loop AI (Advanced)'), findsOneWidget);
+    expect(find.text('Echo Loop AI (Advanced)'), findsNWidgets(2));
     expect(find.textContaining('Best sound quality'), findsOneWidget);
-    expect(find.text('American'), findsOneWidget);
-    expect(find.text('British'), findsOneWidget);
+    expect(find.text('High quality'), findsOneWidget);
+    expect(find.text('Recommended'), findsOneWidget);
   });
 
-  testWidgets('选 Echo Loop → engine 更新为 echoLoop 且触发 ensureDownloaded', (
-    tester,
-  ) async {
-    final notifier = _TestKokoroNotifier(const KokoroModelsState({}));
-    await tester.pumpWidget(_wrap(const TtsSettings(), notifier: notifier));
-    await tester.pumpAndSettle();
-
-    // echoLoop = Advanced 档（Kokoro）。
-    await tester.tap(find.text('Echo Loop AI (Advanced)'));
-    await tester.pumpAndSettle();
-
-    expect(
-      _containerOf(tester).read(ttsSettingsProvider).engine,
-      TtsEngineKind.echoLoop,
-    );
-    expect(notifier.ensured, contains(KokoroModelVariant.fp32));
+  test('Android 不显示系统语音入口，其他平台保留', () {
+    expect(showPlatformTtsEngine(true), isFalse);
+    expect(showPlatformTtsEngine(false), isTrue);
   });
 
   testWidgets('Echo Loop → 显示两个模型变体（高质量带推荐徽标 / 轻量）', (tester) async {
     await tester.pumpWidget(
-      _wrap(const TtsSettings(engine: TtsEngineKind.echoLoop)),
+      _wrap(const TtsSettings(engine: TtsEngineKind.kokoro)),
     );
     await tester.pumpAndSettle();
 
@@ -137,7 +140,7 @@ void main() {
     final notifier = _TestKokoroNotifier(const KokoroModelsState({}));
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         notifier: notifier,
       ),
     );
@@ -153,7 +156,7 @@ void main() {
     expect(notifier.ensured, contains(KokoroModelVariant.int8));
   });
 
-  testWidgets('下载中 → 进度条 + 取消按钮，点取消触发 cancelDownload', (tester) async {
+  testWidgets('当前模型下载中 → 进度条但不显示取消按钮', (tester) async {
     final notifier = _TestKokoroNotifier(
       _models(
         fp32: const KokoroModelState(
@@ -164,18 +167,36 @@ void main() {
     );
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         notifier: notifier,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Cancel'), findsNothing);
+  });
+
+  testWidgets('非当前模型下载中 → 显示取消按钮，点取消触发 cancelDownload', (tester) async {
+    final notifier = _TestKokoroNotifier(
+      _models(
+        int8: const KokoroModelState(
+          downloadStatus: AsrModelDownloadStatus.downloading,
+          downloadProgress: 0.42,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        const TtsSettings(engine: TtsEngineKind.kokoro),
+        notifier: notifier,
+      ),
+    );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(notifier.cancelled, [KokoroModelVariant.fp32]);
+    expect(notifier.cancelled, [KokoroModelVariant.int8]);
   });
 
   testWidgets('失败 → 错误 + 重试按钮，点重试触发 retryDownload', (tester) async {
@@ -189,7 +210,7 @@ void main() {
     );
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         notifier: notifier,
       ),
     );
@@ -204,10 +225,29 @@ void main() {
     expect(notifier.retried, [KokoroModelVariant.fp32]);
   });
 
+  testWidgets('当前 Piper 音色下载中 → 保留进度但不显示取消或下载按钮', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const TtsSettings(engine: TtsEngineKind.piper),
+        piperModels: const PiperModelsState({
+          'en_US-amy-medium': PiperModelState(
+            downloadStatus: AsrModelDownloadStatus.downloading,
+            downloadProgress: 0.42,
+          ),
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byTooltip('Cancel'), findsNothing);
+    expect(find.byIcon(Icons.download_rounded), findsNWidgets(8));
+  });
+
   testWidgets('存储空间不足 → 显清晰的空间不足文案（非原始异常）', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _models(
           fp32: const KokoroModelState(
             downloadStatus: AsrModelDownloadStatus.failed,
@@ -227,7 +267,7 @@ void main() {
   testWidgets('就绪（fp32 选中）→ 音色行 + 点开弹层显全部 11 个（分组），使用中变体不显删除', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _models(fp32: readyState),
       ),
     );
@@ -260,7 +300,7 @@ void main() {
     // fp32 使用中（不可删），int8 已下载但非使用中（可删）。
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _models(fp32: readyState, int8: readyState),
       ),
     );
@@ -273,7 +313,7 @@ void main() {
   testWidgets('就绪 + 弹层选英音音色 → 口音设为英音 + 写入英音音色', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _models(fp32: readyState),
       ),
     );
@@ -294,7 +334,7 @@ void main() {
   testWidgets('就绪 + 弹层点音色 → setKokoroVoice 更新', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+        const TtsSettings(engine: TtsEngineKind.kokoro),
         models: _models(fp32: readyState),
       ),
     );
@@ -319,69 +359,11 @@ void main() {
     expect(find.byTooltip('Delete model'), findsNothing);
   });
 
-  testWidgets('平台引擎 + 点击口音行 → setAccent 更新', (tester) async {
+  testWidgets('平台引擎不显示口音行，保留默认口音设置', (tester) async {
     await tester.pumpWidget(_wrap(const TtsSettings())); // 默认美音
     await tester.pumpAndSettle();
 
     expect(_containerOf(tester).read(ttsSettingsProvider).accent, TtsAccent.us);
-    // 点英音行 → 口音切英音（试听异常在控制器内捕获，不影响设置写入）。
-    await tester.tap(find.text('British'));
-    await tester.pumpAndSettle();
-    expect(_containerOf(tester).read(ttsSettingsProvider).accent, TtsAccent.uk);
-  });
-
-  testWidgets('平台引擎 + 模型已下载 → 显示删除入口（回收空间），不显示音色', (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        const TtsSettings(), // 平台 TTS
-        models: _models(fp32: readyState),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byTooltip('Delete model'), findsOneWidget);
-    expect(find.text('Voice'), findsNothing);
-  });
-
-  testWidgets('切回平台 TTS → 不弹窗（由删除入口回收）', (tester) async {
-    final notifier = _TestKokoroNotifier(_models(fp32: readyState));
-    await tester.pumpWidget(
-      _wrap(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-        notifier: notifier,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text(_platformEngineLabel));
-    await tester.pumpAndSettle();
-
-    expect(
-      _containerOf(tester).read(ttsSettingsProvider).engine,
-      TtsEngineKind.platform,
-    );
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(find.byTooltip('Delete model'), findsOneWidget);
-    expect(notifier.deleted, isEmpty);
-  });
-
-  testWidgets('平台引擎删除入口 → 点删除确认调用 deleteModel(fp32)', (tester) async {
-    final notifier = _TestKokoroNotifier(_models(fp32: readyState));
-    await tester.pumpWidget(
-      _wrap(const TtsSettings(), notifier: notifier), // 平台 TTS
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('Delete model'));
-    await tester.pumpAndSettle();
-    // 确认弹窗内删除。
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Delete model'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(notifier.deleted, [KokoroModelVariant.fp32]);
+    expect(find.text('British'), findsNothing);
   });
 }

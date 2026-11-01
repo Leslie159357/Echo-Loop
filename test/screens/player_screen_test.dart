@@ -14,7 +14,8 @@ import 'package:echo_loop/widgets/common/paragraph_sentence_list_card.dart';
 import 'package:echo_loop/widgets/common/masked_sentence_tile.dart';
 import 'package:echo_loop/widgets/common/bookmark_toggle_row.dart';
 import 'package:echo_loop/widgets/playback_controls.dart';
-import 'package:echo_loop/widgets/practice/annotation_content_view.dart';
+import 'package:echo_loop/widgets/practice/sentence_explanation_view.dart';
+import 'package:echo_loop/widgets/practice/practice_progress_section.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
 import 'package:echo_loop/models/playback_settings.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
@@ -28,6 +29,7 @@ import 'package:echo_loop/database/app_database.dart' show AudioItem, Bookmark;
 import 'package:echo_loop/database/daos/audio_item_dao.dart';
 import 'package:echo_loop/database/daos/bookmark_dao.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../helpers/mock_providers.dart';
@@ -71,6 +73,12 @@ class _RecordingListeningPractice extends TestListeningPractice {
   /// 记录 PageView 翻页触发的选句调用（含全局下标与是否起播）。
   final List<({int index, bool autoPlay})> selectFullCalls = [];
   final List<({int index, bool autoPlay})> selectBookmarkCalls = [];
+
+  @override
+  Future<void> pause() async {
+    pauseCalls += 1;
+    state = state.copyWith(isPlaying: false);
+  }
 
   @override
   Future<void> selectFullSentence(int index, {bool autoPlay = true}) async {
@@ -202,9 +210,11 @@ List<Override> _restoreProgressOverrides({
 /// Future(...) 和 _HotkeyTipsCarousel 的 periodic Timer 全部完成/取消
 Future<void> _disposeTree(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
-  // 额外 pump 让 deactivate 中 Future 微任务执行完毕
-  await tester.pump();
-  await tester.pump();
+  // Drift 查询流的关闭会在 dispose 后再排入零时长 timer，连续推进事件循环
+  // 直到 provider/container 的异步清理完成，避免测试框架误报 pending timer。
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 1));
+  }
 }
 
 void main() {
@@ -268,8 +278,8 @@ void main() {
 
         // TabBar 应显示"全文"和"书签"标签
         expect(find.byType(TabBar), findsOneWidget);
-        expect(find.textContaining('Full Text'), findsOneWidget);
-        expect(find.textContaining('Bookmarked'), findsOneWidget);
+        expect(find.textContaining('full playback'), findsOneWidget);
+        expect(find.textContaining('saved'), findsOneWidget);
         await _disposeTree(tester);
       });
 
@@ -315,8 +325,7 @@ void main() {
         );
         await tester.pump();
 
-        // 播放控制栏应存在（play_arrow 限定在 PlaybackControls 内，
-        // 因为当前播放句的编号区也会渲染 play_arrow）
+        // play_arrow 只应出现在播放控制栏中；句子列表左侧固定显示讲解图标。
         expect(
           find.descendant(
             of: find.byType(PlaybackControls),
@@ -329,7 +338,7 @@ void main() {
         await _disposeTree(tester);
       });
 
-      testWidgets('移动端状态 label 不再占用完整底部安全区', (tester) async {
+      testWidgets('移动端播放器控制区完整避让底部安全区', (tester) async {
         tester.view.physicalSize = const Size(390, 844);
         tester.view.devicePixelRatio = 1.0;
         tester.view.padding = const FakeViewPadding(bottom: 34);
@@ -363,9 +372,46 @@ void main() {
         final screenBottom =
             tester.view.physicalSize.height / tester.view.devicePixelRatio;
 
-        // 底部状态行保留约 16px 压缩安全区，避免贴住 Home indicator，
-        // 同时不使用 34px 全量安全区把播放器控制面板顶高。
-        expect(screenBottom - statusRowBottom, closeTo(16, 0.1));
+        // 状态行与播放按钮属于同一个控制区，统一避让完整的底部安全区。
+        expect(screenBottom - statusRowBottom, closeTo(34, 0.1));
+        await _disposeTree(tester);
+      });
+
+      testWidgets('无字幕播放按钮不落入底部安全区', (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1.0;
+        // 模拟退出沉浸式全屏后的瞬间：普通 padding 可能暂时为 0，
+        // 但系统导航栏的 viewPadding 已经恢复。
+        tester.view.padding = const FakeViewPadding();
+        tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPadding);
+        addTearDown(tester.view.resetViewPadding);
+
+        final item = createTestAudioItem();
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _audioOverrides(
+              practiceState: ListeningPracticeState(
+                currentAudioItem: item,
+                sentences: const [],
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final button = tester.getRect(
+          find.descendant(
+            of: find.byType(PlaybackControls),
+            matching: find.byIcon(Icons.play_arrow),
+          ),
+        );
+        final safeBottom =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio - 34;
+        expect(button.bottom, lessThanOrEqualTo(safeBottom));
         await _disposeTree(tester);
       });
 
@@ -393,6 +439,34 @@ void main() {
         );
         expect(progressBar.progress, const Duration(seconds: 45));
         expect(progressBar.total, const Duration(seconds: 120));
+        await _disposeTree(tester);
+      });
+
+      testWidgets('进度条未播放轨道使用不透明容器色', (tester) async {
+        final item = createTestAudioItem();
+        final sentences = createTestSentences(count: 3);
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _audioOverrides(
+              practiceState: ListeningPracticeState(
+                currentAudioItem: item,
+                sentences: sentences,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final context = tester.element(find.byType(ProgressBar));
+        final progressBar = tester.widget<ProgressBar>(
+          find.byType(ProgressBar),
+        );
+        expect(
+          progressBar.baseBarColor,
+          Theme.of(context).colorScheme.surfaceContainerHighest,
+        );
         await _disposeTree(tester);
       });
 
@@ -451,7 +525,7 @@ void main() {
 
         // 应弹出循环设置弹窗（含两组循环开关，无标题）
         expect(find.text('Loop Settings'), findsNothing);
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
         expect(find.text('Single-sentence loop'), findsOneWidget);
         await _disposeTree(tester);
       });
@@ -475,14 +549,14 @@ void main() {
         await tester.pump();
 
         // 点击书签标签
-        await tester.tap(find.textContaining('Bookmarked'));
+        await tester.tap(find.textContaining('saved'));
         // Tab 切换动画 300ms + 内容构建，分多次 pump 确保完成
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump();
 
         // 应显示无书签提示
-        expect(find.text('No bookmarked sentences'), findsOneWidget);
+        expect(find.text('No saved sentences'), findsOneWidget);
         await _disposeTree(tester);
       });
 
@@ -504,62 +578,26 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('No bookmarked sentences'), findsNothing);
+        expect(find.text('No saved sentences'), findsNothing);
 
         await tester.drag(find.byType(TabBarView), const Offset(-400, 0));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump();
 
-        expect(find.text('No bookmarked sentences'), findsNothing);
+        expect(find.text('No saved sentences'), findsNothing);
         expect(find.byType(ParagraphSentenceListCard), findsOneWidget);
 
-        await tester.tap(find.textContaining('Bookmarked'));
+        await tester.tap(find.textContaining('saved'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump();
 
-        expect(find.text('No bookmarked sentences'), findsOneWidget);
+        expect(find.text('No saved sentences'), findsOneWidget);
         await _disposeTree(tester);
       });
 
-      testWidgets('点击句子编号区从该句开始播放', (tester) async {
-        final item = createTestAudioItem();
-        final sentences = createTestSentences(count: 3);
-
-        await tester.pumpWidget(
-          createTestScreen(
-            const PlayerScreen(),
-            overrides: _audioOverrides(
-              practiceState: ListeningPracticeState(
-                currentAudioItem: item,
-                sentences: sentences,
-                currentFullIndex: 0,
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        // 初始：第 1 句播放（编号区显示 ▶），第 2 句编号区显示 '2'
-        expect(find.text('2'), findsOneWidget);
-        expect(find.text('1'), findsNothing);
-
-        // 点击第 2 句编号区 → selectFullSentence(1) → currentFullIndex=1
-        await tester.tap(
-          find.byKey(
-            const ValueKey('$kMaskedSentenceNumberHitAreaKeyPrefix-1'),
-          ),
-        );
-        await tester.pump();
-
-        // 第 2 句变为播放（▶），第 1 句编号区恢复显示 '1'
-        expect(find.text('1'), findsOneWidget);
-        expect(find.text('2'), findsNothing);
-        await _disposeTree(tester);
-      });
-
-      testWidgets('点击句子主体先切换焦点再进入讲解页', (tester) async {
+      testWidgets('点击句子正文从该句开始播放', (tester) async {
         final item = createTestAudioItem();
         final sentences = createTestSentences(count: 3);
         final player = _RecordingListeningPractice(
@@ -578,13 +616,46 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 点击非当前句主体区，避开左侧编号播放热区。
+        // 点击第 2 句正文 → selectFullSentence(1) → currentFullIndex=1
         await tester.tap(
-          find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-2')),
+          find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-1')),
+        );
+        await tester.pump();
+
+        expect(player.selectFullCalls, [(index: 1, autoPlay: true)]);
+        expect(player.state.currentFullIndex, 1);
+        expect(find.byType(ParagraphSentenceListCard), findsOneWidget);
+        await _disposeTree(tester);
+      });
+
+      testWidgets('点击左侧讲解按钮先切换焦点再进入讲解页', (tester) async {
+        final item = createTestAudioItem();
+        final sentences = createTestSentences(count: 3);
+        final player = _RecordingListeningPractice(
+          ListeningPracticeState(
+            currentAudioItem: item,
+            sentences: sentences,
+            currentFullIndex: 0,
+          ),
+        );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _recordingOverrides(player),
+          ),
         );
         await tester.pumpAndSettle();
 
-        // 正文点击只切换焦点，不自动播放；返回时列表会跟随新焦点。
+        // 点击非当前句的左侧讲解按钮。
+        await tester.tap(
+          find.byKey(
+            const ValueKey('$kMaskedSentenceExplanationHitAreaKeyPrefix-2'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 进入讲解前只切换焦点，不自动播放；返回时列表会跟随新焦点。
         expect(player.selectFullCalls, [(index: 2, autoPlay: false)]);
         expect(player.state.currentFullIndex, 2);
         // 导航到讲解页 stub。
@@ -593,8 +664,35 @@ void main() {
       });
     });
 
+    testWidgets('长按菜单讲解非当前句，复用原有焦点切换与导航', (tester) async {
+      final player = _RecordingListeningPractice(
+        ListeningPracticeState(
+          currentAudioItem: createTestAudioItem(),
+          sentences: createTestSentences(count: 3),
+          currentFullIndex: 0,
+        ),
+      );
+      await tester.pumpWidget(
+        createTestScreen(
+          const PlayerScreen(),
+          overrides: _recordingOverrides(player),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(
+        find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-2')),
+      );
+      await tester.pumpAndSettle();
+      expect(player.selectFullCalls, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('sentence-menu-explain')));
+      await tester.pumpAndSettle();
+      expect(player.selectFullCalls, [(index: 2, autoPlay: false)]);
+      expect(find.text('Sentence Detail'), findsOneWidget);
+      await _disposeTree(tester);
+    });
+
     group('单句模式（精听）', () {
-      testWidgets('复用精听解析组件 AnnotationContentView + 难句标记行', (tester) async {
+      testWidgets('复用讲解组件与句子信息行，不显示重复进度条', (tester) async {
         final item = createTestAudioItem();
         final sentences = createTestSentences(count: 3);
 
@@ -614,9 +712,91 @@ void main() {
         await tester.pump();
 
         // 不再是旧的列表卡片，而是精听解析视图 + 难句标记行
-        expect(find.byType(AnnotationContentView), findsOneWidget);
+        expect(find.byType(SentenceExplanationView), findsOneWidget);
+        expect(find.byType(PracticeProgressBar), findsNothing);
+        expect(find.byType(PracticeSentenceInfoRow), findsOneWidget);
         expect(find.byType(BookmarkToggleRow), findsOneWidget);
         expect(find.byType(ParagraphSentenceListCard), findsNothing);
+
+        // 随心听讲解区与信息行共用宿主级水平边距，解析面板也不会贴边。
+        expect(
+          tester.getRect(find.byType(SentenceExplanationView)).left,
+          AppSpacing.m,
+        );
+        await _disposeTree(tester);
+      });
+
+      testWidgets('句子元信息与难句标记位于同一行', (tester) async {
+        final item = createTestAudioItem();
+        final sentences = createTestSentences(count: 3);
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _singleSentenceOverrides(
+              practiceState: ListeningPracticeState(
+                currentAudioItem: item,
+                sentences: sentences,
+                currentFullIndex: 0,
+                settings: const PlaybackSettings(singleSentenceMode: true),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final metadataCenter = tester
+            .getCenter(find.byType(PracticeSentenceInfoRow))
+            .dy;
+        final bookmarkCenter = tester
+            .getCenter(find.byType(BookmarkToggleRow))
+            .dy;
+        expect(metadataCenter, closeTo(bookmarkCenter, 3));
+        await _disposeTree(tester);
+      });
+
+      testWidgets('信息行固定，讲解工具栏与正文位于同一滚动区', (tester) async {
+        final item = createTestAudioItem();
+        final sentences = createTestSentences(count: 3);
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _singleSentenceOverrides(
+              practiceState: ListeningPracticeState(
+                currentAudioItem: item,
+                sentences: sentences,
+                currentFullIndex: 0,
+                settings: const PlaybackSettings(singleSentenceMode: true),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final scrollView = find.descendant(
+          of: find.byType(SentenceExplanationView),
+          matching: find.byType(SingleChildScrollView),
+        );
+        expect(scrollView, findsOneWidget);
+        expect(
+          find.ancestor(
+            of: find.byType(PracticeSentenceInfoRow),
+            matching: scrollView,
+          ),
+          findsNothing,
+        );
+        expect(
+          find.ancestor(
+            of: find.byType(BookmarkToggleRow),
+            matching: scrollView,
+          ),
+          findsNothing,
+        );
+        expect(
+          find.ancestor(of: find.text('Analysis'), matching: scrollView),
+          findsOneWidget,
+        );
         await _disposeTree(tester);
       });
 
@@ -688,14 +868,14 @@ void main() {
         await tester.pump();
 
         // 初始未标记
-        expect(find.text('Tap to mark as difficult'), findsOneWidget);
+        expect(find.text('Save'), findsOneWidget);
 
         await tester.tap(find.byType(BookmarkToggleRow));
         await tester.pump();
 
         // 切换后显示已标记文案
-        expect(find.text('Tap to mark as difficult'), findsNothing);
-        expect(find.text('Marked difficult, tap to undo'), findsOneWidget);
+        expect(find.text('Save'), findsNothing);
+        expect(find.text('Unsave'), findsOneWidget);
         await _disposeTree(tester);
       });
 
@@ -886,7 +1066,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.textContaining('Bookmarked'));
+        await tester.tap(find.text('saved (2)'));
         // 等待 TabBarView 切换动画结束，否则滑动区仍在横向位移中，
         // fling 命中点会落到正在滑出的全文页上而非收藏页滑动区。
         await tester.pumpAndSettle();
@@ -912,6 +1092,31 @@ void main() {
         expect(player.selectBookmarkCalls.last, (index: 0, autoPlay: false));
         expect(player.state.currentBookmarkIndex, 0);
         await _disposeTree(tester);
+      });
+
+      testWidgets('退出随心听时暂停播放', (tester) async {
+        final item = createTestAudioItem();
+        final player = _RecordingListeningPractice(
+          ListeningPracticeState(
+            currentAudioItem: item,
+            isPlaying: true,
+            sentences: createTestSentences(count: 2),
+            currentFullIndex: 0,
+          ),
+        );
+
+        await tester.pumpWidget(
+          createTestScreen(
+            const PlayerScreen(),
+            overrides: _recordingOverrides(player),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await _disposeTree(tester);
+
+        expect(player.pauseCalls, 1);
+        expect(player.state.isPlaying, isFalse);
       });
     });
   });

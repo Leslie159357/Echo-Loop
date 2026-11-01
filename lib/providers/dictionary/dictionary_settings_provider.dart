@@ -14,6 +14,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
 import '../../models/dictionary/dictionary_settings.dart';
+import '../../features/user_preferences/domain/user_preferences_sync_events.dart';
 import '../../services/dictionary/dictionary_source.dart';
 import 'dictionary_registry.dart';
 
@@ -42,10 +43,41 @@ class DictionarySettingsNotifier extends _$DictionarySettingsNotifier {
     return DictionarySettings();
   }
 
+  /// 云端写回 SharedPreferences 后同步刷新内存状态。
+  void reloadFromPrefs() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    final jsonStr = prefs.getString(_spKey);
+    if (jsonStr == null) {
+      state = DictionarySettings();
+      return;
+    }
+    try {
+      final decoded = json.decode(jsonStr);
+      state = decoded is Map<String, dynamic>
+          ? DictionarySettings.fromJson(decoded)
+          : DictionarySettings();
+    } catch (error) {
+      debugPrint('DictionarySettings: 解析失败: $error');
+      state = DictionarySettings();
+    }
+  }
+
   /// 设置默认词典源
   Future<void> setDefault(String id) async {
     if (state.defaultSourceId == id) return;
     await _persist(state.copyWith(defaultSourceId: id));
+  }
+
+  /// 设置查词时是否自动播放发音。
+  Future<void> setAutoSpeakOnLookup(bool enabled) async {
+    if (state.autoSpeakOnLookup == enabled) return;
+    await _persist(state.copyWith(autoSpeakOnLookup: enabled));
+  }
+
+  /// 设置网页词典广告过滤开关。
+  Future<void> setAdFilteringEnabled(bool enabled) async {
+    if (state.adFilteringEnabled == enabled) return;
+    await _persist(state.copyWith(adFilteringEnabled: enabled));
   }
 
   /// 启用/禁用某词典源
@@ -83,6 +115,7 @@ class DictionarySettingsNotifier extends _$DictionarySettingsNotifier {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setString(_spKey, json.encode(settings.toJson()));
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       debugPrint('DictionarySettings: 保存失败: $e');
     }

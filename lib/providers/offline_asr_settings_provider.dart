@@ -4,6 +4,7 @@
 /// 独立于 [AppSettings]，遵循"Provider 按功能域拆分"原则。
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -13,32 +14,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
+import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
+    show sharedPreferencesProvider;
 import '../services/app_logger.dart';
 import '../services/asr/asr_model_manager.dart';
 import '../services/asr/offline_asr_engine.dart';
 import '../services/download/download_failure.dart';
+import '../services/reliable_http_downloader.dart';
 import '../utils/app_data_dir.dart';
 import 'asr_engine_provider.dart';
 
-/// 进程内是否已检查过 ASR 崩溃面包屑（只检查一次）。
+/// 进程内是否已检查过 ASR 推理 pending 文件（只检查一次）。
 bool _asrCrashMarkerChecked = false;
 const _backendKey = 'offline_asr_backend';
 const _selectedModelKey = 'offline_asr_selected_model_id';
-String _downloadCompletedKey(String modelId) =>
-    'offline_asr_downloaded_$modelId';
 
-AsrModelDownloadStatus _deriveStoredDownloadStatus({
-  required bool fullyDownloaded,
-  required int localSizeBytes,
-}) {
-  if (fullyDownloaded) {
-    return AsrModelDownloadStatus.downloaded;
-  }
-  if (localSizeBytes > 0) {
-    return AsrModelDownloadStatus.failed;
-  }
-  return AsrModelDownloadStatus.notDownloaded;
-}
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -246,14 +236,18 @@ final offlineAsrSettingsProvider =
       OfflineAsrSettingsNotifier.new,
     );
 
-/// 应用启动时预加载的离线 ASR 初始状态。
-///
-/// 通过 main() 注入，避免首次点击语音练习时先读到默认值。
-/// 启动时只读取“下载完成”持久化标记，不再做文件系统重校验。
+/// 从已初始化的 Preferences 构造初始状态，不访问模型目录。
 final initialOfflineAsrSettingsStateProvider =
     Provider<OfflineAsrSettingsState>((ref) {
       final recommended = ref.read(recommendedAsrModelProvider);
-      return OfflineAsrSettingsState(recommendedModel: recommended);
+      final defaultBackend = !kIsWeb && Platform.isAndroid
+          ? AsrBackend.offline
+          : AsrBackend.platform;
+      return offlineAsrSettingsStateFromPrefs(
+        prefs: ref.read(sharedPreferencesProvider),
+        recommendedModel: recommended,
+        defaultBackend: defaultBackend,
+      );
     });
 
 /// 设置页是否显示 AI 语音识别入口。
@@ -264,14 +258,17 @@ final showOfflineAsrSectionProvider = Provider<bool>((ref) {
   return true;
 });
 
-/// 推荐的 ASR 模型（main() 中一次性计算并 override 注入）。
+/// 推荐的 ASR 模型。
 final recommendedAsrModelProvider = Provider<AsrModelInfo>(
-  (ref) => throw UnimplementedError('Must be overridden in main()'),
+  (ref) =>
+      availableModels.firstWhere((model) => model.id == 'whisper-base-en-int8'),
 );
 
 /// 离线 ASR 设置 Notifier。
 class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
   final Map<String, CancelToken> _downloadCancelTokens = {};
+  final Map<String, Future<void>> _downloadTasks = {};
+  final Set<String> _cancellingModelIds = {};
 
   @override
   OfflineAsrSettingsState build() {
@@ -281,7 +278,8 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
       }
     });
 
-    return ref.read(initialOfflineAsrSettingsStateProvider);
+    final initial = ref.read(initialOfflineAsrSettingsStateProvider);
+    return initial;
   }
 
   /// 兼容旧调用：语音识别基础能力常开；offline 后端下确保当前模型就绪。
@@ -314,7 +312,6 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
                 ),
           )
           .copyWith(enabled: true);
-      await _persistDownloadCompleted(modelId, true);
       await _initializeEngine(modelId);
       ref.read(analyticsServiceProvider).track(Events.asrSettingChanged, {
         EventParams.asrEnabled: true,
@@ -398,7 +395,6 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     final modelManager = ref.read(asrModelManagerProvider);
     await modelManager.deleteModel(targetId);
     state = state.withModelState(targetId, const AsrModelState());
-    await _persistDownloadCompleted(targetId, false);
   }
 
   /// 删除所有已下载且当前未使用的 Whisper 模型。
@@ -425,23 +421,35 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
   /// 取消当前或指定模型正在进行的下载。
   Future<void> cancelDownload([String? modelId]) async {
     final targetId = modelId ?? state.selectedModel.id;
+    final task = _downloadTasks[targetId];
     _downloadCancelTokens.remove(targetId)?.cancel();
-    final modelManager = ref.read(asrModelManagerProvider);
-    final localSize = await modelManager.modelLocalSize(targetId);
+    // 与 TTS 下载统一：用户点击取消后立即撤销下载 UI，文件句柄释放和目录清理
+    // 在后台继续，避免大文件下载的取消反馈被底层 I/O 阻塞。
     state = state.withModelState(
       targetId,
-      state
-          .modelStateOf(targetId)
-          .copyWith(
-            downloadStatus: _deriveStoredDownloadStatus(
-              fullyDownloaded: false,
-              localSizeBytes: localSize,
-            ),
-            downloadProgress: 0,
-            localSizeBytes: localSize,
-          ),
+      const AsrModelState(downloadStatus: AsrModelDownloadStatus.notDownloaded),
     );
-    await _persistDownloadCompleted(targetId, false);
+    if (task == null) {
+      // 兼容状态恢复后的残留：没有在途下载也要回收目录。
+      final modelManager = ref.read(asrModelManagerProvider);
+      await modelManager.deleteModel(targetId);
+      // 主模型任务可能已在进程退出前进入 VAD 下载；无在途任务时同样清理其半成品。
+      await modelManager.discardPartialDownload(vadModelId);
+      return;
+    }
+    _cancellingModelIds.add(targetId);
+    // 等待下载器释放文件句柄后再删除目录，避免主动取消被记录成 PathNotFound/storage 失败。
+    try {
+      await task;
+      final modelManager = ref.read(asrModelManagerProvider);
+      // 主动取消不是失败；删除模型时一并丢弃可续传的 `.part` 和元数据。
+      await modelManager.deleteModel(targetId);
+      // VAD 是主模型下载链路的共享后续步骤，取消时仅清它的半成品，
+      // 不删除其它已完成模型可复用的 VAD 安装目录。
+      await modelManager.discardPartialDownload(vadModelId);
+    } finally {
+      _cancellingModelIds.remove(targetId);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -449,7 +457,19 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
   // ---------------------------------------------------------------------------
 
   Future<void> _downloadAndInitialize(String modelId) async {
-    await _persistDownloadCompleted(modelId, false);
+    if (_cancellingModelIds.contains(modelId)) return;
+    final task = _runDownloadAndInitialize(modelId);
+    _downloadTasks[modelId] = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_downloadTasks[modelId], task)) {
+        _downloadTasks.remove(modelId);
+      }
+    }
+  }
+
+  Future<void> _runDownloadAndInitialize(String modelId) async {
     state = state.withModelState(
       modelId,
       state
@@ -464,18 +484,32 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     final cancelToken = CancelToken();
     _downloadCancelTokens[modelId] = cancelToken;
     final modelManager = ref.read(asrModelManagerProvider);
+    // 网络流可能每个小数据块都回报进度；限制 UI 状态最多每 100ms 更新一次。
+    // 下载完成的 100% 进度仍立即发布，避免进度条和完成状态落后。
+    const progressUpdateInterval = Duration(milliseconds: 100);
+    final progressUpdateClock = Stopwatch()..start();
+    var lastProgressUpdateAt = Duration.zero;
 
     try {
       await modelManager.downloadModel(
         modelId,
         cancelToken: cancelToken,
         onProgress: (progress) {
-          if (cancelToken.isCancelled) return;
+          if (cancelToken.isCancelled ||
+              !identical(_downloadCancelTokens[modelId], cancelToken)) {
+            return;
+          }
+          final now = progressUpdateClock.elapsed;
+          if (progress.progress < 1.0 &&
+              now - lastProgressUpdateAt < progressUpdateInterval) {
+            return;
+          }
+          final currentState = state.modelStateOf(modelId);
+          if (progress.progress == currentState.downloadProgress) return;
+          lastProgressUpdateAt = now;
           state = state.withModelState(
             modelId,
-            state
-                .modelStateOf(modelId)
-                .copyWith(downloadProgress: progress.progress),
+            currentState.copyWith(downloadProgress: progress.progress),
           );
         },
       );
@@ -485,6 +519,10 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
         await modelManager.downloadModel(vadModelId, cancelToken: cancelToken);
       }
 
+      if (cancelToken.isCancelled ||
+          !identical(_downloadCancelTokens[modelId], cancelToken)) {
+        return;
+      }
       _downloadCancelTokens.remove(modelId);
       final localSize = await modelManager.modelLocalSize(modelId);
 
@@ -498,13 +536,28 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
               localSizeBytes: localSize,
             ),
       );
-      await _persistDownloadCompleted(modelId, true);
 
       await _initializeEngine(modelId);
     } catch (e) {
-      _downloadCancelTokens.remove(modelId);
+      final isCurrentDownload = identical(
+        _downloadCancelTokens[modelId],
+        cancelToken,
+      );
+      if (isCurrentDownload) {
+        _downloadCancelTokens.remove(modelId);
+      } else if (_downloadCancelTokens.containsKey(modelId)) {
+        // 同一模型已发起新下载，旧会话不得覆盖其状态或完成标记。
+        return;
+      }
       // 取消不是失败：恢复未下载态，不显错误。
-      if (e is DioException && e.type == DioExceptionType.cancel) {
+      final isCancelled =
+          cancelToken.isCancelled ||
+          (e is DioException && e.type == DioExceptionType.cancel) ||
+          (e is ReliableDownloadException &&
+              e.kind == ReliableDownloadFailure.cancelled);
+      if (isCancelled) {
+        // 文件已由 cancelDownload 的用户动作路径立即清理；这里不能再次删除，
+        // 否则迟到回调可能误删用户重试后新任务写入的文件。
         state = state.withModelState(
           modelId,
           state
@@ -512,6 +565,8 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
               .copyWith(
                 downloadStatus: AsrModelDownloadStatus.notDownloaded,
                 downloadProgress: 0,
+                localSizeBytes: 0,
+                clearError: true,
               ),
         );
       } else {
@@ -527,28 +582,44 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
               ),
         );
       }
-      await _persistDownloadCompleted(modelId, false);
     }
   }
 
-  /// 检查上次是否疑似崩溃在 ASR 推理（残留面包屑），有则记录+上报后清除。
+  /// 检查上次是否疑似崩溃在 ASR 推理，有则转成日志并上报。
   ///
   /// 进程内只检查一次。放在引擎初始化前——即真正再次跑 native 推理之前。
   Future<void> _reportPreviousAsrCrashIfAny() async {
     if (_asrCrashMarkerChecked) return;
     _asrCrashMarkerChecked = true;
     try {
-      final f = File(await asrCrashMarkerPath());
-      if (!await f.exists()) return;
-      final info = (await f.readAsString()).trim();
-      await f.delete();
-      AppLogger.log('ASRCrash', '⚠ 检测到上次疑似崩溃在 ASR 推理: $info');
-      ref.read(analyticsServiceProvider).track(
-        Events.asrInferenceCrashSuspected,
-        {'detail': info},
+      final directory = Directory(await asrInferenceLogDirectoryPath());
+      final pendingFiles = directory.listSync().whereType<File>().where(
+        (file) => file.path.endsWith('.pending'),
       );
+      for (final pending in pendingFiles) {
+        final fileName = pending.uri.pathSegments.last;
+        if (!fileName.startsWith('asr_inference-') ||
+            !fileName.endsWith('.pending')) {
+          continue;
+        }
+        final timestamp = fileName.substring(
+          'asr_inference-'.length,
+          fileName.length - '.pending'.length,
+        );
+        final crashLog = File('${directory.path}/asr-crash-$timestamp.log');
+        if (await crashLog.exists()) continue;
+        final info = (await pending.readAsString()).trim();
+        await pending.rename(crashLog.path);
+        AppLogger.log('ASRCrash', '⚠ 检测到上次疑似崩溃在 ASR 推理: $info');
+        ref.read(analyticsServiceProvider).track(
+          Events.asrInferenceCrashSuspected,
+          {'detail': info},
+        );
+      }
+      final legacyMarker = File('${directory.path}/asr_crash.marker');
+      if (await legacyMarker.exists()) await legacyMarker.delete();
     } catch (_) {
-      // 忽略：面包屑检查不应影响引擎初始化。
+      // 忽略：pending 检查不应影响引擎初始化。
     }
   }
 
@@ -578,20 +649,9 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
       );
       state = state.copyWith(engineReady: true);
     } catch (e) {
-      // 引擎初始化失败不是下载失败，无确定归类 → 通用文案；原始异常打日志。
+      // 引擎初始化失败不改变安装状态；模型文件仍可能是完好的。
       AppLogger.log('OfflineAsr', '✗ engine init failed ($modelId): $e');
-      state = state
-          .withModelState(
-            modelId,
-            state
-                .modelStateOf(modelId)
-                .copyWith(
-                  downloadStatus: AsrModelDownloadStatus.failed,
-                  downloadError: DownloadFailureKind.unknown,
-                ),
-          )
-          .copyWith(engineReady: false);
-      await _persistDownloadCompleted(modelId, false);
+      state = state.copyWith(engineReady: false);
     }
   }
 
@@ -660,22 +720,36 @@ class OfflineAsrSettingsNotifier extends Notifier<OfflineAsrSettingsState> {
     }
   }
 
-  /// 持久化”模型已完整下载”标记。
-  ///
-  /// 该标记只作为启动恢复和状态核对的快速索引，最终仍以文件系统校验为准。
-  Future<void> _persistDownloadCompleted(String modelId, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_downloadCompletedKey(modelId), value);
+  /// 从安装清单刷新状态，避免旧 Preferences 标记与真实文件系统漂移。
+  /// 由安装状态 Gate 调用；扫描结果过期时不允许写回状态。
+  Future<void> refreshInstalledStates({bool Function()? shouldCommit}) async {
+    final manager = ref.read(asrModelManagerProvider);
+    var next = state;
+    for (final model in availableModels) {
+      final manifest = await manager.readInstallManifest(model.id);
+      final filesReady = await manager.isModelDownloaded(model.id);
+      if (shouldCommit != null && !shouldCommit()) return;
+      next = next.withModelState(
+        model.id,
+        manifest == null || !filesReady
+            ? const AsrModelState()
+            : AsrModelState(
+                downloadStatus: AsrModelDownloadStatus.downloaded,
+                downloadProgress: 1,
+                localSizeBytes: manifest.resourceSize,
+              ),
+      );
+    }
+    if (shouldCommit == null || shouldCommit()) state = next;
   }
 }
 
-/// 启动期从持久化和模型文件系统中构建离线 ASR 初始状态。
-Future<OfflineAsrSettingsState> loadInitialOfflineAsrSettingsState({
+/// 仅恢复用户偏好；安装状态必须异步从 install.json 恢复。
+OfflineAsrSettingsState offlineAsrSettingsStateFromPrefs({
   required SharedPreferences prefs,
-  required AsrModelManager modelManager,
   required AsrModelInfo recommendedModel,
   required AsrBackend defaultBackend,
-}) async {
+}) {
   final backendName = prefs.getString(_backendKey);
   final backend = backendName == AsrBackend.offline.name
       ? AsrBackend.offline
@@ -688,27 +762,11 @@ Future<OfflineAsrSettingsState> loadInitialOfflineAsrSettingsState({
     orElse: () => recommendedModel,
   );
 
-  final modelStates = <String, AsrModelState>{};
-  for (final model in availableModels) {
-    final persistedDownloaded =
-        prefs.getBool(_downloadCompletedKey(model.id)) ?? false;
-    final localSize = await modelManager.modelLocalSize(model.id);
-    final fullyDownloaded =
-        persistedDownloaded && await modelManager.isModelDownloaded(model.id);
-    modelStates[model.id] = AsrModelState(
-      downloadStatus: _deriveStoredDownloadStatus(
-        fullyDownloaded: fullyDownloaded,
-        localSizeBytes: localSize,
-      ),
-      localSizeBytes: localSize,
-    );
-  }
-
   return OfflineAsrSettingsState(
     enabled: true,
     backend: backend,
     recommendedModel: recommendedModel,
     selectedModel: selectedModel,
-    modelStates: modelStates,
+    modelStates: const {},
   );
 }

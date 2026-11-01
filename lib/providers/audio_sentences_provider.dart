@@ -4,7 +4,7 @@
 /// `audioItemId + sentenceIndex` 取相邻句（做 AI 翻译的前后句上下文）。
 ///
 /// 设计要点：
-/// - **卸载时机 = 观察者生命周期（autoDispose）**：由 [AnnotationContentView] 等在
+/// - **卸载时机 = 观察者生命周期（autoDispose）**：由 [SentenceExplanationView] 等在
 ///   build 中 `ref.watch(audioSentencesProvider(id))` 撑起生命周期，视图离屏即自动
 ///   释放；同 audioItemId 的多个观察者（如 player PageView 相邻页）共享唯一实例。
 ///   不用 keepAlive，内存不无限累积。
@@ -30,7 +30,9 @@ part 'audio_sentences_provider.g.dart';
 @riverpod
 Future<List<Sentence>> audioSentences(Ref ref, String audioItemId) async {
   if (audioItemId.isEmpty) return const [];
-  final srt = await ref.read(audioItemDaoProvider).getTranscriptSrt(audioItemId);
+  final srt = await ref
+      .read(audioItemDaoProvider)
+      .getTranscriptSrt(audioItemId);
   if (srt == null || srt.isEmpty) return const [];
   return SubtitleParser.parseSubtitleString(srt);
 }

@@ -31,9 +31,6 @@ class AnalyticsService {
   }) : _channel = channel,
        _consent = consent;
 
-  /// 当前通道名称（调试用）
-  String get channelName => _channel.name;
-
   /// 记录事件
   ///
   /// 如果用户未同意数据采集，事件将被静默丢弃。
@@ -57,6 +54,11 @@ class AnalyticsService {
   Future<void> setUserProperty(String name, String? value) async {
     if (!_consent.hasConsented) return;
     await _channel.setUserProperty(name, value);
+  }
+
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    if (!_consent.hasConsented) return;
+    await _channel.setUserProperties(properties);
   }
 
   /// 注册 super properties。

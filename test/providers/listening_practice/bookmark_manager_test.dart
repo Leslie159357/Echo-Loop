@@ -13,53 +13,6 @@ void main() {
       );
     }
 
-    group('autoAddBracketBookmarks', () {
-      test('[text] 格式被识别', () {
-        final sentences = [
-          createSentence(0, '[Introduction]'),
-          createSentence(1, 'Normal text'),
-          createSentence(2, '[Chapter 1]'),
-        ];
-        final bookmarks = BookmarkManager.autoAddBracketBookmarks(sentences);
-
-        expect(bookmarks, {0, 2});
-      });
-
-      test('普通文本不被识别', () {
-        final sentences = [
-          createSentence(0, 'Hello world'),
-          createSentence(1, 'Normal sentence'),
-        ];
-        final bookmarks = BookmarkManager.autoAddBracketBookmarks(sentences);
-
-        expect(bookmarks, isEmpty);
-      });
-
-      test('混合列表正确过滤', () {
-        final sentences = [
-          createSentence(0, '[Title]'),
-          createSentence(1, 'Body text'),
-          createSentence(2, 'More text [with brackets] inside'),
-          createSentence(3, '[End]'),
-        ];
-        final bookmarks = BookmarkManager.autoAddBracketBookmarks(sentences);
-
-        // 只有完全被 [] 包裹的才算
-        expect(bookmarks, {0, 3});
-      });
-
-      test('空列表返回空集合', () {
-        final bookmarks = BookmarkManager.autoAddBracketBookmarks([]);
-        expect(bookmarks, isEmpty);
-      });
-
-      test('前后有空格的 [text] 也被识别（trim）', () {
-        final sentences = [createSentence(0, '  [Title]  ')];
-        final bookmarks = BookmarkManager.autoAddBracketBookmarks(sentences);
-        expect(bookmarks, {0});
-      });
-    });
-
     group('updateSentenceBookmarkStatus', () {
       test('正确设置 isBookmarked 标志', () {
         final sentences = [
@@ -84,6 +37,55 @@ void main() {
 
         expect(sentences[0].isBookmarked, isFalse);
         expect(sentences[1].isBookmarked, isFalse);
+      });
+    });
+
+    group('createSentenceBookmarkSnapshot', () {
+      test('创建收藏状态副本且不修改共享字幕对象', () {
+        final source = [
+          createSentence(0, 'A'),
+          createSentence(1, 'B')..isBookmarked = true,
+          createSentence(2, 'C'),
+        ];
+
+        final snapshot = BookmarkManager.createSentenceBookmarkSnapshot(
+          source,
+          {0, 2},
+        );
+
+        expect(snapshot.map((sentence) => sentence.isBookmarked), [
+          true,
+          false,
+          true,
+        ]);
+        expect(snapshot.map((sentence) => sentence.index), [0, 1, 2]);
+        expect(identical(snapshot[0], source[0]), isFalse);
+        expect(source.map((sentence) => sentence.isBookmarked), [
+          false,
+          true,
+          false,
+        ]);
+      });
+
+      test('保留段落结构并为每句创建独立副本', () {
+        final source = [
+          [createSentence(0, 'A'), createSentence(1, 'B')],
+          [createSentence(2, 'C')],
+        ];
+
+        final snapshot = BookmarkManager.createParagraphBookmarkSnapshot(
+          source,
+          {1, 2},
+        );
+
+        expect(snapshot.map((paragraph) => paragraph.length), [2, 1]);
+        expect(
+          snapshot
+              .expand((paragraph) => paragraph)
+              .map((sentence) => sentence.isBookmarked),
+          [false, true, true],
+        );
+        expect(identical(snapshot[0][0], source[0][0]), isFalse);
       });
     });
 
@@ -184,6 +186,23 @@ void main() {
         final nextIndex = result.$3;
 
         expect(nextIndex, isNull);
+      });
+
+      test('书签模式移除末尾书签但前面仍有收藏时回退到前一个', () {
+        final sentences = [
+          createSentence(0, 'A'),
+          createSentence(1, 'B'),
+          createSentence(2, 'C'),
+          createSentence(3, 'D'),
+        ];
+        final result = BookmarkManager.toggleBookmark(3, sentences, {
+          0,
+          1,
+          3,
+        }, true);
+
+        expect(result.$2, {3});
+        expect(result.$3, 1);
       });
 
       test('书签模式移除后跳过同文本书签找到下一个', () {

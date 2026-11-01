@@ -32,7 +32,6 @@ import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
 import 'package:echo_loop/providers/daily_study_time_provider.dart';
-import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:echo_loop/providers/learning_session/intensive_listen_player_provider.dart';
@@ -113,8 +112,6 @@ class TestReviewDifficultPractice extends FakeReviewDifficultPractice {
 class TestAudioEngine extends FakeAudioEngine {
   TestAudioEngine() : super();
 }
-
-class TestFlashcardNotifier extends FakeFlashcardNotifier {}
 
 class TestDailyStudyTime extends FakeDailyStudyTime {}
 
@@ -294,8 +291,6 @@ Future<void> safeSettle(
 /// 空操作分析通道（集成测试用）
 class _NoOpChannel implements AnalyticsChannel {
   @override
-  String get name => 'NoOp';
-  @override
   Future<void> initialize() async {}
   @override
   Future<void> logEvent(String name, Map<String, Object>? parameters) async {}
@@ -304,6 +299,8 @@ class _NoOpChannel implements AnalyticsChannel {
   @override
   Future<void> setUserProperty(String name, String? value) async {}
   @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {}
+  @override
   Future<void> registerSuperProperties(Map<String, Object> properties) async {}
   @override
   Future<void> unregisterSuperProperty(String name) async {}
@@ -311,6 +308,7 @@ class _NoOpChannel implements AnalyticsChannel {
 
 /// 缓存的 SharedPreferences 实例（由 [initTestAnalytics] 初始化）
 SharedPreferences? _testPrefsCache;
+AnalyticsService? _testAnalyticsService;
 
 /// 初始化测试用 AnalyticsService（须在 createTestApp 前调用一次）
 Future<void> initTestAnalytics() async {
@@ -320,11 +318,10 @@ Future<void> initTestAnalytics() async {
   SharedPreferences.setMockInitialValues(guideSeen);
   final prefs = await SharedPreferences.getInstance();
   _testPrefsCache = prefs;
-  final service = AnalyticsService(
+  _testAnalyticsService = AnalyticsService(
     channel: _NoOpChannel(),
     consent: ConsentManager(prefs),
   );
-  initAnalytics(service);
 }
 
 // ========== Override 工厂 ==========
@@ -332,13 +329,15 @@ Future<void> initTestAnalytics() async {
 /// Onboarding 问卷相关的 provider 测试 override
 List<Override> onboardingTestOverrides() {
   final prefs = _testPrefsCache;
-  if (prefs == null) {
+  final analyticsService = _testAnalyticsService;
+  if (prefs == null || analyticsService == null) {
     throw StateError(
       'initTestAnalytics() must be called before createTestApp() '
       'to initialize SharedPreferences for onboarding overrides',
     );
   }
   return [
+    analyticsServiceProvider.overrideWithValue(analyticsService),
     isFirstLaunchProvider.overrideWithValue(false),
     sharedPreferencesProvider.overrideWithValue(prefs),
     initialOnboardingCompletedProvider.overrideWithValue(true),
@@ -403,7 +402,6 @@ Widget createTestApp() {
       studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
       studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
-      flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
       speechPracticeBackendProvider.overrideWithValue(
         TestSpeechPracticePlatform(),
       ),
@@ -466,7 +464,6 @@ Widget createTestAppWithAudio({
       studyStatsNotifierProvider.overrideWith(() => TestStudyStatsNotifier()),
       studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
       savedWordListProvider.overrideWith(() => TestSavedWordList()),
-      flashcardNotifierProvider.overrideWith(() => TestFlashcardNotifier()),
       speechPracticeBackendProvider.overrideWithValue(
         TestSpeechPracticePlatform(),
       ),

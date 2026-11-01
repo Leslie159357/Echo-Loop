@@ -12,13 +12,20 @@ import '../database/providers.dart';
 import '../models/audio_item.dart';
 import '../services/app_logger.dart';
 import '../utils/audio_content_check.dart';
-import '../utils/audio_duration.dart';
+import '../utils/media_duration.dart';
 import '../utils/transcript_stats.dart';
 import 'collection_provider.dart';
 import 'learning_progress_provider.dart';
+import 'favorite_sentence_lifecycle_provider.dart';
 import 'tag_provider.dart';
 
 part 'audio_library_provider.g.dart';
+
+const _durationDebugLogTag = 'MediaDuration';
+
+final mediaDurationSecondsReaderProvider = Provider<MediaDurationSecondsReader>(
+  (ref) => getMediaDurationSeconds,
+);
 
 class AudioLibraryState {
   final List<AudioItem> audioItems;
@@ -38,6 +45,8 @@ class AudioLibraryState {
 
 @Riverpod(keepAlive: true)
 class AudioLibrary extends _$AudioLibrary {
+  final Set<String> _contentCheckInFlight = <String>{};
+
   @override
   AudioLibraryState build() {
     return const AudioLibraryState();
@@ -75,6 +84,9 @@ class AudioLibrary extends _$AudioLibrary {
               ),
               remoteAudioId: row.remoteAudioId,
               originalDate: row.originalDate,
+              communityUnavailableAt: row.communityUnavailableAt,
+              difficulty: row.difficulty,
+              description: row.description,
               importSourceType: AudioImportSourceType.fromStorageValue(
                 row.importSourceType,
               ),
@@ -82,9 +94,10 @@ class AudioLibrary extends _$AudioLibrary {
               podcastEpisodeGuid: row.podcastEpisodeGuid,
               podcastEnclosureUrl: row.podcastEnclosureUrl,
               podcastEnclosureType: row.podcastEnclosureType,
-              podcastDescription: row.podcastDescription,
               podcastImageUrl: row.podcastImageUrl,
               podcastLink: row.podcastLink,
+              podcastTranscriptUrl: row.podcastTranscriptUrl,
+              podcastTranscriptFormat: row.podcastTranscriptFormat,
             ),
           )
           .toList();
@@ -95,7 +108,7 @@ class AudioLibrary extends _$AudioLibrary {
       for (final item in allItems) {
         AudioItem processedItem = item;
 
-        // audioPath=null → 未就绪（官方合集未下载）；直接保留为合法条目
+        // audioPath=null → 未就绪（社区合集未下载）；直接保留为合法条目
         final currentAudioPath = item.audioPath;
         if (currentAudioPath == null) {
           validItems.add(processedItem);
@@ -260,6 +273,12 @@ class AudioLibrary extends _$AudioLibrary {
     final savedSenseGroupDao = ref.read(savedSenseGroupDaoProvider);
     await savedSenseGroupDao.clearContextForAudios(ids);
 
+    // FK 级联会直接删除书签，必须先统一归档其 FSRS 快照。
+    final sentenceLifecycle = ref.read(favoriteSentenceLifecycleProvider);
+    for (final id in ids) {
+      await sentenceLifecycle.removeAllForAudio(id);
+    }
+
     final dao = ref.read(audioItemDaoProvider);
     await dao.hardDeleteMany(ids);
 
@@ -287,7 +306,7 @@ class AudioLibrary extends _$AudioLibrary {
 
   /// 删除已下载的音频文件，但保留 item 本身（还原为「未下载」态）。
   ///
-  /// 用于官方/播客音频——item 由后端 / RSS 统一管理不可删除，仅回收本地下载占用。
+  /// 用于社区/播客音频——item 由后端 / RSS 统一管理不可删除，仅回收本地下载占用。
   /// 语义：清 DB 下载态（audioPath + 文件派生指纹/内容状态，见 [AudioItemDao.clearDownloadState]）
   /// → 同步内存 state → best-effort 删磁盘音频文件 + 波形缓存。
   /// **不触碰字幕与学习进度**（字幕单独管理，重新下载即恢复播放）。无需二次确认——
@@ -309,10 +328,10 @@ class AudioLibrary extends _$AudioLibrary {
       removedIds: {id},
     );
 
-    // 官方音频的 audioSha256 是重新下载定位文件路径的稳定标识，必须保留。
-    final isOfficial = item.remoteAudioId != null;
+    // 社区媒体的 audioSha256 是重新下载定位文件路径的稳定标识，必须保留。
+    final isCommunity = item.remoteAudioId != null;
     final dao = ref.read(audioItemDaoProvider);
-    await dao.clearDownloadState(id, keepAudioSha256: isOfficial);
+    await dao.clearDownloadState(id, keepAudioSha256: isCommunity);
 
     state = state.copyWith(
       audioItems: [
@@ -322,7 +341,7 @@ class AudioLibrary extends _$AudioLibrary {
               audioPath: null,
               contentStatus: null,
               originalAudioSha256: null,
-              audioSha256: isOfficial ? i.audioSha256 : null,
+              audioSha256: isCommunity ? i.audioSha256 : null,
             )
           else
             i,
@@ -467,8 +486,9 @@ class AudioLibrary extends _$AudioLibrary {
 
   /// 检测音频内容有效性并持久化（新下载/导入完成后调用）。
   ///
-  /// 解码失败或全程静音 → [AudioContentStatus.suspectEmpty]。
-  /// [decodedDurationSeconds] 调用方已算出解码时长时传入，避免重复解码。
+  /// FFmpeg 短解码失败 → [AudioContentStatus.damaged]；可解码但静音 →
+  /// [AudioContentStatus.silent]。
+  /// [decodedDurationSeconds] 保留调用兼容，不参与内容有效性判定。
   /// 后台执行，失败仅记录日志，不影响主流程。写回前校验条目仍存在且 audioPath
   /// 未变（防竞态）。
   Future<void> checkAudioContent(
@@ -477,6 +497,8 @@ class AudioLibrary extends _$AudioLibrary {
   }) async {
     final item = getItemById(audioId);
     if (item == null || !item.isAudioReady) return;
+    if (item.isVideo) return; // 本期视频不做内容有效性校验
+    if (!_contentCheckInFlight.add(audioId)) return;
     final audioPath = item.audioPath!;
     try {
       final status = await evaluateAudioContent(
@@ -489,20 +511,79 @@ class AudioLibrary extends _$AudioLibrary {
       await updateAudioItem(latest.copyWith(contentStatus: status));
     } catch (e) {
       AppLogger.log('AudioContentCheck', '音频内容检测失败: $e');
+    } finally {
+      _contentCheckInFlight.remove(audioId);
     }
   }
 
-  /// 补填缺失时长 — 对已就绪且 totalDuration == 0 的音频逐个提取并持久化
+  /// 补填缺失时长 — 对已就绪且 totalDuration == 0 的音视频素材逐个提取并持久化
   Future<void> backfillDurations() async {
     final missing = state.audioItems
         .where((item) => item.totalDuration == 0 && item.isAudioReady)
         .toList();
+    final videoCount = missing.where((item) => item.isVideo).length;
+    AppLogger.log(
+      _durationDebugLogTag,
+      'event=backfill_begin candidates=${missing.length} videos=$videoCount',
+    );
+    var videosWithDuration = 0;
+    final readDuration = ref.read(mediaDurationSecondsReaderProvider);
     for (final item in missing) {
-      final seconds = await getAudioDurationSeconds(item.audioPath!);
+      final isVideo = item.isVideo;
+      final relativePath = item.audioPath;
+      if (relativePath == null) continue;
+      if (isVideo) {
+        AppLogger.log(
+          _durationDebugLogTag,
+          'event=backfill_probe_begin trace=${item.id}',
+        );
+      }
+      final seconds = await readDuration(
+        relativePath,
+        traceId: isVideo ? item.id : null,
+      );
       if (seconds > 0) {
-        updateAudioItem(item.copyWith(totalDuration: seconds));
+        final latest = getItemById(item.id);
+        if (latest == null ||
+            latest.totalDuration != 0 ||
+            latest.audioPath != relativePath) {
+          if (isVideo) {
+            AppLogger.log(
+              _durationDebugLogTag,
+              'event=backfill_update_skipped trace=${item.id} '
+              'reason=item_changed',
+            );
+          }
+          continue;
+        }
+        try {
+          await updateAudioItem(latest.copyWith(totalDuration: seconds));
+          if (isVideo) {
+            videosWithDuration++;
+            AppLogger.log(
+              _durationDebugLogTag,
+              'event=backfill_update_complete trace=${item.id} seconds=$seconds',
+            );
+          }
+        } on Object catch (error) {
+          AppLogger.log(
+            _durationDebugLogTag,
+            'event=backfill_update_failed trace=${item.id} '
+            'errorType=${error.runtimeType}',
+          );
+        }
+      } else if (isVideo) {
+        AppLogger.log(
+          _durationDebugLogTag,
+          'event=backfill_result trace=${item.id} outcome=zero',
+        );
       }
     }
+    AppLogger.log(
+      _durationDebugLogTag,
+      'event=backfill_complete candidates=${missing.length} videos=$videoCount '
+      'videosWithDuration=$videosWithDuration',
+    );
   }
 
   /// 全量 backfill 字幕内容 — 把旧行的 SRT 文件读入 transcript_srt 列。
@@ -592,14 +673,17 @@ class AudioLibrary extends _$AudioLibrary {
       audioContentStatus: Value(item.contentStatus?.index),
       remoteAudioId: Value(item.remoteAudioId),
       originalDate: Value(item.originalDate),
+      difficulty: Value(item.difficulty),
+      description: Value(item.description),
       importSourceType: Value(item.importSourceType?.storageValue),
       importSourceUrl: Value(item.importSourceUrl),
       podcastEpisodeGuid: Value(item.podcastEpisodeGuid),
       podcastEnclosureUrl: Value(item.podcastEnclosureUrl),
       podcastEnclosureType: Value(item.podcastEnclosureType),
-      podcastDescription: Value(item.podcastDescription),
       podcastImageUrl: Value(item.podcastImageUrl),
       podcastLink: Value(item.podcastLink),
+      podcastTranscriptUrl: Value(item.podcastTranscriptUrl),
+      podcastTranscriptFormat: Value(item.podcastTranscriptFormat),
       updatedAt: Value(DateTime.now()),
     );
   }

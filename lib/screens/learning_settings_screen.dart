@@ -15,6 +15,7 @@ import '../analytics/models/event_names.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_settings_provider.dart';
+import '../providers/new_user_guide_provider.dart';
 import '../theme/app_theme.dart';
 
 /// 学习设置页面
@@ -37,33 +38,72 @@ class LearningSettingsScreen extends ConsumerWidget {
         ),
         children: [
           Card(
-            child: SwitchListTile(
-              secondary: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  title: Text(l10n.autoShowAiExplanationToggle),
+                  subtitle: Text(
+                    l10n.autoShowAiExplanationSubtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
+                  ),
+                  value: settings.autoShowAiExplanation,
+                  onChanged: (value) async {
+                    await ref
+                        .read(learningSettingsProvider.notifier)
+                        .setAutoShowAiExplanation(value);
+                  },
                 ),
-                child: Icon(
-                  Icons.auto_awesome,
-                  size: 20,
-                  color: colorScheme.primary,
-                ),
-              ),
-              title: Text(l10n.autoExpandCachedAnnotationToggle),
-              subtitle: Text(
-                l10n.autoExpandCachedAnnotationSubtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-              ),
-              value: settings.autoExpandCachedAnnotation,
-              onChanged: (value) async {
-                await ref
-                    .read(learningSettingsProvider.notifier)
-                    .setAutoExpandCachedAnnotation(value);
-              },
+                if (settings.autoShowAiExplanation) ...[
+                  const Divider(height: 1),
+                  _AiExplanationSubSwitch(
+                    title: l10n.autoShowAiAnalysisToggle,
+                    icon: Icons.psychology_alt_outlined,
+                    value: settings.autoShowAiAnalysis,
+                    onChanged: (value) async {
+                      await ref
+                          .read(learningSettingsProvider.notifier)
+                          .setAutoShowAiAnalysis(value);
+                    },
+                  ),
+                  _AiExplanationSubSwitch(
+                    title: l10n.autoShowAiTranslationToggle,
+                    icon: Icons.translate,
+                    value: settings.autoShowAiTranslation,
+                    onChanged: (value) async {
+                      await ref
+                          .read(learningSettingsProvider.notifier)
+                          .setAutoShowAiTranslation(value);
+                    },
+                  ),
+                  _AiExplanationSubSwitch(
+                    title: l10n.autoShowAiSenseGroupsToggle,
+                    icon: Icons.account_tree_outlined,
+                    value: settings.autoShowAiSenseGroups,
+                    onChanged: (value) async {
+                      await ref
+                          .read(learningSettingsProvider.notifier)
+                          .setAutoShowAiSenseGroups(value);
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.m),
@@ -200,7 +240,125 @@ class LearningSettingsScreen extends ConsumerWidget {
               },
             ),
           ),
+          const SizedBox(height: AppSpacing.m),
+          Card(
+            child: SwitchListTile(
+              secondary: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.bookmark_added_rounded,
+                  size: 20,
+                  color: colorScheme.primary,
+                ),
+              ),
+              title: Text(l10n.autoSaveOnUnclearToggle),
+              subtitle: Text(
+                l10n.autoSaveOnUnclearSubtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              value: settings.autoSaveOnUnclear,
+              onChanged: (value) async {
+                await ref
+                    .read(learningSettingsProvider.notifier)
+                    .setAutoSaveOnUnclear(value);
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.m),
+          // 新手引导：没有开关，引导中点「跳过」即关闭；这里只提供整行可点的「重置」。
+          Card(
+            child: ListTile(
+              leading: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.school_outlined,
+                  size: 20,
+                  color: colorScheme.primary,
+                ),
+              ),
+              title: Text(l10n.resetNewUserGuide),
+              onTap: () => _resetGuide(context, ref, l10n),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// 重置新手引导：重新开启引导并清空所有 flow 的已看状态。
+  Future<void> _resetGuide(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    await ref.read(guideControllerProvider.notifier).resetAll();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.resetNewUserGuideDone)));
+  }
+}
+
+class _AiExplanationSubSwitch extends StatelessWidget {
+  const _AiExplanationSubSwitch({
+    required this.title,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final IconData icon;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: AppSpacing.xl + AppSpacing.m,
+          right: AppSpacing.l,
+        ),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(icon, size: 15, color: colorScheme.primary),
+              ),
+              const SizedBox(width: AppSpacing.s),
+              Expanded(child: Text(title, style: theme.textTheme.bodyMedium)),
+              Transform.scale(
+                scale: 0.88,
+                alignment: Alignment.centerRight,
+                child: Switch(value: value, onChanged: onChanged),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

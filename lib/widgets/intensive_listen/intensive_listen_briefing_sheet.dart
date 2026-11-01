@@ -10,10 +10,13 @@ import '../common/pause_choice_dropdown.dart';
 import '../common/setting_labeled_row.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/intensive_listen_settings.dart';
+import '../../models/study_stage.dart';
 import '../../models/stage_settings_overrides.dart' show BriefingPauseChoice;
 import '../../theme/app_theme.dart';
 import '../../utils/playback_speed.dart';
 import '../common/briefing_action_row.dart';
+import '../common/learning_briefing_sheet_content.dart';
+import '../study/study_stage_visuals.dart';
 
 /// 显示精听简报底部弹窗
 ///
@@ -111,14 +114,9 @@ class _IntensiveListenBriefingSheetState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final visual = studyStageVisual(StudyStage.intensiveListen, l10n);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.l,
-        AppSpacing.l,
-        AppSpacing.l,
-        AppSpacing.xl,
-      ),
+    return LearningBriefingSheetContent(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -133,8 +131,12 @@ class _IntensiveListenBriefingSheetState
           ),
           const SizedBox(height: AppSpacing.l),
 
-          // 耳机图标
-          Icon(Icons.hearing, size: 56, color: theme.colorScheme.primary),
+          // 与学习任务列表共用阶段图标和颜色。
+          Icon(
+            visual.icon,
+            size: 56,
+            color: visual.iconColor ?? theme.colorScheme.primary,
+          ),
           const SizedBox(height: AppSpacing.m),
 
           // 标题

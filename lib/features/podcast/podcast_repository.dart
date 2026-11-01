@@ -1,6 +1,6 @@
 /// Podcast Repository
 ///
-/// 负责：创建 podcast 合集、刷新 Feed（10 分钟节流 + inflight 合并）、
+/// 负责：创建 podcast 合集、刷新 Feed（60 分钟节流 + inflight 合并）、
 /// guid 去重入库。不触发字幕 API，由用户手动触发。
 library;
 
@@ -25,8 +25,8 @@ import 'podcast_url_resolver.dart';
 
 part 'podcast_repository.g.dart';
 
-/// 10 分钟节流阈值
-const _refreshThrottleMinutes = 10;
+/// 已订阅播客 Feed 的 60 分钟节流阈值。
+const _refreshThrottleMinutes = 60;
 
 /// 重复订阅同一播客时抛出，携带已有合集名供 UI 提示。
 class PodcastAlreadySubscribedException implements Exception {
@@ -71,9 +71,19 @@ class PodcastRepository {
 
   /// 通过用户输入的 URL 创建 podcast 合集并完成首次 Feed 拉取。
   ///
+  /// [knownFeedUrl] 用于 Apple 搜索/精选结果已直接拿到 RSS 的场景：
+  /// 原始 [inputUrl] 仍保存为来源链接（通常是 Apple Podcasts），RSS 拉取
+  /// 直接使用 [knownFeedUrl]，避免重复 iTunes lookup。
+  ///
   /// 成功后合集和音频条目（占位，未下载）已入库。
-  Future<Collection> createAndFetch(String inputUrl) async {
-    final feedUrl = await _urlResolver.resolve(inputUrl);
+  Future<Collection> createAndFetch(
+    String inputUrl, {
+    String? knownFeedUrl,
+  }) async {
+    final trimmedKnownFeed = knownFeedUrl?.trim();
+    final feedUrl = trimmedKnownFeed != null && trimmedKnownFeed.isNotEmpty
+        ? trimmedKnownFeed
+        : await _urlResolver.resolve(inputUrl);
 
     // 判重：同一 Feed 已订阅则拒绝创建，提示已有合集名
     final existing = _ref
@@ -116,7 +126,7 @@ class PodcastRepository {
 
   /// 刷新 podcast 合集的 Feed，写入新 episode。
   ///
-  /// [force] = true 跳过 10 分钟节流。
+  /// [force] = true 跳过 60 分钟节流。
   /// 同一合集若已有进行中的刷新，直接返回同一个 Future（inflight 合并）。
   Future<void> refresh(String collectionId, {bool force = false}) {
     final collections = _ref.read(collectionListProvider).rawCollections;
@@ -177,6 +187,10 @@ class PodcastRepository {
         podcastLastRefreshedAt: refreshedAt,
         clearPodcastLastRefreshError: true,
         podcastMetaJson: jsonEncode(result.meta.toJson()),
+        // 描述随刷新写回：订阅时的 description 可能是旧版清洗逻辑生成（段落被
+        // 压成空格），刷新后用最新 parser 结果覆盖，保持与 podcastMetaJson 同源。
+        // meta 无描述时保留原值，避免被清空。
+        description: result.meta.description ?? collection.description,
         coverUrl: result.meta.imageUrl ?? collection.coverUrl,
         podcastFeedUrl: feed.url,
       );
@@ -201,7 +215,7 @@ class PodcastRepository {
       );
       await _ref
           .read(collectionListProvider.notifier)
-          .updatePodcastCollection(failed);
+          .updatePodcastCollection(failed, touchUpdatedAt: false);
       AppLogger.log(
         'PodcastRefresh',
         'load feed failed collectionId=${collection.id} '
@@ -279,21 +293,36 @@ class PodcastRepository {
     final audioLib = _ref.read(audioLibraryProvider.notifier);
     final collList = _ref.read(collectionListProvider.notifier);
 
-    // 获取该合集已有的 guid 集合（避免重复）
+    // 获取该合集已有条目（按 guid 索引）：用于去重，并为未下载的老单集补写字幕地址。
     final existingItems = _ref.read(audioLibraryProvider).audioItems;
     final collectionAudioIds = _ref
         .read(collectionListProvider)
         .getAudioIds(collectionId)
         .toSet();
-    final existingGuids = existingItems
-        .where((item) => collectionAudioIds.contains(item.id))
-        .map((item) => item.podcastEpisodeGuid)
-        .whereType<String>()
-        .toSet();
+    final existingByGuid = <String, AudioItem>{
+      for (final item in existingItems)
+        if (collectionAudioIds.contains(item.id) &&
+            item.podcastEpisodeGuid != null)
+          item.podcastEpisodeGuid!: item,
+    };
 
     final newItems = <AudioItem>[];
     for (final episode in episodes) {
-      if (existingGuids.contains(episode.guid)) continue;
+      final existing = existingByGuid[episode.guid];
+      if (existing != null) {
+        // 老单集只补写字幕地址：未下载音频、且 feed 现在提供了字幕。不触发下载。
+        if (existing.audioPath == null &&
+            existing.podcastTranscriptUrl == null &&
+            episode.transcriptUrl != null) {
+          await audioLib.updateAudioItem(
+            existing.copyWith(
+              podcastTranscriptUrl: episode.transcriptUrl,
+              podcastTranscriptFormat: episode.transcriptFormat,
+            ),
+          );
+        }
+        continue;
+      }
 
       final now = DateTime.now();
       final item = AudioItem(
@@ -306,9 +335,11 @@ class PodcastRepository {
         podcastEpisodeGuid: episode.guid,
         podcastEnclosureUrl: episode.enclosureUrl,
         podcastEnclosureType: episode.enclosureType,
-        podcastDescription: episode.description,
+        description: episode.description,
         podcastImageUrl: episode.imageUrl,
         podcastLink: episode.link,
+        podcastTranscriptUrl: episode.transcriptUrl,
+        podcastTranscriptFormat: episode.transcriptFormat,
       );
 
       newItems.add(item);

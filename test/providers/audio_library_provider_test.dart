@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,119 @@ import 'package:echo_loop/utils/app_data_dir.dart';
 import '../database/dao_test.dart';
 import '../helpers/mock_providers.dart';
 
+class _BackfillTestAudioLibrary extends AudioLibrary {
+  _BackfillTestAudioLibrary(this.initialState);
+
+  final AudioLibraryState initialState;
+  int updateCount = 0;
+
+  @override
+  AudioLibraryState build() => initialState;
+
+  void replaceItem(AudioItem replacement) {
+    state = state.copyWith(
+      audioItems: [
+        for (final item in state.audioItems)
+          if (item.id == replacement.id) replacement else item,
+      ],
+    );
+  }
+
+  @override
+  Future<void> updateAudioItem(AudioItem updatedItem) async {
+    updateCount++;
+    replaceItem(updatedItem);
+  }
+}
+
 void main() {
+  group('AudioLibrary.backfillDurations', () {
+    test('回填旧视频的缺失时长，并跳过已有时长条目', () async {
+      late _BackfillTestAudioLibrary library;
+      final missing = createTestAudioItem(
+        id: 'missing-video-duration',
+        audioPath: 'videos/lesson.mkv',
+        transcriptPath: null,
+        totalDuration: 0,
+      );
+      final existing = createTestAudioItem(
+        id: 'existing-video-duration',
+        audioPath: 'videos/known.mp4',
+        transcriptPath: null,
+        totalDuration: 46,
+      );
+      final probedPaths = <String>[];
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => library = _BackfillTestAudioLibrary(
+              AudioLibraryState(audioItems: [missing, existing]),
+            ),
+          ),
+          mediaDurationSecondsReaderProvider.overrideWith(
+            (ref) => (relativePath, {traceId}) async {
+              probedPaths.add(relativePath);
+              return 83;
+            },
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(audioLibraryProvider.notifier).backfillDurations();
+
+      expect(probedPaths, ['videos/lesson.mkv']);
+      expect(
+        library.state.audioItems
+            .firstWhere((item) => item.id == missing.id)
+            .totalDuration,
+        83,
+      );
+      expect(library.updateCount, 1);
+    });
+
+    test('探测期间路径已变化时不把旧文件时长写到新条目', () async {
+      final probeStarted = Completer<void>();
+      final probeResult = Completer<int>();
+      late _BackfillTestAudioLibrary library;
+      final missing = createTestAudioItem(
+        id: 'replaced-video',
+        audioPath: 'videos/old.mkv',
+        transcriptPath: null,
+        totalDuration: 0,
+      );
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => library = _BackfillTestAudioLibrary(
+              AudioLibraryState(audioItems: [missing]),
+            ),
+          ),
+          mediaDurationSecondsReaderProvider.overrideWith(
+            (ref) => (relativePath, {traceId}) {
+              probeStarted.complete();
+              return probeResult.future;
+            },
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final backfill = container
+          .read(audioLibraryProvider.notifier)
+          .backfillDurations();
+      await probeStarted.future;
+      library.replaceItem(missing.copyWith(audioPath: 'videos/new.mkv'));
+      probeResult.complete(83);
+      await backfill;
+
+      final current = library.state.audioItems.single;
+      expect(current.audioPath, 'videos/new.mkv');
+      expect(current.totalDuration, 0);
+      expect(library.updateCount, 0);
+    });
+  });
+
   group('AudioLibrary.togglePin', () {
     late ProviderContainer container;
 
@@ -238,7 +351,7 @@ void main() {
           podcastEpisodeGuid: 'guid-1',
           audioSha256: 'sha-x',
           originalAudioSha256: 'orig-x',
-          contentStatus: AudioContentStatus.suspectEmpty,
+          contentStatus: AudioContentStatus.damaged,
         ),
       ]);
 
@@ -256,7 +369,7 @@ void main() {
       expect(it.contentStatus, isNull);
     });
 
-    test('官方：保留 audioSha256（重下定位标识），清空其余文件派生元数据', () async {
+    test('社区：保留 audioSha256（重下定位标识），清空其余文件派生元数据', () async {
       final audioFile = File('${tempDir.path}/audios/official/a.m4a');
       await audioFile.create(recursive: true);
       await audioFile.writeAsString('audio');
@@ -278,7 +391,7 @@ void main() {
       expect(await audioFile.exists(), isFalse);
       final it = container.read(audioLibraryProvider).audioItems.single;
       expect(it.audioPath, isNull);
-      // 官方 sha 保留，供重新下载定位 audios/official/<sha>.m4a
+      // 社区 sha 保留，供重新下载定位 audios/official/<sha>.m4a
       expect(it.audioSha256, 'sha-official');
       expect(it.contentStatus, isNull);
     });
@@ -366,6 +479,62 @@ void main() {
       await notifier.deleteDownloadedAudio('dl-1');
 
       expect(container.read(audioLibraryProvider).audioItems.length, 1);
+    });
+  });
+
+  group('AudioLibrary.checkAudioContent', () {
+    late Directory tempDir;
+    late ProviderContainer container;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('audio_library_check_');
+      appDataDirectoryOverride = tempDir;
+      final db = createTestDatabase();
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          analyticsOverride(),
+          usageOverride(),
+          collectionListProvider.overrideWith(
+            () => TestCollectionList(const CollectionState()),
+          ),
+          tagListProvider.overrideWith(() => TestTagList(const TagState())),
+          learningProgressNotifierProvider.overrideWith(
+            () => TestLearningProgressNotifier(const LearningProgressState()),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await db.close();
+      });
+    });
+
+    tearDown(() async {
+      appDataDirectoryOverride = null;
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('视频条目直接早退，不写入 contentStatus', () async {
+      final notifier = container.read(audioLibraryProvider.notifier);
+      await notifier.addAudioItems([
+        createTestAudioItem(
+          id: 'v-1',
+          name: 'video',
+          audioPath: 'videos/clip.mp4',
+        ),
+      ]);
+
+      await notifier.checkAudioContent('v-1');
+
+      final it = container
+          .read(audioLibraryProvider)
+          .audioItems
+          .singleWhere((e) => e.id == 'v-1');
+      expect(it.isVideo, isTrue);
+      expect(it.contentStatus, isNull);
     });
   });
 }

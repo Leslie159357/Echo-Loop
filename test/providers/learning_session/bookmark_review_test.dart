@@ -1,351 +1,696 @@
-// BookmarkReview 单元测试。
-// 测试 BookmarkSentence 数据类和 ReviewDifficultPracticeState 在收藏复习场景下的行为。
-// Provider 的播放逻辑依赖 AudioEngine，集成测试在 integration_test 中覆盖。
 import 'dart:async';
+import 'dart:io';
 
-import 'package:drift/native.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/database/app_database.dart' as db;
-import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/database/daos/bookmark_dao.dart';
-import 'package:echo_loop/models/bookmark_sentence.dart';
-import 'package:echo_loop/models/audio_engine_state.dart';
-import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/features/memory_scheduler/domain/memory_rating.dart';
+import 'package:echo_loop/features/memory_scheduler/config/memory_profiles.dart';
+import 'package:echo_loop/features/memory_scheduler/domain/memory_namespaces.dart';
+import 'package:echo_loop/features/memory_scheduler/domain/memory_scheduler_commands.dart';
+import 'package:echo_loop/features/memory_scheduler/domain/memory_subject_ref.dart';
+import 'package:echo_loop/features/memory_scheduler/providers/memory_scheduler_providers.dart';
+import 'package:echo_loop/models/favorite_review_settings.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/audio_engine/foreground_audio_engine_provider.dart';
-import 'package:echo_loop/providers/blind_flow/blind_practice_flow_phase.dart';
-import 'package:echo_loop/providers/learned_vocabulary_tracker_provider.dart';
+import 'package:echo_loop/providers/favorite_review_settings_provider.dart';
 import 'package:echo_loop/providers/learning_session/bookmark_review_provider.dart';
-import 'package:echo_loop/providers/learning_session/review_difficult_practice_provider.dart';
-import 'package:echo_loop/providers/study_stats_provider.dart';
-import 'package:echo_loop/services/learned_vocabulary_tracker.dart';
+import 'package:echo_loop/providers/short_audio_player_provider.dart';
+import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
+import 'package:echo_loop/utils/app_data_dir.dart' as app_data_dir;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/native.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 
 import '../../helpers/mock_providers.dart';
 
-class _ReplayBookmarkAudioEngine extends TestForegroundAudioEngine {
-  int _sessionId = 0;
+class _TestBookmarkDao implements BookmarkDao {
+  _TestBookmarkDao({this.fail = false});
+  final bool fail;
+  final removed = <(String, int)>[];
 
-  _ReplayBookmarkAudioEngine()
-    : super(
-        initialState: const AudioEngineState(
-          sessionId: 0,
-          currentAudioId: 'audio-1',
+  @override
+  Future<void> removeBookmark(String audioItemId, int sentenceIndex) async {
+    if (fail) throw StateError('failed');
+    removed.add((audioItemId, sentenceIndex));
+  }
+
+  @override
+  Future<void> removeBookmarks(
+    String audioItemId,
+    Set<int> sentenceIndices,
+  ) async {
+    if (fail) throw StateError('failed');
+    for (final sentenceIndex in sentenceIndices) {
+      removed.add((audioItemId, sentenceIndex));
+    }
+  }
+
+  @override
+  Future<db.Bookmark?> getByAudioAndSentence(
+    String audioItemId,
+    int sentenceIndex,
+  ) async => db.Bookmark(
+    id: sentenceIndex,
+    audioItemId: audioItemId,
+    memorySubjectId: 'test-subject-$sentenceIndex',
+    sentenceIndex: sentenceIndex,
+    sentenceText: 'Sentence $sentenceIndex',
+    startTime: sentenceIndex.toDouble(),
+    endTime: sentenceIndex + 1.0,
+    createdAt: DateTime(2026),
+    updatedAt: DateTime(2026),
+    syncStatus: 0,
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => Future<void>.value();
+}
+
+class _FakeShortAudioPlayer extends LocalAudioClipPlayer {
+  _FakeShortAudioPlayer() : super(backend: UnavailableAudioClipPlayerBackend());
+
+  int stops = 0;
+  int rangePlays = 0;
+  final paths = <String>[];
+  final ranges = <(Duration, Duration)>[];
+  Completer<AudioPlaybackResult>? pendingRangePlay;
+  final _rangePlaybackStartWaiters = <Completer<void>>[];
+  int _unobservedRangePlaybackStarts = 0;
+  String? _playingKey;
+
+  @override
+  LocalAudioClipPlaybackState get state =>
+      LocalAudioClipPlaybackState(playingKey: _playingKey);
+
+  @override
+  Future<AudioPlaybackResult> playRangeFile(
+    String filePath, {
+    required Duration start,
+    required Duration end,
+    String? playbackKey,
+  }) {
+    rangePlays++;
+    paths.add(filePath);
+    ranges.add((start, end));
+    _playingKey = playbackKey;
+    if (_rangePlaybackStartWaiters.isNotEmpty) {
+      _rangePlaybackStartWaiters.removeAt(0).complete();
+    } else {
+      _unobservedRangePlaybackStarts++;
+    }
+    return (pendingRangePlay ??= Completer<AudioPlaybackResult>()).future;
+  }
+
+  Future<void> waitForRangePlaybackStart() {
+    if (_unobservedRangePlaybackStarts > 0) {
+      _unobservedRangePlaybackStarts--;
+      return Future<void>.value();
+    }
+    final waiter = Completer<void>();
+    _rangePlaybackStartWaiters.add(waiter);
+    return waiter.future;
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    _playingKey = null;
+    pendingRangePlay?.complete(AudioPlaybackResult.cancelled);
+    pendingRangePlay = null;
+  }
+
+  void completeRange(AudioPlaybackResult result) {
+    _playingKey = null;
+    pendingRangePlay?.complete(result);
+    pendingRangePlay = null;
+  }
+}
+
+class _RecordingForegroundAudioEngine extends TestForegroundAudioEngine {
+  int stopCalls = 0;
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    await super.stop();
+  }
+}
+
+class _TestFavoriteReviewSettings extends FavoriteReviewSettingsNotifier {
+  _TestFavoriteReviewSettings({
+    required this.autoPlayFront,
+    required this.autoPlayBack,
+  });
+
+  final bool autoPlayFront;
+  final bool autoPlayBack;
+
+  @override
+  FavoriteReviewSettings build() => FavoriteReviewSettings(
+    autoPlayFront: autoPlayFront,
+    autoPlayBack: autoPlayBack,
+  );
+}
+
+BookmarkWithAudio _bookmark(int id) => BookmarkWithAudio(
+  bookmark: db.Bookmark(
+    id: id,
+    audioItemId: 'audio-1',
+    memorySubjectId: 'test-subject-$id',
+    sentenceIndex: id,
+    sentenceText: 'Sentence $id',
+    startTime: id.toDouble(),
+    endTime: id + 1.0,
+    createdAt: DateTime(2026, 1, 20 - id),
+    updatedAt: DateTime(2026, 1, 20 - id),
+    syncStatus: 0,
+  ),
+  audioName: 'Material',
+);
+
+ProviderContainer _container(
+  _TestBookmarkDao dao,
+  db.AppDatabase database, {
+  required _FakeShortAudioPlayer shortAudioPlayer,
+  bool autoPlayFront = false,
+  bool autoPlayBack = false,
+}) => ProviderContainer(
+  overrides: [
+    appDatabaseProvider.overrideWithValue(database),
+    bookmarkDaoProvider.overrideWithValue(dao),
+    audioEngineProvider.overrideWith(TestAudioEngine.new),
+    foregroundAudioEngineProvider.overrideWith(
+      _RecordingForegroundAudioEngine.new,
+    ),
+    shortAudioPlayerProvider.overrideWithValue(shortAudioPlayer),
+    favoriteReviewSettingsProvider.overrideWith(
+      () => _TestFavoriteReviewSettings(
+        autoPlayFront: autoPlayFront,
+        autoPlayBack: autoPlayBack,
+      ),
+    ),
+    analyticsOverride(),
+  ],
+);
+
+Future<void> _disposeBookmarkContainer(ProviderContainer container) async {
+  await container.read(bookmarkReviewProvider.notifier).disposeSession();
+  container.dispose();
+}
+
+({
+  ProviderContainer container,
+  db.AppDatabase database,
+  _FakeShortAudioPlayer player,
+})
+_testScope(
+  _TestBookmarkDao dao, {
+  bool autoPlayFront = false,
+  bool autoPlayBack = false,
+}) {
+  final database = db.AppDatabase(NativeDatabase.memory());
+  final player = _FakeShortAudioPlayer();
+  return (
+    container: _container(
+      dao,
+      database,
+      shortAudioPlayer: player,
+      autoPlayFront: autoPlayFront,
+      autoPlayBack: autoPlayBack,
+    ),
+    database: database,
+    player: player,
+  );
+}
+
+Future<void> _addPlayableMedia(db.AppDatabase database) {
+  final now = DateTime.now();
+  return database.audioItemDao.upsert(
+    db.AudioItemsCompanion(
+      id: const Value('audio-1'),
+      name: const Value('Material'),
+      audioPath: const Value('media/test.mp4'),
+      addedDate: Value(now),
+      updatedAt: Value(now),
+    ),
+  );
+}
+
+Future<void> _initializeBookmarkReview(
+  ProviderContainer container,
+  List<BookmarkWithAudio> bookmarks,
+) async {
+  final database = container.read(appDatabaseProvider);
+  await _addPlayableMedia(database);
+  final scheduler = container.read(memorySchedulerProvider);
+  for (final item in bookmarks) {
+    final bookmark = item.bookmark;
+    await database
+        .into(database.bookmarks)
+        .insertOnConflictUpdate(
+          db.BookmarksCompanion.insert(
+            memorySubjectId: Value(bookmark.memorySubjectId),
+            audioItemId: bookmark.audioItemId,
+            sentenceIndex: bookmark.sentenceIndex,
+            sentenceText: bookmark.sentenceText,
+            startTime: bookmark.startTime,
+            endTime: bookmark.endTime,
+            createdAt: bookmark.createdAt,
+            updatedAt: bookmark.updatedAt,
+            deletedAt: Value(bookmark.deletedAt),
+          ),
+        );
+    final subjectId = bookmark.memorySubjectId;
+    if (subjectId == null || subjectId.trim().isEmpty) continue;
+    final subject = MemorySubjectRef(
+      namespace: kSavedSentenceNamespace,
+      subjectId: subjectId,
+    );
+    if (await scheduler.getSchedule(subject) == null) {
+      await scheduler.ensureSchedule(
+        EnsureMemoryScheduleCommand(
+          subject: subject,
+          profile: kFsrsDefaultProfileRef,
+          occurredAt: DateTime.now(),
         ),
       );
-
-  @override
-  int newSession() {
-    _sessionId += 1;
-    return _sessionId;
+    }
   }
-
-  @override
-  bool isActiveSession(int id) => id == _sessionId;
-
-  @override
-  Future<void> playClipOnce(Sentence sentence, int sessionId) async {
-    if (!isActiveSession(sessionId)) return;
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-  }
+  await container.read(bookmarkReviewProvider.notifier).initialize();
 }
 
-class _TestStudyStatsNotifier extends StudyStatsNotifier {
-  @override
-  Future<StudyStats> build() async => const StudyStats();
-}
+late Directory _testAppDataDirectory;
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    _testAppDataDirectory = await Directory.systemTemp.createTemp(
+      'echo_loop_bookmark_review_test-',
+    );
+    app_data_dir.appDataDirectoryOverride = _testAppDataDirectory;
+  });
 
-  group('BookmarkSentence', () {
-    test('从 BookmarkWithAudio 正确转换', () {
-      // 模拟 BookmarkWithAudio → BookmarkSentence 转换逻辑
-      const startTime = 1.5; // 秒
-      const endTime = 3.2; // 秒
-      const sentenceText = 'Hello world';
-      const audioItemId = 'audio-1';
-      const audioName = 'Test Audio';
-      const sentenceIndex = 3;
+  tearDownAll(() async {
+    app_data_dir.appDataDirectoryOverride = null;
+    if (_testAppDataDirectory.existsSync()) {
+      await _testAppDataDirectory.delete(recursive: true);
+    }
+  });
 
-      final bookmarkSentence = BookmarkSentence(
-        sentence: Sentence(
-          index: sentenceIndex,
-          text: sentenceText,
-          startTime: Duration(milliseconds: (startTime * 1000).round()),
-          endTime: Duration(milliseconds: (endTime * 1000).round()),
-          isBookmarked: true,
-        ),
-        audioItemId: audioItemId,
-        audioName: audioName,
-        originalSentenceIndex: sentenceIndex,
-      );
+  test('initialize filters invalid bookmarks and starts on front', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    final database = scope.database;
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await database.close();
+    });
+    final invalid = BookmarkWithAudio(
+      bookmark: _bookmark(9).bookmark.copyWith(endTime: 9),
+      audioName: 'Material',
+    );
+    await _initializeBookmarkReview(container, [_bookmark(1), invalid]);
+    final state = container.read(bookmarkReviewProvider);
+    expect(state.initialTotal, 1);
+    expect(state.face, BookmarkReviewFace.front);
+    expect(state.currentCard?.sentence.text, 'Sentence 1');
+  });
 
-      expect(bookmarkSentence.sentence.text, sentenceText);
+  test(
+    'changing order during review selects the new first unreviewed card',
+    () async {
+      final scope = _testScope(_TestBookmarkDao());
+      final container = scope.container;
+      addTearDown(() async {
+        await _disposeBookmarkContainer(container);
+        await scope.database.close();
+      });
+      await _initializeBookmarkReview(container, [
+        _bookmark(3),
+        _bookmark(2),
+        _bookmark(1),
+      ]);
       expect(
-        bookmarkSentence.sentence.startTime,
-        const Duration(milliseconds: 1500),
-      );
-      expect(
-        bookmarkSentence.sentence.endTime,
-        const Duration(milliseconds: 3200),
-      );
-      expect(bookmarkSentence.audioItemId, audioItemId);
-      expect(bookmarkSentence.audioName, audioName);
-      expect(bookmarkSentence.originalSentenceIndex, sentenceIndex);
-      expect(bookmarkSentence.sentence.isBookmarked, true);
-    });
-
-    test('句子时长计算正确', () {
-      final bookmarkSentence = BookmarkSentence(
-        sentence: Sentence(
-          index: 0,
-          text: 'Test',
-          startTime: const Duration(seconds: 1),
-          endTime: const Duration(seconds: 4),
-        ),
-        audioItemId: 'audio-1',
-        audioName: 'Audio 1',
-        originalSentenceIndex: 0,
+        container.read(bookmarkReviewProvider).currentCard?.sentence.index,
+        3,
       );
 
-      expect(bookmarkSentence.sentence.duration, const Duration(seconds: 3));
-    });
-  });
-
-  group('ReviewDifficultPracticeState（收藏复习场景）', () {
-    test('初始化收藏复习 — 状态正确', () {
-      // 模拟 initialize 后的状态
-      const state = ReviewDifficultPracticeState(
-        currentSentenceIndex: 0,
-        totalSentences: 5,
-      );
-
-      expect(state.currentSentenceIndex, 0);
-      expect(state.totalSentences, 5);
-      expect(state.isPlaying, false);
-    });
-
-    test('取消收藏后列表更新 — 移除中间句子', () {
-      const state = ReviewDifficultPracticeState(
-        currentSentenceIndex: 2,
-        totalSentences: 5,
-      );
-
-      // 模拟 removeBookmark 后的状态（移除索引 2 后，索引不变）
-      final afterRemove = state.copyWith(
-        currentSentenceIndex: 2,
-        totalSentences: 4,
-        isPlaying: false,
-        isAnnotationMode: false,
-        isTextRevealed: false,
-        isPauseBetweenPlays: false,
-        isPauseBetweenSentences: false,
-        currentPlayCount: 1,
-      );
-
-      expect(afterRemove.totalSentences, 4);
-      expect(afterRemove.currentSentenceIndex, 2);
-    });
-
-    test('取消收藏后列表更新 — 移除最后一句回退索引', () {
-      const state = ReviewDifficultPracticeState(
-        currentSentenceIndex: 4,
-        totalSentences: 5,
-      );
-
-      // 移除最后一句后，索引回退
-      final afterRemove = state.copyWith(
-        currentSentenceIndex: 3,
-        totalSentences: 4,
-      );
-
-      expect(afterRemove.currentSentenceIndex, 3);
-      expect(afterRemove.totalSentences, 4);
-    });
-
-    test('取消收藏后列表为空 — 停止播放', () {
-      const state = ReviewDifficultPracticeState(
-        currentSentenceIndex: 0,
-        totalSentences: 1,
-      );
-
-      final afterRemove = state.copyWith(isPlaying: false, totalSentences: 0);
-
-      expect(afterRemove.isPlaying, false);
-      expect(afterRemove.totalSentences, 0);
-    });
-
-    test('重置到第一句（再来一遍）', () {
-      // 模拟 resetToStart 后的状态
-      const reset = ReviewDifficultPracticeState(
-        currentSentenceIndex: 0,
-        totalSentences: 5,
-      );
-
-      expect(reset.currentSentenceIndex, 0);
-      expect(reset.totalSentences, 5);
-    });
-  });
-
-  group('按音频分组乱序逻辑', () {
-    test('同一音频的句子保持 sentenceIndex 顺序', () {
-      // 模拟 3 个音频的书签
-      final sentences = [
-        _makeBookmarkSentence('audio-1', 'Audio 1', 0),
-        _makeBookmarkSentence('audio-1', 'Audio 1', 2),
-        _makeBookmarkSentence('audio-1', 'Audio 1', 5),
-        _makeBookmarkSentence('audio-2', 'Audio 2', 1),
-        _makeBookmarkSentence('audio-2', 'Audio 2', 3),
-        _makeBookmarkSentence('audio-3', 'Audio 3', 0),
-      ];
-
-      // 按音频分组
-      final grouped = <String, List<BookmarkSentence>>{};
-      for (final s in sentences) {
-        (grouped[s.audioItemId] ??= []).add(s);
-      }
-
-      // 验证每组内部顺序正确
-      for (final group in grouped.values) {
-        for (int i = 1; i < group.length; i++) {
-          expect(
-            group[i].originalSentenceIndex >=
-                group[i - 1].originalSentenceIndex,
-            true,
-            reason: '组内句子应按 sentenceIndex 顺序排列',
-          );
+      final reordered = Completer<void>();
+      final subscription = container.listen(bookmarkReviewProvider, (_, next) {
+        if (next.currentCard?.sentence.index == 1 && !reordered.isCompleted) {
+          reordered.complete();
         }
-      }
+      });
+      addTearDown(subscription.close);
 
-      expect(grouped.length, 3);
-      expect(grouped['audio-1']!.length, 3);
-      expect(grouped['audio-2']!.length, 2);
-      expect(grouped['audio-3']!.length, 1);
-    });
-
-    test('组间乱序后组内顺序不变', () {
-      final sentences = [
-        _makeBookmarkSentence('audio-A', 'A', 0),
-        _makeBookmarkSentence('audio-A', 'A', 1),
-        _makeBookmarkSentence('audio-B', 'B', 0),
-        _makeBookmarkSentence('audio-B', 'B', 1),
-      ];
-
-      final grouped = <String, List<BookmarkSentence>>{};
-      for (final s in sentences) {
-        (grouped[s.audioItemId] ??= []).add(s);
-      }
-
-      // 乱序音频组
-      final audioIds = grouped.keys.toList()..shuffle();
-      final result = <BookmarkSentence>[];
-      for (final id in audioIds) {
-        result.addAll(grouped[id]!);
-      }
-
-      // 验证组内顺序
-      String? currentAudioId;
-      int lastIndex = -1;
-      for (final s in result) {
-        if (s.audioItemId != currentAudioId) {
-          currentAudioId = s.audioItemId;
-          lastIndex = -1;
-        }
-        expect(s.originalSentenceIndex > lastIndex, true, reason: '组内顺序应递增');
-        lastIndex = s.originalSentenceIndex;
-      }
-    });
-  });
-
-  group('BookmarkReview provider', () {
-    test('dispose 后重新 initialize，盲听仍可再次播放', () async {
-      final testDb = db.AppDatabase(
-        NativeDatabase.memory(
-          setup: (database) => database.execute('PRAGMA foreign_keys = ON'),
-        ),
-      );
-      final container = ProviderContainer(
-        overrides: [
-          appDatabaseProvider.overrideWithValue(testDb),
-          foregroundAudioEngineProvider.overrideWith(
-            () => _ReplayBookmarkAudioEngine(),
-          ),
-          audioEngineProvider.overrideWith(TestAudioEngine.new),
-          learnedVocabularyTrackerProvider.overrideWithValue(
-            LearnedVocabularyTracker(
-              persistWordForms: (_) async {},
-              onStatsUpdated: () {},
+      await container
+          .read(favoriteReviewSettingsProvider.notifier)
+          .update(
+            const FavoriteReviewSettings(
+              autoPlayFront: false,
+              autoPlayBack: false,
+              order: FavoriteReviewOrder.dueAt,
             ),
-          ),
-          studyStatsNotifierProvider.overrideWith(_TestStudyStatsNotifier.new),
-          analyticsOverride(),
-          ...studyTimeOverrides(),
-        ],
-      );
-      addTearDown(testDb.close);
-      addTearDown(container.dispose);
-
-      container.read(bookmarkReviewProvider);
-      final notifier = container.read(bookmarkReviewProvider.notifier);
-      final bookmarks = [
-        BookmarkWithAudio(
-          bookmark: db.Bookmark(
-            id: 1,
-            audioItemId: 'audio-1',
-            sentenceIndex: 0,
-            sentenceText: 'First sentence',
-            startTime: 0,
-            endTime: 1,
-            createdAt: DateTime(2026, 4, 3, 9),
-            updatedAt: DateTime(2026, 4, 3, 9),
-            syncStatus: 0,
-          ),
-          audioName: 'Audio 1',
-        ),
-      ];
-
-      notifier.initialize(bookmarks, getAudioItemById: (_) async => null);
-      unawaited(notifier.startPlaying());
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      expect(
-        container.read(bookmarkReviewProvider).blindFlowState?.phase,
-        isA<BlindPlayingPrompt>(),
-      );
-
-      notifier.disposePlayer();
-
-      notifier.initialize(bookmarks, getAudioItemById: (_) async => null);
-      unawaited(notifier.startPlaying());
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+          );
+      await reordered.future.timeout(const Duration(seconds: 3));
 
       final state = container.read(bookmarkReviewProvider);
-      expect(state.totalSentences, 1);
-      expect(state.blindFlowState?.phase, isA<BlindPlayingPrompt>());
-      expect(state.isPlaying, isTrue);
-
-      notifier.disposePlayer();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
-  });
-}
-
-/// 辅助方法：创建 BookmarkSentence
-BookmarkSentence _makeBookmarkSentence(
-  String audioId,
-  String audioName,
-  int sentenceIndex,
-) {
-  return BookmarkSentence(
-    sentence: Sentence(
-      index: sentenceIndex,
-      text: 'Sentence $sentenceIndex from $audioName',
-      startTime: Duration(seconds: sentenceIndex * 5),
-      endTime: Duration(seconds: sentenceIndex * 5 + 3),
-      isBookmarked: true,
-    ),
-    audioItemId: audioId,
-    audioName: audioName,
-    originalSentenceIndex: sentenceIndex,
+      expect(state.currentCard?.sentence.index, 1);
+      expect(state.reviewedCount, 0);
+      expect(state.remainingCount, 3);
+    },
   );
+
+  test('reveal stops playback and exposes placeholder back', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await scope.database.close();
+    });
+    final notifier = container.read(bookmarkReviewProvider.notifier);
+    await _addPlayableMedia(scope.database);
+    await _initializeBookmarkReview(container, [_bookmark(1)]);
+    await notifier.revealBack();
+    expect(
+      container.read(bookmarkReviewProvider).face,
+      BookmarkReviewFace.back,
+    );
+    expect(scope.player.stops, greaterThan(0));
+  });
+
+  test(
+    'does not stop foreground engine when no legacy playback is active',
+    () async {
+      final scope = _testScope(_TestBookmarkDao());
+      final container = scope.container;
+      addTearDown(() async {
+        await _disposeBookmarkContainer(container);
+        await scope.database.close();
+      });
+      final foreground =
+          container.read(foregroundAudioEngineProvider.notifier)
+              as _RecordingForegroundAudioEngine;
+      final notifier = container.read(bookmarkReviewProvider.notifier);
+
+      await _initializeBookmarkReview(container, [_bookmark(1)]);
+      await notifier.revealBack();
+      await notifier.interruptPlayback();
+
+      expect(foreground.stopCalls, 0);
+    },
+  );
+
+  test('stops foreground engine when legacy playback is active', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await scope.database.close();
+    });
+    final foreground =
+        container.read(foregroundAudioEngineProvider.notifier)
+            as _RecordingForegroundAudioEngine;
+    final notifier = container.read(bookmarkReviewProvider.notifier);
+
+    foreground.isPlaying = true;
+    await notifier.interruptPlayback();
+
+    expect(foreground.stopCalls, 1);
+    expect(foreground.isPlaying, isFalse);
+  });
+
+  test('shared auto-play settings control sentence front and back', () async {
+    final disabled = _testScope(
+      _TestBookmarkDao(),
+      autoPlayFront: false,
+      autoPlayBack: false,
+    );
+    addTearDown(() async {
+      await _disposeBookmarkContainer(disabled.container);
+      await disabled.database.close();
+    });
+    final disabledNotifier = disabled.container.read(
+      bookmarkReviewProvider.notifier,
+    );
+    await _initializeBookmarkReview(disabled.container, [_bookmark(1)]);
+    await disabledNotifier.startCurrentCard();
+    await disabledNotifier.revealBack();
+    expect(disabled.player.rangePlays, 0);
+
+    final enabled = _testScope(
+      _TestBookmarkDao(),
+      autoPlayFront: true,
+      autoPlayBack: true,
+    );
+    addTearDown(() async {
+      await _disposeBookmarkContainer(enabled.container);
+      await enabled.database.close();
+    });
+    final enabledNotifier = enabled.container.read(
+      bookmarkReviewProvider.notifier,
+    );
+    await _addPlayableMedia(enabled.database);
+    await _initializeBookmarkReview(enabled.container, [_bookmark(1)]);
+    unawaited(enabledNotifier.startCurrentCard());
+    await enabled.player.waitForRangePlaybackStart();
+    expect(enabled.player.rangePlays, 1);
+    expect(enabled.player.paths.single, endsWith('media/test.mp4'));
+    expect(enabled.player.ranges.single, (
+      const Duration(seconds: 1),
+      const Duration(seconds: 2),
+    ));
+    await enabledNotifier.interruptPlayback();
+    await enabledNotifier.revealBack();
+    await enabled.player.waitForRangePlaybackStart();
+    expect(enabled.player.rangePlays, 2);
+    await enabledNotifier.interruptPlayback();
+  });
+
+  test('back can play and stop the current sentence', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await scope.database.close();
+    });
+    final notifier = container.read(bookmarkReviewProvider.notifier);
+    await _addPlayableMedia(scope.database);
+    await _initializeBookmarkReview(container, [_bookmark(1)]);
+    await notifier.revealBack();
+
+    final playback = notifier.toggleCurrentPlayback();
+    await scope.player.waitForRangePlaybackStart();
+    expect(scope.player.rangePlays, 1);
+    expect(
+      container.read(bookmarkReviewProvider).playbackState,
+      BookmarkReviewPlaybackState.playing,
+    );
+
+    await notifier.toggleCurrentPlayback();
+    expect(scope.player.stops, greaterThan(0));
+    expect(
+      container.read(bookmarkReviewProvider).playbackState,
+      BookmarkReviewPlaybackState.idle,
+    );
+    await playback;
+  });
+
+  test('completed sentence playback returns to idle', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    addTearDown(() async {
+      await _disposeBookmarkContainer(scope.container);
+      await scope.database.close();
+    });
+    final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+    await _addPlayableMedia(scope.database);
+    await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+    await notifier.revealBack();
+
+    final playback = notifier.toggleCurrentPlayback();
+    await scope.player.waitForRangePlaybackStart();
+    scope.player.completeRange(AudioPlaybackResult.completed);
+    await playback;
+
+    expect(
+      scope.container.read(bookmarkReviewProvider).playbackState,
+      BookmarkReviewPlaybackState.idle,
+    );
+  });
+
+  test('completed sentence playback writes new statistics', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    addTearDown(() async {
+      await _disposeBookmarkContainer(scope.container);
+      await scope.database.close();
+    });
+    final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+    await _addPlayableMedia(scope.database);
+    await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+    await notifier.revealBack();
+
+    final playback = notifier.toggleCurrentPlayback();
+    await scope.player.waitForRangePlaybackStart();
+    scope.player.completeRange(AudioPlaybackResult.completed);
+    await playback;
+    await notifier.disposeSession();
+
+    final record = await scope.database.dailyStudyRecordDao.getByDate(
+      DateTime.now(),
+    );
+    expect(record?.inputWords, 2);
+    expect(record?.inputTimeMilliseconds, 1000);
+    final forms = await scope.database
+        .select(scope.database.learnedWordForms)
+        .get();
+    expect(forms.map((form) => form.wordForm), contains('sentence'));
+  });
+
+  test(
+    'interrupted sentence playback does not write input statistics',
+    () async {
+      final scope = _testScope(_TestBookmarkDao());
+      addTearDown(() async {
+        await _disposeBookmarkContainer(scope.container);
+        await scope.database.close();
+      });
+      final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+      await _addPlayableMedia(scope.database);
+      await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+      await notifier.revealBack();
+
+      final playback = notifier.toggleCurrentPlayback();
+      await scope.player.waitForRangePlaybackStart();
+      await notifier.interruptPlayback();
+      await playback;
+      await notifier.disposeSession();
+
+      final record = await scope.database.dailyStudyRecordDao.getByDate(
+        DateTime.now(),
+      );
+      expect(record?.inputWords ?? 0, 0);
+      expect(record?.inputTimeMilliseconds ?? 0, 0);
+    },
+  );
+
+  test(
+    'rating the last card stops playback before showing completion',
+    () async {
+      final scope = _testScope(_TestBookmarkDao(), autoPlayBack: true);
+      addTearDown(() async {
+        await _disposeBookmarkContainer(scope.container);
+        await scope.database.close();
+      });
+      final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+      await _addPlayableMedia(scope.database);
+      await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+      await notifier.revealBack();
+      await scope.player.waitForRangePlaybackStart();
+      expect(scope.player.pendingRangePlay, isNotNull);
+
+      await notifier.selectRating(MemoryRating.good);
+
+      expect(scope.player.stops, greaterThan(0));
+      expect(scope.container.read(bookmarkReviewProvider).currentCard, isNull);
+      expect(
+        scope.container.read(bookmarkReviewProvider).completionSummary,
+        isNotNull,
+      );
+    },
+  );
+
+  test('failed sentence playback exposes the existing failed state', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    addTearDown(() async {
+      await _disposeBookmarkContainer(scope.container);
+      await scope.database.close();
+    });
+    final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+    await _addPlayableMedia(scope.database);
+    await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+    await notifier.revealBack();
+
+    final playback = notifier.toggleCurrentPlayback();
+    await scope.player.waitForRangePlaybackStart();
+    scope.player.completeRange(AudioPlaybackResult.failed);
+    await playback;
+
+    final state = scope.container.read(bookmarkReviewProvider);
+    expect(state.playbackState, BookmarkReviewPlaybackState.failed);
+    expect(state.mediaError, 'audio_unavailable');
+  });
+
+  test('successful unsave removes current card and advances', () async {
+    final dao = _TestBookmarkDao();
+    final scope = _testScope(dao);
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await scope.database.close();
+    });
+    final notifier = container.read(bookmarkReviewProvider.notifier);
+    await _initializeBookmarkReview(container, [_bookmark(1), _bookmark(2)]);
+    final removed = container.read(bookmarkReviewProvider).currentCard!;
+    await notifier.removeCurrentBookmark();
+    expect(dao.removed, [(removed.audioItemId, removed.originalSentenceIndex)]);
+    expect(container.read(bookmarkReviewProvider).remainingCount, 1);
+    expect(
+      container.read(bookmarkReviewProvider).face,
+      BookmarkReviewFace.front,
+    );
+  });
+
+  test('empty deck creates a zero-stat completion summary', () async {
+    final scope = _testScope(_TestBookmarkDao());
+    addTearDown(() async {
+      await _disposeBookmarkContainer(scope.container);
+      await scope.database.close();
+    });
+
+    await scope.container.read(bookmarkReviewProvider.notifier).initialize();
+
+    final state = scope.container.read(bookmarkReviewProvider);
+    expect(state.currentCard, isNull);
+    expect(state.completionSummary, isNotNull);
+    expect(state.completionSummary?.reviewedCount, 0);
+    expect(state.completionSummary?.ratingCount, 0);
+  });
+
+  test(
+    'unsaving the only sentence shows a zero-stat completion summary',
+    () async {
+      final scope = _testScope(_TestBookmarkDao());
+      addTearDown(() async {
+        await _disposeBookmarkContainer(scope.container);
+        await scope.database.close();
+      });
+      final notifier = scope.container.read(bookmarkReviewProvider.notifier);
+      await _initializeBookmarkReview(scope.container, [_bookmark(1)]);
+
+      await notifier.removeCurrentBookmark();
+
+      final state = scope.container.read(bookmarkReviewProvider);
+      expect(state.currentCard, isNull);
+      expect(state.completionSummary, isNotNull);
+      expect(state.completionSummary?.reviewedCount, 0);
+      expect(state.completionSummary?.ratingCount, 0);
+    },
+  );
+
+  test('failed unsave keeps current card', () async {
+    final scope = _testScope(_TestBookmarkDao(fail: true));
+    final container = scope.container;
+    addTearDown(() async {
+      await _disposeBookmarkContainer(container);
+      await scope.database.close();
+    });
+    final notifier = container.read(bookmarkReviewProvider.notifier);
+    await _initializeBookmarkReview(container, [_bookmark(1)]);
+    await notifier.removeCurrentBookmark();
+    final state = container.read(bookmarkReviewProvider);
+    expect(state.remainingCount, 1);
+    expect(state.removeError, isNotNull);
+    expect(state.isRemoving, isFalse);
+  });
 }

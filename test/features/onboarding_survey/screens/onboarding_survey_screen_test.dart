@@ -11,12 +11,15 @@ import 'package:echo_loop/analytics/analytics_service.dart';
 import 'package:echo_loop/analytics/consent_manager.dart';
 import 'package:echo_loop/analytics/models/event_names.dart';
 import 'package:echo_loop/features/onboarding_survey/data/onboarding_survey_storage.dart';
+import 'package:echo_loop/features/onboarding_survey/data/user_onboarding_sync_service.dart';
 import 'package:echo_loop/features/onboarding_survey/models/onboarding_question.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/user_onboarding_sync_provider.dart';
 import 'package:echo_loop/features/onboarding_survey/screens/onboarding_survey_screen.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/router/app_router.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/features/onboarding_survey/widgets/survey_choice_grid.dart';
 import 'package:echo_loop/features/onboarding_survey/widgets/survey_choice_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,9 +27,6 @@ import '../../../helpers/mock_providers.dart';
 
 class _RecordingAnalyticsChannel implements AnalyticsChannel {
   final List<({String name, Map<String, Object>? params})> events = [];
-
-  @override
-  String get name => 'Recording';
 
   @override
   Future<void> initialize() async {}
@@ -46,7 +46,36 @@ class _RecordingAnalyticsChannel implements AnalyticsChannel {
   Future<void> setUserProperty(String name, String? value) async {}
 
   @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {}
+
+  @override
   Future<void> unregisterSuperProperty(String name) async {}
+}
+
+class _RecordingOnboardingSync implements OnboardingSync {
+  int localAnswersChanged = 0;
+
+  @override
+  Future<void> onAppResumed() async {}
+
+  @override
+  Future<void> onLocalAnswersChanged() async {
+    localAnswersChanged++;
+  }
+
+  @override
+  Future<void> onSessionChanged({required bool isSignedIn}) async {}
+}
+
+class _NoopOnboardingSync implements OnboardingSync {
+  @override
+  Future<void> onAppResumed() async {}
+
+  @override
+  Future<void> onLocalAnswersChanged() async {}
+
+  @override
+  Future<void> onSessionChanged({required bool isSignedIn}) async {}
 }
 
 /// 创建一个最小化的可路由测试 App，承载 onboarding 页 + study 占位页。
@@ -54,6 +83,7 @@ Widget _wrap({
   required SharedPreferences prefs,
   bool initialOnboardingCompleted = false,
   _RecordingAnalyticsChannel? analyticsChannel,
+  OnboardingSync? onboardingSync,
   ThemeMode themeMode = ThemeMode.light,
 }) {
   final router = GoRouter(
@@ -75,6 +105,9 @@ Widget _wrap({
       sharedPreferencesProvider.overrideWithValue(prefs),
       initialOnboardingCompletedProvider.overrideWithValue(
         initialOnboardingCompleted,
+      ),
+      onboardingSyncProvider.overrideWithValue(
+        onboardingSync ?? _NoopOnboardingSync(),
       ),
       if (analyticsChannel == null)
         analyticsOverride()
@@ -110,7 +143,10 @@ void main() {
 
   testWidgets('普通分支：选目标 → 时长 → 渠道 → 方法论页 → 点开始学习', (tester) async {
     final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(_wrap(prefs: prefs));
+    final onboardingSync = _RecordingOnboardingSync();
+    await tester.pumpWidget(
+      _wrap(prefs: prefs, onboardingSync: onboardingSync),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
@@ -131,8 +167,9 @@ void main() {
     // 中文用户应看到中文渠道选项
     expect(find.text('小红书'), findsOneWidget);
     expect(find.text('微信'), findsOneWidget);
-    expect(find.text('抖音'), findsOneWidget);
-    expect(find.text('快手'), findsOneWidget);
+    expect(find.text('短视频'), findsOneWidget);
+    expect(find.text('搜索引擎'), findsOneWidget);
+    expect(find.text('老师 / 学校'), findsOneWidget);
     // 英文渠道不展示
     expect(find.text('Reddit'), findsNothing);
     expect(find.text('Google Play'), findsNothing);
@@ -158,6 +195,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
     expect(find.text('STUDY_PLACEHOLDER'), findsOneWidget);
+    expect(onboardingSync.localAnswersChanged, 1);
 
     final storage = OnboardingSurveyStorage(prefs);
     expect(storage.isCompleted, isTrue);
@@ -206,7 +244,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
     final githubTile = find.ancestor(
       of: find.text('GitHub'),
-      matching: find.byType(SurveyChoiceTile),
+      matching: find.byType(SurveyChoiceGridTile),
     );
     final githubIcon = find.descendant(
       of: githubTile,
@@ -495,30 +533,90 @@ void main() {
     await tester.pumpAndSettle();
 
     // 走到渠道页
-    await tester.tap(find.text('Everyday conversation'));
+    await tester.tap(find.text('Daily conversation'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    await tester.tap(find.text('About 10 min'));
+    await tester.tap(find.text('About 10 minutes'));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
 
     expect(find.text('How did you hear about us?'), findsOneWidget);
-    expect(find.text('App Store'), findsOneWidget);
-    expect(find.text('Google Play'), findsOneWidget);
+    expect(find.text('App Store / Google Play'), findsOneWidget);
     expect(find.text('Reddit'), findsOneWidget);
     expect(find.text('YouTube'), findsOneWidget);
-    expect(find.text('TikTok'), findsOneWidget);
-    expect(find.text('Instagram'), findsOneWidget);
+    expect(find.text('Short videos'), findsOneWidget);
+    expect(find.text('Teacher or school'), findsOneWidget);
     expect(find.text('X / Twitter'), findsOneWidget);
     // 中文渠道不应展示
     expect(find.text('Xiaohongshu'), findsNothing);
     expect(find.text('WeChat'), findsNothing);
-    expect(find.text('Douyin'), findsNothing);
 
     await tester.tap(find.text('Reddit'));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
-    await tester.tap(find.text('Start learning'));
+    await tester.tap(find.text('Start Practicing'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
     final answers = OnboardingSurveyStorage(prefs).loadAnswers();
     expect(answers?.referralSource, equals(OnboardingReferralSource.reddit));
+  });
+
+  testWidgets('其他渠道：不自动跳转，填写补充说明后继续，并随答案与埋点保存', (tester) async {
+    final prefs = await SharedPreferences.getInstance();
+    final analytics = _RecordingAnalyticsChannel();
+    await tester.pumpWidget(_wrap(prefs: prefs, analyticsChannel: analytics));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('工作沟通'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    await tester.tap(find.text('不固定'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 600));
+
+    await tester.ensureVisible(find.text('其他'));
+    await tester.tap(find.text('其他'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 800));
+    // 选择"其他"后停留在渠道页，等待补充说明或点击继续
+    expect(find.text('你是从哪里知道我们的？'), findsOneWidget);
+
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), '  同事推荐的公众号  ');
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '继续'));
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+
+    expect(find.textContaining('提升英语听说'), findsOneWidget);
+    await tester.tap(find.text('开始学习'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+
+    final answers = OnboardingSurveyStorage(prefs).loadAnswers();
+    expect(answers?.referralSource, equals(OnboardingReferralSource.other));
+    expect(answers?.referralOtherText, equals('同事推荐的公众号'));
+
+    final completed = analytics.events.firstWhere(
+      (event) => event.name == Events.onboardingSurveyCompleted,
+    );
+    expect(
+      completed.params?[EventParams.referralOtherText],
+      equals('同事推荐的公众号'),
+    );
+  });
+
+  testWidgets('渠道页：iPhone SE 尺寸下全部选项无需滚动即可一屏看完', (tester) async {
+    // iPhone SE（375×667pt）：双列网格后，"其他"这一格必须落在屏幕内
+    tester.view.physicalSize = const Size(375 * 2, 667 * 2);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(_wrap(prefs: prefs));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('工作沟通'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    await tester.tap(find.text('不固定'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 600));
+
+    expect(find.text('你是从哪里知道我们的？'), findsOneWidget);
+    expect(tester.getRect(find.text('其他')).bottom, lessThan(667));
+    expect(tester.getRect(find.text('GitHub')).top, lessThan(667));
   });
 }

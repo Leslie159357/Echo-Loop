@@ -33,6 +33,10 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final settings = LearningSettings.fromPrefsSync(prefs);
       expect(settings.autoSkipRetell, isFalse);
+      expect(settings.autoShowAiExplanation, isTrue);
+      expect(settings.autoShowAiAnalysis, isTrue);
+      expect(settings.autoShowAiTranslation, isTrue);
+      expect(settings.autoShowAiSenseGroups, isFalse);
       expect(settings.autoPlayRetellRecordingAfterCompletion, isFalse);
       expect(settings.listenAndRepeatRatingEnabled, isTrue);
       expect(settings.retellRatingEnabled, isTrue);
@@ -43,6 +47,10 @@ void main() {
     test('SP 已写入时同步返回保存值', () async {
       SharedPreferences.setMockInitialValues({
         LearningSettingsKeys.autoSkipRetell: true,
+        LearningSettingsKeys.autoShowAiExplanation: false,
+        LearningSettingsKeys.autoShowAiAnalysis: false,
+        LearningSettingsKeys.autoShowAiTranslation: false,
+        LearningSettingsKeys.autoShowAiSenseGroups: true,
         LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion: true,
         LearningSettingsKeys.listenAndRepeatRatingEnabled: false,
         LearningSettingsKeys.retellRatingEnabled: false,
@@ -52,6 +60,10 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final settings = LearningSettings.fromPrefsSync(prefs);
       expect(settings.autoSkipRetell, isTrue);
+      expect(settings.autoShowAiExplanation, isFalse);
+      expect(settings.autoShowAiAnalysis, isFalse);
+      expect(settings.autoShowAiTranslation, isFalse);
+      expect(settings.autoShowAiSenseGroups, isTrue);
       expect(settings.autoPlayRetellRecordingAfterCompletion, isTrue);
       expect(settings.listenAndRepeatRatingEnabled, isFalse);
       expect(settings.retellRatingEnabled, isFalse);
@@ -112,6 +124,76 @@ void main() {
       expect(prefs.containsKey(LearningSettingsKeys.autoSkipRetell), isFalse);
     });
 
+    test('setAutoShowAiExplanation 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setAutoShowAiExplanation(false);
+
+      expect(
+        container.read(learningSettingsProvider).autoShowAiExplanation,
+        isFalse,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.autoShowAiExplanation),
+        isFalse,
+      );
+    });
+
+    test('setAutoShowAiAnalysis 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setAutoShowAiAnalysis(false);
+
+      expect(
+        container.read(learningSettingsProvider).autoShowAiAnalysis,
+        isFalse,
+      );
+      expect(prefs.getBool(LearningSettingsKeys.autoShowAiAnalysis), isFalse);
+    });
+
+    test('setAutoShowAiTranslation 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setAutoShowAiTranslation(false);
+
+      expect(
+        container.read(learningSettingsProvider).autoShowAiTranslation,
+        isFalse,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.autoShowAiTranslation),
+        isFalse,
+      );
+    });
+
+    test('setAutoShowAiSenseGroups 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setAutoShowAiSenseGroups(true);
+
+      expect(
+        container.read(learningSettingsProvider).autoShowAiSenseGroups,
+        isTrue,
+      );
+      expect(prefs.getBool(LearningSettingsKeys.autoShowAiSenseGroups), isTrue);
+    });
+
     test('setAutoPlayRetellRecordingAfterCompletion 写 SP + 翻转 state', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
@@ -149,6 +231,79 @@ void main() {
         isFalse,
       );
       expect(prefs.getBool(LearningSettingsKeys.retellRatingEnabled), isFalse);
+    });
+
+    test('setAutoSaveOnUnclear(false) 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(learningSettingsProvider).autoSaveOnUnclear,
+        isTrue,
+      );
+      await container
+          .read(learningSettingsProvider.notifier)
+          .setAutoSaveOnUnclear(false);
+
+      expect(
+        container.read(learningSettingsProvider).autoSaveOnUnclear,
+        isFalse,
+      );
+      expect(prefs.getBool(LearningSettingsKeys.autoSaveOnUnclear), isFalse);
+    });
+
+    test('SP 缺失时听不懂自动收藏默认开启，已关闭时启动读取为 false', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      expect(LearningSettings.fromPrefsSync(prefs).autoSaveOnUnclear, isTrue);
+
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.autoSaveOnUnclear: false,
+      });
+      final closedPrefs = await SharedPreferences.getInstance();
+      expect(
+        LearningSettings.fromPrefsSync(closedPrefs).autoSaveOnUnclear,
+        isFalse,
+      );
+    });
+
+    test('setShowStudyRecommendation(false) 写 SP + 翻转 state', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      await notifier.setShowStudyRecommendation(false);
+
+      expect(
+        container.read(learningSettingsProvider).showStudyRecommendation,
+        isFalse,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.showStudyRecommendation),
+        isFalse,
+      );
+    });
+
+    test('SP 缺失时推荐卡默认显示，已关闭时启动读取为 false', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        LearningSettings.fromPrefsSync(prefs).showStudyRecommendation,
+        isTrue,
+      );
+
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.showStudyRecommendation: false,
+      });
+      final closedPrefs = await SharedPreferences.getInstance();
+      expect(
+        LearningSettings.fromPrefsSync(closedPrefs).showStudyRecommendation,
+        isFalse,
+      );
     });
 
     test('setListenAndRepeatRatingEnabled 写 SP + 翻转 state', () async {
@@ -203,6 +358,31 @@ void main() {
       );
       expect(
         prefs.getBool(LearningSettingsKeys.pdfExportReminderShown),
+        isTrue,
+      );
+    });
+
+    test('markUnclearAutoSaveReminderShown 写 SP + 翻转 state，重复调用幂等', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      expect(
+        container.read(learningSettingsProvider).unclearAutoSaveReminderShown,
+        isFalse,
+      );
+
+      await notifier.markUnclearAutoSaveReminderShown();
+      await notifier.markUnclearAutoSaveReminderShown();
+
+      expect(
+        container.read(learningSettingsProvider).unclearAutoSaveReminderShown,
+        isTrue,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.unclearAutoSaveReminderShown),
         isTrue,
       );
     });

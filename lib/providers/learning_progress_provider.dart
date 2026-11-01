@@ -387,6 +387,8 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
         clearShadowingSentenceIndex: clearShadowing,
         clearDifficultPracticeSentenceIndex: clearDifficult,
         clearRetellSentenceIndex: clearRetell,
+        // 跨 stage 推进：清除手动解锁标记，下一轮恢复正常时间锁
+        clearManualUnlockAt: true,
         skippedSubStageKeys: clearedSkippedKeys,
       );
       advancedToNextStage = true;
@@ -442,6 +444,30 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
 
     // 完成后若新位置仍是复述类 + 自动跳过开启 → 连续推进
     await _autoSkipRetellIfEnabled(audioItemId);
+  }
+
+  /// 完成逐句精听，并在没有收藏句时自动完成随后的难句跟读。
+  ///
+  /// 仅供精听完成流程调用，避免普通步骤推进意外改变跟读断点或进度语义。
+  Future<void> completeIntensiveListenAndAutoCompleteShadowingIfNoDifficult(
+    String audioItemId,
+  ) async {
+    await completeCurrentSubStage(audioItemId);
+    await _autoCompleteShadowingIfNoDifficult(audioItemId);
+  }
+
+  /// 当前步骤为难句跟读且没有收藏句时，写入真实完成记录并推进。
+  ///
+  /// 这与手动跳过不同：用户已经完成精听，跟读只是因没有内容而自动完成。
+  Future<void> _autoCompleteShadowingIfNoDifficult(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null || progress.isCompleted) return;
+    if (progress.currentSubStage != SubStageType.listenAndRepeat) return;
+    final bookmarks = await ref
+        .read(bookmarkDaoProvider)
+        .getBookmarkedIndices(audioItemId);
+    if (bookmarks.isNotEmpty) return;
+    await completeCurrentSubStage(audioItemId);
   }
 
   /// 用户跳过当前子阶段（手动按钮 / 自动跳过策略）。
@@ -552,6 +578,8 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
         clearShadowingSentenceIndex: clearShadowing,
         clearDifficultPracticeSentenceIndex: clearDifficult,
         clearRetellSentenceIndex: clearRetell,
+        // 跨 stage 推进：清除手动解锁标记，下一轮恢复正常时间锁
+        clearManualUnlockAt: true,
         skippedSubStageKeys: newSkipped,
       );
     }
@@ -751,6 +779,39 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
     await _setPaused(audioItemId, false);
   }
 
+  /// 立即解锁当前复习轮（学习计划页「立即解锁」按钮）。
+  ///
+  /// 写 [LearningProgress.manualUnlockAt]，不篡改 lastStageCompletedAt——
+  /// 后续轮次仍按本轮实际完成时间顺延。跨 stage 推进时该字段被清除
+  /// （见 [completeCurrentSubStage] / [_doSkipCore]）。
+  /// 非复习阶段或当前未锁定时幂等返回。
+  Future<void> unlockCurrentReview(String audioItemId) async {
+    final progress = state.progressMap[audioItemId];
+    if (progress == null || !progress.isInReviewStage) return;
+    final checkNow = ref.read(nowProvider)();
+    if (!progress.isReviewLockedAt(checkNow)) return;
+
+    // 持久化时间始终用真实时间，避免 debug 偏移导致复习链断裂
+    final now = DateTime.now();
+    final updated = progress.copyWith(manualUnlockAt: now, updatedAt: now);
+    await _persistProgress(updated);
+
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = updated;
+    state = state.copyWith(progressMap: newMap);
+
+    AppLogger.log(
+      'LearningProgress',
+      'unlockCurrentReview audio=$audioItemId '
+          'stage=${progress.currentStage.key} unlockAt=$now',
+    );
+
+    ref.read(analyticsServiceProvider).track(Events.reviewUnlockEarly, {
+      ...ref.audioEventParams(audioItemId),
+      EventParams.stage: progress.currentStage.name,
+    });
+  }
+
   Future<void> _setPaused(String audioItemId, bool paused) async {
     final progress = state.progressMap[audioItemId];
     if (progress == null) return;
@@ -772,6 +833,15 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
   /// 所以"重置进度"场景下必须显式删除，否则子步骤完成态会残留在 UI 上。
   Future<void> deleteProgress(String audioItemId) async {
     await deleteProgressMany({audioItemId});
+  }
+
+  /// 重置学习进度并立即创建当前计划的首步进度。
+  ///
+  /// 用户停留在学习计划页时，必须同步回填内存状态，避免页面暂时回退到
+  /// 空进度的默认分发，从而错误打开非首个子步骤。
+  Future<LearningProgress> resetProgress(String audioItemId) async {
+    await deleteProgress(audioItemId);
+    return ensureProgress(audioItemId);
   }
 
   /// 批量删除指定音频的学习进度。
@@ -1048,6 +1118,7 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
           _encodeSkippedKeys(progress.skippedSubStageKeys),
         ),
         isPaused: Value(progress.isPaused),
+        manualUnlockAt: Value(progress.manualUnlockAt),
         planVersionsJson: Value(
           _encodePlanVersions(progress.planVersionsByStage),
         ),
@@ -1149,6 +1220,7 @@ class LearningProgressNotifier extends _$LearningProgressNotifier {
       updatedAt: row.updatedAt,
       skippedSubStageKeys: _decodeSkippedKeys(row.skippedSubStages),
       isPaused: row.isPaused,
+      manualUnlockAt: row.manualUnlockAt,
       planVersionsByStage: _decodePlanVersions(row.planVersionsJson),
     );
   }

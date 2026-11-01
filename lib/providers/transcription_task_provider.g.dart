@@ -48,8 +48,30 @@ final transcriptionFinalizationServiceProvider =
 // ignore: unused_element
 typedef TranscriptionFinalizationServiceRef =
     ProviderRef<AudioFinalizationService>;
+String _$transcriptionAudioExtractorHash() =>
+    r'f4d087712d3fdddc5b60868ca95c4be7684e77f0';
+
+/// 视频转录前抽取音轨的服务 Provider（测试时可覆盖）
+///
+/// Copied from [transcriptionAudioExtractor].
+@ProviderFor(transcriptionAudioExtractor)
+final transcriptionAudioExtractorProvider =
+    Provider<TranscriptionAudioExtractor>.internal(
+      transcriptionAudioExtractor,
+      name: r'transcriptionAudioExtractorProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$transcriptionAudioExtractorHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef TranscriptionAudioExtractorRef =
+    ProviderRef<TranscriptionAudioExtractor>;
 String _$transcriptionTaskManagerHash() =>
-    r'80040bb3dacdeee21ca54aa41be7cd323cb80dc1';
+    r'802b045e04b1de3f73bb64efba642a0e0b78d979';
 
 /// 转录任务管理器
 ///

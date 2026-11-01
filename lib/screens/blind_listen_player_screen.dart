@@ -17,12 +17,17 @@ import '../database/enums.dart';
 import '../utils/playback_speed.dart';
 import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
+import '../models/media_learning_startup.dart';
+import '../models/media_playback_state.dart';
 import '../models/retell_settings.dart';
 import '../models/sentence.dart';
+import '../models/word_highlight_binding.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_session/blind_listen_player_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
+import '../providers/media_engine/media_engine_provider.dart';
+import '../providers/media_engine/media_sense_group_range_playback.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/new_user_guide_provider.dart';
 import 'sentence_detail_screen.dart';
@@ -40,6 +45,9 @@ import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/player_hotkey_scope.dart';
 import '../widgets/practice/practice_play_count_label.dart';
+import '../widgets/common/managed_media_visual_surface.dart';
+import '../widgets/common/practice_media_presentation_host.dart';
+import '../widgets/study/study_activity_detector.dart';
 
 /// 盲听播放器页面
 class BlindListenPlayerScreen extends ConsumerStatefulWidget {
@@ -49,10 +57,14 @@ class BlindListenPlayerScreen extends ConsumerStatefulWidget {
   /// 音频项 ID
   final String audioItemId;
 
+  /// 音视频盲听共用的路由后媒体启动；仅视频显示媒体画面和视频加载样式。
+  final MediaLearningStartup? mediaStartup;
+
   const BlindListenPlayerScreen({
     super.key,
     this.collectionId,
     required this.audioItemId,
+    this.mediaStartup,
   });
 
   @override
@@ -77,13 +89,15 @@ class _BlindListenPlayerScreenState
   /// 同步阶段（几十 ms），不阻塞下一次点击。
   bool _isSeeking = false;
 
-  /// 新手引导：编号区 / 主体区 Showcase key（随 State 生命周期存在）
-  final GlobalKey _guideNumberKey = GlobalKey(
-    debugLabel: 'guideSentenceNumber',
+  /// 新手引导：讲解按钮 / 主体播放区 Showcase key（随 State 生命周期存在）
+  final GlobalKey _guideExplanationKey = GlobalKey(
+    debugLabel: 'guideSentenceExplanation',
   );
   final GlobalKey _guideBodyKey = GlobalKey(debugLabel: 'guideSentenceBody');
   ProviderSubscription<BlindListenPlayerState>? _playerSubscription;
   StreamSubscription<Duration>? _silenceSkipSub;
+  bool _mediaStartupReady = false;
+  PracticeMediaPresentationSession? _mediaPresentationSession;
 
   @override
   void initState() {
@@ -94,7 +108,6 @@ class _BlindListenPlayerScreenState
         if (_isExiting || prev == null) return;
         _logBlindStateTransition(prev, next);
         if (!prev.stepFinished && next.stepFinished) {
-          ref.read(learningSessionProvider.notifier).pauseStudyTimer();
           shortenIdleTimeout(5);
           _handleCompleted();
         }
@@ -104,7 +117,14 @@ class _BlindListenPlayerScreenState
         .read(blindListenPlayerProvider.notifier)
         .silenceSkipEventStream
         .listen(_showSilenceSkippedSnackBar);
+    if (widget.mediaStartup == null) {
+      _scheduleStartPlaying();
+    }
+  }
+
+  void _scheduleStartPlaying() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       AppLogger.log('BlindListenScreen', '首帧后启动播放');
       ref.read(blindListenPlayerProvider.notifier).startPlaying();
       // 从 DB 拉取最新的收藏状态（覆盖 initializeParagraphs 时的同步快照）
@@ -114,6 +134,30 @@ class _BlindListenPlayerScreenState
             .initializeBookmarks(widget.audioItemId),
       );
     });
+  }
+
+  void _handleMediaStartupReady() {
+    if (!mounted || _mediaStartupReady) return;
+    setState(() => _mediaStartupReady = true);
+    _scheduleStartPlaying();
+  }
+
+  Future<void> _handleMediaStartupExit() async {
+    await widget.mediaStartup?.cancel();
+    if (mounted) context.pop();
+  }
+
+  Widget _wrapMediaStartup(Widget child) {
+    final startup = widget.mediaStartup;
+    if (startup == null) return child;
+    return ManagedMediaVisualSurface(
+      loadKey: startup.loadKey,
+      load: startup.load,
+      cancel: startup.cancel,
+      onReady: _handleMediaStartupReady,
+      showVideoLoading: startup.showVideoLoading,
+      child: child,
+    );
   }
 
   @override
@@ -139,7 +183,7 @@ class _BlindListenPlayerScreenState
 
   // ========== 句子点击 ==========
 
-  /// 点击句子编号 → 从该句开始播放
+  /// 点击句子正文 → 从该句开始播放
   ///
   /// guard 只 hold seekToSentence 的同步阶段（Provider 内 _cancelAll + state.copyWith
   /// 完成立即返回，_playCurrentParagraph 是 unawaited 异步执行）。
@@ -173,26 +217,71 @@ class _BlindListenPlayerScreenState
 
     final lpState = ref.read(listeningPracticeProvider);
     final audioName = lpState.currentAudioItem?.name ?? '';
-
-    await context.push(
-      AppRoutes.sentenceDetail,
+    final mediaReady = widget.mediaStartup != null && _mediaStartupReady;
+    final usesVideo =
+        widget.mediaStartup?.showVideoLoading == true && _mediaStartupReady;
+    await AppRoutes.pushNested(
+      context,
+      AppRoutes.sentenceDetailSegment,
       extra: SentenceDetailArgs(
         audioItemId: widget.audioItemId,
         audioName: audioName,
         sentenceText: sentence.text,
         sentenceIndex: sentence.index,
+        totalSentenceCount: ref
+            .read(blindListenPlayerProvider.notifier)
+            .totalSentenceCount,
         startTimeMs: sentence.startTime.inMilliseconds,
         endTimeMs: sentence.endTime.inMilliseconds,
+        rangePlayback: mediaReady ? _blindMediaRangePlayback : null,
+        wordHighlightSource: _wordHighlightSource(),
+        mediaSession: usesVideo ? _buildMediaSession() : null,
       ),
     );
 
     _isNavigatingToDetail = false;
-
     // 返回后刷新收藏状态（详情页可能修改了收藏）
     if (!mounted) return;
     await ref
         .read(blindListenPlayerProvider.notifier)
         .initializeBookmarks(widget.audioItemId);
+  }
+
+  late final MediaSenseGroupRangePlayback _blindMediaRangePlayback =
+      MediaSenseGroupRangePlayback(
+        engine: ref.read(mediaEngineProvider.notifier),
+        playbackSpeed: () =>
+            ref.read(blindListenPlayerProvider).settings.playbackSpeed,
+      );
+
+  WordHighlightSource _wordHighlightSource() {
+    final engine = ref.read(mediaEngineProvider.notifier);
+    return WordHighlightSource(
+      audioItemId: widget.audioItemId,
+      positionStream: engine.wordHighlightPositionStream,
+      currentPosition: engine.wordHighlightPosition,
+      playbackStatus: engine.wordHighlightPlaybackStatus,
+      playbackStatusStream: engine.wordHighlightPlaybackStatusStream,
+    );
+  }
+
+  SentenceDetailMediaSession? _buildMediaSession() {
+    final session = _mediaPresentationSession;
+    if (session == null) return null;
+    return SentenceDetailMediaSession(
+      readState: () {
+        final state = session.readState();
+        return MediaPlaybackState(
+          visualTrackVisible: state.visualTrackVisible,
+          visualTrackExpanded: state.expanded,
+          videoSubtitleVisible: state.subtitleVisible,
+        );
+      },
+      setVisible: session.setVisible,
+      setSubtitleVisible: session.setSubtitleVisible,
+      setFullscreen: session.setFullscreen,
+      buildVideoView: session.buildVideoView,
+    );
   }
 
   // ========== 完成处理 ==========
@@ -494,8 +583,39 @@ class _BlindListenPlayerScreenState
     );
     final playerState = ref.read(blindListenPlayerProvider);
 
-    return wakelockBody(
-      child: _buildParagraphMode(context, l10n, theme, playerState),
+    final mediaReady = widget.mediaStartup == null || _mediaStartupReady;
+    return StudyActivityDetector(
+      onActivity: ref
+          .read(blindListenPlayerProvider.notifier)
+          .markStudyActivity,
+      child: wakelockBody(
+        child: PracticeMediaPresentationHost(
+          enabled:
+              mediaReady &&
+              widget.mediaStartup?.showVideoLoading == true &&
+              ref.read(learningSessionProvider).playbackChain ==
+                  LearningPlaybackChain.mediaEngine,
+          suppressVisualView: _isNavigatingToDetail,
+          audioItemId: widget.audioItemId,
+          isPlaying: playerState.isPlaying,
+          onPlayPause: () {
+            final player = ref.read(blindListenPlayerProvider.notifier);
+            playerState.isPlaying
+                ? unawaited(player.pause())
+                : unawaited(player.resume());
+          },
+          onSessionChanged: (session) => _mediaPresentationSession = session,
+          builder: (context, presentation, mediaSurface) => _buildParagraphMode(
+            context,
+            l10n,
+            theme,
+            playerState,
+            topContent: presentation.enabled ? mediaSurface : null,
+            bodyWrapper: _wrapMediaStartup,
+            fullscreenBody: presentation.expanded ? mediaSurface : null,
+          ),
+        ),
+      ),
     );
   }
 
@@ -538,8 +658,11 @@ class _BlindListenPlayerScreenState
     BuildContext context,
     AppLocalizations l10n,
     ThemeData theme,
-    BlindListenPlayerState playerState,
-  ) {
+    BlindListenPlayerState playerState, {
+    Widget? topContent,
+    Widget Function(Widget child)? bodyWrapper,
+    Widget? fullscreenBody,
+  }) {
     final player = ref.read(blindListenPlayerProvider.notifier);
 
     final sentences = player.currentParagraphSentences;
@@ -565,21 +688,21 @@ class _BlindListenPlayerScreenState
           )
         : l10n.intensiveListenProgress(sentenceIdx, player.totalSentenceCount);
 
-    // 新手引导：编号→开播、文本→讲解。统一挂在第 1 句（idx=0），首项最显眼。
+    // 新手引导：文本→开播、左侧图标→讲解。统一挂在第 1 句（idx=0），首项最显眼。
     const guideTargetLocalIdx = 0;
-    final numberStep = GuideStep(
-      key: _guideNumberKey,
-      description: l10n.guideSentenceTileNumberDescription,
-    );
     final bodyStep = GuideStep(
       key: _guideBodyKey,
       description: l10n.guideSentenceTileBodyDescription,
+    );
+    final explanationStep = GuideStep(
+      key: _guideExplanationKey,
+      description: l10n.guideSentenceTileExplanationDescription,
     );
     final guideFlows = <GuideFlow>[
       GuideFlow(
         flowId: GuideFlowIds.sentenceTileTour,
         shouldRun: sentences.isNotEmpty,
-        steps: [numberStep, bodyStep],
+        steps: [bodyStep, explanationStep],
       ),
     ];
 
@@ -608,7 +731,11 @@ class _BlindListenPlayerScreenState
         canPop: false,
         onPopInvokedWithResult: (didPop, _) async {
           if (didPop) return;
-          await _handleExit();
+          if (widget.mediaStartup != null && !_mediaStartupReady) {
+            await _handleMediaStartupExit();
+          } else {
+            await _handleExit();
+          }
         },
         child: GuideFlowSequenceHost(
           flows: guideFlows,
@@ -622,9 +749,11 @@ class _BlindListenPlayerScreenState
             durationText: _formatDurationText(
               l10n,
               paragraphDuration: paragraphDuration,
-              totalDuration: player.totalDuration,
-              paragraphTotal: playerState.totalParagraphs,
             ),
+            elapsed: sentences.isEmpty ? null : sentences.first.startTime,
+            remaining: sentences.isEmpty
+                ? null
+                : player.totalDuration - sentences.first.startTime,
             onSeekToIndex: isMultiParagraph
                 ? (p) => ref
                       .read(blindListenPlayerProvider.notifier)
@@ -640,17 +769,21 @@ class _BlindListenPlayerScreenState
                   : RetellDisplayMode.hideAll,
               keywordMap: const {},
               playingSentenceIndex: playerState.playingSentenceIndex,
+              wordHighlightSource: _wordHighlightSource(),
               autoFocusEnabled: true,
               bookmarkedSentenceIndices: playerState.bookmarkedSentenceIndices,
-              onSentenceTap: _handleSentenceDetail,
+              onSentenceExplanationTap: _handleSentenceDetail,
               onSentencePlayFrom: _handleSentencePlayFrom,
               onSentenceBookmarkToggle: (sentence) => ref
                   .read(blindListenPlayerProvider.notifier)
                   .toggleBookmark(widget.audioItemId, sentence),
               guideTargetLocalIdx: guideTargetLocalIdx,
-              numberAreaGuideStep: numberStep,
+              explanationAreaGuideStep: explanationStep,
               bodyAreaGuideStep: bodyStep,
             ),
+            topContent: topContent,
+            bodyWrapper: bodyWrapper,
+            fullscreenBody: fullscreenBody,
             contentControls: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 36),
               child: GestureDetector(
@@ -711,7 +844,6 @@ class _BlindListenPlayerScreenState
                                 ),
                               ),
                             );
-                            final hasFF = !s.paused && !s.fastForward;
                             return Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -728,41 +860,15 @@ class _BlindListenPlayerScreenState
                                       total: s.total,
                                       isPaused: s.paused,
                                       isFastForward: s.fastForward,
+                                      onTap: player.enterWaitingForUser,
                                       onPause: () => player.pauseCountdown(),
                                       onResume: () => player.resumeCountdown(),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 48),
-                                // 右槽位：快进按钮（与 next 按钮对齐）
-                                SizedBox(
+                                const SizedBox(
                                   width: PlaybackControls.controlButtonSize,
-                                  height: 48,
-                                  child: Center(
-                                    child: AnimatedOpacity(
-                                      opacity: hasFF ? 1.0 : 0.0,
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      child: IgnorePointer(
-                                        ignoring: !hasFF,
-                                        child: hasFF
-                                            ? GestureDetector(
-                                                onTap: player
-                                                    .toggleCountdownFastForward,
-                                                child: Icon(
-                                                  Icons.fast_forward_rounded,
-                                                  size: 32,
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withValues(alpha: 0.6),
-                                                ),
-                                              )
-                                            : const SizedBox.shrink(),
-                                      ),
-                                    ),
-                                  ),
                                 ),
                               ],
                             );
@@ -830,17 +936,11 @@ String _formatHumanDuration(AppLocalizations l10n, Duration duration) {
   return l10n.durationMinutesSeconds(totalSec ~/ 60, totalSec % 60);
 }
 
-/// 时长文案：单段时只显示总长，多段时显示「段长 / 总长」
+/// 时长文案：仅显示当前段落时长。
 String _formatDurationText(
   AppLocalizations l10n, {
   required Duration paragraphDuration,
-  required Duration totalDuration,
-  required int paragraphTotal,
-}) {
-  if (paragraphTotal <= 1) return _formatHumanDuration(l10n, totalDuration);
-  return '${_formatHumanDuration(l10n, paragraphDuration)} / '
-      '${_formatHumanDuration(l10n, totalDuration)}';
-}
+}) => _formatHumanDuration(l10n, paragraphDuration);
 
 /// 统一显示速度标签：始终保留一位小数。
 String _formatSpeed(double speed) => formatPlaybackSpeedLabel(speed);

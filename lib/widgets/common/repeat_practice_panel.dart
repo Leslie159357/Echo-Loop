@@ -16,13 +16,14 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/speech_practice_models.dart';
-import '../../services/audio_playback_service.dart';
+import '../../services/audio_preview_controller.dart';
 import '../../theme/app_theme.dart';
 import 'playback_controls.dart' show PlaybackControls;
 import 'processing_indicator.dart';
 import 'recording_button.dart' show RecordingButton, RecordingButtonMode;
 import 'speech_rating_badge.dart';
 import 'status_label.dart';
+import 'tappable_wrapper.dart';
 
 /// 正常状态文字槽位高度
 const double _kStatusSlotHeight = 20;
@@ -96,8 +97,8 @@ class RepeatPracticePanel extends StatelessWidget {
   /// badge 播放控制器，用于页面触发与用户点击 badge 相同的回放流程。
   final SpeechRatingBadgeController? ratingBadgeController;
 
-  /// badge 播放服务工厂，测试中可注入无平台依赖替身。
-  final AudioPlaybackService Function()? ratingPlaybackServiceFactory;
+  /// badge 试听控制器工厂，用于与页面其他播放入口共用同一份播放状态。
+  final AudioPreviewController Function()? ratingPreviewControllerFactory;
 
   // ========== 配置 ==========
 
@@ -106,6 +107,17 @@ class RepeatPracticePanel extends StatelessWidget {
 
   /// 是否显示评级/录音胶囊。
   final bool showRatingBadge;
+
+  /// 是否为当前录音 badge 提供 AI 复述评估入口。
+  ///
+  /// 默认关闭，跟读等其他复用页面不会显示该入口。
+  final bool showAiReviewButton;
+
+  /// AI 评估请求是否正在准备或等待首个流式结果。
+  final bool isAiReviewLoading;
+
+  /// 点击 AI 评估入口。
+  final VoidCallback? onAiReviewTap;
 
   const RepeatPracticePanel({
     super.key,
@@ -122,9 +134,12 @@ class RepeatPracticePanel extends StatelessWidget {
     this.onFastForward,
     this.onBeforePlayback,
     this.ratingBadgeController,
-    this.ratingPlaybackServiceFactory,
+    this.ratingPreviewControllerFactory,
     this.thresholds = RatingThresholds.listenAndRepeat,
     this.showRatingBadge = true,
+    this.showAiReviewButton = false,
+    this.isAiReviewLoading = false,
+    this.onAiReviewTap,
   });
 
   @override
@@ -147,6 +162,8 @@ class RepeatPracticePanel extends StatelessWidget {
     final currentBadgeAttempt = _badgeAttempt;
     final hasBadge = currentBadgeAttempt != null;
     final hasFF = onFastForward != null;
+    final hasAiReview = hasBadge && showAiReviewButton && onAiReviewTap != null;
+    final hasRightControl = hasAiReview || hasFF;
     final statusSlotHeight = _usesExpandedStatusSlot
         ? _kErrorStatusSlotHeight
         : _kStatusSlotHeight;
@@ -206,8 +223,8 @@ class RepeatPracticePanel extends StatelessWidget {
                                           : null,
                                       thresholds: thresholds,
                                       controller: ratingBadgeController,
-                                      playbackServiceFactory:
-                                          ratingPlaybackServiceFactory,
+                                      previewControllerFactory:
+                                          ratingPreviewControllerFactory,
                                     )
                                   : const SizedBox.shrink(),
                             ),
@@ -226,17 +243,25 @@ class RepeatPracticePanel extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 48),
-                      // 右槽位：快进按钮（与 next 按钮同宽同位）
+                      // 右槽位：复述 AI 评估胶囊与左侧录音 badge 对称；未启用
+                      // 时保留既有快进按钮，避免影响跟读等其他练习页面。
                       SizedBox(
                         width: PlaybackControls.controlButtonSize,
                         height: _kButtonRowHeight,
                         child: Center(
                           child: AnimatedOpacity(
-                            opacity: hasFF ? 1.0 : 0.0,
+                            opacity: hasRightControl ? 1.0 : 0.0,
                             duration: const Duration(milliseconds: 200),
                             child: IgnorePointer(
-                              ignoring: !hasFF,
-                              child: hasFF
+                              ignoring: !hasRightControl,
+                              child: hasAiReview
+                                  ? OverflowBox(
+                                      maxWidth: 160,
+                                      minHeight: 0,
+                                      alignment: Alignment.center,
+                                      child: _buildAiReviewPill(),
+                                    )
+                                  : hasFF
                                   ? GestureDetector(
                                       onTap: onFastForward,
                                       child: Icon(
@@ -266,17 +291,98 @@ class RepeatPracticePanel extends StatelessWidget {
     );
   }
 
+  /// 构建右侧「AI 评估」胶囊。
+  ///
+  /// 与左侧 [SpeechRatingBadge] 共用同一套胶囊语言（999 圆角、
+  /// h10/v6 内边距、labelMedium 文字、16px 图标、中性表面色 + 细描边），
+  /// 只用 primary 色的星芒图标点出 AI 属性，避免抢视觉重心。
+  Widget _buildAiReviewPill() {
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.8)
+        : theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    final bgColor = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainerHigh;
+    final borderColor = isDark
+        ? theme.colorScheme.outline.withValues(alpha: 0.3)
+        : theme.colorScheme.outline.withValues(alpha: 0.2);
+    final accentColor = theme.colorScheme.primary.withValues(
+      alpha: isDark ? 0.9 : 0.8,
+    );
+
+    return Semantics(
+      button: true,
+      label: l10n.retellAiReviewTooltip,
+      child: Tooltip(
+        message: l10n.retellAiReviewTooltip,
+        child: MouseRegion(
+          // 桌面端保留手型指针（原 InkWell 由框架提供）
+          cursor: isAiReviewLoading
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.click,
+          child: TappableWrapper(
+            key: const Key('retell_ai_review_button'),
+            onTap: isAiReviewLoading ? null : onAiReviewTap,
+            feedbackType: TapFeedback.opacity,
+            pressedOpacity: 0.6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isAiReviewLoading)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accentColor,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 16,
+                      color: accentColor,
+                    ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.retellAiReviewTooltip,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 构建左侧反馈胶囊使用的 attempt。
   ///
-  /// 关闭复述评级时仍保留录音回放入口，但把 attempt 降级为
-  /// `unavailable + filePath`，让 [SpeechRatingBadge] 显示「录音」胶囊而非评级。
+  /// 只要有有效录音文件，就必须保留回放 badge。
+  ///
+  /// 评分开启且 ASR 成功时显示评分；关闭评分或 ASR 失败时统一降级为
+  /// `unavailable + filePath`，让 [SpeechRatingBadge] 显示「录音」胶囊。
   SpeechPracticeAttempt? get _badgeAttempt {
     final attempt = currentAttempt;
     if (attempt == null) return null;
-    if (showRatingBadge) {
+    if (!attempt.hasRecording) {
+      return showRatingBadge && attempt.hasFinalFeedback ? attempt : null;
+    }
+    if (showRatingBadge && !attempt.isRecognitionFailure) {
       return attempt.hasFinalFeedback ? attempt : null;
     }
-    if (!attempt.hasRecording) return null;
     return attempt.copyWith(
       status: SpeechPracticeAttemptStatus.unavailable,
       clearFinalTranscript: true,

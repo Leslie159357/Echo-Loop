@@ -13,12 +13,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/app_logger.dart';
 import '../../services/tts/kokoro_voices.dart';
-import '../../services/tts/piper_voices.dart';
+import '../../services/tts/piper_model_catalog.dart';
 import '../../services/tts/tts_engine.dart';
 
 /// 同步从 SP 预读的 TTS 设置初值，由 main() 通过 override 注入。
 ///
-/// 默认返回 [TtsSettings] 默认值（平台 TTS + 美音）：发音是辅助功能，未注入时
+/// 默认返回 [TtsSettings] 默认值（Echo Loop AI Advanced + 美音）：发音是辅助功能，未注入时
 /// 用默认值优雅降级，不让宿主页面（含发音按钮）因缺 override 而崩溃。
 final initialTtsSettingsProvider = Provider<TtsSettings>((ref) {
   return const TtsSettings();
@@ -27,6 +27,9 @@ final initialTtsSettingsProvider = Provider<TtsSettings>((ref) {
 /// TTS 设置 SP key 常量。
 abstract final class TtsSettingsKeys {
   static const engine = 'tts_engine';
+
+  /// 历史版本写入的 Echo Loop 产品名值，读取时保留兼容。
+  static const legacyEchoLoopEngineValue = 'echoLoop';
   static const accent = 'tts_accent';
   static const kokoroVoiceUs = 'tts_kokoro_voice_us';
   static const kokoroVoiceUk = 'tts_kokoro_voice_uk';
@@ -35,9 +38,31 @@ abstract final class TtsSettingsKeys {
   static const piperVoiceUk = 'tts_piper_voice_uk';
 }
 
+/// 将所有平台历史写入的 Echo Loop 产品名值迁移为 Kokoro 实现名。
+Future<void> migrateLegacyEchoLoopTtsPreference(SharedPreferences prefs) async {
+  if (prefs.getString(TtsSettingsKeys.engine) !=
+      TtsSettingsKeys.legacyEchoLoopEngineValue) {
+    return;
+  }
+  await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.kokoro.name);
+}
+
+/// 将 Android 历史系统 TTS 偏好迁移为 Echo Loop AI Advanced。
+///
+/// 仅 Android 执行：iOS/macOS 仍可能合法使用平台 TTS，不能全平台迁移
+/// [TtsEngineKind.platform]。
+Future<void> migrateAndroidPlatformTtsPreference(
+  SharedPreferences prefs,
+) async {
+  if (prefs.getString(TtsSettingsKeys.engine) != TtsEngineKind.platform.name) {
+    return;
+  }
+  await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.kokoro.name);
+}
+
 /// TTS 设置不可变值对象。
 class TtsSettings {
-  /// 合成引擎（默认平台 TTS）。
+  /// 合成引擎（默认 Echo Loop AI Advanced）。
   final TtsEngineKind engine;
 
   /// 发音口音（默认美音）。
@@ -59,7 +84,7 @@ class TtsSettings {
   final String piperVoiceUk;
 
   const TtsSettings({
-    this.engine = TtsEngineKind.platform,
+    this.engine = TtsEngineKind.kokoro,
     this.accent = TtsAccent.us,
     this.kokoroVoiceUs = kokoroDefaultVoiceUs,
     this.kokoroVoiceUk = kokoroDefaultVoiceUk,
@@ -87,11 +112,11 @@ class TtsSettings {
   TtsSpeechConfig toSpeechConfig() => TtsSpeechConfig(
     languageTag: languageTag,
     voiceName: switch (engine) {
-      TtsEngineKind.echoLoop => activeKokoroVoice,
+      TtsEngineKind.kokoro => activeKokoroVoice,
       TtsEngineKind.piper => activePiperVoice,
       TtsEngineKind.platform => null,
     },
-    modelTag: engine == TtsEngineKind.echoLoop ? kokoroVariant.name : null,
+    modelTag: engine == TtsEngineKind.kokoro ? kokoroVariant.name : null,
   );
 
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
@@ -143,9 +168,12 @@ class TtsSettings {
   }
 
   static TtsEngineKind _engineFromName(String? name) {
+    if (name == TtsSettingsKeys.legacyEchoLoopEngineValue) {
+      return TtsEngineKind.kokoro;
+    }
     return TtsEngineKind.values.firstWhere(
       (e) => e.name == name,
-      orElse: () => TtsEngineKind.platform,
+      orElse: () => TtsEngineKind.kokoro,
     );
   }
 

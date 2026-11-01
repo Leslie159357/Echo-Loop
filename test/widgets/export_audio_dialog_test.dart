@@ -40,11 +40,37 @@ void main() {
 
       // 验证两个 checkbox 都存在
       expect(find.text('Audio'), findsOneWidget);
-      expect(find.text('Subtitle'), findsOneWidget);
+      expect(find.text('Subtitles'), findsOneWidget);
 
       // 两个 checkbox 都应可点击
       final checkboxes = find.byType(Checkbox);
       expect(checkboxes, findsNWidgets(2));
+    });
+
+    testWidgets('isVideo 时标题与媒体选项文案用「视频」', (tester) async {
+      await tester.pumpWidget(
+        _buildTestApp(
+          child: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => showExportAudioDialog(
+                context: context,
+                hasTranscript: true,
+                isVideo: true,
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      // 标题 + 确认按钮都为 Export Video；媒体选项为 Video；不出现 Audio 文案。
+      expect(find.text('Export Video'), findsNWidgets(2));
+      expect(find.text('Video'), findsOneWidget);
+      expect(find.text('Audio'), findsNothing);
+      expect(find.text('Subtitles'), findsOneWidget);
     });
 
     testWidgets('无字幕时字幕 checkbox disabled', (tester) async {
@@ -112,7 +138,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 取消选中字幕（默认选中的）
-      await tester.tap(find.text('Subtitle'));
+      await tester.tap(find.text('Subtitles'));
       await tester.pumpAndSettle();
 
       // 导出按钮应该 disabled

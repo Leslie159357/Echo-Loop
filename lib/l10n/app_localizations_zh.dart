@@ -9,19 +9,74 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get startupLocalDataErrorTitle => '抱歉，出错了';
+
+  @override
+  String get startupLocalDataErrorMessage => '数据暂时无法正常加载。请重试；如果问题持续，请联系我们。';
+
+  @override
+  String get startupLocalDataContactUs => '联系我们';
+
+  @override
+  String get startupLocalDataViewLogs => '查看日志';
+
+  @override
+  String get playbackFailedTitle => '播放失败';
+
+  @override
+  String get playbackFailedMessage => '请稍后重试。';
+
+  @override
   String get appTitle => 'Echo Loop';
 
   @override
   String get premiumTitle => 'Echo Loop 会员';
 
   @override
-  String get premiumTagline => '使用更多 AI，学习更高效。';
+  String get premiumTagline => '无限 AI，学习更高效。';
 
   @override
-  String get aiQuotaExceededTitle => '本月免费额度已用完';
+  String get aiQuotaExceededGenericTitle => '本月 AI 免费额度已用完';
 
   @override
-  String get aiQuotaExceededMessage => '升级会员，获得更多 AI 额度和 AI 功能。';
+  String aiQuotaExceededTitle(String feature) {
+    return '本月 $feature免费额度已用完';
+  }
+
+  @override
+  String get aiQuotaFeatureTranslation => 'AI 翻译';
+
+  @override
+  String get aiQuotaFeatureAnalysis => 'AI 句子解析';
+
+  @override
+  String get aiQuotaFeatureSenseGroup => 'AI 句子意群拆分';
+
+  @override
+  String get aiQuotaFeatureWordAnalysis => 'AI 词汇解析';
+
+  @override
+  String get aiQuotaFeatureTranscription => 'AI 转录';
+
+  @override
+  String get aiQuotaFeatureChat => 'AI 助手';
+
+  @override
+  String get aiQuotaFeatureRetellReview => 'AI 复述评估';
+
+  @override
+  String get aiQuotaExceededMessage => '升级会员，获得无限 AI 额度和 AI 功能。';
+
+  @override
+  String get aiQuotaUnsupportedGenericTitle => '免费版暂不支持此 AI 功能';
+
+  @override
+  String aiQuotaUnsupportedTitle(String feature) {
+    return '免费版暂不支持 $feature';
+  }
+
+  @override
+  String get aiQuotaUnsupportedMessage => '升级会员，解锁该功能和更多 AI 功能。';
 
   @override
   String get aiQuotaExceededCta => '升级会员';
@@ -48,22 +103,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumActive => '你已是会员';
 
   @override
-  String get premiumBenefitTranslation => '更多 AI 翻译';
+  String get premiumBenefitTranslation => '无限 AI 翻译';
 
   @override
-  String get premiumBenefitAnalysis => '更多 AI 句子拆解';
+  String get premiumBenefitAnalysis => '无限 AI 句子解析';
 
   @override
-  String get premiumBenefitWordAnalysis => '更多 AI 单词讲解';
+  String get premiumBenefitWordAnalysis => '无限 AI 词汇解析';
 
   @override
   String get premiumBenefitTranscription => '更多 AI 字幕转录';
 
   @override
-  String get premiumBenefitSenseGroups => '更多 AI 句子意群拆分';
+  String get premiumBenefitAiAssistant => '无限 AI 助手对话';
+
+  @override
+  String get premiumBenefitPrioritySupport => '优先客户支持';
+
+  @override
+  String get premiumBenefitSenseGroups => '无限 AI 句子意群拆分';
+
+  @override
+  String get premiumBenefitRetellReview => '无限 AI 复述评估';
 
   @override
   String get premiumSubscribe => '订阅';
+
+  @override
+  String get premiumBuyOneYear => '购买一年会员';
 
   @override
   String premiumStartTrial(int days) {
@@ -86,6 +153,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumPlanYearly => '年度会员';
 
   @override
+  String get premiumPlanYearlyOneTime => '一年期会员';
+
+  @override
   String get premiumPlanLifetime => '终身会员';
 
   @override
@@ -96,6 +166,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get premiumStatusExpiring => '即将到期';
+
+  @override
+  String get premiumStatusFixedTerm => '一次性购买';
 
   @override
   String get premiumStatusLifetime => '永久';
@@ -111,6 +184,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String premiumValidUntil(String date) {
+    return '有效期至 $date';
+  }
+
+  @override
   String get premiumLifetimeAccessNote => '永久有效，无需续订';
 
   @override
@@ -120,7 +198,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumLoginRequired => '订阅前请先登录。';
 
   @override
+  String get premiumPurchaseLoginRequired => '购买前请先登录。';
+
+  @override
+  String get premiumRestoreLoginRequired => '恢复购买前请先登录。';
+
+  @override
   String get premiumPurchaseFailed => '购买失败，请重试。';
+
+  @override
+  String get premiumRestoreAccountMismatch =>
+      '此订阅已绑定到另一个 Echo Loop 账号。请登录原账号后重试。';
 
   @override
   String get premiumRestoreNone => '未找到可恢复的购买。';
@@ -129,16 +217,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumRestored => '已恢复购买。';
 
   @override
-  String get premiumWebCheckoutCta => '前往订阅结账';
+  String get premiumWebCheckoutCta => '查看订阅方案';
 
   @override
-  String get premiumWebCheckoutHint => '套餐、当前价格和优惠会在安全结账页显示。';
+  String get premiumUseWebCheckoutFallback => '中国用户请使用 Paddle 支付';
+
+  @override
+  String get premiumUseStoreCheckout => '继续使用商店支付';
 
   @override
   String get premiumWebVerifying => '正在等待支付结果确认…';
-
-  @override
-  String get premiumWebCheckDone => '我已完成支付';
 
   @override
   String get premiumWebOpenFailed => '无法打开结账页面，请重试。';
@@ -147,10 +235,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumRefresh => '刷新';
 
   @override
+  String get premiumRefreshStatus => '刷新会员状态';
+
+  @override
+  String get premiumPurchasePendingSync => '购买成功，会员权益同步中，稍后自动生效。';
+
+  @override
+  String get premiumCheckingEntitlement => '正在确认会员状态…';
+
+  @override
+  String get premiumEntitlementCheckFailed => '暂时无法确认会员状态，请重试。确认完成前无法购买。';
+
+  @override
+  String get premiumEntitlementUpdated => '会员状态已更新。';
+
+  @override
+  String get premiumAlreadyEntitledSyncFailed => '检测到已有有效订阅，但同步失败，请点击右上角恢复购买。';
+
+  @override
   String get premiumPeriodMonthly => '月付';
 
   @override
   String get premiumPeriodYearly => '年付';
+
+  @override
+  String get premiumPeriodYearlyOneTime => '一年期 · 一次性购买';
 
   @override
   String get premiumPeriodLifetime => '终身';
@@ -165,7 +274,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get premiumPriceSuffixFirstYear => '/首年';
 
   @override
+  String get premiumPriceSuffixFirstMonth => '/首月';
+
+  @override
   String get premiumPriceSuffixLifetime => '一次性';
+
+  @override
+  String get premiumOneTimeYearAccess => '一次付款，享受 1 年会员，不自动续费';
 
   @override
   String premiumSavePercent(int percent) {
@@ -185,11 +300,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String premiumIntroFirstMonth(String price) {
     return '首月 $price';
-  }
-
-  @override
-  String premiumIntroFirstPeriod(String price) {
-    return '首期 $price';
   }
 
   @override
@@ -219,12 +329,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String premiumSpecialOfferPercent(int percent, String period) {
-    return '特别优惠：首$period立减 $percent%';
+    return '早鸟优惠：首$period立减 $percent%';
   }
 
   @override
   String premiumSpecialOfferIntro(String intro, String renewal) {
-    return '特别优惠：$intro，之后 $renewal';
+    return '早鸟优惠：$intro，之后 $renewal';
   }
 
   @override
@@ -232,9 +342,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get premiumOfferPeriodMonth => '月';
-
-  @override
-  String get premiumOfferPeriodGeneric => '期';
 
   @override
   String get premiumTermsShort => '服务条款';
@@ -253,6 +360,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get account => '账户';
+
+  @override
+  String get chinaRoutingIndicatorTooltip => '当前使用中国区服务路由';
 
   @override
   String get settings => '设置';
@@ -293,7 +403,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get add => '添加';
 
   @override
+  String get importAction => '导入';
+
+  @override
   String get selectAudioFile => '选择音频文件';
+
+  @override
+  String get subtitlePairedBadge => '已匹配字幕，将一并导入';
 
   @override
   String get audioFilePickerCloudDriveHint =>
@@ -383,6 +499,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appearance => '外观';
 
   @override
+  String get readingTextSettings => '文字大小';
+
+  @override
+  String get readingTextPreview => '预览';
+
+  @override
+  String get readingFontSize => '字号';
+
+  @override
+  String get readingFontSizeDecrease => '缩小字号';
+
+  @override
+  String get readingFontSizeIncrease => '放大字号';
+
+  @override
   String get themeMode => '主题';
 
   @override
@@ -395,7 +526,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get themeModeDark => '深色模式';
 
   @override
-  String get language => '界面语言';
+  String get language => '应用语言';
 
   @override
   String get languageDescription => '应用界面使用的语言';
@@ -520,6 +651,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tapBookmarkIcon => '点击句子旁的书签图标收藏';
 
   @override
+  String get noBookmarksHint => '还没有收藏句子，可点击句子右侧书签添加';
+
+  @override
+  String get bookmarksEmptyReturned => '已无收藏句子，已切回全文';
+
+  @override
   String get removeBookmarkTip => '取消收藏';
 
   @override
@@ -533,6 +670,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get copied => '已复制到剪贴板';
+
+  @override
+  String get sentenceMenuSave => '收藏句子';
+
+  @override
+  String get sentenceMenuUnsave => '取消收藏';
+
+  @override
+  String get sentenceMenuExplain => 'AI 讲解';
+
+  @override
+  String get sentenceMenuSaved => '已收藏';
+
+  @override
+  String get sentenceMenuUnsaved => '已取消收藏';
+
+  @override
+  String get sentenceMenuActionFailed => '操作失败，请重试。';
 
   @override
   String get hotkeyReplay => 'R：重播';
@@ -571,6 +726,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get audioErrorUnsupportedTitle => '不支持的音频格式';
+
+  @override
+  String get audioErrorNoAudioTitle => '未选择音频文件';
+
+  @override
+  String get audioNoAudioSelected =>
+      '字幕需要和音频一起导入，请把音频文件也选上：MP3、WAV、M4A、AAC、FLAC。';
 
   @override
   String get audioErrorGenericTitle => '添加音频失败';
@@ -621,6 +783,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String updatedOn(String date) {
+    return '更新于 $date';
+  }
+
+  @override
   String get collections => '合集';
 
   @override
@@ -633,7 +800,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get newCollectionOptionTitle => '新建合集';
 
   @override
-  String get newCollectionOptionDescription => '手动添加音频或练习材料';
+  String get newCollectionOptionDescription => '添加音频或视频';
 
   @override
   String get collectionName => '合集名称';
@@ -652,7 +819,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deleteCollectionConfirm(String name) {
-    return '确定要删除「$name」吗？合集中的音频文件不会被删除。';
+    return '确定要删除「$name」吗？';
+  }
+
+  @override
+  String get deleteCollectionAlsoDeleteAudio => '同时删除音频文件';
+
+  @override
+  String deleteCollectionKeepAudioHint(int count) {
+    return '合集中共 $count 个音频文件，将保留。';
+  }
+
+  @override
+  String deleteCollectionDeleteAudioHint(int count) {
+    return '合集中共 $count 个音频文件，将一并删除。';
   }
 
   @override
@@ -697,13 +877,43 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get discoverEntryTitleA => '发现精选资源';
+  String get discoverEntryTitleA => '发现资源';
 
   @override
-  String get discoverEntrySubtitleA => '播客 · 托福 · 雅思 · 专四专八，教材...';
+  String get discoverEntrySubtitleA => '播客、托福、雅思、四六级、口译...';
 
   @override
-  String get officialCollectionEmpty => '该合集暂无音频';
+  String get communityCollectionEmpty => '该合集暂无文件';
+
+  @override
+  String communityCollectionAuthor(String nickname) {
+    return '作者：$nickname';
+  }
+
+  @override
+  String get communityCollectionUnknownAuthor => '未知作者';
+
+  @override
+  String communityCollectionUploader(String nickname) {
+    return '上传者：$nickname';
+  }
+
+  @override
+  String get communityCollectionUnknownUploader => '未知上传者';
+
+  @override
+  String get communityCollectionUnknownPublishDate => '日期未知';
+
+  @override
+  String communityCollectionCover(String name) {
+    return '$name封面';
+  }
+
+  @override
+  String get communityCollectionShowMore => '展开';
+
+  @override
+  String get communityCollectionShowLess => '收起';
 
   @override
   String get sortCollections => '排序';
@@ -716,7 +926,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String audioCount(int count) {
-    return '$count 个音频';
+    return '$count 个素材';
   }
 
   @override
@@ -726,7 +936,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get collectionNameExists => '已存在同名合集';
 
   @override
-  String get addAudioToCollection => '添加音频';
+  String get addAudioToCollection => '添加音频或视频';
 
   @override
   String get removeFromCollection => '从合集中移除';
@@ -751,10 +961,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get audioNotInOtherCollections => '未被其它合集引用，可放心删除。';
 
   @override
-  String get emptyCollection => '合集中还没有音频';
+  String selectedCount(int count) {
+    return '已选 $count 项';
+  }
 
   @override
-  String get tapToAddAudio => '点击 + 添加音频文件';
+  String get selectAll => '全选';
+
+  @override
+  String get deselectAll => '取消全选';
+
+  @override
+  String removeFromCollectionBatch(int count) {
+    return '从合集移除 $count 项';
+  }
+
+  @override
+  String permanentlyDeleteBatch(int count) {
+    return '彻底删除 $count 项音频';
+  }
+
+  @override
+  String get permanentlyDeleteBatchHint => '将删除音频文件，并从所有合集移除。';
+
+  @override
+  String get removeFromCollectionBatchHint => '仅从当前合集移除，音频文件保留。';
+
+  @override
+  String get emptyCollection => '合集暂无内容';
 
   @override
   String get renameAudio => '重命名';
@@ -794,12 +1028,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get favoritesComingSoon => '收藏功能即将上线';
 
   @override
-  String get learningPlanProgress => '学习进度';
-
-  @override
-  String get learningPlanNotStarted => '未开始';
-
-  @override
   String get firstStudy => '首次学习';
 
   @override
@@ -807,7 +1035,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String stepProgress(int completed, int total) {
-    return '$completed/$total 完成';
+    return '$completed/$total';
   }
 
   @override
@@ -833,6 +1061,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stepRetellingDesc => '挑战一下：用自己的话复述每段大意';
+
+  @override
+  String get stepFullTextRetelling => '全文复述';
 
   @override
   String get warmUpCardTitle => '听前预热';
@@ -876,6 +1107,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get reviewUnlocked => '已解锁';
+
+  @override
+  String get unlockReviewNow => '立即解锁';
 
   @override
   String get startLearning => '开始学习';
@@ -997,6 +1231,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get library => '资源库';
 
   @override
+  String get myLibrary => '我的资源库';
+
+  @override
+  String get libraryShowAll => '全部';
+
+  @override
   String get collectionsTab => '合集';
 
   @override
@@ -1080,16 +1320,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenHideSubtitle => '隐藏字幕';
 
   @override
-  String get intensiveListenCantUnderstand => '听不太懂';
+  String get intensiveListenUnclear => '听不太懂';
 
   @override
-  String get intensiveListenAutoMarkedDifficult => '已自动标记为难句，点此取消';
+  String get intensiveListenAutoMarkedDifficult => '已自动收藏';
 
   @override
-  String get intensiveListenMarkedDifficult => '已标记为难句，点此取消';
+  String get intensiveListenMarkedDifficult => '取消收藏';
 
   @override
-  String get intensiveListenNotDifficult => '点击标记为难句';
+  String get intensiveListenNotDifficult => '收藏';
 
   @override
   String get aiTranslation => '翻译';
@@ -1125,7 +1365,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenContinue => '继续';
 
   @override
-  String get intensiveListenReplayingWithSubtitle => '带字幕重播中...';
+  String get intensiveListenReplayingWithSubtitle => '再听一遍，巩固记忆';
 
   @override
   String intensiveListenPauseBetweenPlays(int seconds) {
@@ -1185,6 +1425,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenRepeatCount => '每句循环次数';
 
   @override
+  String get intensiveListenAnnotationReplayUsesRepeatCount => '讲解页按循环次数播放';
+
+  @override
   String intensiveListenRepeatCountValue(int count) {
     return '$count 次';
   }
@@ -1211,7 +1454,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get intensiveListenControlModeAutoDesc => '自动循环、自动停顿、自动下一句';
 
   @override
-  String get intensiveListenControlModeManualDesc => '手动重听、手动下一句';
+  String get intensiveListenControlModeManualDesc => '按设置循环，手动下一句';
 
   @override
   String intensiveListenPauseFixedUnit(int seconds) {
@@ -1381,9 +1624,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatCompleteTitle => '跟读完成';
 
   @override
-  String get listenAndRepeatNoDifficultSentences => '没有难句，无需跟读';
-
-  @override
   String get exitListenAndRepeatTitle => '退出跟读？';
 
   @override
@@ -1394,6 +1634,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get listenAndRepeatBriefingTip => '先听原句，在停顿期间跟读。';
+
+  @override
+  String get listenAndRepeatScopeLabel => '跟读范围';
+
+  @override
+  String get listenAndRepeatScopeFullText => '全文';
+
+  @override
+  String get listenAndRepeatScopeDifficultOnly => '仅收藏';
+
+  @override
+  String get listenAndRepeatNoSavedSentencesNoNeed => '没有收藏句';
+
+  @override
+  String listenAndRepeatBriefingSentenceCount(int count) {
+    return '$count 句';
+  }
 
   @override
   String listenAndRepeatBriefingDifficultCount(int count) {
@@ -1616,6 +1873,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reviewDifficultPracticeTitle => '难句补练';
 
   @override
+  String get reviewBlindListenDesc => '再次盲听，感受理解力的变化';
+
+  @override
+  String get reviewDifficultPracticeDesc => '重听难句，听不懂就跟读补练';
+
+  @override
+  String get reviewRetellParagraphDesc => '再次复述，提升理解和表达能力';
+
+  @override
+  String get reviewRetellSummaryDesc => '概述全文，梳理整体脉络，检验学习效果';
+
+  @override
+  String get reviewBriefingTipDifficultPractice => '先盲听难句，听不懂再跟读加练。';
+
+  @override
+  String get reviewBriefingTipRetellSummary => '用 3-5 句话总结全文大意。';
+
+  @override
   String reviewDifficultPracticeProgress(int current, int total) {
     return '第 $current/$total 句';
   }
@@ -1724,31 +1999,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get speechModelDownloadFailed => '下载失败，点击重试。';
 
   @override
-  String get speechModelDownloadFailedTitle => '语音识别模型下载失败';
-
-  @override
-  String get speechModelDownloadFailedGenericPurpose => '语音识别模型用于练习后自动评分。';
-
-  @override
-  String get speechModelDownloadFailedListenAndRepeatPurpose =>
-      '语音识别模型用于跟读后自动评分。';
-
-  @override
-  String get speechModelDownloadFailedRetellPurpose => '语音识别模型用于复述后自动评分。';
-
-  @override
-  String get speechModelDownloadFailedDisableHint => '暂时不需要自动评分，可关闭：';
-
-  @override
-  String get speechModelDisablePathGeneric => '设置 > 学习设置';
-
-  @override
-  String get speechModelDisablePathListenAndRepeat => '设置 > 学习设置 > 跟读时显示评分';
-
-  @override
-  String get speechModelDisablePathRetell => '设置 > 学习设置 > 复述时显示评分';
-
-  @override
   String get downloadErrorStorage => '存储空间不足，请清理后重试。';
 
   @override
@@ -1786,23 +2036,43 @@ class AppLocalizationsZh extends AppLocalizations {
   String get disableAction => '关闭';
 
   @override
-  String get speechRecognitionRequiredTitle => '需要下载语音识别模型';
-
-  @override
   String get speechRecognitionRequiredMessage =>
       '语音识别用于自动评估跟读和复述效果，开始前需要先下载模型。';
 
   @override
-  String get downloadAndEnable => '下载并启用';
+  String get asrModelDownloadRequiredTitle => '需要下载语音识别模型';
 
   @override
-  String get notNow => '暂不启用';
+  String asrModelDownloadEstimate(String size) {
+    return '预计下载量：约 $size';
+  }
 
   @override
-  String get speechModelRepairTitle => '模型下载不完整';
+  String get asrModelDownloadSettingsHint => '你也可以前往设置选择其他语音识别模型。';
 
   @override
-  String get speechModelRepairMessage => '语音识别模型未下载完成，需要重新下载才能使用语音练习。';
+  String get asrModelDownloadingTitle => '正在下载语音识别模型';
+
+  @override
+  String asrModelDownloadingMessage(String size) {
+    return '预计下载量：约 $size';
+  }
+
+  @override
+  String asrModelDownloadProgress(String progress) {
+    return '已完成 $progress';
+  }
+
+  @override
+  String get asrModelDownloadFailedTitle => '语音识别模型下载失败';
+
+  @override
+  String asrModelDownloadFailedMessage(String size) {
+    return '下载未完成。预计下载量：约 $size';
+  }
+
+  @override
+  String get asrDownloadModel => '下载模型';
 
   @override
   String get downloadNow => '立即下载';
@@ -1815,9 +2085,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get retryDownload => '重试';
-
-  @override
-  String get downloadingSpeechModel => '正在下载语音识别模型';
 
   @override
   String get developer => '开发者';
@@ -1899,6 +2166,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get transcriptionUploading => '上传中…';
 
   @override
+  String get transcriptionCompressing => '音频压缩中…';
+
+  @override
   String get transcriptionProcessing => '转录中…';
 
   @override
@@ -1918,6 +2188,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get transcriptionErrorUnknown => '请检查音频是否正常，稍后再试';
+
+  @override
+  String get transcriptionErrorCompression => '音频压缩失败，请检查音频后重试';
+
+  @override
+  String get transcriptionErrorCompressedFileTooLarge => '压缩后文件仍超过 25MB';
+
+  @override
+  String get transcriptionErrorAudioNotFound => '未找到已上传的音频，请重试。';
+
+  @override
+  String get transcriptionErrorAudioExpired => '已上传的音频已过期，请重试。';
+
+  @override
+  String get transcriptionErrorRequestInvalid => '转录请求无效，请更新应用后重试。';
+
+  @override
+  String get transcriptionErrorApiDeprecated => '当前应用版本已不再受支持，请更新应用。';
 
   @override
   String get transcriptionEmptyResult => '未检测到语音';
@@ -1966,7 +2254,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get overwrite => '覆盖';
 
   @override
+  String get downloadPodcastSubtitle => '下载播客字幕';
+
+  @override
+  String get downloadPodcastSubtitleSubtitle => '播客已提供字幕，无需转录';
+
+  @override
+  String get downloadSubtitle => '下载字幕';
+
+  @override
+  String get downloadSubtitleFailed => '下载字幕失败';
+
+  @override
   String get audioContentEmptyWarning => '疑似空音频';
+
+  @override
+  String get audioContentDamagedWarning => '音频异常';
+
+  @override
+  String get audioContentSilentWarning => '疑似静音音频';
+
+  @override
+  String get transcriptionDamagedConfirmTitle => '音频可能损坏';
+
+  @override
+  String get transcriptionDamagedConfirmMessage => '该音频可能已损坏或格式不兼容，仍要转录吗？';
 
   @override
   String get transcriptionSilentConfirmTitle => '音频疑似为空';
@@ -1976,6 +2288,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get transcriptionSilentConfirmProceed => '仍要转录';
+
+  @override
+  String transcriptionAudioFileSize(Object size) {
+    return '文件大小：$size';
+  }
+
+  @override
+  String transcriptionAudioDuration(Object duration) {
+    return '时长：$duration';
+  }
+
+  @override
+  String get transcriptionAudioUnknown => '未检测到';
 
   @override
   String get currentSubtitleExists => '当前：已有字幕';
@@ -2068,13 +2393,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String firstStudySection(int count) {
-    return '首次学习 ($count)';
-  }
+  String get recommendedForYou => '为你推荐';
 
   @override
   String completedSection(int count) {
-    return '已完成 ($count)';
+    return '已学完的材料 ($count)';
   }
 
   @override
@@ -2167,7 +2490,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get favoritesUnsaveVocabulary => '取消收藏';
 
   @override
-  String get bookmarkReviewTitle => '收藏复习';
+  String get bookmarkReviewTitle => '收藏句复习';
 
   @override
   String get bookmarkReviewStart => '开始复习';
@@ -2176,6 +2499,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String bookmarkReviewStartCount(int count) {
     return '开始复习 ($count)';
   }
+
+  @override
+  String bookmarkReviewDueCount(int count) {
+    return '待复习 $count 个';
+  }
+
+  @override
+  String get bookmarkReviewNothingToReview => '暂无待复习内容';
+
+  @override
+  String favoriteVocabularyReviewDueCount(int count) {
+    return '待复习 $count 个';
+  }
+
+  @override
+  String get favoriteReviewNothingToReview => '暂无待复习内容';
 
   @override
   String get bookmarkReviewComplete => '复习完成';
@@ -2190,6 +2529,132 @@ class AppLocalizationsZh extends AppLocalizations {
   String bookmarkReviewFromAudio(String name) {
     return '来自：$name';
   }
+
+  @override
+  String get favoriteSourceMaterialNotFound => '来源材料未找到';
+
+  @override
+  String get bookmarkReviewUnsave => '取消收藏';
+
+  @override
+  String get bookmarkReviewTapReplay => '听一遍，想一想';
+
+  @override
+  String get bookmarkReviewLoadingAudio => '正在加载音频…';
+
+  @override
+  String get bookmarkReviewPlaying => '正在播放';
+
+  @override
+  String get bookmarkReviewPlayOriginal => '再听一遍';
+
+  @override
+  String get bookmarkReviewTapRetry => '点按重试';
+
+  @override
+  String get bookmarkReviewListenPrompt => '点按可从头重播';
+
+  @override
+  String get bookmarkReviewReadyTitle => '想好后翻面';
+
+  @override
+  String get bookmarkReviewRevealHint => '点按查看答案';
+
+  @override
+  String get bookmarkReviewCompleted => '全部完成！';
+
+  @override
+  String get bookmarkReviewUnsaveFailed => '取消收藏失败，请重试。';
+
+  @override
+  String get bookmarkReviewSettingsPlaceholderTitle => '复习设置';
+
+  @override
+  String get bookmarkReviewSettingsPlaceholderBody => '更多复习控制将在后续版本中开放。';
+
+  @override
+  String get bookmarkReviewSettingsTitle => '复习设置';
+
+  @override
+  String get bookmarkReviewShowNextReviewTime => '显示下次复习时间';
+
+  @override
+  String get favoriteReviewAutoPlayFront => '自动播放正面';
+
+  @override
+  String get favoriteReviewAutoPlayBack => '自动播放背面';
+
+  @override
+  String get favoriteReviewShowVocabularyOnFront => '正面显示词汇';
+
+  @override
+  String get bookmarkReviewDailyGoal => '每日复习目标';
+
+  @override
+  String get favoriteReviewSentenceSettings => '收藏句子复习';
+
+  @override
+  String get favoriteReviewVocabularySettings => '收藏词汇复习';
+
+  @override
+  String get favoriteReviewSentenceDailyGoal => '每日句子复习目标';
+
+  @override
+  String get favoriteReviewVocabularyDailyGoal => '每日词汇复习目标';
+
+  @override
+  String get bookmarkReviewUnlimited => '不限制';
+
+  @override
+  String get bookmarkReviewOrder => '复习顺序';
+
+  @override
+  String get bookmarkReviewOrderSmart => '自动';
+
+  @override
+  String get bookmarkReviewOrderDueAt => '最早到期优先';
+
+  @override
+  String get bookmarkReviewOrderRandom => '随机';
+
+  @override
+  String get bookmarkReviewRatingAgain => '听不懂';
+
+  @override
+  String get bookmarkReviewRatingGood => '听懂了';
+
+  @override
+  String get favoriteVocabularyReviewTitle => '收藏词汇复习';
+
+  @override
+  String get favoriteVocabularyReviewCompleted => '全部完成！';
+
+  @override
+  String get favoriteVocabularyReviewTapReplay => '点按重播';
+
+  @override
+  String get favoriteVocabularyReviewLoadingAudio => '正在加载音频…';
+
+  @override
+  String get favoriteVocabularyReviewPlaying => '正在播放';
+
+  @override
+  String get favoriteVocabularyReviewTapRetry => '点按重试';
+
+  @override
+  String get favoriteVocabularyReviewAudioSkipped => '音频不可用，点按重试';
+
+  @override
+  String get favoriteVocabularyReviewReadyTitle => '想好后翻面';
+
+  @override
+  String get favoriteVocabularyReviewRevealHint => '点按查看反面';
+
+  @override
+  String get favoriteVocabularyReviewBackPlaceholder => '反面正在开发中';
+
+  @override
+  String get bookmarkReviewRatingEasy => '轻松听懂';
 
   @override
   String get difficultPracticeSettings => '练习设置';
@@ -2431,13 +2896,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get joinCommunity => '加入学习社群';
 
   @override
-  String get joinCommunityInviteSubtitle => '找搭子，共享学习资料，提需求';
+  String get aboutCommunity => '加入社区';
+
+  @override
+  String get joinCommunityInviteSubtitle => '找资源，找搭子，反馈建议';
 
   @override
   String get networkError => '无法连接，请检查网络后重试';
 
   @override
-  String get viewSourceCode => '查看源代码';
+  String get viewSourceCode => '开源项目';
 
   @override
   String updateAvailable(String version) {
@@ -2481,10 +2949,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get demoModeSubtitle => '开启后使用演示数据，方便截图展示';
 
   @override
-  String get practiceRemoveMark => '取消标记';
+  String get practiceRemoveMark => '取消收藏';
 
   @override
-  String get practiceAddMark => '重新标记';
+  String get practiceAddMark => '重新收藏';
 
   @override
   String blindListenSegmentProgress(int current, int total) {
@@ -2592,7 +3060,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stageBookmarkReview => '句子复习';
 
   @override
-  String get stageFlashcard => '单词复习';
+  String get stageFlashcard => '词汇复习';
 
   @override
   String stageBreakdownTitle(String date) {
@@ -2697,7 +3165,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String recentCompletions(int count) {
-    return '最近完成 ($count)';
+    return '最近完成任务 ($count)';
   }
 
   @override
@@ -2717,10 +3185,21 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String timeFromNowSeconds(int seconds) {
+    return '$seconds秒后';
+  }
+
+  @override
   String get exportAudio => '导出音频';
 
   @override
   String get exportAudioFile => '音频';
+
+  @override
+  String get exportVideo => '导出视频';
+
+  @override
+  String get exportVideoFile => '视频';
 
   @override
   String get exportSubtitleFile => '字幕';
@@ -2802,6 +3281,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get exportSuccess => '导出完成';
+
+  @override
+  String get downloadSuccess => '下载完成';
 
   @override
   String get importSuccess => '导入完成';
@@ -2910,6 +3392,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noActivityThisMonth => '本月暂无学习记录';
 
   @override
+  String get studyDurationNoRecords => '暂无学习记录';
+
+  @override
   String monthlySummaryTitle(String month) {
     return '$month月统计';
   }
@@ -2973,8 +3458,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get senseGroupSignInRequiredTitle => '登录后使用 AI 功能';
 
   @override
-  String get senseGroupSignInRequiredMessage =>
-      'AI 翻译、解析和意群拆分需要使用云端 AI 服务。登录后可以继续生成新结果，已缓存的结果仍可正常查看。';
+  String get senseGroupSignInRequiredMessage => '使用 AI 功能前，请先登录。';
 
   @override
   String get senseGroupSyntheticTimingNoticeTitle => '意群时间可能不准';
@@ -2998,6 +3482,114 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get recycleBinTitle => '回收站';
+
+  @override
+  String get reviewStatisticsTitle => '复习统计';
+
+  @override
+  String get reviewStatisticsAll => '全部';
+
+  @override
+  String get reviewStatisticsSentences => '收藏句子';
+
+  @override
+  String get reviewStatisticsVocabulary => '收藏词汇';
+
+  @override
+  String get reviewStatisticsTodayOverview => '今日概览';
+
+  @override
+  String get reviewStatisticsTodayReviewed => '今日复习';
+
+  @override
+  String get reviewStatisticsTodayCompleted => '今日已复习';
+
+  @override
+  String get reviewCompletionReviewed => '复习条数';
+
+  @override
+  String get reviewStatusRemaining => '剩余';
+
+  @override
+  String get reviewStatisticsDuration => '复习时长';
+
+  @override
+  String get reviewStatisticsDue => '现在可复习';
+
+  @override
+  String reviewStatisticsCurrentDue(String count) {
+    return '现在可复习 $count';
+  }
+
+  @override
+  String get reviewStatisticsCurrentDueExplanation => '已到期，可立即开始复习';
+
+  @override
+  String reviewStatisticsCurrentDueBreakdown(Object overdue, Object today) {
+    return '其中 $overdue 项逾期，$today 项今天已到期';
+  }
+
+  @override
+  String get reviewStatisticsStreak => '连续复习';
+
+  @override
+  String reviewStatisticsStreakExplanation(int count) {
+    return '连续 $count 天都有复习记录';
+  }
+
+  @override
+  String get reviewStatisticsLearningRhythm => '学习节奏';
+
+  @override
+  String get reviewStatisticsTrend => '近 30 天复习趋势';
+
+  @override
+  String get reviewStatisticsTrendExplanation => '每天完成的不同收藏内容';
+
+  @override
+  String get reviewStatisticsReviewPlan => '复习安排';
+
+  @override
+  String get reviewStatisticsUpcoming => '未来 7 天复习安排（含今天）';
+
+  @override
+  String get reviewStatisticsUpcomingExplanation => '每天到期的收藏内容';
+
+  @override
+  String get reviewStatisticsTodayShort => '今天';
+
+  @override
+  String get reviewStatisticsRecentPerformance => '近期表现';
+
+  @override
+  String get reviewStatisticsRatings => '近 30 天记忆保持率';
+
+  @override
+  String get reviewStatisticsRetentionRate => '保持率';
+
+  @override
+  String get reviewStatisticsRetentionExplanation =>
+      '每项内容仅统计首次复习结果。\n保持率 = (听懂了 + 轻松听懂) / 总数';
+
+  @override
+  String get reviewStatisticsEmptyRatings => '暂无评分记录';
+
+  @override
+  String get reviewStatisticsContent => '累计复习内容';
+
+  @override
+  String get reviewStatisticsContentExplanation => '至少完成过一次复习';
+
+  @override
+  String get reviewStatisticsHistory => '历史足迹';
+
+  @override
+  String reviewStatisticsItemCount(int count) {
+    return '$count 项';
+  }
+
+  @override
+  String get reviewStatisticsLoadError => '统计加载失败';
 
   @override
   String get recycleBinEmpty => '没有已移除的内容';
@@ -3028,6 +3620,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get importList => '导入列表';
+
+  @override
   String filesSelected(int count) {
     return '已选择 $count 个文件';
   }
@@ -3038,8 +3633,23 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String importingFileProgress(int current, int total, String name) {
+    return '正在导入 $current/$total：$name';
+  }
+
+  @override
   String multipleAudioAdded(int count) {
-    return '已添加 $count 个音频';
+    return '已添加 $count 个素材';
+  }
+
+  @override
+  String audioImportedCount(int count) {
+    return '成功导入 $count 个素材';
+  }
+
+  @override
+  String audioImportedWithSubtitleCount(int count) {
+    return '其中 $count 个包含字幕';
   }
 
   @override
@@ -3048,7 +3658,22 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get duplicatesSkippedDetail => '以下音频已在本合集中，已跳过：';
+  String importFailedCount(int count) {
+    return '失败 $count 个';
+  }
+
+  @override
+  String get duplicatesSkippedDetail => '以下素材与本合集中已有素材内容完全相同，已跳过：';
+
+  @override
+  String duplicateExistingFileName(String name) {
+    return '重复文件名: $name';
+  }
+
+  @override
+  String duplicateOfExisting(String name) {
+    return '与「$name」内容相同';
+  }
 
   @override
   String get removeFile => '移除';
@@ -3077,23 +3702,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retry => '重试';
 
   @override
+  String get mediaPreparingHint => '正在下载音频和字幕…';
+
+  @override
+  String get mediaWaitingOtherDownload => '另一项下载进行中，完成后将自动开始。';
+
+  @override
   String get guideNext => '下一步';
 
   @override
   String get guideDone => '知道了';
 
   @override
-  String get guideLibraryCollectionListDescription =>
-      '这里是合集列表。合集用于将音频按主题分类整理，点击任意合集，可以查看其中包含的音频。';
-
-  @override
-  String get guideLibraryCollectionMenuDescription => '点击这里，可以置顶、重命名或删除合集。';
+  String get guideSkip => '跳过';
 
   @override
   String get guideLibraryCreateCollectionDescription => '点击这里，可以创建新的合集。';
-
-  @override
-  String get guideCollectionAudioListDescription => '点击任意音频，可以查看它的学习计划和当前进度。';
 
   @override
   String get guideCollectionAudioMenuDescription =>
@@ -3108,16 +3732,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get guidePlanAddSubtitleDescription =>
       '可以用 AI 一键生成字幕，或上传本地字幕文件。完成后即可开始学习这段音频。';
-
-  @override
-  String get guidePlanAiTranscriptionTitle => '使用 AI 转录';
-
-  @override
-  String get guidePlanAiTranscriptionDescription =>
-      '如果你手头没有字幕文件，使用 AI 转录是最快的方式。';
-
-  @override
-  String get guidePlanStartTranscriptionDescription => '点击这里，让 AI 为这段音频生成字幕。';
 
   @override
   String get guidePlanFreePlayTitle => '随心听';
@@ -3150,19 +3764,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get learningProgressLoadFailed => '学习进度加载失败，请稍后重试';
 
   @override
-  String get guideMainShellVisitLibraryTitle => '从资源库开始';
-
-  @override
-  String get guideMainShellVisitLibraryDescription => '点击这里，了解如何使用本 App。';
-
-  @override
-  String get guideStudyTasksOverviewTitle => '这里是你的学习任务';
-
-  @override
-  String get guideStudyTasksOverviewDescription =>
-      '包括待学习的新音频、到期的复习任务和已完成的任务等。Echo Loop 会自动帮你安排学习节奏。';
-
-  @override
   String get guideStudyStatsHeaderTitle => '今日学习统计';
 
   @override
@@ -3170,40 +3771,22 @@ class AppLocalizationsZh extends AppLocalizations {
       '今天的听力时长、口语练习时长和新学词汇量都汇总在这里。点击卡片或柱状图，可查看更详细的数据分布。';
 
   @override
-  String get guideStudyStreakDescription => '点击这里查看学习日历。坚持每天打卡，逐步养成稳定的学习习惯。';
+  String get guideStudyStreakDescription => '点击这里查看学习日历';
 
   @override
-  String guideFavoritesSentencesListDescription(String dumbbellIcon) {
-    return '这里是你收藏的句子，并按来源音频分组展示。点击 $dumbbellIcon 按钮，可以一键复习该音频中的所有收藏句子。';
-  }
+  String get guideFavoritesSentencesListDescription => '这里是你收藏的句子，并按来源分组展示。';
 
   @override
-  String get guideFavoritesSentencesReviewDescription => '点击这里，一键复习所有收藏的句子。';
+  String get guideFavoritesVocabularyListDescription => '这里是你收藏的单词、词组、意群。';
 
   @override
-  String get guideFavoritesVocabularyListDescription =>
-      '这里是你收藏的单词和意群。展开后可查看释义，也可以收听它们在原句中的发音。';
+  String get guideSentenceTileBodyDescription => '点击句子从这里开始播放。';
 
   @override
-  String get guideFavoritesFlashcardDescription =>
-      '点击这里进入闪卡模式，复习所有收藏的词汇。通过看单词、听原句，可以更高效地巩固记忆。';
+  String get guideSentenceTileExplanationDescription => '点击左侧讲解图标查看这句话的讲解。';
 
   @override
-  String get guideIntensiveListenCantUnderstandDescription =>
-      '遇到听不懂的句子时点这里，会自动标记为难句并进入讲解模式。';
-
-  @override
-  String get guideIntensiveListenAnnotationContinueDescription =>
-      '搞懂这句后点「继续」进入下一句。';
-
-  @override
-  String get guideIntensiveListenAnnotationPlayDescription => '点击播放按钮，播放当前句。';
-
-  @override
-  String get guideSentenceTileNumberDescription => '点击编号从这句开始播放。';
-
-  @override
-  String get guideSentenceTileBodyDescription => '点击句子查看讲解。';
+  String get viewSentenceExplanation => '查看句子讲解';
 
   @override
   String get guideSubtitleEditorBoundaryHandleDescription =>
@@ -3217,13 +3800,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get guideSentenceAnnotationSentenceDescription =>
-      '点击任意单词可查看词典；长按句子可复制文字。';
+      '点击或长按选中文本，即可查看词典释义。';
 
   @override
   String get guideSentenceAnnotationSenseGroupDescription => '按意群切分，帮你轻松听懂长难句。';
-
-  @override
-  String get guideSentenceAnnotationTranslationDescription => '把这句话翻译成你的母语。';
 
   @override
   String get guideSentenceAnnotationAnalysisDescription =>
@@ -3245,7 +3825,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get resetOnboardingDone => 'Onboarding 已重置，请重启 App 以重新进入问卷';
 
   @override
-  String get discoverOfficialCollections => '发现精选合集';
+  String get discoverCommunityCollections => '发现资源';
 
   @override
   String get discoverEmpty => '暂无精选合集';
@@ -3257,7 +3837,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoverRetry => '重试';
 
   @override
-  String get discoverPodcastEntryTitle => '精选播客';
+  String get discoverPodcastEntryTitle => 'Apple 播客';
 
   @override
   String discoverPodcastEntrySubtitle(int count) {
@@ -3271,11 +3851,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoverPodcastEmpty => '暂无精选播客';
 
   @override
-  String get podcastCatalogSignInRequiredMessage =>
-      '登录后可以将精选播客添加到我的合集，并继续学习后续单集。';
+  String get podcastSignInRequiredMessage => '登录后可以将精选播客添加到我的合集，并继续学习后续单集。';
 
   @override
-  String get podcastCatalogSubscribeFailed =>
+  String get podcastPreviewSubscribeFailed =>
       '添加失败。部分 RSS 或 Apple Podcasts 在当前网络环境下可能不可访问，请稍后重试或切换网络。';
 
   @override
@@ -3302,23 +3881,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get podcastPreviewEmpty => '暂未获取到单集。';
 
   @override
-  String get officialBadge => '精选';
+  String get localCollectionBadge => '本地';
 
   @override
-  String get officialDeprecatedBadge => '已下架';
+  String get communityBadge => '共享';
+
+  @override
+  String get communityDeprecatedBadge => '已下架';
+
+  @override
+  String get podcastCollectionBadge => '播客';
 
   @override
   String get addToMyCollections => '添加到我的合集';
 
   @override
-  String get officialCollectionSignInRequiredTitle => '登录后添加合集';
+  String get communityCollectionSignInRequiredTitle => '登录后添加合集';
 
   @override
-  String get officialCollectionSignInRequiredMessage =>
-      '登录后可以将精选合集添加到我的合集，并同步后续学习内容。';
+  String get communityCollectionSignInRequiredMessage =>
+      '登录后可以将共享合集添加到我的合集，并同步后续内容。';
 
   @override
   String get goLearn => '去学习';
+
+  @override
+  String get communityCollectionAdded => '已添加';
 
   @override
   String get removeFromMyCollections => '从我的合集移除';
@@ -3336,18 +3924,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get enrollFailed => '添加失败，请检查网络后重试';
 
   @override
-  String removeOfficialConfirmTitle(String name) {
+  String removeCommunityConfirmTitle(String name) {
     return '移除《$name》？';
   }
 
   @override
-  String get removeOfficialConfirmMessage => '将删除本合集所有音频、字幕和相关学习记录，此操作不可恢复。';
+  String get removeCommunityConfirmMessage => '将删除本合集所有媒体、字幕和相关学习记录，此操作不可恢复。';
 
   @override
-  String get removeOfficialConfirmConfirm => '确认移除';
+  String get removeCommunityConfirmConfirm => '确认移除';
 
   @override
-  String get officialCollectionDeprecated => '该合集已下架，本地副本仍可继续使用。';
+  String get communityCollectionDeprecated => '该合集已移除，本地副本仍可继续使用。';
+
+  @override
+  String get communityCollectionRefreshFailed => '同步失败，下拉重试';
+
+  @override
+  String get communityFileUnavailable => '该文件已从共享合集中移除';
+
+  @override
+  String communityFilesRemoved(int count) {
+    return '共享合集中有 $count 个文件已移除';
+  }
 
   @override
   String get downloadCancel => '取消下载';
@@ -3366,27 +3965,32 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get updateOfficialSubtitle => '更新字幕';
+  String get updateCommunitySubtitle => '更新字幕';
 
   @override
-  String get updateOfficialSubtitleConfirm => '确定更新字幕？';
+  String get updateCommunitySubtitleConfirm => '确定更新字幕？';
 
   @override
-  String get updateOfficialSubtitleWarning => '更新字幕将替换本地字幕，并清空该音频的所有收藏句子和学习进度。';
+  String get updateCommunitySubtitleWarning =>
+      '更新字幕将替换本地字幕，并清空该媒体的所有收藏句子和学习进度。';
 
   @override
-  String get officialSubtitleUpdated => '字幕已更新';
+  String get communitySubtitleUpdated => '字幕已更新';
 
   @override
-  String get officialSubtitleUpdateFailed => '字幕更新失败，请重试';
-
-  @override
-  String downloadInProgressSnackbar(String name) {
-    return '正在下载《$name》，完成后再开始这条';
-  }
+  String get communitySubtitleUpdateFailed => '字幕更新失败，请重试';
 
   @override
   String get downloadLoading => '加载中';
+
+  @override
+  String get backgroundDownloadRunningTitle => '正在下载';
+
+  @override
+  String get backgroundDownloadCompleteTitle => '下载完成';
+
+  @override
+  String get backgroundDownloadFailedTitle => '下载失败';
 
   @override
   String get audioListColumnName => '名称';
@@ -3511,9 +4115,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingQ3OptionAppStore => '应用商店';
 
   @override
-  String get onboardingQ3OptionGooglePlay => 'Google Play';
-
-  @override
   String get onboardingQ3OptionYoutube => 'YouTube';
 
   @override
@@ -3523,28 +4124,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingQ3OptionXTwitter => 'X';
 
   @override
-  String get onboardingQ3OptionTiktok => 'TikTok';
-
-  @override
-  String get onboardingQ3OptionInstagram => 'Instagram';
-
-  @override
   String get onboardingQ3OptionXiaohongshu => '小红书';
 
   @override
   String get onboardingQ3OptionWechat => '微信';
 
   @override
-  String get onboardingQ3OptionDouyin => '抖音';
-
-  @override
-  String get onboardingQ3OptionKuaishou => '快手';
-
-  @override
   String get onboardingQ3OptionBilibili => 'B 站';
-
-  @override
-  String get onboardingQ3OptionBaiduSearch => '百度搜索';
 
   @override
   String get onboardingQ3OptionGoogleSearch => 'Google 搜索';
@@ -3557,6 +4143,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingQ3OptionOther => '其他';
+
+  @override
+  String get onboardingQ3OptionShortVideo => '短视频';
+
+  @override
+  String get onboardingQ3OptionSearchEngine => '搜索引擎';
+
+  @override
+  String get onboardingQ3OptionTeacherSchool => '老师 / 学校';
+
+  @override
+  String get onboardingQ3OtherHint => '可选，告诉我们具体是从哪里知道的';
 
   @override
   String get onboardingPermissionsHint => '为了保证体验我们将请求以下权限';
@@ -3580,6 +4178,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get learningSettings => '学习设置';
 
   @override
+  String get showRecommendationToggle => '显示推荐卡片';
+
+  @override
+  String get showRecommendationSubtitle => '在学习页显示「为你推荐」卡片';
+
+  @override
+  String get hideRecommendationTooltip => '关闭推荐';
+
+  @override
+  String get hideRecommendationTitle => '隐藏推荐卡片？';
+
+  @override
+  String get hideRecommendationMessage =>
+      '隐藏后学习页将不再显示推荐。如需恢复，可在「设置 › 学习 › 显示设置」中重新开启。';
+
+  @override
   String get speakingPracticeSection => '口语练习';
 
   @override
@@ -3589,13 +4203,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get autoSkipRetellSubtitle => '学习计划遇到复述任务时自动跳过';
 
   @override
-  String get autoSkipRetellDescription => '开启后，复述类任务会自动标记为已跳过；你随时可以在随心听里完成它们。';
-
-  @override
   String get autoExpandCachedAnnotationToggle => '自动展开句子讲解';
 
   @override
   String get autoExpandCachedAnnotationSubtitle => '自动展示查看过的翻译、解析和意群';
+
+  @override
+  String get autoShowAiExplanationToggle => '自动显示 AI 讲解';
+
+  @override
+  String get autoShowAiExplanationSubtitle => '进入句子讲解时自动显示选中的 AI 辅助内容';
+
+  @override
+  String get autoShowAiAnalysisToggle => 'AI 解析';
+
+  @override
+  String get autoShowAiTranslationToggle => 'AI 翻译';
+
+  @override
+  String get autoShowAiSenseGroupsToggle => 'AI 意群分割';
 
   @override
   String get autoPlayRetellRecordingToggle => '自动播放复述录音';
@@ -3616,6 +4242,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retellRatingSubtitle => '关闭后只保留录音回听，不再显示评分';
 
   @override
+  String get autoSaveOnUnclearToggle => '听不懂时自动收藏';
+
+  @override
+  String get autoSaveOnUnclearSubtitle => '精听时点击「听不太懂」，自动把该句加入收藏';
+
+  @override
+  String get unclearAutoSaveDialogTitle => '自动收藏听不懂的句子';
+
+  @override
+  String get unclearAutoSaveDialogMessage => '点「听不太懂」时，会自动收藏本句，方便你之后集中复习。';
+
+  @override
+  String get unclearAutoSaveSwitchOn => '开启';
+
+  @override
+  String get unclearAutoSaveSwitchOff => '关闭';
+
+  @override
+  String get unclearAutoSaveDialogHint => '随时可在「我的 → 学习设置」中修改。';
+
+  @override
+  String get unclearAutoSaveDialogConfirm => '知道了';
+
+  @override
   String get retellSkip => '跳过';
 
   @override
@@ -3626,6 +4276,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get skipSilenceDescription => '跳过句子之间较长的静音部分';
+
+  @override
+  String get wordHighlightTitle => '逐词高亮';
+
+  @override
+  String get wordHighlightDescription => '播放原音时高亮当前读到的单词';
 
   @override
   String get silenceThreshold => '静音阈值';
@@ -3653,7 +4309,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get speechPermItemMic => '麦克风';
 
   @override
-  String get speechPermItemMicDesc => '录制你的朗读用于发音评测';
+  String get speechPermItemMicDesc => '录制你的朗读用于发音评估';
 
   @override
   String get speechPermItemSpeech => '语音识别';
@@ -3900,6 +4556,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authAppleAccount => 'Apple 账号';
 
   @override
+  String get authEmailUnavailable => '邮箱暂不可用';
+
+  @override
   String get authGoogleAccount => 'Google 账号';
 
   @override
@@ -3960,13 +4619,141 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importAudioFromFile => '从本地文件导入';
 
   @override
-  String get importAudioFromFileDescription => '选择手机或网盘中的音频文件';
+  String get importAudioFromFileDescription => '选择手机或网盘中的素材文件';
 
   @override
   String get importAudioFromUrl => '从链接导入';
 
   @override
   String get importAudioFromUrlDescription => '粘贴音频直链，下载后加入资源库';
+
+  @override
+  String get importAudioFromCloudDrive => '从网盘导入';
+
+  @override
+  String get importAudioFromBaiduNetdisk => '从百度网盘导入';
+
+  @override
+  String get cloudDriveSourceShort => '网盘';
+
+  @override
+  String get baiduNetdisk => '百度网盘';
+
+  @override
+  String get baiduNetdiskAllFiles => '全部文件';
+
+  @override
+  String get baiduNetdiskWaitingAuthorization => '等待百度授权...';
+
+  @override
+  String get baiduNetdiskLoadingFiles => '正在加载百度网盘文件...';
+
+  @override
+  String get baiduNetdiskImportFailed => '百度网盘导入失败。';
+
+  @override
+  String get baiduNetdiskConnectTitle => '连接百度网盘';
+
+  @override
+  String get baiduNetdiskConnectDescription =>
+      '授权 Echo Loop 浏览你的百度网盘，并导入选中的素材文件。';
+
+  @override
+  String get baiduNetdiskConnectAction => '连接百度网盘';
+
+  @override
+  String get baiduNetdiskLogoutTooltip => '退出百度网盘登录';
+
+  @override
+  String get baiduNetdiskSelectAllAction => '全选';
+
+  @override
+  String get baiduNetdiskClearSelectionAction => '取消';
+
+  @override
+  String get baiduNetdiskLogoutTitle => '退出百度网盘登录？';
+
+  @override
+  String get baiduNetdiskLogoutMessage => 'Echo Loop 会清除当前设备上保存的百度网盘授权。';
+
+  @override
+  String get baiduNetdiskLogoutConfirm => '退出登录';
+
+  @override
+  String get baiduNetdiskAccountTooltip => '百度网盘账户';
+
+  @override
+  String get baiduNetdiskAccountTitle => '百度网盘账户';
+
+  @override
+  String get baiduNetdiskUsername => '百度用户名';
+
+  @override
+  String get baiduNetdiskNetdiskName => '网盘昵称';
+
+  @override
+  String get baiduNetdiskMembership => '会员状态';
+
+  @override
+  String get baiduNetdiskUserId => '用户 ID';
+
+  @override
+  String get baiduNetdiskUnavailable => '未提供';
+
+  @override
+  String get baiduNetdiskDisconnect => '断开百度网盘连接';
+
+  @override
+  String get baiduNetdiskNoSupportedAudio => '此文件夹中没有支持的素材文件。';
+
+  @override
+  String get importAudioShort => '导入';
+
+  @override
+  String get cancelImport => '取消导入';
+
+  @override
+  String get cancelingImport => '正在取消导入…';
+
+  @override
+  String importAudioSelectedCount(int count) {
+    return '导入 $count 个';
+  }
+
+  @override
+  String importAudioAndSubtitleCount(int audioCount, int subtitleCount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      audioCount,
+      locale: localeName,
+      other: '$audioCount 个素材',
+      zero: '',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      subtitleCount,
+      locale: localeName,
+      other: '，$subtitleCount 个字幕',
+      zero: '',
+    );
+    return '导入（$_temp0$_temp1）';
+  }
+
+  @override
+  String get baiduNetdiskImporting => '正在导入...';
+
+  @override
+  String baiduNetdiskImportingFile(String name) {
+    return '正在导入 $name...';
+  }
+
+  @override
+  String baiduNetdiskImportedCount(int count) {
+    return '已从百度网盘导入 $count 个';
+  }
+
+  @override
+  String baiduNetdiskSkippedSummary(int duplicates, int failures) {
+    return '跳过重复项：$duplicates · 失败：$failures';
+  }
 
   @override
   String get audioUrlLabel => '音频链接';
@@ -3999,7 +4786,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get audioDownloadFailed => '下载音频失败';
 
   @override
-  String get audioDownloadInProgress => '正在下载音频';
+  String get audioDownloadInProgress => '正在下载';
 
   @override
   String get audioImportComplete => '导入完成';
@@ -4022,6 +4809,18 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get podcastUrlHint =>
       'https://podcasts.apple.com/... 或 https://…/feed.xml';
+
+  @override
+  String get podcastSearchHint => '搜索播客或粘贴链接';
+
+  @override
+  String get podcastSearchEmpty => '没有找到相关播客';
+
+  @override
+  String get podcastSearchFailed => '搜索失败，请重试';
+
+  @override
+  String get podcastSubscribeThisLink => '订阅此链接';
 
   @override
   String get podcastSubscribing => '正在获取 Podcast Feed…';
@@ -4075,9 +4874,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get podcastAuthor => '作者';
-
-  @override
-  String get podcastDescription => '简介';
 
   @override
   String get podcastFeedUrl => 'RSS 链接';
@@ -4160,6 +4956,44 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ttsModelNotDownloaded => '未下载';
 
   @override
+  String get ttsModelDownloadRequiredTitle => '需要下载语音合成模型';
+
+  @override
+  String get ttsModelDownloadIntro => '首次使用此语音需要下载模型。';
+
+  @override
+  String ttsModelDownloadEstimate(Object size) {
+    return '预计下载量：约 $size';
+  }
+
+  @override
+  String get ttsModelDownloadSettingsHint => '你也可以前往设置选择其他语音合成模型。';
+
+  @override
+  String get ttsModelDownloadingTitle => '正在下载语音合成模型';
+
+  @override
+  String ttsModelDownloadingMessage(Object size) {
+    return '预计下载量：约 $size';
+  }
+
+  @override
+  String ttsModelDownloadProgress(Object progress) {
+    return '已完成 $progress';
+  }
+
+  @override
+  String get ttsModelDownloadFailedTitle => '语音合成模型下载失败';
+
+  @override
+  String ttsModelDownloadFailedMessage(Object size) {
+    return '下载未完成。预计下载量：约 $size';
+  }
+
+  @override
+  String get ttsDownloadModel => '下载模型';
+
+  @override
   String get ttsAccent => '口音';
 
   @override
@@ -4224,7 +5058,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dictionarySourcesDescription => '关闭的词典不会出现在查词切换器中';
 
   @override
-  String get dictionaryWebAdsNotice => '在线词典可能含其自带广告，与 Echo Loop 无关。';
+  String get dictionaryAutoSpeakOnLookup => '查词时自动播放发音';
+
+  @override
+  String get dictionaryAdFilterTitle => '屏蔽网页词典广告';
 
   @override
   String get dictSourceLocal => '本地词典';
@@ -4313,4 +5150,267 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dictAiMultiBackground => '背景知识';
+
+  @override
+  String get chatOpenTooltip => '问 AI';
+
+  @override
+  String get chatSentenceTitle => 'AI 助教';
+
+  @override
+  String get chatInputPlaceholder => '有问题尽管问…';
+
+  @override
+  String get chatSend => '发送';
+
+  @override
+  String get chatStop => '停止';
+
+  @override
+  String get chatClear => '清空对话';
+
+  @override
+  String get chatNewChat => '新建会话';
+
+  @override
+  String get chatRegenerate => '重新生成';
+
+  @override
+  String get chatEdit => '编辑';
+
+  @override
+  String get chatEditTitle => '编辑消息';
+
+  @override
+  String get chatCopy => '复制';
+
+  @override
+  String get chatCopied => '已复制';
+
+  @override
+  String chatContextLabel(String summary) {
+    return '正在讨论：$summary';
+  }
+
+  @override
+  String get chatEmptyGreeting => '关于这句话，有什么想问的？';
+
+  @override
+  String get chatErrorNetwork => '网络不可用，点击重试。';
+
+  @override
+  String get chatErrorGenerate => '生成失败，点击重试。';
+
+  @override
+  String get chatUpgrade => '升级';
+
+  @override
+  String get chatSignInTitle => '需要登录';
+
+  @override
+  String get chatSignInMessage => '登录后即可使用 AI 助手。';
+
+  @override
+  String get chatScrollToBottom => '回到底部';
+
+  @override
+  String get chatThinking => '思考中…';
+
+  @override
+  String get chatFollowUp => '问 AI';
+
+  @override
+  String get chatFollowUpExplain => '详细解释';
+
+  @override
+  String get chatFollowUpTranslate => '翻译';
+
+  @override
+  String get chatFollowUpExample => '举个例子';
+
+  @override
+  String get chatFollowUpInstruction => '请仅根据下方引用的内容回答问题。';
+
+  @override
+  String get chatQuoteRemove => '移除引用';
+
+  @override
+  String get retellAiReviewTooltip => 'AI 评估';
+
+  @override
+  String get retellAiReviewTitle => 'AI 复述评估';
+
+  @override
+  String get retellAiReviewKeyPoints => '要点覆盖';
+
+  @override
+  String get retellAiReviewLabelOriginal => '原文';
+
+  @override
+  String get retellAiReviewLabelYouSaid => '你说';
+
+  @override
+  String get retellAiReviewLabelTip => '提示';
+
+  @override
+  String get retellAiReviewSuggestion => '建议';
+
+  @override
+  String get retellAiReviewStatusCovered => '一致';
+
+  @override
+  String get retellAiReviewStatusPartial => '片面';
+
+  @override
+  String get retellAiReviewStatusMissed => '遗漏';
+
+  @override
+  String get retellAiReviewStatusDistorted => '误解';
+
+  @override
+  String get retellAiReviewStatusAdded => '多说';
+
+  @override
+  String get retellAiReviewCorrections => '表达纠错';
+
+  @override
+  String get retellAiReviewCorrectionTypeGrammar => '语法';
+
+  @override
+  String get retellAiReviewCorrectionTypeWordChoice => '用词';
+
+  @override
+  String get retellAiReviewCorrectionTypeRedundancy => '冗余';
+
+  @override
+  String get retellAiReviewCorrectionTypePhrasing => '说法';
+
+  @override
+  String get retellAiReviewCorrectionTypeCohesion => '衔接';
+
+  @override
+  String get retellAiReviewEvaluating => '正在评估…';
+
+  @override
+  String get retellAiReviewGenerating => '正在生成…';
+
+  @override
+  String get retellAiReviewRetry => '重试';
+
+  @override
+  String get retellAiReviewError => 'AI 评估未能完成，请重试。';
+
+  @override
+  String get retellAiReviewAudioPreparationError => '无法准备评估所需的录音文件。';
+
+  @override
+  String get retellAiReviewAudioTooLarge => '转换后的录音超过 2 MB 限制。';
+
+  @override
+  String get retellAiReviewSignInRequiredTitle => '登录后使用 AI 复述评估';
+
+  @override
+  String get retellAiReviewSignInRequiredMessage =>
+      'AI 复述评估使用云端 AI 服务，登录后即可获得复述反馈。';
+
+  @override
+  String get retellAiReviewPlayRecording => '播放录音';
+
+  @override
+  String get retellAiReviewStopRecording => '停止录音';
+
+  @override
+  String get videoHideTrack => '隐藏画面';
+
+  @override
+  String get mediaShowVisualTrack => '显示画面';
+
+  @override
+  String get mediaEnterFullscreen => '全屏';
+
+  @override
+  String get mediaExitFullscreen => '退出全屏';
+
+  @override
+  String get mediaHideVideoSubtitles => '隐藏视频内字幕';
+
+  @override
+  String get mediaShowVideoSubtitles => '显示视频内字幕';
+
+  @override
+  String get videoLoopWhole => '整篇循环';
+
+  @override
+  String get videoLoopSentence => '单句循环';
+
+  @override
+  String get videoLoading => '正在加载视频…';
+
+  @override
+  String get videoLoadFailed => '视频加载失败';
+
+  @override
+  String get videoNoTranscript => '无字幕';
+
+  @override
+  String get videoRetry => '重试';
+
+  @override
+  String get pronunciationPlay => '播放发音';
+
+  @override
+  String get pronunciationStandard => '标准发音';
+
+  @override
+  String get pronunciationAdjective => '形容词';
+
+  @override
+  String get pronunciationNoun => '名词';
+
+  @override
+  String get pronunciationNounAdjective => '名词 / 形容词';
+
+  @override
+  String get pronunciationVerb => '动词';
+
+  @override
+  String get pronunciationPastTense => '过去式';
+
+  @override
+  String get pronunciationPresentTense => '一般现在时';
+
+  @override
+  String get pronunciationInterjection => '感叹词';
+
+  @override
+  String get pronunciationLibrary => '离线单词发音';
+
+  @override
+  String get pronunciationLibraryDescription => '词典查词时优先播放预录的单词发音';
+
+  @override
+  String get redownload => '重新下载';
+
+  @override
+  String get collapseSidebar => '收起侧边栏';
+
+  @override
+  String get expandSidebar => '展开侧边栏';
+
+  @override
+  String get audioDetailTitle => '文件详情';
+
+  @override
+  String get audioDetailDescription => '简介';
+
+  @override
+  String get audioDetailDifficulty => '难度';
+
+  @override
+  String get audioDetailNoDescription => '暂无简介';
+
+  @override
+  String learningPlanFromCollection(String collections) {
+    return '来自：$collections';
+  }
 }

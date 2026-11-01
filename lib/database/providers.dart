@@ -14,8 +14,13 @@ import 'daos/saved_sense_group_dao.dart';
 import 'daos/learned_word_form_dao.dart';
 import 'daos/daily_study_record_dao.dart';
 import 'daos/daily_stage_study_record_dao.dart';
+import 'daos/study_statistics_dao.dart';
 import 'daos/tts_cache_dao.dart';
+import 'daos/memory_schedule_dao.dart';
+import 'daos/favorite_review_dao.dart';
 import '../services/study_time_service.dart';
+import '../services/study_activity_gate.dart';
+import '../services/app_logger.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/learning_progress_provider.dart';
@@ -30,9 +35,9 @@ import '../providers/learning_session/intensive_listen_player_provider.dart';
 import '../providers/learning_session/retell_player_provider.dart';
 import '../providers/listen_and_repeat/listen_and_repeat_controller.dart';
 import '../providers/learning_session/review_difficult_practice_provider.dart';
-import '../providers/flashcard/flashcard_provider.dart';
 import '../providers/transcription_task_provider.dart';
 import '../providers/study_stats_provider.dart';
+import '../providers/study_duration_provider.dart';
 import '../providers/study_task_provider.dart';
 import '../providers/learned_vocabulary_tracker_provider.dart';
 import '../providers/sentence_ai_provider.dart';
@@ -55,7 +60,12 @@ void initAppDatabase(AppDatabase db) {
 ///
 /// 用于演示模式切换：先关闭旧连接，再创建新数据库实例，
 /// 避免 Drift "multiple databases" 警告。
-Future<void> closeCurrentDatabase() async {
+Future<void> closeCurrentDatabase({StudyTimeService? studyTimeService}) async {
+  try {
+    await studyTimeService?.flush();
+  } catch (error, stackTrace) {
+    AppLogger.log('Database', '关闭前统计 flush 失败，继续切库: $error\n$stackTrace');
+  }
   await _appDatabase.close();
 }
 
@@ -71,6 +81,8 @@ void switchAppDatabase(AppDatabase newDb, WidgetRef ref) {
 
   // 1. Invalidate 核心数据库提供者
   ref.invalidate(appDatabaseProvider);
+  ref.invalidate(studyStatisticsDaoProvider);
+  ref.invalidate(studyTimeServiceProvider);
 
   // 2. 显式 invalidate 所有 keepAlive 数据提供者
   //    （它们用 ref.read() 而非 ref.watch()，不会自动级联）
@@ -90,13 +102,13 @@ void switchAppDatabase(AppDatabase newDb, WidgetRef ref) {
   ref.invalidate(listenAndRepeatControllerProvider);
   ref.invalidate(retellPlayerProvider);
   ref.invalidate(reviewDifficultPracticeProvider);
-  ref.invalidate(flashcardNotifierProvider);
   ref.invalidate(transcriptionTaskManagerProvider);
 
   ref.invalidate(bookmarkListProvider);
 
   // 3. Invalidate 非 keepAlive 但依赖 DB 的提供者
   ref.invalidate(studyStatsNotifierProvider);
+  ref.invalidate(studyDurationRecordsProvider);
   ref.invalidate(studyTaskProvider);
   ref.invalidate(learnedVocabularyTrackerProvider);
 
@@ -194,10 +206,33 @@ final ttsCacheDaoProvider = Provider<TtsCacheDao>((ref) {
   return ref.watch(appDatabaseProvider).ttsCacheDao;
 });
 
+/// MemoryScheduler DAO Provider。
+final memoryScheduleDaoProvider = Provider<MemoryScheduleDao>((ref) {
+  return ref.watch(appDatabaseProvider).memoryScheduleDao;
+});
+
+/// 收藏复习队列直接查询已到期调度及对应收藏内容的 DAO Provider。
+final favoriteReviewDaoProvider = Provider<FavoriteReviewDao>((ref) {
+  return ref.watch(appDatabaseProvider).favoriteReviewDao;
+});
+
 /// StudyTimeService Provider
 final studyTimeServiceProvider = Provider<StudyTimeService>((ref) {
   return StudyTimeService(
     ref.watch(dailyStudyRecordDaoProvider),
     ref.watch(dailyStageStudyRecordDaoProvider),
+    statisticsDao: ref.watch(studyStatisticsDaoProvider),
   );
+});
+
+/// 学习统计唯一写入 DAO Provider。
+final studyStatisticsDaoProvider = Provider<StudyStatisticsDao>((ref) {
+  return ref.watch(appDatabaseProvider).studyStatisticsDao;
+});
+
+/// 学习计时器使用的 App 生命周期状态 Provider。
+final studyActivityGateProvider = Provider<StudyActivityGate>((ref) {
+  final gate = StudyActivityGate();
+  ref.onDispose(gate.dispose);
+  return gate;
 });

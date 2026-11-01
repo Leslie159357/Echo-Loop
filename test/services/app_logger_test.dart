@@ -1,36 +1,43 @@
-/// AppLogger 落盘日志测试。
-///
-/// 验证：开启落盘后每条日志同步写入文件、可读回；超限时只保留尾部。
-/// 落盘是排查 native 崩溃（崩溃前内存缓冲丢失）的关键，需保证可靠。
+/// AppLogger 持久化日志测试。
 library;
 
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/services/app_logger.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory tempDir;
-  late String logPath;
+  late String logDirectory;
 
   setUp(() {
     tempDir = Directory.systemTemp.createTempSync('app_logger_test');
-    logPath = '${tempDir.path}/app.log';
+    logDirectory = '${tempDir.path}/logs';
+    AppLogger.instance.clear();
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await AppLogger.resetPersistentOutputForTesting();
+    AppLogger.instance.clear();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  test('开启落盘后日志写入文件并可读回', () async {
-    await AppLogger.initFileSink(logPath);
-    AppLogger.log('Test', 'hello world');
+  test('配置持久化输出后写入活动日志，且不恢复历史内存日志', () async {
+    final directory = Directory(logDirectory)..createSync(recursive: true);
+    File(
+      '${directory.path}/app.log',
+    ).writeAsStringSync('12:00:00.000 [Persisted] previous run\n');
 
-    final persisted = await AppLogger.readPersistedLog();
-    expect(persisted, isNotNull);
-    expect(persisted, contains('[Test] hello world'));
-    // 文件内容应与读回一致。
-    expect(File(logPath).readAsStringSync(), contains('hello world'));
+    await AppLogger.configurePersistentOutput(logDirectory);
+
+    expect(AppLogger.instance.entries, isEmpty);
+    AppLogger.log('Test', 'hello world');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final persisted = await AppLogger.readRecentPersistedEntries();
+    final lines = persisted.map((entry) => entry.toString());
+    expect(lines, contains(contains('[Persisted] previous run')));
+    expect(lines, contains(contains('[Test] hello world')));
   });
 
   test('formatLine 输出 HH:MM:SS.mmm [tag] message 格式', () {
@@ -42,22 +49,53 @@ void main() {
     expect(line, '09:08:07.123 [ASREngine] decode done');
   });
 
-  test('超过上限时启动只保留尾部', () async {
-    // 预置一个超大日志文件（> 512KB）。
-    final big = StringBuffer();
-    for (var i = 0; i < 60000; i++) {
-      big.writeln('11:11:11.111 [Old] line $i');
-    }
-    File(logPath).writeAsStringSync(big.toString());
-    expect(File(logPath).lengthSync(), greaterThan(512 * 1024));
+  test('读取最近持久化日志时按归档到活动文件的顺序拼接', () async {
+    final directory = Directory(logDirectory)..createSync(recursive: true);
+    File(
+      '${directory.path}/app-2026-01-01.log',
+    ).writeAsStringSync('12:00:00.000 [Old] old\n');
+    File(
+      '${directory.path}/app.log',
+    ).writeAsStringSync('12:00:01.000 [New] new\n');
+    await AppLogger.configurePersistentOutput(logDirectory);
 
-    await AppLogger.initFileSink(logPath);
+    final entries = await AppLogger.readRecentPersistedEntries();
+    expect(entries.map((entry) => entry.toString()).toList(), [
+      '12:00:00.000 [Old] old',
+      '12:00:01.000 [New] new',
+    ]);
+  });
 
-    final after = File(logPath).readAsStringSync();
-    expect(after.length, lessThan(512 * 1024));
-    expect(after, startsWith('--- 日志已截断，保留尾部 ---'));
-    // 截断后应保留最近的行，丢弃最早的行。
-    expect(after, contains('line 59999'));
-    expect(after, isNot(contains('line 0\n')));
+  test('读取大量持久化日志时只保留最近 500 条', () async {
+    final directory = Directory(logDirectory)..createSync(recursive: true);
+    final lines = List.generate(
+      AppLogger.maxRetainedEntries + 700,
+      (index) => '12:00:00.000 [Bulk] line-$index',
+    );
+    File(
+      '${directory.path}/app.log',
+    ).writeAsStringSync('${lines.join('\n')}\n');
+    await AppLogger.configurePersistentOutput(logDirectory);
+
+    final entries = await AppLogger.readRecentPersistedEntries();
+
+    expect(entries, hasLength(AppLogger.maxRetainedEntries));
+    expect(entries.first.message, 'line-700');
+    expect(entries.last.message, 'line-1199');
+  });
+
+  test('清空操作同时删除活动与历史日志', () async {
+    await AppLogger.configurePersistentOutput(logDirectory);
+    AppLogger.log('Test', 'to clear');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    await AppLogger.clearPersistedLogs();
+
+    expect(AppLogger.instance.entries, isEmpty);
+    final files = Directory(logDirectory).listSync().whereType<File>().toList();
+    // 清空后会立即恢复轮转输出，因此只留下新的空活动文件。
+    expect(files, hasLength(1));
+    expect(files.single.path, endsWith('/app.log'));
+    expect(files.single.readAsStringSync(), isEmpty);
   });
 }

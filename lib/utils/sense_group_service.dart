@@ -1,7 +1,7 @@
 /// 意群数据服务
 ///
 /// 纯数据类，封装词级时间戳加载、AI 意群拆分请求和时间范围计算。
-/// 不包含 UI 状态或播放逻辑，由 [AnnotationContentView] 内部使用。
+/// 不包含 UI 状态或播放逻辑，由 [SentenceExplanationView] 内部使用。
 library;
 
 import 'package:dio/dio.dart';
@@ -89,11 +89,13 @@ class SenseGroupService {
     required int sentenceEndMs,
     List<WordTimestamp>? wordTimestamps,
     CancelToken? cancelToken,
+    bool respectLocalQuotaReset = false,
   }) async* {
     final stream = ai.getSenseGroupsStream(
       text,
       accessToken: accessToken,
       cancelToken: cancelToken,
+      respectLocalQuotaReset: respectLocalQuotaReset,
     );
     await for (final result in stream) {
       final timings = computeTimings(

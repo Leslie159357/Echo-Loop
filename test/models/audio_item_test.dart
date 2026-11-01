@@ -15,6 +15,8 @@ void main() {
       String? audioSha256,
       String? originalAudioSha256,
       String? transcriptLanguage,
+      String? difficulty,
+      String? description,
       AudioImportSourceType? importSourceType,
       String? importSourceUrl,
     }) {
@@ -32,6 +34,8 @@ void main() {
         audioSha256: audioSha256,
         originalAudioSha256: originalAudioSha256,
         transcriptLanguage: transcriptLanguage,
+        difficulty: difficulty,
+        description: description,
         importSourceType: importSourceType,
         importSourceUrl: importSourceUrl,
       );
@@ -52,6 +56,24 @@ void main() {
         expect(restored.sentenceCount, item.sentenceCount);
         expect(restored.wordCount, item.wordCount);
         expect(restored.isPinned, item.isPinned);
+      });
+
+      test('难度往返一致，缺失字段时为空', () {
+        final item = createSample(difficulty: 'B1');
+        final restored = AudioItem.fromJson(item.toJson());
+        final oldJson = item.toJson()..remove('difficulty');
+
+        expect(restored.difficulty, 'B1');
+        expect(AudioItem.fromJson(oldJson).difficulty, isNull);
+      });
+
+      test('文件描述往返一致，缺失字段时为空', () {
+        final item = createSample(description: 'A puma at large.');
+        final restored = AudioItem.fromJson(item.toJson());
+        final oldJson = item.toJson()..remove('description');
+
+        expect(restored.description, 'A puma at large.');
+        expect(AudioItem.fromJson(oldJson).description, isNull);
       });
 
       test('导入来源字段往返一致', () {
@@ -131,6 +153,13 @@ void main() {
         expect(copied.importSourceUrl, isNull);
       });
 
+      test('社区材料难度支持显式清空', () {
+        final item = createSample(difficulty: 'B1');
+
+        expect(item.copyWith(difficulty: null).difficulty, isNull);
+        expect(item.copyWith().difficulty, 'B1');
+      });
+
       test('不传参数时保持原值', () {
         final item = createSample();
         final copied = item.copyWith();
@@ -198,10 +227,10 @@ void main() {
         expect(item.isAudioReady, isTrue);
       });
 
-      test('audioPath=null → false（官方合集未下载占位行）', () {
+      test('audioPath=null → false（社区合集未下载占位行）', () {
         final item = AudioItem(
           id: 'oc-1',
-          name: '官方音频',
+          name: '社区音频',
           audioPath: null,
           transcriptPath: null,
           addedDate: now,
@@ -453,7 +482,7 @@ void main() {
       expect(item.transcriptLanguage, isNull);
     });
 
-    group('官方合集字段（remoteAudioId）+ audioPath nullable', () {
+    group('社区合集字段（remoteAudioId）+ audioPath nullable', () {
       test('默认 remoteAudioId=null（用户自建音频）', () {
         final item = AudioItem(
           id: 'audio-1',
@@ -465,7 +494,7 @@ void main() {
         expect(item.isAudioReady, isTrue);
       });
 
-      test('官方合集未下载音频：remoteAudioId 有值，audioPath=null', () {
+      test('社区合集未下载音频：remoteAudioId 有值，audioPath=null', () {
         final item = AudioItem(
           id: 'audio-1',
           name: 'Day 1',
@@ -518,10 +547,8 @@ void main() {
     group('AudioContentStatus 枚举', () {
       test('fromIndex 正确映射', () {
         expect(AudioContentStatus.fromIndex(0), AudioContentStatus.ok);
-        expect(
-          AudioContentStatus.fromIndex(1),
-          AudioContentStatus.suspectEmpty,
-        );
+        expect(AudioContentStatus.fromIndex(1), AudioContentStatus.damaged);
+        expect(AudioContentStatus.fromIndex(2), AudioContentStatus.silent);
         expect(AudioContentStatus.fromIndex(null), isNull);
         expect(AudioContentStatus.fromIndex(99), isNull);
         expect(AudioContentStatus.fromIndex(-1), isNull);
@@ -529,7 +556,8 @@ void main() {
 
       test('index 属性正确', () {
         expect(AudioContentStatus.ok.index, 0);
-        expect(AudioContentStatus.suspectEmpty.index, 1);
+        expect(AudioContentStatus.damaged.index, 1);
+        expect(AudioContentStatus.silent.index, 2);
       });
     });
 
@@ -538,15 +566,26 @@ void main() {
         expect(createSample().contentStatus, isNull);
       });
 
-      test('toJson / fromJson 往返一致 — suspectEmpty', () {
+      test('toJson / fromJson 往返一致 — damaged', () {
         final item = createSample().copyWith(
-          contentStatus: AudioContentStatus.suspectEmpty,
+          contentStatus: AudioContentStatus.damaged,
         );
         final json = item.toJson();
         expect(json['contentStatus'], 1);
 
         final restored = AudioItem.fromJson(json);
-        expect(restored.contentStatus, AudioContentStatus.suspectEmpty);
+        expect(restored.contentStatus, AudioContentStatus.damaged);
+      });
+
+      test('toJson / fromJson 往返一致 — silent', () {
+        final item = createSample().copyWith(
+          contentStatus: AudioContentStatus.silent,
+        );
+        final json = item.toJson();
+        expect(json['contentStatus'], 2);
+
+        final restored = AudioItem.fromJson(json);
+        expect(restored.contentStatus, AudioContentStatus.silent);
       });
 
       test('toJson / fromJson 往返一致 — null', () {
@@ -572,7 +611,7 @@ void main() {
 
       test('copyWith 覆盖为 ok', () {
         final item = createSample().copyWith(
-          contentStatus: AudioContentStatus.suspectEmpty,
+          contentStatus: AudioContentStatus.damaged,
         );
         final copied = item.copyWith(contentStatus: AudioContentStatus.ok);
         expect(copied.contentStatus, AudioContentStatus.ok);
@@ -580,14 +619,14 @@ void main() {
 
       test('copyWith 不传参保持原值', () {
         final item = createSample().copyWith(
-          contentStatus: AudioContentStatus.suspectEmpty,
+          contentStatus: AudioContentStatus.silent,
         );
-        expect(item.copyWith().contentStatus, AudioContentStatus.suspectEmpty);
+        expect(item.copyWith().contentStatus, AudioContentStatus.silent);
       });
 
       test('copyWith 显式传 null', () {
         final item = createSample().copyWith(
-          contentStatus: AudioContentStatus.suspectEmpty,
+          contentStatus: AudioContentStatus.damaged,
         );
         expect(item.copyWith(contentStatus: null).contentStatus, isNull);
       });
@@ -611,6 +650,48 @@ void main() {
         );
         final reset = item.copyWith(originalDate: null);
         expect(reset.originalDate, isNull);
+      });
+    });
+
+    group('mediaType 派生', () {
+      test('path 为 null 按 audio 处理', () {
+        expect(mediaTypeForPath(null), MediaType.audio);
+      });
+
+      test('无扩展名按 audio 处理', () {
+        expect(mediaTypeForPath('audios/noext'), MediaType.audio);
+      });
+
+      test('音频扩展名判定为 audio', () {
+        expect(mediaTypeForPath('audios/a.mp3'), MediaType.audio);
+        expect(mediaTypeForPath('audios/a.m4a'), MediaType.audio);
+      });
+
+      test('四种视频扩展名判定为 video', () {
+        expect(mediaTypeForPath('videos/a.mp4'), MediaType.video);
+        expect(mediaTypeForPath('videos/a.mov'), MediaType.video);
+        expect(mediaTypeForPath('videos/a.m4v'), MediaType.video);
+        expect(mediaTypeForPath('videos/a.mkv'), MediaType.video);
+      });
+
+      test('大写视频扩展名判定为 video', () {
+        expect(mediaTypeForPath('videos/A.MP4'), MediaType.video);
+      });
+
+      test('AudioItem.isVideo：视频路径为 true', () {
+        final item = createSample().copyWith(audioPath: 'videos/a.mp4');
+        expect(item.isVideo, isTrue);
+        expect(item.mediaType, MediaType.video);
+      });
+
+      test('AudioItem.isVideo：音频路径为 false', () {
+        final item = createSample().copyWith(audioPath: 'audios/a.mp3');
+        expect(item.isVideo, isFalse);
+      });
+
+      test('AudioItem.isVideo：audioPath 为 null 时为 false', () {
+        final item = createSample().copyWith(audioPath: null);
+        expect(item.isVideo, isFalse);
       });
     });
   });

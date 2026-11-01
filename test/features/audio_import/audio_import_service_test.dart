@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:echo_loop/features/audio_import/audio_import_models.dart';
 import 'package:echo_loop/features/audio_import/audio_registration_service.dart';
 import 'package:echo_loop/features/audio_import/audio_import_service.dart';
+import 'package:echo_loop/services/background_file_download_service.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
@@ -12,6 +13,50 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockDio extends Mock implements Dio {}
+
+class _FakeDownloadRunner implements BackgroundDownloadRunner {
+  _FakeDownloadRunner({
+    this.bytes = const <int>[1, 2, 3, 4],
+    this.result = const BackgroundDownloadResult(
+      status: BackgroundDownloadStatus.complete,
+    ),
+    this.totalBytes,
+    this.writePartialOnFailure = false,
+  });
+
+  final List<int> bytes;
+  final BackgroundDownloadResult result;
+  final int? totalBytes;
+
+  /// 模拟系统下载在取消/失败前已落盘一部分数据。
+  final bool writePartialOnFailure;
+  Uri? lastUri;
+  String? lastDisplayName;
+
+  @override
+  Future<BackgroundDownloadResult> enqueue({
+    required Uri uri,
+    required String savePath,
+    String? displayName,
+    required Map<String, String> headers,
+    required BackgroundFileDownloadProgress? onProgress,
+    required CancelToken? cancelToken,
+  }) async {
+    lastUri = uri;
+    lastDisplayName = displayName;
+    onProgress?.call(totalBytes == null ? 0 : bytes.length, totalBytes);
+    if (result.status == BackgroundDownloadStatus.complete ||
+        writePartialOnFailure) {
+      await File(savePath).parent.create(recursive: true);
+      await File(savePath).writeAsBytes(bytes);
+    }
+    return result;
+  }
+}
+
+BackgroundFileDownloadService _backgroundDownloader(
+  _FakeDownloadRunner runner,
+) => BackgroundFileDownloadService(runner: runner);
 
 class _FakeAudioLibrary extends AudioLibrary {
   _FakeAudioLibrary([this.initialState = const AudioLibraryState()]);
@@ -95,7 +140,7 @@ void main() {
       expect(resolved.displayName, 'episode-1');
       expect(resolved.fileName, 'episode-1.mp3');
       expect(resolved.extension, 'mp3');
-      expect(resolved.contentLength, 1234);
+      expect(resolved.mimeType, 'audio/mpeg');
     });
 
     test('无扩展名时从 audio content-type 推断格式', () async {
@@ -165,6 +210,37 @@ void main() {
   });
 
   group('AudioRegistrationService', () {
+    test('注册 MKV 视频时保存统一媒体探测得到的时长', () async {
+      final container = ProviderContainer(
+        overrides: [audioLibraryProvider.overrideWith(_FakeAudioLibrary.new)],
+      );
+      addTearDown(container.dispose);
+      final service = AudioRegistrationService(
+        readDurationSeconds: (_) async => 83,
+      );
+
+      final result = await service.registerSandboxedAudio(
+        input: const SandboxedAudioRegistrationInput(
+          name: 'lesson',
+          relativePath: 'videos/lesson.mkv',
+          importSourceType: AudioImportSourceType.cloudDrive,
+        ),
+        audioLibrary: container.read(audioLibraryProvider.notifier),
+        audioLibraryState: container.read(audioLibraryProvider),
+      );
+
+      final item = switch (result) {
+        AudioRegistrationAdded(:final item) => item,
+        AudioRegistrationDuplicate() => fail('Expected new MKV registration'),
+      };
+      expect(item.isVideo, isTrue);
+      expect(item.totalDuration, 83);
+      expect(
+        container.read(audioLibraryProvider).audioItems.single.totalDuration,
+        83,
+      );
+    });
+
     test('本地导入只记录来源类型，不记录设备原始路径', () async {
       final container = ProviderContainer(
         overrides: [audioLibraryProvider.overrideWith(_FakeAudioLibrary.new)],
@@ -416,6 +492,91 @@ void main() {
       expect(result, isA<AudioRegistrationDuplicate>());
       expect(container.read(audioLibraryProvider).audioItems, [existing]);
     });
+
+    test('重复项同时携带本次导入名与已有条目名（内容同、名不同）', () async {
+      final existing = AudioItem(
+        id: 'a1',
+        name: 'TPO-32-L4',
+        audioPath: 'audios/sha.m4a',
+        audioSha256: 'sha',
+        originalAudioSha256: 'orig-sha',
+        addedDate: DateTime(2026, 1, 1),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => _FakeAudioLibrary(AudioLibraryState(audioItems: [existing])),
+          ),
+          collectionListProvider.overrideWith(
+            () => _FakeCollectionList(
+              const CollectionState(
+                audioIdsMap: {
+                  'c1': ['a1'],
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final service = AudioRegistrationService(
+        readDurationSeconds: (_) async => 5,
+      );
+
+      final result = await service.registerSandboxedAudio(
+        input: const SandboxedAudioRegistrationInput(
+          name: 'TPO-32-L4 copy copy',
+          relativePath: 'audios/sha.m4a',
+          importSourceType: AudioImportSourceType.local,
+          audioSha256: 'orig-sha',
+          originalAudioSha256: 'orig-sha',
+        ),
+        audioLibrary: container.read(audioLibraryProvider.notifier),
+        audioLibraryState: container.read(audioLibraryProvider),
+        collectionList: container.read(collectionListProvider.notifier),
+        collectionState: container.read(collectionListProvider),
+        collectionId: 'c1',
+      );
+
+      final dup = result as AudioRegistrationDuplicate;
+      expect(dup.attemptedName, 'TPO-32-L4 copy copy');
+      expect(dup.existingName, 'TPO-32-L4');
+      expect(dup.name, 'TPO-32-L4'); // 兼容 getter
+    });
+
+    test('按名去重（无原始 hash）重复项 attemptedName 与 existingName 一致', () async {
+      final existing = AudioItem(
+        id: 'a1',
+        name: 'lesson',
+        audioPath: 'audios/old.m4a',
+        addedDate: DateTime(2026, 1, 1),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          audioLibraryProvider.overrideWith(
+            () => _FakeAudioLibrary(AudioLibraryState(audioItems: [existing])),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final service = AudioRegistrationService(
+        readDurationSeconds: (_) async => 5,
+      );
+
+      final result = await service.registerSandboxedAudio(
+        input: const SandboxedAudioRegistrationInput(
+          name: 'lesson',
+          relativePath: 'audios/lesson.mp3',
+          importSourceType: AudioImportSourceType.local,
+        ),
+        audioLibrary: container.read(audioLibraryProvider.notifier),
+        audioLibraryState: container.read(audioLibraryProvider),
+      );
+
+      final dup = result as AudioRegistrationDuplicate;
+      expect(dup.attemptedName, 'lesson');
+      expect(dup.existingName, 'lesson');
+    });
   });
 
   group('AudioImportService.importFromUrl', () {
@@ -437,25 +598,10 @@ void main() {
           statusCode: 200,
           headers: Headers.fromMap({
             Headers.contentTypeHeader: ['audio/mpeg'],
+            Headers.contentLengthHeader: ['1234'],
           }),
         ),
       );
-      when(
-        () => dio.download(
-          any(),
-          any(),
-          cancelToken: any(named: 'cancelToken'),
-          options: any(named: 'options'),
-          onReceiveProgress: any(named: 'onReceiveProgress'),
-        ),
-      ).thenAnswer((invocation) async {
-        final savePath = invocation.positionalArguments[1] as String;
-        final callback =
-            invocation.namedArguments[#onReceiveProgress] as ProgressCallback?;
-        callback?.call(4, 4);
-        await File(savePath).writeAsBytes([1, 2, 3, 4]);
-        return Response<void>(requestOptions: RequestOptions(path: ''));
-      });
     });
 
     tearDown(() async {
@@ -464,10 +610,15 @@ void main() {
       }
     });
 
-    test('成功下载、保留原始音频并创建 AudioItem 写入库状态', () async {
+    test('HEAD 大小与落盘大小不一致时仍接受平台报告完成的下载', () async {
+      final runner = _FakeDownloadRunner(
+        bytes: const <int>[1, 2, 3, 4],
+        totalBytes: 8,
+      );
       final service = AudioImportService(
         dio: dio,
         resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(runner),
         // 导入不再转码：仅对原始 .mp3 计算指纹。
         computeSha256: (path) async {
           expect(path, endsWith('.mp3'));
@@ -492,6 +643,7 @@ void main() {
       );
 
       expect(item.name, 'lesson');
+      expect(runner.lastDisplayName, item.name);
       // 保留原始格式与扩展名，audioSha256 == originalAudioSha256。
       expect(item.audioPath, 'audios/imported/sha-original.mp3');
       expect(item.totalDuration, 42);
@@ -501,6 +653,75 @@ void main() {
       expect(item.importSourceUrl, 'https://example.com/lesson.mp3');
       expect(container.read(audioLibraryProvider).audioItems, [item]);
       expect(await File('${tmpDir.path}/${item.audioPath}').exists(), isTrue);
+      expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
+    });
+
+    test('下载被取消 → AudioImportException(canceled) 且不留临时文件', () async {
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(
+            result: const BackgroundDownloadResult(
+              status: BackgroundDownloadStatus.canceled,
+            ),
+          ),
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [audioLibraryProvider.overrideWith(_FakeAudioLibrary.new)],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        service.importFromUrl(
+          url: 'https://example.com/lesson.mp3',
+          audioLibrary: container.read(audioLibraryProvider.notifier),
+          audioLibraryState: container.read(audioLibraryProvider),
+        ),
+        throwsA(
+          isA<AudioImportException>().having(
+            (e) => e.code,
+            'code',
+            AudioImportFailureCode.canceled,
+          ),
+        ),
+      );
+      expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
+    });
+
+    test('下载网络失败（404）→ AudioImportException(network) 且不留临时文件', () async {
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(
+            result: const BackgroundDownloadResult(
+              status: BackgroundDownloadStatus.notFound,
+              statusCode: 404,
+            ),
+          ),
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [audioLibraryProvider.overrideWith(_FakeAudioLibrary.new)],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        service.importFromUrl(
+          url: 'https://example.com/lesson.mp3',
+          audioLibrary: container.read(audioLibraryProvider.notifier),
+          audioLibraryState: container.read(audioLibraryProvider),
+        ),
+        throwsA(
+          isA<AudioImportException>().having(
+            (e) => e.code,
+            'code',
+            AudioImportFailureCode.network,
+          ),
+        ),
+      );
       expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
     });
 
@@ -528,6 +749,9 @@ void main() {
       final service = AudioImportService(
         dio: dio,
         resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(bytes: const <int>[1, 2, 3, 4]),
+        ),
         computeSha256: (_) async => 'sha-existing',
       );
 
@@ -563,19 +787,6 @@ void main() {
     setUp(() async {
       tmpDir = await Directory.systemTemp.createTemp('episode_download_test_');
       dio = _MockDio();
-      when(
-        () => dio.download(
-          any(),
-          any(),
-          cancelToken: any(named: 'cancelToken'),
-          options: any(named: 'options'),
-          onReceiveProgress: any(named: 'onReceiveProgress'),
-        ),
-      ).thenAnswer((invocation) async {
-        final savePath = invocation.positionalArguments[1] as String;
-        await File(savePath).writeAsBytes([5, 6, 7, 8]);
-        return Response<void>(requestOptions: RequestOptions(path: ''));
-      });
     });
 
     tearDown(() async {
@@ -584,10 +795,77 @@ void main() {
       }
     });
 
-    test('Podcast 单集下载成功后保留原始音频', () async {
+    test('Podcast 单集手动取消时删除已落盘的部分文件', () async {
       final service = AudioImportService(
         dio: dio,
         resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(
+            bytes: const <int>[1, 2, 3],
+            writePartialOnFailure: true,
+            result: const BackgroundDownloadResult(
+              status: BackgroundDownloadStatus.canceled,
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        service.downloadEpisodeToSandbox(
+          url: 'https://example.com/episode.mp3',
+          displayName: 'Episode 1',
+          enclosureType: 'audio/mpeg',
+        ),
+        throwsA(
+          isA<AudioImportException>().having(
+            (e) => e.code,
+            'code',
+            AudioImportFailureCode.canceled,
+          ),
+        ),
+      );
+      expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
+    });
+
+    test('Podcast 单集自然失败时保留已落盘的部分文件，供下次继续', () async {
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(
+            bytes: const <int>[1, 2, 3],
+            writePartialOnFailure: true,
+            result: const BackgroundDownloadResult(
+              status: BackgroundDownloadStatus.failed,
+              statusCode: 503,
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        service.downloadEpisodeToSandbox(
+          url: 'https://example.com/episode.mp3',
+          displayName: 'Episode 1',
+          enclosureType: 'audio/mpeg',
+        ),
+        throwsA(
+          isA<AudioImportException>().having(
+            (e) => e.code,
+            'code',
+            AudioImportFailureCode.network,
+          ),
+        ),
+      );
+      expect(await _tmpAudioImportFiles(tmpDir), hasLength(1));
+    });
+
+    test('Podcast 单集下载成功后保留原始音频', () async {
+      final runner = _FakeDownloadRunner(bytes: const <int>[5, 6, 7, 8]);
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(runner),
         computeSha256: (path) async {
           expect(path, endsWith('.mp3'));
           return 'sha-episode';
@@ -600,9 +878,11 @@ void main() {
 
       final result = await service.downloadEpisodeToSandbox(
         url: 'https://example.com/episode.mp3',
+        displayName: 'Episode 1: Welcome',
         enclosureType: 'audio/mpeg',
       );
 
+      expect(runner.lastDisplayName, 'Episode 1: Welcome');
       expect(result.relativePath, 'audios/imported/sha-episode.mp3');
       expect(result.durationSeconds, 61);
       expect(result.audioSha256, 'sha-episode');
@@ -618,18 +898,69 @@ void main() {
       final service = AudioImportService(
         dio: dio,
         resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(
+          _FakeDownloadRunner(bytes: const <int>[5, 6, 7, 8]),
+        ),
         computeSha256: (_) async => 'sha-episode',
         readDurationSeconds: (_) async => 61,
       );
 
       final result = await service.downloadEpisodeToSandbox(
         url: 'https://example.com/episode.mp3',
+        displayName: 'Episode 1',
         enclosureType: 'audio/mpeg',
       );
 
       expect(result.relativePath, 'audios/imported/sha-episode.mp3');
       expect(await existingFile.readAsBytes(), [9, 9, 9]);
       expect(await _tmpAudioImportFiles(tmpDir), isEmpty);
+    });
+
+    test('BBC 旧 HTTP enclosure 下载前自动升级为 HTTPS secure URL', () async {
+      final runner = _FakeDownloadRunner(bytes: const <int>[5, 6, 7, 8]);
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(runner),
+        computeSha256: (_) async => 'sha-episode',
+        readDurationSeconds: (_) async => 61,
+      );
+
+      await service.downloadEpisodeToSandbox(
+        url:
+            'http://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss-low/proto/http/vpid/p0n4bjcm.mp3',
+        displayName: 'BBC episode title',
+        enclosureType: 'audio/mpeg',
+      );
+
+      expect(
+        runner.lastUri.toString(),
+        startsWith('https://open.live.bbc.co.uk/'),
+      );
+      expect(runner.lastUri.toString(), contains('/proto/https/'));
+      expect(runner.lastUri.toString(), endsWith('/vpid/p0n4bjcm.mp3'));
+    });
+
+    test('Anchor 播客重定向 URL 直接下载其内嵌的媒体 URL', () async {
+      final runner = _FakeDownloadRunner(bytes: const <int>[5, 6, 7, 8]);
+      final service = AudioImportService(
+        dio: dio,
+        resolveDataDir: () async => tmpDir,
+        backgroundDownloader: _backgroundDownloader(runner),
+        computeSha256: (_) async => 'sha-episode',
+        readDurationSeconds: (_) async => 61,
+      );
+
+      await service.downloadEpisodeToSandbox(
+        url:
+            'https://anchor.fm/s/show/podcast/play/123/'
+            'https%3A%2F%2Fcdn.example.com%2Fepisode.mp3',
+        displayName: 'Anchor episode title',
+        enclosureType: 'audio/mpeg',
+      );
+
+      expect(runner.lastUri, Uri.parse('https://cdn.example.com/episode.mp3'));
+      expect(runner.lastDisplayName, 'Anchor episode title');
     });
   });
 }

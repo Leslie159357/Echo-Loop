@@ -18,7 +18,11 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
   /// 当前句是否仍被标记为难句
   final bool currentSentenceBookmarked;
 
+  /// 当前媒体是否为视频；播放始终由共享 MediaEngine 提供。
+  final bool hasVideo;
+
   const ListenAndRepeatSessionState({
+    super.sessionId,
     super.phase,
     super.sentenceIndex,
     super.totalSentences,
@@ -29,8 +33,12 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
     super.recordingScore,
     super.isReviewPlaybackActive,
     super.flowToken,
+    super.controlMode,
+    super.postRecordingAction,
+    super.isTransitioning,
     this.isFreePlay = false,
     this.currentSentenceBookmarked = false,
+    this.hasVideo = false,
   });
 
   /// 从 [RepeatFlowState] 和 [isFreePlay] 构建
@@ -38,8 +46,10 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
     RepeatFlowState flow, {
     bool isFreePlay = false,
     bool currentSentenceBookmarked = false,
+    bool hasVideo = false,
   }) {
     return ListenAndRepeatSessionState(
+      sessionId: flow.sessionId,
       phase: flow.phase,
       sentenceIndex: flow.sentenceIndex,
       totalSentences: flow.totalSentences,
@@ -50,13 +60,18 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
       recordingScore: flow.recordingScore,
       isReviewPlaybackActive: flow.isReviewPlaybackActive,
       flowToken: flow.flowToken,
+      controlMode: flow.controlMode,
+      postRecordingAction: flow.postRecordingAction,
+      isTransitioning: flow.isTransitioning,
       isFreePlay: isFreePlay,
       currentSentenceBookmarked: currentSentenceBookmarked,
+      hasVideo: hasVideo,
     );
   }
 
   @override
   ListenAndRepeatSessionState copyWith({
+    int? sessionId,
     RepeatFlowPhase? phase,
     int? sentenceIndex,
     int? totalSentences,
@@ -67,10 +82,15 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
     Object? recordingScore = _noChange,
     bool? isReviewPlaybackActive,
     int? flowToken,
+    RepeatControlMode? controlMode,
+    RepeatPostRecordingAction? postRecordingAction,
+    bool? isTransitioning,
     bool? isFreePlay,
     bool? currentSentenceBookmarked,
+    bool? hasVideo,
   }) {
     return ListenAndRepeatSessionState(
+      sessionId: sessionId ?? this.sessionId,
       phase: phase ?? this.phase,
       sentenceIndex: sentenceIndex ?? this.sentenceIndex,
       totalSentences: totalSentences ?? this.totalSentences,
@@ -86,9 +106,13 @@ class ListenAndRepeatSessionState extends RepeatFlowState {
       isReviewPlaybackActive:
           isReviewPlaybackActive ?? this.isReviewPlaybackActive,
       flowToken: flowToken ?? this.flowToken,
+      controlMode: controlMode ?? this.controlMode,
+      postRecordingAction: postRecordingAction ?? this.postRecordingAction,
+      isTransitioning: isTransitioning ?? this.isTransitioning,
       isFreePlay: isFreePlay ?? this.isFreePlay,
       currentSentenceBookmarked:
           currentSentenceBookmarked ?? this.currentSentenceBookmarked,
+      hasVideo: hasVideo ?? this.hasVideo,
     );
   }
 }

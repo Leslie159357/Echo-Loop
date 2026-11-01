@@ -43,18 +43,22 @@ export 'package:echo_loop/services/asr/offline_asr_engine.dart'
 export 'package:echo_loop/database/app_database.dart' show SavedWord;
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
+import 'package:echo_loop/providers/intensive_annotation/intensive_annotation_phase.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/blind_listen_settings.dart';
 import 'package:echo_loop/models/collection.dart';
 import 'package:echo_loop/models/difficult_practice_settings.dart';
-import 'package:echo_loop/models/flashcard_item.dart';
-import 'package:echo_loop/models/flashcard_settings.dart';
 import 'package:echo_loop/models/intensive_listen_settings.dart';
+import 'package:echo_loop/models/media_load_result.dart';
 import 'package:echo_loop/models/learning_plan.dart';
 import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/providers/learning_session/intensive_listen_playback_driver.dart';
+import 'package:echo_loop/providers/learning_session/paragraph_playback_driver.dart';
 import 'package:echo_loop/models/playback_settings.dart';
 import 'package:echo_loop/models/retell_settings.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/models/sentence_playback_result.dart';
+import 'package:echo_loop/models/sense_group_range_playback.dart';
 import 'package:echo_loop/models/study_stage.dart';
 import 'package:echo_loop/models/tag.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
@@ -62,8 +66,6 @@ import 'package:echo_loop/providers/audio_engine/foreground_audio_engine_provide
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
 import 'package:echo_loop/providers/daily_study_time_provider.dart';
-import 'package:echo_loop/providers/flashcard/flashcard_flow_phase.dart';
-import 'package:echo_loop/providers/flashcard/flashcard_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:echo_loop/providers/learning_session/intensive_listen_player_provider.dart';
@@ -75,6 +77,7 @@ import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/providers/repeat_flow/repeat_flow_engine.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/tag_provider.dart';
+import 'package:echo_loop/providers/time_provider.dart';
 import 'package:echo_loop/services/asr/offline_asr_engine.dart';
 import 'package:echo_loop/services/study_time_service.dart';
 
@@ -196,12 +199,12 @@ class FakeAudioLibrary extends AudioLibrary {
     final index = items.indexWhere((item) => item.id == id);
     if (index != -1 && items[index].isAudioReady) {
       final item = items[index];
-      final isOfficial = item.remoteAudioId != null;
+      final isCommunity = item.remoteAudioId != null;
       items[index] = item.copyWith(
         audioPath: null,
         contentStatus: null,
         originalAudioSha256: null,
-        audioSha256: isOfficial ? item.audioSha256 : null,
+        audioSha256: isCommunity ? item.audioSha256 : null,
       );
       state = state.copyWith(audioItems: items);
     }
@@ -264,7 +267,10 @@ class FakeCollectionList extends CollectionList {
     final collections = [...state.rawCollections];
     final index = collections.indexWhere((c) => c.id == id);
     if (index != -1) {
-      collections[index] = collections[index].copyWith(name: newName);
+      collections[index] = collections[index].copyWith(
+        name: newName,
+        updatedAt: DateTime.now(),
+      );
       state = state.copyWith(rawCollections: collections);
     }
   }
@@ -302,7 +308,49 @@ class FakeCollectionList extends CollectionList {
       if (!ids.contains(audioId)) ids.add(audioId);
     }
     newMap[collectionId] = ids;
-    state = state.copyWith(audioIdsMap: newMap);
+    _touchCollectionUpdatedAt(collectionId, audioIdsMap: newMap);
+  }
+
+  @override
+  Future<void> removeAudioFromCollection(
+    String collectionId,
+    String audioId,
+  ) async {
+    await removeAudiosFromCollection(collectionId, {audioId});
+  }
+
+  @override
+  Future<void> removeAudiosFromCollection(
+    String collectionId,
+    Set<String> audioIds,
+  ) async {
+    final newMap = Map<String, List<String>>.from(state.audioIdsMap);
+    final ids = List<String>.from(newMap[collectionId] ?? [])
+      ..removeWhere(audioIds.contains);
+    newMap[collectionId] = ids;
+    _touchCollectionUpdatedAt(collectionId, audioIdsMap: newMap);
+  }
+
+  @override
+  Future<void> createPodcastCollection(Collection collection) async {
+    state = state.copyWith(
+      rawCollections: [...state.rawCollections, collection],
+      audioIdsMap: {...state.audioIdsMap, collection.id: []},
+    );
+  }
+
+  @override
+  Future<void> updatePodcastCollection(
+    Collection updated, {
+    bool touchUpdatedAt = true,
+  }) async {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == updated.id);
+    if (index == -1) return;
+    collections[index] = touchUpdatedAt
+        ? updated.copyWith(updatedAt: DateTime.now())
+        : updated;
+    state = state.copyWith(rawCollections: collections);
   }
 
   @override
@@ -318,6 +366,25 @@ class FakeCollectionList extends CollectionList {
         ..removeWhere(audioIds.contains);
     }
     state = state.copyWith(audioIdsMap: newMap);
+  }
+
+  void _touchCollectionUpdatedAt(
+    String collectionId, {
+    Map<String, List<String>>? audioIdsMap,
+  }) {
+    final collections = [...state.rawCollections];
+    final index = collections.indexWhere((c) => c.id == collectionId);
+    if (index == -1) {
+      if (audioIdsMap != null) {
+        state = state.copyWith(audioIdsMap: audioIdsMap);
+      }
+      return;
+    }
+    collections[index] = collections[index].copyWith(updatedAt: DateTime.now());
+    state = state.copyWith(
+      rawCollections: collections,
+      audioIdsMap: audioIdsMap,
+    );
   }
 }
 
@@ -433,6 +500,9 @@ class FakeTagList extends TagList {
 /// 测试用 ListeningPractice — 不访问音频引擎
 class FakeListeningPractice extends ListeningPractice {
   final ListeningPracticeState initialState;
+  bool listenersSuspended = false;
+  int pauseCalls = 0;
+  int syncBookmarksCalls = 0;
 
   FakeListeningPractice([this.initialState = const ListeningPracticeState()]);
 
@@ -451,7 +521,10 @@ class FakeListeningPractice extends ListeningPractice {
   Future<void> play() async {}
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    pauseCalls += 1;
+    state = state.copyWith(isPlaying: false);
+  }
 
   @override
   Future<void> stop() async {}
@@ -512,13 +585,19 @@ class FakeListeningPractice extends ListeningPractice {
   Future<void> saveCurrentPlaybackState({bool silent = false}) async {}
 
   @override
-  void suspendListeners() {}
+  void suspendListeners() {
+    listenersSuspended = true;
+  }
 
   @override
-  void resumeListeners() {}
+  void resumeListeners() {
+    listenersSuspended = false;
+  }
 
   @override
-  Future<void> syncBookmarks() async {}
+  Future<void> syncBookmarks() async {
+    syncBookmarksCalls += 1;
+  }
 
   /// 设置测试用句子列表
   void setTestSentences(List<Sentence> sentences) {
@@ -605,6 +684,21 @@ class FakeLearningProgressNotifier extends LearningProgressNotifier {
       progressMap: newMap,
       completionsByAudio: newCompletions,
     );
+  }
+
+  @override
+  Future<void> unlockCurrentReview(String audioItemId) async {
+    // 与真实实现同守卫，仅省去持久化：写 manualUnlockAt 解除当前轮时间锁。
+    final progress = state.progressMap[audioItemId];
+    if (progress == null || !progress.isInReviewStage) return;
+    if (!progress.isReviewLockedAt(ref.read(nowProvider)())) return;
+    final now = DateTime.now();
+    final newMap = Map<String, LearningProgress>.from(state.progressMap);
+    newMap[audioItemId] = progress.copyWith(
+      manualUnlockAt: now,
+      updatedAt: now,
+    );
+    state = state.copyWith(progressMap: newMap);
   }
 
   @override
@@ -697,6 +791,12 @@ class FakeLearningProgressNotifier extends LearningProgressNotifier {
   }
 
   @override
+  Future<LearningProgress> resetProgress(String audioItemId) async {
+    await deleteProgress(audioItemId);
+    return ensureProgress(audioItemId);
+  }
+
+  @override
   Future<void> deleteProgressMany(
     Set<String> audioItemIds, {
     bool deleteFromDb = true,
@@ -705,7 +805,16 @@ class FakeLearningProgressNotifier extends LearningProgressNotifier {
     for (final audioItemId in audioItemIds) {
       newMap.remove(audioItemId);
     }
-    state = state.copyWith(progressMap: newMap);
+    final newCompletions = Map<String, Set<String>>.from(
+      state.completionsByAudio,
+    );
+    for (final audioItemId in audioItemIds) {
+      newCompletions.remove(audioItemId);
+    }
+    state = state.copyWith(
+      progressMap: newMap,
+      completionsByAudio: newCompletions,
+    );
   }
 
   @override
@@ -874,23 +983,28 @@ class FakeLearningSession extends LearningSession {
   LearningSessionState build() => initialState;
 
   @override
-  Future<void> enterBlindListenMode(
-    String audioItemId, {
-    bool isFreePlay = false,
+  Future<MediaLoadResult> enterBlindListenMode(
+    AudioItem mediaItem, {
     required List<List<Sentence>> paragraphs,
-    BlindListenSettings? settings,
+    BlindListenSettings settings = const BlindListenSettings(),
     LearningStage? stage,
+    bool isFreePlay = false,
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.blindListen,
-      audioItemId: audioItemId,
+      audioItemId: mediaItem.id,
       isFreePlay: isFreePlay,
+      playbackChain: LearningPlaybackChain.mediaEngine,
     );
+    return MediaLoadResult.ready;
   }
 
   @override
-  Future<void> enterIntensiveListenMode(
-    String audioItemId,
+  Future<void> cancelBlindListenEntry() async {}
+
+  @override
+  Future<MediaLoadResult> enterIntensiveListenMode(
+    AudioItem mediaItem,
     List<Sentence> sentences, {
     bool isFreePlay = false,
     IntensiveListenSettings settings = const IntensiveListenSettings(),
@@ -898,10 +1012,15 @@ class FakeLearningSession extends LearningSession {
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.intensiveListen,
-      audioItemId: audioItemId,
+      audioItemId: mediaItem.id,
       isFreePlay: isFreePlay,
+      playbackChain: LearningPlaybackChain.mediaEngine,
     );
+    return MediaLoadResult.ready;
   }
+
+  @override
+  Future<void> cancelIntensiveListenEntry() async {}
 
   @override
   Future<void> enterListenAndRepeatMode(
@@ -918,8 +1037,8 @@ class FakeLearningSession extends LearningSession {
   }
 
   @override
-  Future<void> enterReviewDifficultPracticeMode(
-    String audioItemId,
+  Future<MediaLoadResult> enterReviewDifficultPracticeMode(
+    AudioItem mediaItem,
     List<Sentence> allSentences, {
     bool isFreePlay = false,
     DifficultPracticeSettings settings = const DifficultPracticeSettings(),
@@ -927,14 +1046,19 @@ class FakeLearningSession extends LearningSession {
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.reviewDifficultPractice,
-      audioItemId: audioItemId,
+      audioItemId: mediaItem.id,
       isFreePlay: isFreePlay,
+      playbackChain: LearningPlaybackChain.mediaEngine,
     );
+    return MediaLoadResult.ready;
   }
 
   @override
-  Future<void> enterRetellMode(
-    String audioItemId,
+  Future<void> cancelReviewDifficultPracticeEntry() async {}
+
+  @override
+  Future<MediaLoadResult> enterRetellMode(
+    AudioItem mediaItem,
     List<List<Sentence>> paragraphs, {
     bool isFreePlay = false,
     LearningStage? catchUpStage,
@@ -942,10 +1066,15 @@ class FakeLearningSession extends LearningSession {
   }) async {
     state = state.copyWith(
       learningMode: LearningMode.retell,
-      audioItemId: audioItemId,
+      audioItemId: mediaItem.id,
       isFreePlay: isFreePlay,
+      playbackChain: LearningPlaybackChain.mediaEngine,
     );
+    return MediaLoadResult.ready;
   }
+
+  @override
+  Future<void> cancelRetellEntry() async {}
 
   @override
   Future<void> replayBlindListen() async {
@@ -957,9 +1086,6 @@ class FakeLearningSession extends LearningSession {
     state = const LearningSessionState();
   }
 
-  @override
-  void addOutputWords(int count) {}
-
   /// 直接设置 state（测试辅助方法）
   void setState(LearningSessionState newState) => state = newState;
 }
@@ -969,6 +1095,7 @@ class FakeLearningSession extends LearningSession {
 /// 测试用 BlindListenPlayer — 不依赖音频引擎
 class FakeBlindListenPlayer extends BlindListenPlayer {
   final BlindListenPlayerState initialState;
+  ParagraphPlaybackDriver? lastPlaybackDriver;
 
   FakeBlindListenPlayer([this.initialState = const BlindListenPlayerState()]);
 
@@ -1013,10 +1140,41 @@ class FakeBlindListenPlayer extends BlindListenPlayer {
   }
 
   @override
+  void updateSettings(BlindListenSettings newSettings) {
+    state = state.copyWith(settings: newSettings);
+  }
+
+  @override
+  Future<void> initializeParagraphs(
+    List<List<Sentence>> paragraphs,
+    BlindListenSettings settings, {
+    int startParagraphIndex = 0,
+    int startSentenceLocalIndex = 0,
+    String? settingsSlot,
+    required ParagraphPlaybackDriver playbackDriver,
+  }) async {
+    lastPlaybackDriver = playbackDriver;
+    final safeIndex = paragraphs.isEmpty
+        ? 0
+        : startParagraphIndex.clamp(0, paragraphs.length - 1);
+    final preBookmarked = <int>{
+      for (final paragraph in paragraphs)
+        for (final sentence in paragraph)
+          if (sentence.isBookmarked) sentence.index,
+    };
+    state = state.copyWith(
+      currentParagraphIndex: safeIndex,
+      totalParagraphs: paragraphs.length,
+      settings: settings,
+      bookmarkedSentenceIndices: preBookmarked,
+    );
+  }
+
+  @override
   Future<void> seekToSentence(int globalSentenceIndex) async {}
 
   @override
-  void disposePlayer() {
+  Future<void> disposePlayer() async {
     state = const BlindListenPlayerState();
   }
 
@@ -1030,6 +1188,9 @@ class FakeBlindListenPlayer extends BlindListenPlayer {
 class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
   final IntensiveListenState initialState;
   List<Sentence> testSentences;
+  IntensiveListenPlaybackDriver? playbackDriver;
+  @override
+  SenseGroupRangePlayback? senseGroupRangePlayback;
 
   FakeIntensiveListenPlayer([
     this.initialState = const IntensiveListenState(),
@@ -1058,14 +1219,23 @@ class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
     int startIndex = 0,
     IntensiveListenSettings settings = const IntensiveListenSettings(),
     String? settingsSlot,
+    IntensiveListenPlaybackDriver? playbackDriver,
+    SenseGroupRangePlayback? senseGroupRangePlayback,
+    bool hasVideo = false,
   }) async {
     testSentences = List.of(sentences);
+    this.playbackDriver = playbackDriver;
+    this.senseGroupRangePlayback = senseGroupRangePlayback;
     state = IntensiveListenState(
       currentSentenceIndex: startIndex,
       totalSentences: sentences.length,
       settings: settings,
+      hasVideo: hasVideo,
     );
   }
+
+  @override
+  Future<void> applyPlaybackSpeed(double speed) async {}
 
   @override
   void updateSettings(IntensiveListenSettings newSettings) {
@@ -1100,30 +1270,62 @@ class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
 
   @override
   Future<void> goToNext() async {
-    if (state.currentSentenceIndex < state.totalSentences - 1) {
-      state = state.copyWith(
-        currentSentenceIndex: state.currentSentenceIndex + 1,
-        currentPlayCount: 1,
-        isAnnotationMode: false,
-        isAnnotationReplay: false,
-        isTextRevealed: false,
-        isCurrentSentenceAutoMarked: false,
-      );
-    }
+    await goToSentence(state.currentSentenceIndex + 1);
   }
 
   @override
   Future<void> goToPrevious() async {
-    if (state.currentSentenceIndex > 0) {
-      state = state.copyWith(
-        currentSentenceIndex: state.currentSentenceIndex - 1,
-        currentPlayCount: 1,
-        isAnnotationMode: false,
-        isAnnotationReplay: false,
-        isTextRevealed: false,
-        isCurrentSentenceAutoMarked: false,
-      );
+    await goToSentence(state.currentSentenceIndex - 1);
+  }
+
+  @override
+  Future<void> goToSentence(int index) async {
+    if (state.totalSentences <= 0) return;
+    final target = index.clamp(0, state.totalSentences - 1);
+    if (target == state.currentSentenceIndex) return;
+    state = state.copyWith(
+      currentSentenceIndex: target,
+      currentPlayCount: 1,
+      isPlaying: true,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+      pauseDuration: Duration.zero,
+      pauseRemaining: Duration.zero,
+      isAnnotationMode: false,
+      isAnnotationReplay: false,
+      annotationReplayRemaining: Duration.zero,
+      annotationReplayDuration: Duration.zero,
+      annotationState: null,
+      isTextRevealed: false,
+      isCurrentSentenceAutoMarked: false,
+    );
+  }
+
+  @override
+  Future<void> commitPendingAnnotationAdvance(int targetSentenceIndex) async {
+    final phase = state.annotationState?.phase;
+    if (phase is! WaitingAnnotationPageTransition ||
+        phase.targetSentenceIndex != targetSentenceIndex ||
+        targetSentenceIndex < 0 ||
+        targetSentenceIndex >= state.totalSentences) {
+      return;
     }
+    state = state.copyWith(
+      currentSentenceIndex: targetSentenceIndex,
+      currentPlayCount: 1,
+      isPlaying: true,
+      isPauseBetweenPlays: false,
+      isPauseBetweenSentences: false,
+      pauseRemaining: Duration.zero,
+      pauseDuration: Duration.zero,
+      isAnnotationMode: false,
+      isAnnotationReplay: false,
+      annotationReplayRemaining: Duration.zero,
+      annotationReplayDuration: Duration.zero,
+      annotationState: null,
+      isTextRevealed: false,
+      isCurrentSentenceAutoMarked: false,
+    );
   }
 
   @override
@@ -1242,8 +1444,10 @@ class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
   }
 
   @override
-  void disposePlayer() {
+  Future<void> disposePlayer() async {
     testSentences = [];
+    playbackDriver = null;
+    senseGroupRangePlayback = null;
     state = const IntensiveListenState();
   }
 
@@ -1265,6 +1469,7 @@ class FakeRetellPlayer extends RetellPlayer {
   Map<int, Set<int>> testKeywords;
   int postEvaluationPauseCalls = 0;
   double? lastPostEvaluationScore;
+  ParagraphPlaybackDriver? lastPlaybackDriver;
 
   FakeRetellPlayer([
     this.initialState = const RetellPlayerState(),
@@ -1306,12 +1511,14 @@ class FakeRetellPlayer extends RetellPlayer {
   }
 
   @override
-  void initialize(
+  Future<void> initialize(
     List<List<Sentence>> paragraphs, {
     int? startSentenceIndex,
     RetellSettings settings = const RetellSettings(),
     String? settingsSlot,
-  }) {
+    required ParagraphPlaybackDriver playbackDriver,
+  }) async {
+    lastPlaybackDriver = playbackDriver;
     testParagraphs = paragraphs;
     testKeywords = const {};
     var safeIndex = 0;
@@ -1493,7 +1700,7 @@ class FakeRetellPlayer extends RetellPlayer {
   }
 
   @override
-  void disposePlayer() {
+  Future<void> disposePlayer() async {
     testParagraphs = [];
     testKeywords = {};
     state = const RetellPlayerState();
@@ -1548,7 +1755,7 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
       onStateChanged: (_) {},
       callbacks: RepeatFlowCallbacks(
         pauseAudio: () {},
-        playSentence: (_, _) async {},
+        playSentence: (_, _) async => SentencePlaybackResult.completed,
         startRecording:
             ({
               required String promptId,
@@ -1579,12 +1786,15 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
   int get currentIndex => state.currentSentenceIndex;
 
   @override
-  void initialize(
+  Future<void> initialize(
     List<Sentence> sentences, {
     int startIndex = 0,
     DifficultPracticeSettings settings = const DifficultPracticeSettings(),
     String? settingsSlot,
-  }) {
+    SentencePlaybackDriver? playbackDriver,
+    SenseGroupRangePlayback? senseGroupRangePlayback,
+    bool hasVideo = false,
+  }) async {
     testSentences = List.of(sentences);
     final validIndex = testSentences.isEmpty
         ? 0
@@ -1593,6 +1803,7 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
       currentSentenceIndex: validIndex,
       totalSentences: sentences.length,
       settings: settings,
+      hasVideo: hasVideo,
     );
   }
 
@@ -1758,7 +1969,7 @@ class FakeReviewDifficultPractice extends ReviewDifficultPractice {
   }
 
   @override
-  void disposePlayer() {
+  Future<void> disposePlayer() async {
     testSentences = [];
     state = const ReviewDifficultPracticeState();
   }
@@ -2061,118 +2272,6 @@ class FakeForegroundAudioEngine extends ForegroundAudioEngine {
   }
 }
 
-// ========== FakeFlashcardNotifier ==========
-
-/// 测试用 FlashcardNotifier — 不访问 SharedPreferences / TTS / 音频引擎
-class FakeFlashcardNotifier extends FlashcardNotifier {
-  @override
-  FlashcardState build() => const FlashcardState();
-
-  @override
-  Future<void> initialize(List<FlashcardItem> items) async {
-    state = FlashcardState(words: items, currentIndex: 0);
-  }
-
-  @override
-  Future<void> userFlipCard() async {
-    if (state.isCompleted || state.words.isEmpty) return;
-    state = state.copyWith(isShowingBack: !state.isShowingBack);
-  }
-
-  @override
-  Future<void> userNextCard() async {
-    if (state.currentIndex >= state.words.length - 1) {
-      state = state.copyWith(isCompleted: true);
-      return;
-    }
-    state = state.copyWith(
-      currentIndex: state.currentIndex + 1,
-      isShowingBack: false,
-    );
-  }
-
-  @override
-  Future<void> userPreviousCard() async {
-    if (state.currentIndex <= 0) return;
-    state = state.copyWith(
-      currentIndex: state.currentIndex - 1,
-      isShowingBack: false,
-    );
-  }
-
-  @override
-  void onAppBackgrounded() {
-    state = state.copyWith(
-      phase: const FlashcardWaitingForUser(
-        FlashcardWaitingReason.appBackgrounded,
-      ),
-    );
-  }
-
-  @override
-  void onSettingsOpened() {
-    state = state.copyWith(
-      phase: const FlashcardWaitingForUser(
-        FlashcardWaitingReason.userOpenedSettings,
-      ),
-    );
-  }
-
-  @override
-  Future<void> userPlayWord() async {}
-
-  @override
-  Future<void> userPlaySentence() async {}
-
-  @override
-  Future<void> disposePlayer() async => state = const FlashcardState();
-
-  @override
-  Future<void> reset() async {
-    final words = state.words;
-    state = FlashcardState(words: words, currentIndex: 0);
-  }
-
-  @override
-  Future<void> toggleCurrentWordSave() async {
-    if (state.words.isEmpty) return;
-    final newWords = List<FlashcardItem>.from(state.words)
-      ..removeAt(state.currentIndex);
-    final newIndex =
-        state.currentIndex >= newWords.length && newWords.isNotEmpty
-        ? newWords.length - 1
-        : state.currentIndex;
-    if (newWords.isEmpty) {
-      state = state.copyWith(
-        words: newWords,
-        isCompleted: true,
-        removedCount: state.removedCount + 1,
-      );
-    } else {
-      state = state.copyWith(
-        words: newWords,
-        currentIndex: newIndex,
-        isShowingBack: false,
-        removedCount: state.removedCount + 1,
-      );
-    }
-  }
-
-  @override
-  Future<void> updateSettings(FlashcardSettings newSettings) async {
-    state = state.copyWith(settings: newSettings);
-  }
-
-  @override
-  Future<void> onWordPlayed() async {}
-
-  @override
-  Future<void> onSentencePlayed(String sentenceText) async {}
-
-  /// 直接设置状态（测试用）
-  void setState(FlashcardState newState) => state = newState;
-}
-
 // ========== FakeDailyStudyTime ==========
 
 /// 测试用 DailyStudyTime — 不依赖 SharedPreferences
@@ -2230,16 +2329,75 @@ class FakeOfflineAsrSettings extends OfflineAsrSettingsNotifier {
 
 /// 无操作 StudyTimeService — 所有写入静默忽略，查询返回零值
 class FakeStudyTimeService implements StudyTimeService {
+  /// 阶段明细查询在无操作 fake 中返回空结果，避免测试夹具引入数据库副作用。
+  @override
+  Future<List<DailyStageStudyRecordData>> getStageBreakdownInRange(
+    DateTime start,
+    DateTime end,
+  ) async => [];
+
   @override
   Future<int> getStudyTime(DateTime date) async => 0;
   @override
   Future<int> getTodayStudyTime() async => 0;
   @override
-  Future<void> addStudyTime(
-    int seconds, {
+  Future<void> recordActiveDuration(
+    Duration duration, {
+    required StudyStage stage,
+    bool recordInputDuration = false,
     DateTime? date,
-    StudyStage? stage,
   }) async {}
+  @override
+  Future<void> recordSessionDurations({
+    required Duration studyDuration,
+    Duration inputDuration = Duration.zero,
+    required StudyStage stage,
+    DateTime? date,
+  }) async {}
+  @override
+  Future<void> recordSentencePlayback({
+    required Duration duration,
+    required String text,
+    required StudyStage stage,
+    bool recordInputDuration = true,
+    DateTime? date,
+  }) async {}
+  @override
+  Future<void> recordSpeechRecognition({
+    required Duration duration,
+    int producedWordCount = 0,
+    required StudyStage stage,
+    DateTime? date,
+  }) async {}
+  @override
+  Future<void> recordOutputWords(
+    int count, {
+    required StudyStage stage,
+    DateTime? date,
+  }) async {}
+  @override
+  void submitSentencePlayback({
+    required Duration duration,
+    required String text,
+    required StudyStage stage,
+    bool recordInputDuration = true,
+    DateTime? date,
+  }) {}
+  @override
+  void submitSpeechRecognition({
+    required Duration duration,
+    int producedWordCount = 0,
+    required StudyStage stage,
+    DateTime? date,
+  }) {}
+  @override
+  void submitOutputWords(
+    int count, {
+    required StudyStage stage,
+    DateTime? date,
+  }) {}
+  @override
+  Future<void> flush() async {}
   @override
   Future<int> getStudyStreak({DateTime? now}) async => 0;
   @override
@@ -2252,23 +2410,13 @@ class FakeStudyTimeService implements StudyTimeService {
   @override
   Future<int> getTodayInputWords() async => 0;
   @override
-  Future<void> addInputWords(int count, {DateTime? date}) async {}
-  @override
   Future<int> getOutputWords(DateTime date) async => 0;
   @override
   Future<int> getTodayOutputWords() async => 0;
   @override
-  Future<void> addOutputWords(int count, {DateTime? date}) async {}
-  @override
   Future<int> getInputTime(DateTime date) async => 0;
   @override
   Future<int> getTodayInputTime() async => 0;
-  @override
-  Future<void> addInputTime(
-    int seconds, {
-    DateTime? date,
-    StudyStage? stage,
-  }) async {}
   @override
   Future<List<int>> getWeeklyInputTimes({DateTime? now}) async =>
       List.filled(7, 0);
@@ -2276,12 +2424,6 @@ class FakeStudyTimeService implements StudyTimeService {
   Future<int> getOutputTime(DateTime date) async => 0;
   @override
   Future<int> getTodayOutputTime() async => 0;
-  @override
-  Future<void> addOutputTime(
-    int seconds, {
-    DateTime? date,
-    StudyStage? stage,
-  }) async {}
   @override
   Future<List<int>> getWeeklyOutputTimes({DateTime? now}) async =>
       List.filled(7, 0);

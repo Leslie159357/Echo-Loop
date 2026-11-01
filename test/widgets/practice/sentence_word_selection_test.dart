@@ -2,6 +2,7 @@
 library;
 
 import 'package:echo_loop/utils/saved_text_index.dart';
+import 'package:echo_loop/utils/text_normalize.dart';
 import 'package:echo_loop/widgets/practice/sentence_word_selection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,31 +47,6 @@ void main() {
     });
   });
 
-  group('snapToWordToken', () {
-    final tokens = tokenizeSentence('Hello, — world!');
-    // tokens: [Hello,(0-6)] [ (6-7)] [—(7-8)] [ (8-9)] [world!(9-15)]
-
-    test('命中词内返回该词', () {
-      expect(snapToWordToken(tokens, 2), 0);
-      expect(snapToWordToken(tokens, 10), 4);
-    });
-
-    test('落在空白/纯标点吸附到最近词', () {
-      expect(snapToWordToken(tokens, 6), 0); // 紧邻 Hello,
-      expect(snapToWordToken(tokens, 8), 4); // 紧邻 world!（距离 1 < 到 Hello, 的 3）
-    });
-
-    test('越界 clamp 到首/末词', () {
-      expect(snapToWordToken(tokens, -5), 0);
-      expect(snapToWordToken(tokens, 99), 4);
-    });
-
-    test('无 word token 返回 -1', () {
-      expect(snapToWordToken(tokenizeSentence('— …'), 1), -1);
-      expect(snapToWordToken(const [], 0), -1);
-    });
-  });
-
   group('wordTokenAtChar', () {
     final tokens = tokenizeSentence('go stop');
 
@@ -86,19 +62,58 @@ void main() {
     });
   });
 
-  group('WordSelection', () {
-    test('textOf 截取选区覆盖的原文（含中间标点空白）', () {
-      const text = 'give up, on it';
-      final tokens = tokenizeSentence(text);
-      // tokens: [give(0)] [ ] [up,(2)] [ ] [on(4)] [ ] [it(6)]
-      expect(const WordSelection(0, 4).textOf(text, tokens), 'give up, on');
-      expect(const WordSelection(2, 2).textOf(text, tokens), 'up,');
+  group('hasDictionaryLookupContent', () {
+    test('空白、标点和符号没有查词语义', () {
+      expect(hasDictionaryLookupContent('   \n'), isFalse);
+      expect(hasDictionaryLookupContent('.,!? —…'), isFalse);
+      expect(hasDictionaryLookupContent('★ →'), isFalse);
     });
 
-    test('charRangeOf 返回字符区间', () {
-      const text = 'a bc d';
-      final tokens = tokenizeSentence(text);
-      expect(const WordSelection(0, 2).charRangeOf(tokens), (0, 4));
+    test('字母数字和内部标点词组保留查词语义', () {
+      expect(hasDictionaryLookupContent('co-op'), isTrue);
+      expect(hasDictionaryLookupContent('well, you know'), isTrue);
+      expect(hasDictionaryLookupContent('123'), isTrue);
+    });
+
+    test('归一化后被剥空的文本不可查（否则面板会拿空串查询）', () {
+      // normalizeWord 的边缘剥离是 ASCII 语义，纯 CJK 会被剥成空串。
+      expect(normalizeWord('你好'), isEmpty);
+      expect(hasDictionaryLookupContent('你好'), isFalse);
+      expect(hasDictionaryLookupContent('日本語'), isFalse);
+      expect(hasDictionaryLookupContent('。，！'), isFalse);
+    });
+
+    test('与点词判定同源：门控结果恒等于 token 的 isWord', () {
+      const cases = [
+        'co-op',
+        'e.g.',
+        'stop...',
+        '3rd',
+        '—',
+        '...',
+        '你好',
+        '日本語',
+        'café',
+        'naïve',
+        "dogs'",
+        "'quoted'",
+      ];
+      for (final text in cases) {
+        final tokens = tokenizeSentence(text);
+        expect(
+          tokens.single.isWord,
+          hasDictionaryLookupContent(text),
+          reason: '「$text」的可点判定与查词门控必须一致',
+        );
+      }
+    });
+
+    test('已知限制：词首尾的非 ASCII 字母被剥掉，词中间的不受影响', () {
+      expect(normalizeWord('café'), 'caf');
+      expect(normalizeWord('résumé'), 'résum');
+      expect(normalizeWord('naïve'), 'naïve');
+      // 仍可查（含 ASCII 字母），只是查的是被剥过的词形。
+      expect(hasDictionaryLookupContent('café'), isTrue);
     });
   });
 

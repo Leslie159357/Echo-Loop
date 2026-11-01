@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/services/temp_cleanup_service.dart';
+import 'package:echo_loop/utils/app_data_dir.dart';
 
 /// 设置目录修改时间（Directory 无 setLastModifiedSync，借助系统 touch）
 void setDirMtime(Directory dir, DateTime time) {
@@ -18,6 +19,7 @@ void main() {
   late Directory fakeDocsDir;
   late Directory fakeCacheDir;
   late Directory fakeTmpDir;
+  late Directory fakeAppDataDir;
 
   setUp(() {
     // 创建模拟的沙盒结构：sandbox/Documents, sandbox/tmp, sandbox/Library/Caches
@@ -26,6 +28,9 @@ void main() {
     fakeTmpDir = Directory('${sandbox.path}/tmp')..createSync();
     fakeCacheDir = Directory('${sandbox.path}/Library/Caches')
       ..createSync(recursive: true);
+    fakeAppDataDir = Directory('${sandbox.path}/Application Support')
+      ..createSync(recursive: true);
+    appDataDirectoryOverride = fakeAppDataDir;
 
     // Mock path_provider
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -44,6 +49,7 @@ void main() {
   });
 
   tearDown(() {
+    appDataDirectoryOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('plugins.flutter.io/path_provider'),
@@ -156,6 +162,16 @@ void main() {
       expect(pdfDir.existsSync(), false);
     });
 
+    test('Library/Caches 删除 log_export_ 临时目录', () async {
+      final logDir = Directory('${fakeCacheDir.path}/log_export_123')
+        ..createSync();
+      File('${logDir.path}/app.log').writeAsBytesSync(List.filled(300, 0));
+
+      await cleanupAllTempFiles();
+
+      expect(logDir.existsSync(), false);
+    });
+
     test('Library/Caches 保护系统 URLCache 与框架缓存', () async {
       // 系统 URLCache：<bundleId>/Cache.db* 及散落的 Cache.db 文件
       final cacheDbFile = File('${fakeCacheDir.path}/Cache.db');
@@ -185,6 +201,21 @@ void main() {
       expect(imageCacheDir.existsSync(), true);
       expect(otherCache.existsSync(), true);
     });
+
+    test('清除缓存全量删除百度网盘临时下载目录', () async {
+      final baiduDir = Directory('${fakeAppDataDir.path}/tmp/baidu_netdisk')
+        ..createSync(recursive: true);
+      final partFile = File('${baiduDir.path}/123.mp4.part');
+      final metaFile = File('${baiduDir.path}/123.mp4.part.meta.json');
+      partFile.writeAsBytesSync(List.filled(700, 0));
+      metaFile.writeAsBytesSync(List.filled(100, 0));
+
+      final result = await cleanupAllTempFiles();
+
+      expect(result.freedBytes, greaterThanOrEqualTo(800));
+      expect(partFile.existsSync(), false);
+      expect(metaFile.existsSync(), false);
+    });
   });
 
   group('cleanupStalePdfExportTemp', () {
@@ -211,7 +242,11 @@ void main() {
       expect(freshDir.existsSync(), true);
     });
 
-    test('不触碰其他前缀与系统缓存（即使很旧）', () async {
+    test('删除旧 log_export_ 目录并保留其他前缀与系统缓存', () async {
+      final logDir = Directory('${fakeCacheDir.path}/log_export_1')
+        ..createSync();
+      File('${logDir.path}/app.log').writeAsBytesSync(List.filled(300, 0));
+      setDirMtime(logDir, DateTime.now().subtract(const Duration(days: 3)));
       final audioDir = Directory('${fakeCacheDir.path}/audio_export_7')
         ..createSync();
       File('${audioDir.path}/a.m4a').writeAsBytesSync(List.filled(200, 0));
@@ -224,8 +259,41 @@ void main() {
 
       await cleanupStalePdfExportTemp();
 
+      expect(logDir.existsSync(), false);
       expect(audioDir.existsSync(), true);
       expect(cacheDbFile.existsSync(), true);
+    });
+  });
+
+  group('cleanupStaleBaiduNetdiskTemp', () {
+    test('删除超过 minAge 的百度网盘半下载文件', () async {
+      final baiduDir = Directory('${fakeAppDataDir.path}/tmp/baidu_netdisk')
+        ..createSync(recursive: true);
+      final oldPart = File('${baiduDir.path}/old.mp4.part');
+      final oldMeta = File('${baiduDir.path}/old.mp4.part.meta.json');
+      oldPart.writeAsBytesSync(List.filled(1000, 0));
+      oldMeta.writeAsBytesSync(List.filled(100, 0));
+      final oldTime = DateTime.now().subtract(const Duration(days: 2));
+      oldPart.setLastModifiedSync(oldTime);
+      oldMeta.setLastModifiedSync(oldTime);
+
+      final result = await cleanupStaleBaiduNetdiskTemp();
+
+      expect(result.freedBytes, 1100);
+      expect(oldPart.existsSync(), false);
+      expect(oldMeta.existsSync(), false);
+    });
+
+    test('保留不足 minAge 的百度网盘半下载文件', () async {
+      final baiduDir = Directory('${fakeAppDataDir.path}/tmp/baidu_netdisk')
+        ..createSync(recursive: true);
+      final freshPart = File('${baiduDir.path}/fresh.mp4.part');
+      freshPart.writeAsBytesSync(List.filled(500, 0));
+
+      final result = await cleanupStaleBaiduNetdiskTemp();
+
+      expect(result.freedBytes, 0);
+      expect(freshPart.existsSync(), true);
     });
   });
 }

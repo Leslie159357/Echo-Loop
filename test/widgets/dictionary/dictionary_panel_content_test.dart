@@ -10,10 +10,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/models/pronunciation/pronunciation_clip.dart';
+import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
 import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
+import 'package:echo_loop/providers/saved_word_provider.dart';
+import 'package:echo_loop/utils/saved_text_index.dart';
 import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/dictionary/dictionary_panel_host.dart';
+import 'package:echo_loop/widgets/tts/speak_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -25,6 +30,11 @@ late SharedPreferences _prefs;
 /// 记录桩控制器每次 TTS 文本预热的入参（在 setUp 清空），
 /// 供断言「打开弹窗即以单词本身预热」。
 final List<List<String>> _prewarmCalls = [];
+final List<String> _autoSpeakCalls = [];
+String? _initialSpeakingKey;
+int _ttsStopCalls = 0;
+int _textPlaybackStopCalls = 0;
+bool _forwardTextPlaybackToTts = false;
 
 /// 桩 [TtsController]：弹窗内嵌发音按钮、查词完成会自动触发例句预热，
 /// 真实控制器会经平台 TTS 引擎/method channel 异步合成，在 widget 测试中
@@ -32,9 +42,13 @@ final List<List<String>> _prewarmCalls = [];
 /// 全部置空，使本测试只验证弹窗 UI、不触碰真实 TTS 栈。
 class _StubTtsController extends TtsController {
   @override
-  TtsControllerState build() => const TtsControllerState();
+  TtsControllerState build() =>
+      TtsControllerState(speakingKey: _initialSpeakingKey);
   @override
-  Future<void> speak(String text, {String? key}) async {}
+  Future<void> speak(String text, {String? key}) async {
+    state = TtsControllerState(speakingKey: key ?? text);
+  }
+
   @override
   Future<void> prewarmTexts(List<String> texts) async {
     _prewarmCalls.add(texts);
@@ -48,7 +62,29 @@ class _StubTtsController extends TtsController {
   @override
   void cancelTextsPrewarm() {}
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    _ttsStopCalls++;
+  }
+}
+
+/// 记录词典自动发音调用，避免测试触碰真实音频播放器。
+class _StubTextPlaybackController extends TextPlaybackController {
+  @override
+  TextPlaybackState build() => const TextPlaybackState();
+
+  @override
+  Future<void> speak(String text, {String? key}) async {
+    _autoSpeakCalls.add(text);
+    state = TextPlaybackState(playingKey: key ?? text);
+    if (_forwardTextPlaybackToTts) {
+      await ref.read(ttsControllerProvider.notifier).speak(text, key: key);
+    }
+  }
+
+  @override
+  Future<void> stop() async {
+    _textPlaybackStopCalls++;
+  }
 }
 
 /// 创建测试用内存词典数据库
@@ -74,13 +110,33 @@ Database _createTestDb() {
 }
 
 /// 构建打开面板的测试页面（经 DictionaryPanelHost 非 modal 打开）
-Widget _buildTestPage(String word, {String? sentenceText}) {
+Widget _buildTestPage(
+  String word, {
+  String? sentenceText,
+  bool hasLocalPronunciation = false,
+  GlobalKey<DictionaryPanelHostState>? hostKey,
+}) {
   return ProviderScope(
     overrides: [
       analyticsOverride(),
       dictionaryOverride(),
+      pronunciationClipsProvider.overrideWith(
+        (ref, lookupWord) => hasLocalPronunciation
+            ? [
+                PronunciationClip(
+                  word: lookupWord,
+                  locale: 'us',
+                  audioFilename: '${lookupWord}_us.opus',
+                  absolutePath: '/audio/${lookupWord}_us.opus',
+                  reason: null,
+                ),
+              ]
+            : const [],
+      ),
       sharedPreferencesProvider.overrideWithValue(_prefs),
       ttsControllerProvider.overrideWith(_StubTtsController.new),
+      textPlaybackProvider.overrideWith(_StubTextPlaybackController.new),
+      savedTextIndexProvider.overrideWithValue(const SavedTextIndex.empty()),
     ],
     child: MaterialApp(
       locale: const Locale('en'),
@@ -94,6 +150,7 @@ Widget _buildTestPage(String word, {String? sentenceText}) {
       theme: AppTheme.light(),
       home: Scaffold(
         body: DictionaryPanelHost(
+          key: hostKey,
           child: Builder(
             builder: (context) => ElevatedButton(
               onPressed: () => DictionaryPanelHost.of(context).show(
@@ -128,6 +185,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     _prefs = await SharedPreferences.getInstance();
     _prewarmCalls.clear();
+    _autoSpeakCalls.clear();
+    _initialSpeakingKey = null;
+    _ttsStopCalls = 0;
+    _textPlaybackStopCalls = 0;
+    _forwardTextPlaybackToTts = false;
     db = _createTestDb();
     oldInstance = DictionaryService.replaceInstance(
       DictionaryService.withDatabase(db),
@@ -140,6 +202,48 @@ void main() {
   });
 
   group('DictionaryPanel', () {
+    testWidgets('关闭面板不会停止宿主页正在播放的句子', (tester) async {
+      _initialSpeakingKey = 'favorite-vocabulary-review-source';
+      await _openSheet(tester, 'run');
+
+      await tester.tap(find.byKey(const Key('dict_panel_close')));
+      await tester.pumpAndSettle();
+
+      expect(_ttsStopCalls, 0);
+    });
+
+    testWidgets('关闭面板仍会停止词典自身发起的朗读', (tester) async {
+      _initialSpeakingKey = 'run';
+      await _openSheet(tester, 'run');
+
+      await tester.tap(find.byKey(const Key('dict_panel_close')));
+      await tester.pumpAndSettle();
+
+      expect(_ttsStopCalls, greaterThan(0));
+    });
+
+    testWidgets('关闭面板立即停止自动发音', (tester) async {
+      await _openSheet(tester, 'run');
+
+      await tester.tap(find.byKey(const Key('dict_panel_close')));
+
+      expect(_textPlaybackStopCalls, greaterThan(0));
+    });
+
+    testWidgets('TTS 开始时不会被词典面板监听器再次停止', (tester) async {
+      await _prefs.setString(
+        'dictionary_settings',
+        '{"autoSpeakOnLookup":false}',
+      );
+      _forwardTextPlaybackToTts = true;
+      await _openSheet(tester, 'run');
+
+      await tester.tap(find.byType(SpeakButton));
+      await tester.pump();
+
+      expect(_textPlaybackStopCalls, 0, reason: 'TTS 状态变化不应反向停止发起它的文本播放控制器');
+    });
+
     testWidgets('显示完整词典内容（音标、释义、星级、标签）', (tester) async {
       await _openSheet(tester, 'abandon');
 
@@ -217,15 +321,12 @@ void main() {
       expect(find.text('/test/'), findsOneWidget);
     });
 
-    testWidgets('词形还原 fallback（running → run）：标题保留表面词形 + 原形提示', (tester) async {
+    testWidgets('未收录变形词不回退原形', (tester) async {
       await _openSheet(tester, 'running');
 
-      // 标题保留用户所选表面词形 running（不再显示词干 run）
       expect(find.text('running'), findsWidgets);
-      // 释义仍通过词形还原命中原形 run
-      expect(find.text('/rʌn/'), findsOneWidget);
-      // 弱化提示告知展示的是原形 run 的查词结果
-      expect(find.textContaining('base form'), findsOneWidget);
+      expect(find.text('/rʌn/'), findsNothing);
+      expect(find.text('Word not found in dictionary'), findsOneWidget);
     });
 
     testWidgets('标题保留大小写，本地查询仍大小写不敏感（Abandon）', (tester) async {
@@ -248,11 +349,49 @@ void main() {
       expect(_prewarmCalls, isNotEmpty);
       expect(_prewarmCalls.first, ['running']);
 
-      // 查词完成后：完整批次照旧触发（本地源 running→run，headword='run'），
-      // 且作为最后发起的批次持最新 token、完整跑完，不被 initState 单词预热干扰。
+      // 未收录的变形词不产生原形结果，初始预热不被后续查询改写。
       await tester.pumpAndSettle();
-      expect(_prewarmCalls.length, greaterThanOrEqualTo(2));
-      expect(_prewarmCalls.last, ['run']);
+      expect(_prewarmCalls.first, ['running']);
+    });
+
+    testWidgets('默认开启时打开查词面板自动发音且不因重建重复播放', (tester) async {
+      await _openSheet(tester, 'running');
+
+      expect(_autoSpeakCalls, ['running']);
+      await tester.pump();
+      expect(_autoSpeakCalls, ['running']);
+    });
+
+    testWidgets('切换到新词时自动发音一次', (tester) async {
+      final hostKey = GlobalKey<DictionaryPanelHostState>();
+      await tester.pumpWidget(_buildTestPage('running', hostKey: hostKey));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      hostKey.currentState!.show(const DictionaryPanelQuery(word: 'walk'));
+      await tester.pump();
+
+      expect(_autoSpeakCalls, ['running', 'walk']);
+    });
+
+    testWidgets('关闭自动发音后查词不触发播放', (tester) async {
+      await _prefs.setString(
+        'dictionary_settings',
+        '{"autoSpeakOnLookup":false}',
+      );
+      await _openSheet(tester, 'running');
+
+      expect(_autoSpeakCalls, isEmpty);
+    });
+
+    testWidgets('已有离线发音时跳过标题单词的 TTS 预热', (tester) async {
+      await tester.pumpWidget(
+        _buildTestPage('running', hasLocalPronunciation: true),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(_prewarmCalls, isEmpty);
     });
 
     testWidgets('弹窗内容可滚动', (tester) async {

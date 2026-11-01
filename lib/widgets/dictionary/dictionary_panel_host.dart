@@ -9,18 +9,31 @@
 ///   OverlayEntry（命令式生命周期易泄漏）；
 /// - 面板状态是页面局部 state（谁创建谁销毁）：页面 pop 即面板销毁，
 ///   查词 controller（autoDispose）随之释放，无跨页残留；
-/// - 面板开着时正文上盖一层**带词区域豁免的透明屏障**：点句子里的词/
-///   拖手柄照常放行（连续查词/扩选），点其它区域先关面板并吸收该次点击
+/// - 面板开着时正文上盖一层**带词区域豁免的透明屏障**：点句子里的词
+///   照常放行（连续查词），点其它区域先关面板并吸收该次点击
 ///   （不触发下层操作）。豁免判定由可点词组件经
-///   [DictionaryPanelHostState.registerTapThroughHitTest] 注册**精确命中
-///   谓词**（文本 bounds + 手柄命中区），不做外扩矩形——句子紧邻的按钮/
+///   [DictionaryPanelHostState.registerTapThroughHitTest] 注册文本 bounds 的
+///   **精确命中谓词**，不做外扩矩形——句子紧邻的按钮/
 ///   点击切换字幕等下层交互不会被误放行。
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../selection/selection_toolbar_host.dart';
+import '../selection/selection_toolbar_layer.dart';
 import 'dictionary_panel.dart';
+
+/// 面板查询切换日志；仅 debug 构建输出，与选区和 controller 日志共用前缀。
+void _traceDictionaryPanel(String message) {
+  if (!kDebugMode) return;
+  final timestamp = DateTime.now().toIso8601String();
+  debugPrint('[DictionaryTrace][$timestamp][panel] $message');
+}
+
+/// 词典面板收藏按钮对应的数据类型。
+enum DictionaryBookmarkKind { word, senseGroup }
 
 /// 一次查词请求：查询文本 + 来源信息（收藏单词时记录出处）
 class DictionaryPanelQuery {
@@ -32,6 +45,9 @@ class DictionaryPanelQuery {
   /// 仅用于本次查询的初始选中源，不写入词典面板会话粘滞源。意群快捷 lookup
   /// 用它强制走 AI 源；普通点词/选词组不传，仍走默认源与词组优先 AI 规则。
   final String? preferredSourceId;
+
+  /// 收藏按钮读写的数据类型；普通查词默认使用词汇收藏。
+  final DictionaryBookmarkKind bookmarkKind;
 
   /// 来源音频 ID（可选）
   final String? audioItemId;
@@ -51,6 +67,7 @@ class DictionaryPanelQuery {
   const DictionaryPanelQuery({
     required this.word,
     this.preferredSourceId,
+    this.bookmarkKind = DictionaryBookmarkKind.word,
     this.audioItemId,
     this.sentenceIndex,
     this.sentenceText,
@@ -63,6 +80,7 @@ class DictionaryPanelQuery {
       other is DictionaryPanelQuery &&
       other.word == word &&
       other.preferredSourceId == preferredSourceId &&
+      other.bookmarkKind == bookmarkKind &&
       other.audioItemId == audioItemId &&
       other.sentenceIndex == sentenceIndex &&
       other.sentenceText == sentenceText &&
@@ -73,6 +91,7 @@ class DictionaryPanelQuery {
   int get hashCode => Object.hash(
     word,
     preferredSourceId,
+    bookmarkKind,
     audioItemId,
     sentenceIndex,
     sentenceText,
@@ -94,10 +113,14 @@ class DictionaryPanelHost extends StatefulWidget {
   /// 是否由宿主自带 PopScope 处理返回键（仅无 PopScope 的页面开启）
   final bool handleBackButton;
 
+  /// 面板开关状态变化回调，供宿主页同步返回手势是否可用。
+  final ValueChanged<bool>? onOpenStateChanged;
+
   const DictionaryPanelHost({
     super.key,
     required this.child,
     this.handleBackButton = false,
+    this.onOpenStateChanged,
   });
 
   @override
@@ -124,11 +147,25 @@ class DictionaryPanelHost extends StatefulWidget {
   static Object? activeOwnerOf(BuildContext context) => context
       .dependOnInheritedWidgetOfExactType<_DictionaryPanelScope>()
       ?.owner;
+
+  /// 面板是否打开（建立依赖）。
+  ///
+  /// 供与面板互斥的交互按**结构性状态**决定自身行为，而不是靠命令式回调同步。
+  /// 首个用途：面板开着时翻页器不接受滑动——屏障是按**区域**放行的（豁免正文
+  /// 文本 bounds 以支持连续点词），而 `SelectableText` 在触屏上不消费水平拖拽，
+  /// 于是文字区域上的横滑会穿到下层 PageView，导致切句成功而面板未关。
+  /// 这不影响文本区域的 tap / 长按 / 手柄拖拽。
+  static bool isPanelOpenOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_DictionaryPanelScope>()
+          ?.isOpen ??
+      false;
 }
 
 /// 宿主 state：持有当前查询与出入场动画
 class DictionaryPanelHostState extends State<DictionaryPanelHost>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin
+    implements SelectionToolbarMount {
   /// 当前查询；null = 面板关闭（不在树中）
   DictionaryPanelQuery? _query;
 
@@ -145,7 +182,7 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
   );
 
   /// 屏障豁免命中谓词集合（入参为全局坐标）。任一谓词命中的点击穿透
-  /// 屏障直达下层（点词切换查询、拖手柄扩选）；均未命中则关面板并吸收点击。
+  /// 屏障直达下层（点词切换查询）；均未命中则关面板并吸收点击。
   final Set<bool Function(Offset globalPosition)> _tapThroughHitTests = {};
 
   /// 面板开关状态监听器。
@@ -165,6 +202,42 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
     _tapThroughHitTests.remove(hitTest);
   }
 
+  /// 当前挂载的选区操作条请求（由可选文本组件推送）。
+  SelectionToolbarRequest? _selectionToolbar;
+
+  /// 挂载/更新选区操作条。
+  ///
+  /// 操作条必须由页面级宿主渲染：它会溢出正文的 render box，而祖先按各自 box
+  /// 剪裁命中测试，挂在正文里溢出部分点不动；挂根 Overlay 则会盖在面板之上、
+  /// 遮挡与滚动跟随都要手算。这里在 Stack 中位于「屏障之上、面板之下」，于是
+  /// 点操作条不被屏障吸收、面板天然遮住操作条，全部由层序解决。
+  @override
+  void showSelectionToolbar(SelectionToolbarRequest request) {
+    // 请求可能来自已卸载内容的延迟回调，宿主自身也可能正在销毁。
+    if (!mounted || _selectionToolbar == request) return;
+    setState(() => _selectionToolbar = request);
+  }
+
+  /// 收起选区操作条（仅当前 owner 可收起自己的）。
+  @override
+  void hideSelectionToolbar(Object owner) {
+    if (!mounted || !identical(_selectionToolbar?.owner, owner)) return;
+    setState(() => _selectionToolbar = null);
+  }
+
+  /// 全局锚点 → 宿主 Stack 局部锚点。
+  TextSelectionToolbarAnchors _toLocalAnchors(
+    TextSelectionToolbarAnchors global,
+  ) {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return global;
+    final secondary = global.secondaryAnchor;
+    return TextSelectionToolbarAnchors(
+      primaryAnchor: box.globalToLocal(global.primaryAnchor),
+      secondaryAnchor: secondary == null ? null : box.globalToLocal(secondary),
+    );
+  }
+
   /// 注册词典面板开关状态监听器。
   void addOpenStateListener(VoidCallback listener) {
     _openStateListeners.add(listener);
@@ -179,6 +252,7 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
     for (final listener in List<VoidCallback>.of(_openStateListeners)) {
       listener();
     }
+    widget.onOpenStateChanged?.call(isOpen);
   }
 
   /// 全局坐标是否命中任一豁免谓词
@@ -214,11 +288,21 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
   /// 面板是否打开（滑出中视为已关闭，避免 closeIfOpen 重复消费返回键）
   bool get isOpen => _query != null && !_closing;
 
+  /// 当前打开的查词会话是否属于 [owner]。
+  ///
+  /// 异步恢复选区或操作条前需重新核对所有权，避免旧帧回调干扰已经切换的查询。
+  bool isOwnedBy(Object owner) => isOpen && identical(_owner, owner);
+
   /// 显示/切换查词。面板已开时原地切换内容（不重播入场动画）。
   ///
   /// [owner] 为发起查词的组件 identity（可点词组件传 State 自身），
   /// 供 [DictionaryPanelHost.activeOwnerOf] 做选区清理判定。
   void show(DictionaryPanelQuery query, {Object? owner}) {
+    _traceDictionaryPanel(
+      'show owner=${owner == null ? null : identityHashCode(owner)} '
+      'word="${query.word}" previous="${_query?.word}" '
+      'wasOpen=$isOpen',
+    );
     setState(() {
       _query = query;
       _owner = owner;
@@ -246,6 +330,16 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
     return true;
   }
 
+  /// 仅当当前面板由 [owner] 发起时关闭。
+  ///
+  /// 显式结束查词会话时用此入口同步收起面板，避免旧组件误关掉另一句
+  /// 刚打开的新查询。
+  bool closeIfOwnedBy(Object owner) {
+    if (!isOwnedBy(owner)) return false;
+    close();
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget result = Stack(
@@ -258,6 +352,16 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
             child: _DismissBarrier(
               shouldForward: _hitsTapThroughRegion,
               onDismiss: close,
+            ),
+          ),
+        // 选区操作条：在屏障之上（点它不被吸收）、面板之下（被面板天然遮挡）。
+        // 锚点在这里换算：宿主的 render box 上一帧已布局，而图层自身首次 build
+        // 时 findRenderObject() 还是 null，无法就地换算。
+        if (_selectionToolbar case final request?)
+          Positioned.fill(
+            child: SelectionToolbarLayer(
+              anchors: _toLocalAnchors(request.globalAnchors),
+              actions: request.actions,
             ),
           ),
         if (_query != null)
@@ -273,12 +377,15 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
                   ).animate(
                     CurvedAnimation(parent: _slide, curve: Curves.easeOutCubic),
                   ),
-              child: SizedBox(
-                width: double.infinity,
-                child: DictionaryPanel(
-                  query: _query!,
-                  onClose: close,
-                  entryAnimation: _slide.view,
+              child: TextFieldTapRegion(
+                child: SizedBox(
+                  key: const Key('dict_panel_surface'),
+                  width: double.infinity,
+                  child: DictionaryPanel(
+                    query: _query!,
+                    onClose: close,
+                    entryAnimation: _slide.view,
+                  ),
                 ),
               ),
             ),
@@ -287,7 +394,9 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
     );
     result = _DictionaryPanelScope(
       owner: isOpen ? _owner : null,
-      child: result,
+      isOpen: isOpen,
+      // 本宿主同时是选区操作条的挂载点（AI 回答等非查词内容也能挂进来）。
+      child: SelectionToolbarScope(mount: this, child: result),
     );
     if (widget.handleBackButton) {
       result = PopScope(
@@ -302,15 +411,22 @@ class DictionaryPanelHostState extends State<DictionaryPanelHost>
   }
 }
 
-/// 向子树暴露当前查词发起者（选区清理依赖面）
+/// 向子树暴露当前查词发起者（选区清理依赖面）与面板开关状态
 class _DictionaryPanelScope extends InheritedWidget {
   final Object? owner;
 
-  const _DictionaryPanelScope({required this.owner, required super.child});
+  /// 面板是否打开（滑出中视为已关闭，与 [DictionaryPanelHostState.isOpen] 一致）
+  final bool isOpen;
+
+  const _DictionaryPanelScope({
+    required this.owner,
+    required this.isOpen,
+    required super.child,
+  });
 
   @override
   bool updateShouldNotify(_DictionaryPanelScope oldWidget) =>
-      oldWidget.owner != owner;
+      oldWidget.owner != owner || oldWidget.isOpen != isOpen;
 }
 
 /// 关面板屏障：豁免区域内的点击穿透（不命中自身），其余点击按下即关面板。
@@ -318,7 +434,7 @@ class _DictionaryPanelScope extends InheritedWidget {
 /// 用 [Listener.onPointerDown]（非手势竞技场）保证即时、无歧义地吸收该次
 /// 点击——被吸收的手势后续事件仍归屏障，天然不会触发下层操作。
 class _DismissBarrier extends StatelessWidget {
-  /// 是否放行该全局坐标（命中词区域/手柄豁免区）
+  /// 是否放行该全局坐标（命中查词正文区域）
   final bool Function(Offset globalPosition) shouldForward;
 
   /// 关闭面板回调

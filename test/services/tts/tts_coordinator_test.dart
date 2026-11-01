@@ -6,15 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:echo_loop/services/tts/tts_cache_store.dart';
+import 'package:echo_loop/services/app_logger.dart';
 import 'package:echo_loop/services/tts/tts_coordinator.dart';
 import 'package:echo_loop/services/tts/tts_engine.dart';
-import 'package:echo_loop/services/tts/tts_player.dart';
+import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
 
 class MockTtsEngine extends Mock implements TtsEngine {}
 
 class MockTtsCacheStore extends Mock implements TtsCacheStore {}
 
-class MockTtsPlayer extends Mock implements TtsPlayer {}
+class MockShortAudioPlayer extends Mock implements LocalAudioClipPlayer {}
 
 const _config = TtsSpeechConfig(languageTag: 'en-US');
 
@@ -47,20 +48,21 @@ void main() {
 
   late MockTtsEngine engine;
   late MockTtsCacheStore store;
-  late MockTtsPlayer player;
+  late MockShortAudioPlayer player;
 
   TtsCoordinator build() {
     return TtsCoordinator(
-      factory: (_) => engine,
+      factory: (_, __) => engine,
       cacheStore: store,
       player: player,
     );
   }
 
   setUp(() {
+    AppLogger.instance.clear();
     engine = MockTtsEngine();
     store = MockTtsCacheStore();
-    player = MockTtsPlayer();
+    player = MockShortAudioPlayer();
 
     when(() => engine.initialize()).thenAnswer((_) async {});
     when(() => engine.applyConfig(any())).thenAnswer((_) async {});
@@ -103,8 +105,9 @@ void main() {
     ).thenAnswer((_) async {});
 
     when(() => player.stop()).thenAnswer((_) async {});
-    when(() => player.dispose()).thenAnswer((_) async {});
-    when(() => player.playFileToEnd(any())).thenAnswer((_) async => true);
+    when(
+      () => player.playFile(any()),
+    ).thenAnswer((_) async => AudioPlaybackResult.completed);
   });
 
   group('configure（惰性引擎）', () {
@@ -120,6 +123,19 @@ void main() {
       await c.speak('hi');
       verify(() => engine.initialize()).called(1);
       verify(() => engine.applyConfig(_config)).called(1);
+      final logs = AppLogger.instance.entries.map((entry) => entry.message);
+      expect(logs, contains(contains('模型预热开始加载：目标=platform/system')));
+      expect(logs, contains(contains('模型预热完成：目标=platform/system')));
+    });
+
+    test('Kokoro 实现日志不暴露 Echo Loop 产品名', () async {
+      final c = build();
+      await c.configure(TtsEngineKind.kokoro, _config);
+      await c.speak('hi');
+
+      final logs = AppLogger.instance.entries.map((entry) => entry.message);
+      expect(logs, contains(contains('模型预热开始加载：目标=kokoro/system')));
+      expect(logs, isNot(contains('模型预热开始加载：引擎=echoLoop')));
     });
 
     test('引擎已建后仅配置变化 → 只 applyConfig 不重建', () async {
@@ -151,16 +167,62 @@ void main() {
         ).thenAnswer((_) async => null);
       }
       final c = TtsCoordinator(
-        factory: (kind) => kind == TtsEngineKind.platform ? engineA : engineB,
+        factory: (kind, _) =>
+            kind == TtsEngineKind.platform ? engineA : engineB,
         cacheStore: store,
         player: player,
       );
       await c.configure(TtsEngineKind.platform, _config);
       await c.speak('hi'); // 建 engineA
-      await c.configure(TtsEngineKind.echoLoop, _config); // 引擎已存在 → 切换重建
+      await c.configure(TtsEngineKind.kokoro, _config);
       verify(() => engineA.dispose()).called(1);
+      verifyNever(() => engineB.initialize());
+
+      // 新模型的实际加载统一由显式 ready 屏障触发。
+      expect(await c.ensureEngineReady(TtsEngineKind.kokoro, _config), isTrue);
       verify(() => engineB.initialize()).called(1);
     });
+
+    test('引擎初始化失败后清理 in-flight，后续可重新加载', () async {
+      final first = MockTtsEngine();
+      final second = MockTtsEngine();
+      _stubEngine(first);
+      _stubEngine(second);
+      when(() => first.initialize()).thenThrow(
+        const PathNotFoundException(
+          'Directory listing failed',
+          OSError('No such file or directory', 2),
+          '/missing/model',
+        ),
+      );
+      var created = 0;
+      final c = TtsCoordinator(
+        factory: (_, __) => created++ == 0 ? first : second,
+        cacheStore: store,
+        player: player,
+      );
+
+      await c.configure(TtsEngineKind.kokoro, _config);
+      await expectLater(
+        c.ensureEngineReady(TtsEngineKind.kokoro, _config),
+        throwsA(isA<PathNotFoundException>()),
+      );
+
+      expect(await c.ensureEngineReady(TtsEngineKind.kokoro, _config), isTrue);
+      verify(() => first.initialize()).called(1);
+      verify(() => second.initialize()).called(1);
+    });
+  });
+
+  test('缓存文件被抢占时不降级实时朗读', () async {
+    final c = build();
+    await c.configure(TtsEngineKind.platform, _config);
+    when(
+      () => player.playFile(any()),
+    ).thenAnswer((_) async => AudioPlaybackResult.cancelled);
+
+    expect(await c.speak('hello'), isFalse);
+    verifyNever(() => engine.speakLive(any()));
   });
 
   group('speak', () {
@@ -182,7 +244,27 @@ void main() {
           config: any(named: 'config'),
         ),
       );
-      verify(() => player.playFileToEnd('/tmp/cached.wav')).called(1);
+      verifyNever(() => engine.initialize());
+      verifyNever(() => engine.applyConfig(any()));
+      verify(() => player.playFile('/tmp/cached.wav')).called(1);
+    });
+
+    test('缓存命中不等待正在初始化的引擎', () async {
+      final initializing = Completer<void>();
+      when(() => engine.initialize()).thenAnswer((_) => initializing.future);
+      when(
+        () => store.lookup(any()),
+      ).thenAnswer((_) async => File('/tmp/cached.wav'));
+
+      final c = build();
+      await c.configure(TtsEngineKind.kokoro, _config);
+      final warmup = c.warmUpCurrentEngine();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(await c.speak('hello'), isTrue);
+      verify(() => player.playFile('/tmp/cached.wav')).called(1);
+      initializing.complete();
+      await warmup;
     });
 
     test('缓存未命中 → 合成、入库、播放合成文件', () async {
@@ -210,7 +292,7 @@ void main() {
           result: any(named: 'result'),
         ),
       ).called(1);
-      verify(() => player.playFileToEnd('/tmp/out.wav')).called(1);
+      verify(() => player.playFile('/tmp/out.wav')).called(1);
     });
 
     test('合成返回 null → 降级实时朗读，不入库', () async {
@@ -255,7 +337,7 @@ void main() {
       await c.configure(TtsEngineKind.platform, _config);
       final ok = await c.speak('   ');
       expect(ok, isFalse);
-      verifyNever(() => player.playFileToEnd(any()));
+      verifyNever(() => player.playFile(any()));
     });
   });
 
@@ -289,11 +371,11 @@ void main() {
       }
 
       final c = TtsCoordinator(
-        factory: (_) => makeEngine(created++),
+        factory: (_, __) => makeEngine(created++),
         cacheStore: store,
         player: player,
       );
-      await c.configure(TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
 
       // 同时发起两次 speak，二者都会在引擎尚未就绪时调用 _ensureEngine。
       await Future.wait([c.speak('a'), c.speak('b')]);
@@ -301,6 +383,114 @@ void main() {
       // 仅构建并初始化了一个引擎（无 worker isolate 泄漏）。
       expect(created, 1, reason: '并发构建应复用同一引擎');
       expect(initStarted.length, 1, reason: 'initialize 只应执行一次');
+    });
+
+    test('模型加载期间切换目标 → 新目标独立加载，旧完成后不得回写当前引擎', () async {
+      final oldInit = Completer<void>();
+      final old = MockTtsEngine();
+      final next = MockTtsEngine();
+      _stubEngine(old);
+      _stubEngine(next, filePath: '/tmp/next.wav');
+      when(() => old.initialize()).thenAnswer((_) => oldInit.future);
+
+      final c = TtsCoordinator(
+        factory: (kind, config) => config.modelTag == 'fp32' ? old : next,
+        cacheStore: store,
+        player: player,
+      );
+      const oldConfig = TtsSpeechConfig(languageTag: 'en-US', modelTag: 'fp32');
+      const nextConfig = TtsSpeechConfig(
+        languageTag: 'en-US',
+        modelTag: 'int8',
+      );
+      await c.configure(TtsEngineKind.kokoro, oldConfig);
+      final oldWarmup = c.warmUpCurrentEngine();
+      await Future<void>.delayed(Duration.zero);
+
+      await c.configure(TtsEngineKind.kokoro, nextConfig);
+      expect(await c.speak('new'), isTrue);
+      verify(() => next.initialize()).called(1);
+      verify(
+        () => next.synthesize(
+          'new',
+          outputDir: any(named: 'outputDir'),
+          baseName: any(named: 'baseName'),
+          config: nextConfig,
+        ),
+      ).called(1);
+
+      oldInit.complete();
+      await oldWarmup;
+      verify(() => old.dispose()).called(1);
+      verifyNever(
+        () => old.synthesize(
+          any(),
+          outputDir: any(named: 'outputDir'),
+          baseName: any(named: 'baseName'),
+          config: any(named: 'config'),
+        ),
+      );
+    });
+
+    test('旧模型合成期间切换 → 新模型可独立播放，旧结果不播放且完成后释放旧引擎', () async {
+      final oldSynthStarted = Completer<void>();
+      final releaseOldSynth = Completer<void>();
+      final old = MockTtsEngine();
+      final next = MockTtsEngine();
+      _stubEngine(old, filePath: '/tmp/old.wav');
+      _stubEngine(next, filePath: '/tmp/next.wav');
+      when(
+        () => old.synthesize(
+          any(),
+          outputDir: any(named: 'outputDir'),
+          baseName: any(named: 'baseName'),
+          config: any(named: 'config'),
+        ),
+      ).thenAnswer((_) async {
+        oldSynthStarted.complete();
+        await releaseOldSynth.future;
+        return const TtsSynthesisResult(
+          filePath: '/tmp/old.wav',
+          format: 'wav',
+        );
+      });
+      when(
+        () => store.deriveKey(
+          text: any(named: 'text'),
+          engine: any(named: 'engine'),
+          voiceId: any(named: 'voiceId'),
+          speed: any(named: 'speed'),
+          modelTag: any(named: 'modelTag'),
+        ),
+      ).thenAnswer((invocation) {
+        final text = invocation.namedArguments[#text] as String;
+        return 'key-$text';
+      });
+
+      final c = TtsCoordinator(
+        factory: (kind, config) => config.modelTag == 'fp32' ? old : next,
+        cacheStore: store,
+        player: player,
+      );
+      const oldConfig = TtsSpeechConfig(languageTag: 'en-US', modelTag: 'fp32');
+      const nextConfig = TtsSpeechConfig(
+        languageTag: 'en-US',
+        modelTag: 'int8',
+      );
+      await c.configure(TtsEngineKind.kokoro, oldConfig);
+      final oldSpeak = c.speak('old');
+      await oldSynthStarted.future;
+
+      await c.configure(TtsEngineKind.kokoro, nextConfig);
+      final nextSpeak = c.speak('next');
+      await Future<void>.delayed(Duration.zero);
+      releaseOldSynth.complete();
+
+      expect(await oldSpeak, isFalse);
+      expect(await nextSpeak, isTrue);
+      verify(() => player.playFile('/tmp/next.wav')).called(1);
+      verifyNever(() => player.playFile('/tmp/old.wav'));
+      verify(() => old.dispose()).called(1);
     });
   });
 
@@ -323,15 +513,15 @@ void main() {
       ).thenReturn('previewKey');
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
-      final ok = await c.speakWith('hi', TtsEngineKind.echoLoop, previewConfig);
+      await c.configure(TtsEngineKind.kokoro, _config);
+      final ok = await c.speakWith('hi', TtsEngineKind.kokoro, previewConfig);
 
       expect(ok, isTrue);
       // 派生键用传入配置的 voiceId / modelTag。
       verify(
         () => store.deriveKey(
           text: 'hi',
-          engine: TtsEngineKind.echoLoop,
+          engine: TtsEngineKind.kokoro,
           voiceId: 'bf_emma',
           speed: any(named: 'speed'),
           modelTag: 'int8',
@@ -346,7 +536,7 @@ void main() {
           config: previewConfig,
         ),
       ).called(1);
-      verify(() => player.playFileToEnd('/tmp/out.wav')).called(1);
+      verify(() => player.playFile('/tmp/out.wav')).called(1);
     });
 
     test('当前为平台引擎时，speakWith Echo Loop 会切到 Echo Loop 引擎合成', () async {
@@ -355,7 +545,7 @@ void main() {
       _stubEngine(platformEngine, filePath: '/tmp/platform.wav');
       _stubEngine(echoEngine, filePath: '/tmp/echo.wav');
       final c = TtsCoordinator(
-        factory: (kind) =>
+        factory: (kind, _) =>
             kind == TtsEngineKind.platform ? platformEngine : echoEngine,
         cacheStore: store,
         player: player,
@@ -365,7 +555,7 @@ void main() {
       await c.speak('platform-first');
       clearInteractions(player);
 
-      final ok = await c.speakWith('hi', TtsEngineKind.echoLoop, previewConfig);
+      final ok = await c.speakWith('hi', TtsEngineKind.kokoro, previewConfig);
 
       expect(ok, isTrue);
       verify(
@@ -384,7 +574,7 @@ void main() {
           config: any(named: 'config'),
         ),
       );
-      verify(() => player.playFileToEnd('/tmp/echo.wav')).called(1);
+      verify(() => player.playFile('/tmp/echo.wav')).called(1);
     });
 
     test('合成期间被新发音抢占 → 不播放', () async {
@@ -407,8 +597,8 @@ void main() {
       });
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
-      final first = c.speakWith('hi', TtsEngineKind.echoLoop, previewConfig);
+      await c.configure(TtsEngineKind.kokoro, _config);
+      final first = c.speakWith('hi', TtsEngineKind.kokoro, previewConfig);
       await synthStarted.future; // 第一次已进入合成
       await c.stop(); // 抢占（递增代际）
       release.complete();
@@ -421,8 +611,8 @@ void main() {
   group('prewarm（后台预热，不播放）', () {
     test('未命中 → 合成入库，但不触发播放器', () async {
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
-      await c.prewarm('hi', TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
+      await c.prewarm('hi', TtsEngineKind.kokoro, _config);
 
       verify(
         () => engine.synthesize(
@@ -436,14 +626,14 @@ void main() {
         () => store.store(
           cacheKey: any(named: 'cacheKey'),
           text: 'hi',
-          engine: TtsEngineKind.echoLoop,
+          engine: TtsEngineKind.kokoro,
           voiceId: any(named: 'voiceId'),
           languageCode: any(named: 'languageCode'),
           speed: any(named: 'speed'),
           result: any(named: 'result'),
         ),
       ).called(1);
-      verifyNever(() => player.playFileToEnd(any()));
+      verifyNever(() => player.playFile(any()));
     });
 
     test('当前为平台引擎时，prewarm Piper 会切到 Piper 引擎合成入库', () async {
@@ -456,7 +646,7 @@ void main() {
       _stubEngine(platformEngine, filePath: '/tmp/platform.wav');
       _stubEngine(piperEngine, filePath: '/tmp/piper.wav');
       final c = TtsCoordinator(
-        factory: (kind) =>
+        factory: (kind, _) =>
             kind == TtsEngineKind.platform ? platformEngine : piperEngine,
         cacheStore: store,
         player: player,
@@ -495,7 +685,7 @@ void main() {
           result: any(named: 'result'),
         ),
       ).called(1);
-      verifyNever(() => player.playFileToEnd(any()));
+      verifyNever(() => player.playFile(any()));
     });
 
     test('同 key 合成在途 → 并发请求复用，仅合成一次', () async {
@@ -519,10 +709,10 @@ void main() {
       });
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
       // 两路并发渲染同一 key（deriveKey 全局桩恒返回 'key1'）。
-      final f1 = c.prewarm('hi', TtsEngineKind.echoLoop, _config);
-      final f2 = c.speakWith('hi', TtsEngineKind.echoLoop, _config);
+      final f1 = c.prewarm('hi', TtsEngineKind.kokoro, _config);
+      final f2 = c.speakWith('hi', TtsEngineKind.kokoro, _config);
       await Future<void>.delayed(Duration.zero); // 让两路都过 lookup、其一登记在途
       gate.complete();
       await Future.wait([f1, f2]);
@@ -536,8 +726,8 @@ void main() {
       ).thenAnswer((_) async => File('/tmp/cached.wav'));
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
-      await c.prewarm('hi', TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
+      await c.prewarm('hi', TtsEngineKind.kokoro, _config);
 
       verifyNever(
         () => engine.synthesize(
@@ -547,7 +737,7 @@ void main() {
           config: any(named: 'config'),
         ),
       );
-      verifyNever(() => player.playFileToEnd(any()));
+      verifyNever(() => player.playFile(any()));
     });
 
     test('复用在途合成播放时不打断该合成（§7.18）→ 合成期间不停引擎，完成后照常播放', () async {
@@ -569,10 +759,10 @@ void main() {
       });
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
-      final pre = c.prewarm('hi', TtsEngineKind.echoLoop, _config); // 登记在途
+      await c.configure(TtsEngineKind.kokoro, _config);
+      final pre = c.prewarm('hi', TtsEngineKind.kokoro, _config); // 登记在途
       await Future<void>.delayed(Duration.zero);
-      final play = c.speakWith('hi', TtsEngineKind.echoLoop, _config); // 复用在途
+      final play = c.speakWith('hi', TtsEngineKind.kokoro, _config); // 复用在途
       await Future<void>.delayed(Duration.zero);
 
       // 在途合成期间绝不停引擎：否则平台引擎 synthesizeToFile 被打断、复用方挂起。
@@ -582,7 +772,7 @@ void main() {
       expect(await play, isTrue);
       await pre;
       // 合成完成后照常播放复用产物。
-      verify(() => player.playFileToEnd('/tmp/out.wav')).called(1);
+      verify(() => player.playFile('/tmp/out.wav')).called(1);
     });
   });
 
@@ -608,7 +798,7 @@ void main() {
         modelTag: 'int8',
       );
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, cfg);
+      await c.configure(TtsEngineKind.kokoro, cfg);
       await c.prewarmCurrent('hello');
 
       verify(
@@ -623,14 +813,14 @@ void main() {
         () => store.store(
           cacheKey: any(named: 'cacheKey'),
           text: 'hello',
-          engine: TtsEngineKind.echoLoop,
+          engine: TtsEngineKind.kokoro,
           voiceId: any(named: 'voiceId'),
           languageCode: any(named: 'languageCode'),
           speed: any(named: 'speed'),
           result: any(named: 'result'),
         ),
       ).called(1);
-      verifyNever(() => player.playFileToEnd(any()));
+      verifyNever(() => player.playFile(any()));
     });
 
     test('命中缓存 → 跳过合成（与 speak 同源 key 即命中）', () async {
@@ -639,7 +829,7 @@ void main() {
       ).thenAnswer((_) async => File('/tmp/cached.wav'));
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
       await c.prewarmCurrent('hi');
 
       verifyNever(
@@ -697,17 +887,17 @@ void main() {
       final (order, release) = gatedSynth();
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
 
       // 后台预热 A 先占住 worker（running，不可打断）。
-      final fa = c.prewarm('A', TtsEngineKind.echoLoop, _config);
+      final fa = c.prewarm('A', TtsEngineKind.kokoro, _config);
       await pumpEventQueue();
       expect(order, ['A'], reason: 'A 已进入合成并占用 worker');
 
       // A 运行期间，依次提交：后台 bg、用户 u1、用户 u2。
-      final fbg = c.prewarm('bg', TtsEngineKind.echoLoop, _config);
-      final fu1 = c.speakWith('u1', TtsEngineKind.echoLoop, _config);
-      final fu2 = c.speakWith('u2', TtsEngineKind.echoLoop, _config);
+      final fbg = c.prewarm('bg', TtsEngineKind.kokoro, _config);
+      final fu1 = c.speakWith('u1', TtsEngineKind.kokoro, _config);
+      final fu2 = c.speakWith('u2', TtsEngineKind.kokoro, _config);
       await pumpEventQueue();
       expect(order, ['A'], reason: 'worker 忙于 A，其余排队等待');
 
@@ -731,7 +921,7 @@ void main() {
       final (order, release) = gatedSynth();
 
       final c = build();
-      await c.configure(TtsEngineKind.echoLoop, _config);
+      await c.configure(TtsEngineKind.kokoro, _config);
 
       // task1、task2 背靠背发起：task2 抢占 task1 的播放，但两者都应合成入队。
       final t1 = c.speak('t1');
@@ -776,7 +966,7 @@ void main() {
       // 被抢占的 task1 不播放，最新的 task2 播放。
       expect(r1, isFalse, reason: 'task1 播放被 task2 抢占');
       expect(r2, isTrue);
-      verify(() => player.playFileToEnd('/tmp/out.wav')).called(1);
+      verify(() => player.playFile('/tmp/out.wav')).called(1);
     });
   });
 
@@ -818,7 +1008,7 @@ void main() {
 
         expect(ok, isTrue, reason: '超时降级 speakLive 后返回');
         verify(() => engine.speakLive('hello')).called(1);
-        verifyNever(() => player.playFileToEnd(any()));
+        verifyNever(() => player.playFile(any()));
       });
     });
 
@@ -845,21 +1035,21 @@ void main() {
         });
 
         final c = build();
-        c.configure(TtsEngineKind.echoLoop, _config);
+        c.configure(TtsEngineKind.kokoro, _config);
         async.flushMicrotasks();
 
         // hang 先占住单槽 worker；next 排队等待。
-        c.prewarm('hang', TtsEngineKind.echoLoop, _config);
+        c.prewarm('hang', TtsEngineKind.kokoro, _config);
         bool? okNext;
         c.speak('next').then((v) => okNext = v);
         async.flushMicrotasks();
-        verifyNever(() => player.playFileToEnd(any()));
+        verifyNever(() => player.playFile(any()));
 
         async.elapse(const Duration(seconds: 13)); // hang 超时 → worker 复位
         async.flushMicrotasks();
 
         expect(okNext, isTrue, reason: '调度器复位后 next 得以执行并播放');
-        verify(() => player.playFileToEnd('/tmp/out.wav')).called(1);
+        verify(() => player.playFile('/tmp/out.wav')).called(1);
       });
     });
 
@@ -879,17 +1069,17 @@ void main() {
         });
 
         final c = build();
-        c.configure(TtsEngineKind.echoLoop, _config);
+        c.configure(TtsEngineKind.kokoro, _config);
         async.flushMicrotasks();
 
-        c.prewarm('hi', TtsEngineKind.echoLoop, _config); // 第 1 次
+        c.prewarm('hi', TtsEngineKind.kokoro, _config); // 第 1 次
         async.flushMicrotasks();
         expect(calls, 1);
 
         async.elapse(const Duration(seconds: 13)); // 超时 → 在途表移除
         async.flushMicrotasks();
 
-        c.prewarm('hi', TtsEngineKind.echoLoop, _config); // 同 key 应重新合成
+        c.prewarm('hi', TtsEngineKind.kokoro, _config); // 同 key 应重新合成
         async.flushMicrotasks();
         expect(calls, 2, reason: '超时后同 key 不复用已死 future，重新合成');
 

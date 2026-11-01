@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +16,6 @@ import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../models/app_update_info.dart';
 import '../providers/app_update_provider.dart';
-import '../providers/dev_version_override_provider.dart';
 import '../providers/developer_options_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
 import '../providers/tts/tts_settings_provider.dart';
@@ -33,10 +34,12 @@ import '../analytics/models/event_names.dart';
 import '../config/app_store_config.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/auth/screens/account_screen.dart';
+import '../features/user_region/user_region_override.dart';
+import '../features/user_region/user_region_providers.dart';
+import '../features/user_region/widgets/user_region_override_tile.dart';
 import '../features/subscription/providers/subscription_availability.dart';
 import '../features/subscription/providers/subscription_controller.dart';
 import '../services/app_update_launcher.dart';
-import '../features/subscription/screens/subscription_debug_screen.dart';
 import '../router/app_router.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import '../services/app_network_image_cache.dart';
@@ -53,18 +56,24 @@ import '../providers/dictionary/dictionary_registry.dart';
 import '../providers/dictionary/visible_sources_provider.dart';
 import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
-import 'asr_test_screen.dart';
-import 'custom_api_settings_screen.dart';
 import 'dictionary_settings_screen.dart';
+import 'display_settings_screen.dart';
 import 'tts_settings_screen.dart';
 import 'learning_settings_screen.dart';
 import 'log_viewer_screen.dart';
 import 'playback_settings_screen.dart';
+import 'reading_text_settings_screen.dart';
 import 'preferences_viewer_screen.dart';
 import 'storage_browser_screen.dart';
 import 'reminder_settings_screen.dart';
-import '../config/api_config.dart';
+import '../services/runtime_endpoint_router.dart';
 import '../widgets/app_update_dialog.dart';
+
+const double _settingsLeadingIconExtent = 32;
+const double _settingsSvgIconExtent = 26;
+const double _settingsBrandIconExtent = 20;
+const double _settingsMaterialIconExtent = 26;
+const _faqUrl = 'https://my.feishu.cn/docx/OPZRdXkRvoAW5Bx78LocBUdqn80';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -104,6 +113,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 settings,
                 settingsController,
               ),
+              _buildReadingTextTile(context, l10n),
             ],
           ),
           const SizedBox(height: AppSpacing.m),
@@ -132,6 +142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// 构建账号分组：登录入口 + 订阅入口（登录 item 下方）。
   Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
     final session = ref.watch(supabaseSessionProvider).valueOrNull;
+    final isChinaUser = ref.watch(isChinaUserProvider);
     final isSignedIn = session != null;
     final accountSubtitle = session == null
         ? null
@@ -149,7 +160,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: l10n.account,
       children: [
         ListTile(
-          leading: _emojiIcon('👤'),
+          leading: _buildAccountLeadingIcon(
+            context,
+            l10n,
+            isChinaUser: isChinaUser,
+          ),
           title: Text(l10n.account),
           subtitle: accountSubtitle == null
               ? null
@@ -181,6 +196,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 中国区路由启用时，在账号入口图标右上角显示地区标记。
+  Widget _buildAccountLeadingIcon(
+    BuildContext context,
+    AppLocalizations l10n, {
+    required bool isChinaUser,
+  }) {
+    final accountIcon = _settingsThemedSvgIcon(
+      context,
+      'assets/icon/account-1.svg',
+    );
+    if (!isChinaUser) return accountIcon;
+
+    return Tooltip(
+      message: l10n.chinaRoutingIndicatorTooltip,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          accountIcon,
+          Positioned(
+            top: 0,
+            right: 0,
+            child: ExcludeSemantics(
+              child: SvgPicture.asset(
+                'assets/icon/china_flag.svg',
+                width: 12,
+                height: 8,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 构建订阅入口（账户分组内、登录 item 下方）。
   ///
   /// 保持简洁：只展示标题 + 状态徽章，详情（套餐、续费、管理）留给点击后的 Paywall。
@@ -197,7 +246,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     const upgradeBadgeTextColor = Color(0xFF111111);
 
     return ListTile(
-      leading: Icon(Icons.workspace_premium, color: gold),
+      leading: _settingsSvgIcon('assets/icon/diamond.svg'),
       title: Text(l10n.premiumEntryTitle),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -285,7 +334,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: l10n.learningSection,
       children: [
         ListTile(
-          leading: _emojiIcon('🔔'),
+          leading: _settingsSvgIcon('assets/icon/bell.svg'),
           title: Text(l10n.reminderSettings),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -306,7 +355,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ListTile(
-          leading: _emojiIcon('📚'),
+          leading: _settingsSvgIcon('assets/icon/book-shelf.svg'),
           title: Text(l10n.learningSettings),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
@@ -315,9 +364,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        ListTile(
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/eye.svg'),
+          title: Text(l10n.displaySettings),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const DisplaySettingsScreen(),
+            ),
+          ),
+        ),
         if (showAsr)
           ListTile(
-            leading: _emojiIcon('🎙️'),
+            leading: _settingsThemedSvgIcon(
+              context,
+              'assets/icon/microphone.svg',
+            ),
             title: Text(l10n.speechRecognition),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -339,18 +401,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
-          ListTile(
-            leading: Icon(Icons.api, color: colorScheme.onSurfaceVariant),
-            subtitle: const Text('配置自建 API 后免登录使用翻译、分析、意群'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const CustomApiSettingsScreen(),
-              ),
-            ),
-          ),
         ListTile(
-          leading: _emojiIcon('🔊'),
+          leading: _settingsSvgIcon('assets/icon/speaker.svg'),
           title: Text(l10n.ttsSettings),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -368,7 +420,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ListTile(
-          leading: _emojiIcon('▶️'),
+          leading: _settingsThemedSvgIcon(
+            context,
+            'assets/icon/play-pause.svg',
+          ),
           title: Text(l10n.playbackSettings),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
@@ -378,7 +433,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ListTile(
-          leading: _emojiIcon('📖'),
+          leading: _settingsSvgIcon('assets/icon/locale-1.svg'),
           title: Text(l10n.dictionarySettings),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -408,7 +463,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _ttsEngineSummary(AppLocalizations l10n, TtsEngineKind engine) {
     return switch (engine) {
       TtsEngineKind.platform => platformSpeechEngineName(l10n),
-      TtsEngineKind.echoLoop || TtsEngineKind.piper => l10n.asrBackendOffline,
+      TtsEngineKind.kokoro || TtsEngineKind.piper => l10n.asrBackendOffline,
     };
   }
 
@@ -423,13 +478,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: l10n.storage,
       children: [
         ListTile(
-          leading: _emojiIcon('💾'),
+          leading: _settingsSvgIcon('assets/icon/diskette.svg'),
           title: Text(l10n.backupAndRestore),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push(AppRoutes.backupRestore),
         ),
         ListTile(
-          leading: _emojiIcon('🗑️'),
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/trash-bin.svg'),
           title: Text(l10n.clearCache),
           onTap: () => _clearAiCache(context, ref, l10n),
         ),
@@ -577,7 +632,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: l10n.about,
       children: [
         ListTile(
-          leading: _emojiIcon('🔄'),
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/group.svg'),
+          title: Text(l10n.aboutCommunity),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            final isZh = Localizations.localeOf(context).languageCode == 'zh';
+            final path = isZh ? '/zh-CN/social' : '/en/social';
+            final uri = runtimeEndpointRouter.apiUri(path);
+            await launchUrl(uri);
+          },
+        ),
+        ListTile(
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/feedback.svg'),
+          title: Text(l10n.writeFeedback),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => launchUrl(Uri.parse('mailto:support@echo-loop.top')),
+        ),
+        if (defaultTargetPlatform == TargetPlatform.iOS)
+          ListTile(
+            leading: _settingsMaterialIcon(Icons.star_rounded),
+            title: Text(l10n.rateUs),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => launchUrl(
+              appStoreReviewUri,
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+        ListTile(
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/help.svg'),
+          title: const Text('FAQ'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => launchUrl(
+            Uri.parse(_faqUrl),
+            mode: LaunchMode.externalApplication,
+          ),
+        ),
+        ListTile(
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/refresh.svg'),
           title: Text(l10n.checkForUpdate),
           trailing: isChecking
               ? const SizedBox(
@@ -589,55 +680,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onTap: isChecking ? null : () => _checkForUpdate(context, ref, l10n),
         ),
         ListTile(
-          leading: _emojiIcon('📜'),
+          leading: _settingsSvgIcon('assets/icon/documents.svg'),
           title: Text(l10n.termsOfService),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => launchUrl(Uri.parse('https://www.echo-loop.top/terms')),
         ),
         ListTile(
-          leading: _emojiIcon('🔒'),
+          leading: _settingsThemedSvgIcon(context, 'assets/icon/lock.svg'),
           title: Text(l10n.privacyPolicy),
           trailing: const Icon(Icons.chevron_right),
           onTap: () =>
               launchUrl(Uri.parse('https://www.echo-loop.top/privacy')),
         ),
         ListTile(
-          leading: _emojiIcon('✉️'),
-          title: Text(l10n.writeFeedback),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => launchUrl(Uri.parse('mailto:support@echo-loop.top')),
-        ),
-        if (defaultTargetPlatform == TargetPlatform.iOS)
-          ListTile(
-            leading: _emojiIcon('⭐'),
-            title: Text(l10n.rateUs),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => launchUrl(
-              appStoreReviewUri,
-              mode: LaunchMode.externalApplication,
+          leading: SizedBox(
+            width: _settingsLeadingIconExtent,
+            height: _settingsLeadingIconExtent,
+            child: Center(
+              child: FaIcon(
+                FontAwesomeIcons.github,
+                size: _settingsBrandIconExtent,
+              ),
             ),
           ),
-        ListTile(
-          leading: _emojiIcon('👥'),
-          title: Text(l10n.joinCommunity),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            final isZh = Localizations.localeOf(context).languageCode == 'zh';
-            final path = isZh ? '/zh-CN/social' : '/en/social';
-            launchUrl(Uri.parse('$apiBaseUrl$path'));
-          },
-        ),
-        ListTile(
-          leading: SizedBox(
-            width: 32,
-            height: 32,
-            child: Center(child: FaIcon(FontAwesomeIcons.github, size: 22)),
-          ),
           title: Text(l10n.viewSourceCode),
-          subtitle: const Text(
-            'github.com/echo-loop/Echo-Loop',
-            style: TextStyle(fontSize: 12),
-          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () =>
               launchUrl(Uri.parse('https://github.com/echo-loop/Echo-Loop/')),
@@ -736,82 +802,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  /// 弹出版本号覆盖对话框（开发者选项）
-  ///
-  /// 输入框预填当前生效的版本号（已覆盖则为覆盖值，否则为真实版本号）。
-  /// 确定后写入 [devVersionOverrideProvider]，下次检查更新即按此版本比较；
-  /// 清除则恢复使用真实版本号。
-  Future<void> _showVersionOverrideDialog(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final realVersion = ref.read(packageInfoProvider).version;
-    final current = ref.read(devVersionOverrideProvider);
-    final textController = TextEditingController(text: current ?? realVersion);
-
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('版本号覆盖'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('真实版本号：$realVersion'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '模拟版本号',
-                hintText: '如 1.0.0',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '设为低于远程 minimumVersion 触发强制更新，'
-              '低于 latestVersion 触发可选更新。',
-              style: TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          // 清除覆盖：返回空串作为清除信号
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(''),
-            child: const Text('清除覆盖'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(textController.text),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-
-    textController.dispose();
-    // null = 取消，不改动；'' = 清除；其它 = 设置覆盖
-    if (result == null) return;
-    ref.read(devVersionOverrideProvider.notifier).setOverride(result);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            result.isEmpty
-                ? '已清除版本号覆盖，恢复真实版本 $realVersion'
-                : '已覆盖版本号为 $result，可点"检查更新"测试',
-          ),
-        ),
-      );
-  }
-
   /// 构建开发者选项区域
   Widget _buildDeveloperSection(
     BuildContext context,
@@ -836,9 +826,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (value) {
             if (!value) {
               ref.read(showDeveloperOptionsProvider.notifier).setEnabled(false);
+              // 关闭开发者选项后入口不可见，恢复自动地区，避免强制地区残留。
+              unawaited(
+                ref
+                    .read(userRegionOverrideStoreProvider)
+                    .save(UserRegionOverride.auto),
+              );
             }
           },
         ),
+        UserRegionOverrideTile(leading: _emojiIcon('🌏')),
         ListTile(
           leading: _emojiIcon('🔧'),
           title: Text(l10n.timeMachine),
@@ -854,40 +851,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ListTile(
-          leading: _emojiIcon('🏷'),
-          title: const Text('版本号覆盖'),
-          subtitle: const Text('模拟旧版本以测试更新弹窗，重启后自动重置'),
-          trailing: _trailingValue(
-            context,
-            ref.watch(devVersionOverrideProvider) ?? '真实版本',
-          ),
-          onTap: () => _showVersionOverrideDialog(context, ref),
-        ),
-        ListTile(
-          leading: _emojiIcon('🎙'),
-          title: const Text('ASR 引擎测试'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const AsrTestScreen()),
-          ),
-        ),
-        ListTile(
           leading: _emojiIcon('📋'),
           title: const Text('日志'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const LogViewerScreen()),
-          ),
-        ),
-        ListTile(
-          leading: _emojiIcon('💳'),
-          title: const Text('订阅调试'),
-          subtitle: const Text('诊断权益、清缓存强刷、覆盖 Pro/Free'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const SubscriptionDebugScreen(),
-            ),
           ),
         ),
         ListTile(
@@ -899,23 +867,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           leading: _emojiIcon('📝'),
           title: Text(l10n.resetOnboarding),
           onTap: () => _resetOnboarding(context, ref, l10n),
-        ),
-        ListTile(
-          leading: _emojiIcon('📊'),
-          title: const Text('Analytics'),
-          trailing: _trailingValue(
-            context,
-            ref.read(analyticsServiceProvider).channelName,
-          ),
-          onTap: () {
-            final service = ref.read(analyticsServiceProvider);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('当前通道: ${service.channelName}'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
         ),
         ListTile(
           leading: _emojiIcon('🎭'),
@@ -931,17 +882,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onChanged: (value) =>
                       _toggleDemoMode(context, ref, controller, value),
                 ),
-        ),
-        ListTile(
-          leading: _emojiIcon('🎯'),
-          title: const Text('字幕自动校准'),
-          subtitle: const Text('AI 转录完成后按本地音频静音微调句边界'),
-          trailing: Switch(
-            value: settings.subtitleAutoAlignEnabled,
-            onChanged: (value) => ref
-                .read(appSettingsProvider.notifier)
-                .setSubtitleAutoAlignEnabled(value),
-          ),
         ),
         ListTile(
           leading: _emojiIcon('📖'),
@@ -979,9 +919,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     WidgetRef ref,
     AppLocalizations l10n,
   ) async {
-    await ref
-        .read(guideControllerProvider.notifier)
-        .resetFlows(GuideFlowIds.all);
+    await ref.read(guideControllerProvider.notifier).resetAll();
 
     if (!context.mounted) return;
     ScaffoldMessenger.of(
@@ -1037,7 +975,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       // Step 1: 关闭旧数据库（避免 Drift "multiple databases" 警告）
-      await closeCurrentDatabase();
+      await closeCurrentDatabase(
+        studyTimeService: ref.read(studyTimeServiceProvider),
+      );
 
       if (enabled) {
         // Step 2a: 创建并 seed demo 库（幂等）
@@ -1279,6 +1219,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 构建设置列表 SVG 图标，统一约束尺寸，避免资源原始尺寸影响行高。
+  Widget _settingsSvgIcon(String assetName) {
+    return SizedBox(
+      width: _settingsLeadingIconExtent,
+      height: _settingsLeadingIconExtent,
+      child: Center(
+        child: SvgPicture.asset(
+          assetName,
+          width: _settingsSvgIconExtent,
+          height: _settingsSvgIconExtent,
+        ),
+      ),
+    );
+  }
+
+  /// 构建随主题切换前景色的单色 SVG，保证深色卡面上的图标对比度。
+  Widget _settingsThemedSvgIcon(BuildContext context, String assetName) {
+    return SizedBox(
+      width: _settingsLeadingIconExtent,
+      height: _settingsLeadingIconExtent,
+      child: Center(
+        child: SvgPicture.asset(
+          assetName,
+          width: _settingsSvgIconExtent,
+          height: _settingsSvgIconExtent,
+          colorFilter: ColorFilter.mode(
+            Theme.of(context).colorScheme.onSurfaceVariant,
+            BlendMode.srcIn,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建设置列表 Material 图标，用于暂未提供 SVG 的少量入口。
+  Widget _settingsMaterialIcon(IconData icon) {
+    return SizedBox(
+      width: _settingsLeadingIconExtent,
+      height: _settingsLeadingIconExtent,
+      child: Center(child: Icon(icon, size: _settingsMaterialIconExtent)),
+    );
+  }
+
   /// 在 children 之间插入浅灰分割线
   List<Widget> _intersperseDividers(List<Widget> children) {
     if (children.length <= 1) return children;
@@ -1313,7 +1296,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading: _emojiIcon('🎨'),
+      leading: _settingsSvgIcon('assets/icon/artist-palette.svg'),
       title: Text(l10n.themeMode),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1330,6 +1313,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// 学习内容「文字大小与字体」入口。
+  Widget _buildReadingTextTile(BuildContext context, AppLocalizations l10n) {
+    return ListTile(
+      leading: _settingsThemedSvgIcon(context, 'assets/icon/text-size.svg'),
+      title: Text(l10n.readingTextSettings),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ReadingTextSettingsScreen(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLanguageTile(
     BuildContext context,
     AppLocalizations l10n,
@@ -1338,7 +1335,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading: _emojiIcon('🌐'),
+      leading: _settingsSvgIcon('assets/icon/locale.svg'),
       title: Text(l10n.language),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1366,7 +1363,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         supportedNativeLanguages[settings.nativeLanguage] ??
         settings.nativeLanguage;
     return ListTile(
-      leading: _emojiIcon('🗣️'),
+      leading: _settingsThemedSvgIcon(context, 'assets/icon/speak.svg'),
       title: Text(l10n.nativeLanguage),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1487,7 +1484,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               settings,
               controller,
               ThemeMode.system,
-              '⚙️',
+              Icons.brightness_auto_rounded,
               l10n.themeModeSystem,
             ),
             _buildThemeOption(
@@ -1496,7 +1493,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               settings,
               controller,
               ThemeMode.light,
-              '☀️',
+              Icons.light_mode_rounded,
               l10n.themeModeLight,
             ),
             _buildThemeOption(
@@ -1505,7 +1502,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               settings,
               controller,
               ThemeMode.dark,
-              '🌛',
+              Icons.dark_mode_rounded,
               l10n.themeModeDark,
             ),
           ],
@@ -1520,20 +1517,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppSettingsState settings,
     AppSettings controller,
     ThemeMode mode,
-    String emoji,
+    IconData themeIcon,
     String label,
   ) {
     final isSelected = settings.themeMode == mode;
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: Icon(
         isSelected ? Icons.check_circle : Icons.circle_outlined,
-        color: isSelected
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.outline,
+        color: isSelected ? colorScheme.primary : colorScheme.outline,
       ),
       title: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
+          Icon(
+            themeIcon,
+            size: 22,
+            color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+          ),
           const SizedBox(width: 12),
           Text(label),
         ],

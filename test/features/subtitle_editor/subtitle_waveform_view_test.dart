@@ -286,6 +286,8 @@ void main() {
           onScrubEnd: (_) {},
           onAdjustEnd: () {},
         ),
+        // 同一用例内多次 pumpWidget 时保留缩放焦点对应的偏移状态。
+        key: const ValueKey('subtitle-waveform-zoom-focus'),
       );
 
       await tester.pumpWidget(build(1));
@@ -400,7 +402,6 @@ void main() {
             word: 'First',
             startTime: Duration.zero,
             endTime: Duration(seconds: 2),
-            confidence: 0,
           ),
           primary: true,
           isSentenceStart: true,
@@ -412,7 +413,6 @@ void main() {
             word: 'sentence.',
             startTime: Duration(seconds: 2),
             endTime: Duration(seconds: 4),
-            confidence: 0,
           ),
           primary: true,
           isSentenceStart: false,
@@ -480,7 +480,6 @@ void main() {
             word: 'one',
             startTime: Duration.zero,
             endTime: Duration(seconds: 1),
-            confidence: 0,
           ),
           primary: true,
           isSentenceStart: true,
@@ -492,7 +491,6 @@ void main() {
             word: 'two',
             startTime: Duration(seconds: 1),
             endTime: Duration(milliseconds: 2500),
-            confidence: 0,
           ),
           primary: true,
           isSentenceStart: false,
@@ -504,7 +502,6 @@ void main() {
             word: 'three',
             startTime: Duration(milliseconds: 2500),
             endTime: Duration(seconds: 4),
-            confidence: 0,
           ),
           primary: true,
           isSentenceStart: false,
@@ -808,6 +805,53 @@ void main() {
       audioEngine.disposeController();
     });
 
+    testWidgets('缩放滑杆圆点在左右端点时仍可从外侧容易拖动', (tester) async {
+      final audioItem = createTestAudioItem(totalDuration: 10);
+      final audioEngine = _ScreenTestAudioEngine(
+        duration: const Duration(seconds: 10),
+        sentences: _sentences(),
+      );
+
+      await tester.pumpWidget(
+        createTestScreen(
+          SubtitleSimpleEditorScreen(audioItem: audioItem),
+          overrides: [audioEngineProvider.overrideWith(() => audioEngine)],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final sliderFinder = find.byKey(
+        const ValueKey('subtitle-waveform-zoom-slider'),
+      );
+      final sliderRect = tester.getRect(sliderFinder);
+
+      // 圆点在最左端时，从控件左边缘向内 4px 按下也应能拖动。
+      final leftGesture = await tester.startGesture(
+        Offset(sliderRect.left + 4, sliderRect.center.dy),
+      );
+      await leftGesture.moveBy(const Offset(80, 0));
+      await leftGesture.up();
+      await tester.pump();
+      expect(tester.widget<Slider>(sliderFinder).value, greaterThan(1.0));
+
+      // 先把圆点移到最右端，再验证右边缘外侧命中区可向内拖动。
+      await tester.drag(sliderFinder, const Offset(1000, 0));
+      await tester.pump();
+      final maxValue = tester.widget<Slider>(sliderFinder).max;
+      expect(tester.widget<Slider>(sliderFinder).value, maxValue);
+
+      final rightGesture = await tester.startGesture(
+        Offset(sliderRect.right - 4, sliderRect.center.dy),
+      );
+      await rightGesture.moveBy(const Offset(-80, 0));
+      await rightGesture.up();
+      await tester.pump();
+      expect(tester.widget<Slider>(sliderFinder).value, lessThan(maxValue));
+
+      audioEngine.disposeController();
+    });
+
     testWidgets('保存按钮激活时使用更深的主色背景', (tester) async {
       final audioItem = createTestAudioItem();
       final audioEngine = _ScreenTestAudioEngine(
@@ -1053,7 +1097,6 @@ const List<WaveformWordBoundary> _activeWords = [
       word: 'aa',
       startTime: Duration(seconds: 4),
       endTime: Duration(seconds: 6),
-      confidence: 0,
     ),
     primary: true,
     isSentenceStart: true,
@@ -1065,7 +1108,6 @@ const List<WaveformWordBoundary> _activeWords = [
       word: 'bb',
       startTime: Duration(seconds: 6),
       endTime: Duration(seconds: 8),
-      confidence: 0,
     ),
     primary: true,
     isSentenceStart: false,

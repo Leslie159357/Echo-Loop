@@ -9,7 +9,7 @@
 
   <p><strong>从此不必自己摸索怎么练好英语。</strong></p>
 
-  <p>盲听 · 精听 · 跟读 · 复述 · 复习，Echo Loop 按科学节奏推你走完。</p>
+  <p>精听 · 跟读 · 盲听 · 复述 · 复习，Echo Loop 按科学节奏推你走完。</p>
 
   <p><sub><em>本项目由中央民族大学外国语学院 <a href="https://sfs.muc.edu.cn/info/1063/3729.htm">杨艳老师</a> 指导设计。</em></sub></p>
 
@@ -32,17 +32,15 @@
 </div>
 
 
-> 🇨🇳 **中国区用户请注意**：中国区 App Store 正在申请 ICP 备案，应用暂时下架。中国大陆用户可切换到非中国区 Apple 账号（如美区、港区）下载安装 Echo Loop。备案完成后会恢复上架。
-
 ---
 
 ## 📖 Echo Loop 是什么
 
 **若英语听说也有一卷无上内功心法，Echo Loop 便是一部现代学习者的 E筋经**。这个 E，既是 Echo，也是 English，更是 Ear 与 Expression。它不传花拳绣腿，不教临场取巧，而是带你:
 
-- 先盲听入定，听出原声气息
-- 再精听通脉，打通语音、词义与句意经脉
-- 继而跟读运功，校准发音、节奏和语感
+- 先精听通脉，打通语音、词义与句意经脉
+- 再跟读运功，校准发音、节奏和语感
+- 继而盲听入定，检验对原声的整体理解
 - 再以复述出招，把听进去的英语化为自己口中自然流出的表达
 
 初练之后，八阶回环自成周天，间隔复习固本培元，难句与生词也在一次次回炉中融会贯通，化为己用。
@@ -100,7 +98,7 @@
 
 **这些决策本身才是最消耗意志力的地方**：不是听不懂，是不知道下一步该做什么。
 
-Echo Loop 想做的，就是在不违背人性的前提下，用更科学的训练流程降低重复练习的执行成本。它把盲听、精听、跟读、复述和间隔复习串成一个自动推进的闭环：选一段你想听懂的音频，按下开始，从盲听到通关，每一步它都会告诉你"现在做什么"。
+Echo Loop 想做的，就是在不违背人性的前提下，用更科学的训练流程降低重复练习的执行成本。它把精听、跟读、盲听、复述和间隔复习串成一个自动推进的闭环：选一段你想听懂的音频，按下开始，从精听到通关，每一步它都会告诉你"现在做什么"。
 
 你只需要坚持打开 App，剩下交给 Echo Loop。把一段材料练透，强过泛听 100 个音频。
 
@@ -129,12 +127,12 @@ Echo Loop 想做的，就是在不违背人性的前提下，用更科学的训�
 
 ## 🧠 学习方法论
 
-**盲听 → 精听 → 跟读 → 复述 → 科学间隔复习 → 通关。**
+**精听 → 跟读 → 盲听 → 复述 → 科学间隔复习 → 通关。**
 
 ```mermaid
 flowchart LR
-  A[盲听<br/>完整听一遍，感知整体难度] --> B[精听<br/>逐句听懂，标记重点难句]
-  B --> C[跟读<br/>模仿语音语调，训练发音能力]
+  A[精听<br/>逐句听懂，标记重点难句] --> B[跟读<br/>模仿语音语调，训练发音能力]
+  B --> C[盲听<br/>完整听一遍，检验整体理解]
   C --> D[复述<br/>用自己的话表达，提升输出能力]
   D --> E[间隔复习<br/>在遗忘前重练，巩固长期记忆]
   E --> F[通关<br/>完成本轮学习任务]
@@ -153,7 +151,7 @@ flowchart LR
 
 | 阶段 | 距上次间隔 | 任务 |
 |---|---|---|
-| 首次学习 | — | 盲听 → 精听 → 跟读 → 段落复述 |
+| 首次学习 | — | 精听 → 跟读 → 盲听 → 段落复述 |
 | 首轮复习 | 6 小时后 | 难句补练 + 段落复述 |
 | 第二轮复习 | 1 天后 | 盲听 + 难句补练 + 段落复述 |
 | 第三轮复习 | 2 天后 | 盲听 + 难句补练 + 段落复述 |
@@ -193,21 +191,115 @@ flowchart LR
 
 ---
 
+## ❓ 常见问题
+
+<details>
+<summary><strong>Echo Loop 免费吗？</strong></summary>
+
+基础功能完全免费，不限次数、不限数量：
+
+- **无限导入素材**：本地文件、链接、百度网盘、播客订阅都能导入，数量不限
+- **无限收藏**：难句、单词、意群随便收藏，没有上限
+- **完整学习闭环**：精听、跟读、盲听、复述，加上 7 轮间隔复习和到点提醒
+- **难句专项复习 + 语境化闪卡**
+- **跟读评测**：用设备自带的语音识别，不计次数
+- **本地离线转录字幕**：下载模型后在本机生成字幕，不用登录
+- **离线词典、学习数据统计、导出 PDF 笔记、备份与恢复**
+
+AI 讲解类功能每月有一份免费额度，大多数用户日常学习够用。只有 AI 用得很多的用户，才需要在 App 内升级会员。
+
+</details>
+
+<details>
+<summary><strong>哪些功能会消耗 AI 额度？</strong></summary>
+
+只有「AI 讲解」类功能会消耗额度：AI 翻译、句子解析、意群拆分、词汇解析、AI 学习助手、复述评估和云端字幕转录。上面列的免费功能都不消耗额度。
+
+</details>
+
+<details>
+<summary><strong>免费额度用完了怎么办？</strong></summary>
+
+学习不受影响，照常练。AI 功能等下个月额度重置后就能继续用；等不及的话，可以在 App 内升级会员。
+
+</details>
+
+<details>
+<summary><strong>开源项目为什么还有付费？</strong></summary>
+
+代码完全开源（AGPL-3.0）。AI 功能每调用一次，都要向大模型服务商付费，会员收入用来支付这部分开销，让项目能持续维护下去。
+
+</details>
+
+<details>
+<summary><strong>支持哪些平台？</strong></summary>
+
+目前主力是 **iOS 和 Android**，在 App Store、Google Play 下载，或者在 [Releases](https://github.com/echo-loop/Echo-Loop/releases) 下载 Android APK。macOS 和 Windows 的桌面版正在开发中，以后会正式发布。
+
+想现在就在电脑上用，可以这样装：
+
+- **Mac（M 系列芯片）**：打开 Mac App Store 搜索 Echo Loop，直接安装 iOS 版
+- **Windows**：先安装腾讯应用宝，再在应用宝里安装 Echo Loop 的 Android APK
+
+</details>
+
+<details>
+<summary><strong>和其他英语 App 有什么不同？</strong></summary>
+
+其他 App 主要提供材料和工具，怎么练要靠你自己安排。Echo Loop 管的是「怎么练」：精听、跟读、盲听、复述、间隔复习串成一个流程，每一步都由 App 告诉你接下来做什么，你不用自己定计划、数遍数、记复习时间。详细对比见上方「🆚 和其他方案的差异」。
+
+</details>
+
+<details>
+<summary><strong>支持哪些学习材料？</strong></summary>
+
+- **音频**：mp3、m4a、wav、aac、flac
+- **视频**：mp4、mov、m4v、mkv（可隐藏画面当音频练）
+- **字幕**：srt、vtt、lrc，与音频同名会自动配对；没有字幕可以用 AI 转录生成
+- **来源**：本地文件、音频直链、百度网盘、播客订阅
+
+播客、TED、美剧片段、教材音频都可以，建议选**你感兴趣、难度略高于当前水平**的内容。
+
+</details>
+
+<details>
+<summary><strong>需要什么英语基础？</strong></summary>
+
+能借助字幕看懂材料大意就可以开始。遇到听不懂的句子，可以用意群拆分、AI 翻译和句子解析拆开理解。基础薄弱的话，先从慢速、短篇的材料练起。
+
+</details>
+
+<details>
+<summary><strong>多久能看到效果？</strong></summary>
+
+一段素材练完首次学习，你就能听懂这段内容，并用自己的话复述出来。之后的 7 轮间隔复习会持续大约 8 周，把它变成长期记忆。整体听说能力的提升靠积累，建议每天练 20～30 分钟，同时学 2～3 段素材，坚持几周会明显感到听得更轻松、说得更顺。
+
+</details>
+
+<details>
+<summary><strong>没有网络能用吗？</strong></summary>
+
+可以。学习流程、复习、收藏、跟读评测、本地转录都能离线使用，只有云端 AI 功能需要联网。
+
+</details>
+
+<details>
+<summary><strong>学习数据存在哪里？换手机怎么办？</strong></summary>
+
+学习数据默认存在本机。换手机或重装前，在「设置 → 备份与恢复」导出备份，到新设备上恢复即可。
+
+</details>
+
+---
+
 ## 💬 加入社群
 
-和其他认真练英语的伙伴一起：交流学习方法、反馈使用体验、第一时间收到新功能更新。
+和其他认真练英语的伙伴一起：交流学习方法、分享学习资源、反馈使用体验、第一时间收到新功能更新。
 
-<table>
-  <tr>
-    <td valign="middle" align="center" width="140">
-      <img src="assets/qr/wechat-group.jpg" alt="微信群二维码" width="110" /><br/>
-      <sub>扫码加入微信群</sub>
-    </td>
-    <td valign="middle">
-      <p><sub>二维码过期或群已满 200 人后请先加微信 <code>echo-loop-app</code>，由群主拉你进群。</sub></p>
-    </td>
-  </tr>
-</table>
+- [加入 QQ 群（1109595757）](https://qm.qq.com/q/f4YeczPPUc)：和其他认真练英语的伙伴交流学习方法、分享学习资源。
+- [微信联系我们](https://i.postimg.cc/P5tVpPTV/echo-loop-wecom.jpg)：扫描二维码联系 Echo Loop。
+- [关注 B 站](https://space.bilibili.com/509449049/upload/video)：获取英语学习内容和功能更新。
+- [关注小红书](https://xhslink.cn/m/4zOdGUcDH4N)：获取使用技巧、功能更新和英语学习内容。
 
 ---
 
@@ -215,7 +307,7 @@ flowchart LR
 
 ### ✅ 1 · 核心功能
 
-- [x] 学习闭环：盲听 / 精听 / 跟读 / 段落复述
+- [x] 学习闭环：精听 / 跟读 / 盲听 / 段落复述
 - [x] 间隔复习调度（6h → 28d）
 - [x] 长难句意群划分
 - [x] 难句收藏 + 专项复习
@@ -228,8 +320,8 @@ flowchart LR
 ### 🚧 2 · AI 能力
 
 - [ ] AI 口语陪练
-- [ ] AI 学习助手（随时答疑）
-- [ ] 单词深度解析
+- [x] AI 学习助手（随时答疑）
+- [x] AI 查词
 - [ ] 个性化素材推荐
 
 ### 🔭 3 · 体验与平台
@@ -249,9 +341,9 @@ flowchart LR
 
 <a href="https://www.star-history.com/?repos=echo-loop%2FEcho-Loop&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&theme=dark&legend=top-left&sealed_token=rmOusoBzvFBrT3dML8wKdnIJ2UTPBU5CA4azMPH-tw854U8mIc38zRs3tiMAgjGvOO2Fh9oEemYoBFeA5TWpNDgGJVm-ZmNs4bzZqkLRVOv9Qt1O3eZSfA" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=rmOusoBzvFBrT3dML8wKdnIJ2UTPBU5CA4azMPH-tw854U8mIc38zRs3tiMAgjGvOO2Fh9oEemYoBFeA5TWpNDgGJVm-ZmNs4bzZqkLRVOv9Qt1O3eZSfA" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=rmOusoBzvFBrT3dML8wKdnIJ2UTPBU5CA4azMPH-tw854U8mIc38zRs3tiMAgjGvOO2Fh9oEemYoBFeA5TWpNDgGJVm-ZmNs4bzZqkLRVOv9Qt1O3eZSfA" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&theme=dark&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
  </picture>
 </a>
 
@@ -280,15 +372,25 @@ flowchart LR
 ```bash
 git clone git@github.com:echo-loop/Echo-Loop.git
 cd Echo-Loop
-cp .dev.env.template .dev.env   # 填入 Supabase / Google / API 地址等编译期变量
+cp .dev.env.template .dev.env   # 填入 Supabase / Google 等编译期变量
 flutter pub get
 dart run build_runner build
 flutter run -d <ios|android|macos> --dart-define-from-file=.dev.env
 ```
 
-> 编译期环境变量（`SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`、`GOOGLE_WEB_CLIENT_ID`、`API_BASE_URL`）
-> 统一放在 `.dev.env`（调试）/ `.prod.env`（发布），通过 `--dart-define-from-file` 注入。
-> 这两个文件已被 `.gitignore`，请勿提交。`.prod.env` 用相同的键，把 `API_BASE_URL` 换成生产地址即可。
+> Supabase 与 Google 等编译期配置放在 `.dev.env`（调试）/ `.prod.env`（发布），通过
+> `--dart-define-from-file` 注入。这两个文件已被 `.gitignore`，请勿提交。
+> 全球 API 默认地址与中国 API 地址可用编译期变量覆盖；全球和中国模型 CDN 地址配置在
+> `lib/config/regional_service_endpoints.dart`；
+> 全球 API 默认地址为 `https://www.echo-loop.top`，可通过 `API_BASE_URL` 编译期变量覆盖；
+> 中国 API 默认地址为 `https://www.echo-loop.cn`，可通过 `API_CHINA_BASE_URL` 编译期变量覆盖，
+> 本地构建可在 `.prod.env` 中覆盖；GitHub Actions CI/Release 会直接将对应 GitHub Variables 传给构建命令；
+> release 包通过统一的 `isChinaUser` 结论选择区域：中国 Apple Storefront、设备国家码或
+> `/api/v1/client/config` 的 `context.countryCode` 任一返回 `CN`/`CHN` 即选择中国，
+> 不需要按地区构建。同一个 release 包包含全球与中国 API 候选地址。首次没有中国地区证据时先使用全球 API；
+> 地区结论变化后先保留当前 API，并立即用配置请求探测新的首选区域；遇到网络错误或 5xx
+> 时尝试另一区域一次。探测成功后切换到首选区域；备用成功后当前会话 API 暂用可用地址，
+> 后续配置刷新会重新探测首选区域。模型 CDN 始终跟随 `isChinaUser`；未设置 API 覆盖变量时使用源码默认地址。
 
 </details>
 
@@ -374,8 +476,17 @@ open -a Simulator
 flutter analyze                          # 静态分析
 flutter test                             # 全部测试
 flutter test integration_test -d macos   # 集成测试
+# Maestro UI 烟测（先启动设备并安装开发包；Android 开发包示例）
+MAESTRO_APP_ID=app.echoloop.dev scripts/test_maestro.sh
+# Android 真机：自动构建、安装 dev 包并运行 Study 测试
+scripts/test_maestro_android.sh
+# 多台设备时，显式指定目标；也可一次性 export MAESTRO_ANDROID_DEVICE=<adb-serial>
+scripts/test_maestro_android.sh --device <adb-serial>
 dart format .                            # 格式化
 ```
+
+> Maestro CLI 安装：`curl -fsSL https://get.maestro.mobile.dev | bash`。iOS 开发包请将
+> `MAESTRO_APP_ID` 改为 `top.echo-loop.dev`；测试流存放在 `maestro/`。
 
 **代码生成**（修改 Riverpod Provider 后）
 
@@ -386,7 +497,7 @@ dart run build_runner build
 **构建**
 
 ```bash
-# 编译期变量从 env 文件注入（dev 用 .dev.env，发布用 .prod.env）
+# Supabase / Google 等编译期变量从 env 文件注入（发布用 .prod.env）
 flutter build macos --dart-define-from-file=.prod.env
 flutter build apk   --dart-define-from-file=.prod.env
 flutter build ios   --dart-define-from-file=.prod.env
@@ -407,6 +518,8 @@ flutter run --release -d <DEVICE_ID> --dart-define-from-file=.dev.env
 </details>
 
 ---
+
+国内 AtomGit 托管：<a href="https://atomgit.com/echo-loop/Echo-Loop">Echo Loop AtomGit 项目主页</a>
 
 ## 📄 License
 

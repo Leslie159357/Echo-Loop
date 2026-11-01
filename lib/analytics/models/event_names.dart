@@ -155,16 +155,16 @@ abstract class Events {
   /// 查看今日学习时长明细
   static const studyTimeViewed = 'study_time_viewed';
 
-  // ── 精品合集 ──
+  // ── 社区合集 ──
   /// 点击发现精品合集入口
   static const discoverEntryTapped = 'discover_entry_tapped';
 
-  /// 成功添加官方合集
-  static const officialCollectionEnroll = 'official_collection_enroll';
+  /// 成功添加社区合集
+  static const communityCollectionEnroll = 'community_collection_enroll';
 
-  /// 查看官方合集详情
-  static const officialCollectionDetailViewed =
-      'official_collection_detail_viewed';
+  /// 查看社区合集详情
+  static const communityCollectionDetailViewed =
+      'community_collection_detail_viewed';
 
   // ── 学习 Tab ──
   /// 查看活动日历
@@ -207,6 +207,10 @@ abstract class Events {
   /// params: stage, subStage, source ∈ {'manual', 'auto'}
   static const retellSkipped = 'retell_skipped';
 
+  /// 手动提前解锁当前复习轮（学习计划页「立即解锁」按钮）
+  /// params: audioId, stage
+  static const reviewUnlockEarly = 'review_unlock_early';
+
   // ── Onboarding 问卷（首启 2 题，只采集不消费） ──
   /// 进入问卷页
   static const onboardingSurveyShown = 'onboarding_survey_shown';
@@ -241,10 +245,23 @@ abstract class Events {
   /// 用户从提醒设置页跳转到系统设置
   static const notificationSettingsOpenTapped =
       'notification_settings_open_tapped';
+
+  // ── 核心商业化与数据安全漏斗 ──
+  /// 用户打开会员订阅页
+  static const subscriptionPageViewed = 'subscription_page_viewed';
+
+  static const subscriptionCheckoutStarted = 'subscription_checkout_started';
+  static const subscriptionPurchaseResult = 'subscription_purchase_result';
+  static const chatTurnResult = 'chat_turn_result';
+  static const cloudImportResult = 'cloud_import_result';
+  static const backupOperationResult = 'backup_operation_result';
 }
 
 /// User property 名称常量（写入分析通道用于分群留存）
 abstract class UserProperties {
+  /// 应用分发渠道（app_store / play / direct）
+  static const installSource = 'install_source';
+
   /// 学习目标（exam / daily / work / travel / other）
   static const englishGoal = 'english_goal';
 
@@ -379,6 +396,9 @@ abstract class EventParams {
   /// Q3 来源渠道（user property 同名）
   static const referralSource = 'referral_source';
 
+  /// Q3 选择"其他"时的补充说明（最长 50 字，未填写时不上报）
+  static const referralOtherText = 'referral_other_text';
+
   /// 完成耗时（秒）
   static const elapsedSeconds = 'elapsed_seconds';
 
@@ -403,4 +423,13 @@ abstract class EventParams {
   /// 系统授权框返回状态
   /// 值：'granted' / 'denied'
   static const status = 'status';
+
+  static const result = 'result';
+  static const operation = 'operation';
+  static const selectedCount = 'selected_count';
+  static const addedCount = 'added_count';
+  static const duplicateCount = 'duplicate_count';
+  static const failedCount = 'failed_count';
+  static const planPeriod = 'plan_period';
+  static const purchaseType = 'purchase_type';
 }

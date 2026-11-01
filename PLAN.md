@@ -1,6 +1,6 @@
 # Echo Loop 项目规划
 
-> 最后更新：2026-07-12（文档压缩整理）
+> 最后更新：2026-09-21（本地数据启动失败降级到首页并保留日志入口）
 > 当前焦点：录音 + 识别功能；首要阻塞为 Android 离线 ASR 结束录音闪退
 
 ## 产品目标
@@ -21,12 +21,13 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 - 词典体系：本地词典、AI 词典、网页词典、多源切换、非 modal 面板。
 - AI 能力：翻译、句子解析、单词深度解析、转录。
 - PDF 导出：学习材料导出为可打印 PDF。
-- 订阅体系：平台/渠道识别、RevenueCat 接入、Web/Paddle 托管结账、AI 配额后端裁决。
+- 订阅体系：平台/渠道识别、native RevenueCat、direct Paddle 后端结账、AI 配额后端裁决。
 
 当前主要风险：
 
 - Android 离线 ASR 在部分机型结束录音后触发 native 崩溃，仍未定位到最终 root cause。
 - 订阅链路主干已打通，但仍需要继续做渠道验证、回归和生产配置收尾。
+- 冷启动已将重型初始化移出首帧路径，并以 Riverpod `AsyncValue` 统一管理本地数据初始化状态；本地数据失败时不再阻断导航壳，首页提供重试与日志入口。仍需在受影响 iOS 真机上用启动日志核验迁移失败原因和首帧实际耗时。
 
 ## 当前里程碑
 
@@ -54,13 +55,14 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 - 多平台体验对齐（iOS / Android / macOS）。
 - 播放、词典、PDF、字幕编辑等高频链路体验打磨。
 - CI / Release / 更新链路稳定性完善。
+- AI 对话助手（通用 chatbot 组件）：多轮对话式 AI 助手，一套可插拔组件接入不同位置（首接入点为句子讲解页；2026-07-23 起逐句精听 / 难句跟读 / 难句复习 / 收藏复习 4 个句子级任务页 AppBar 也接入，共享 `SentenceChatButton` 单一入口来源），复用现有 NDJSON 流式与 402 额度门链路。发布由 `kChatbotEnabled` + remote config 双开关控制。规格见 [docs/chatbot-implementation-plan.md](./docs/chatbot-implementation-plan.md)。
 
 ### 🚧 Milestone 5：支付订阅（Echo Loop Premium）
 
 当前状态：
 
-- 已完成：客户端 RevenueCat 接入、订阅页、平台/渠道识别、Web checkout、AI 配额后端裁决、release 渠道注入。
-- 待继续：真实生产环境验证、退款/撤销回退、多设备/换机验证、更多渠道回归。
+- 已完成：客户端 RevenueCat 接入、订阅页、平台/渠道识别、direct Paddle Checkout 与 Customer Portal、AI 配额后端裁决、release 渠道注入、权益单一来源重构 P0（后端 `/api/entitlements` 唯一权威 + forceReconcile 成交收敛，见 [docs/subscription-single-source-plan.md](./docs/subscription-single-source-plan.md)）。
+- 待继续：真实生产环境验证（Paddle 会员在商店包手动回归，见 plan §11；P0+P1 需后端同步部署）、退款/撤销回退、多设备/换机验证、更多渠道回归。P1 智能刷新（E7/E6/E8）已全部完成（2026-07-23）；E9 Realtime 推送为可选项未实现。
 
 参考文档：
 
@@ -79,6 +81,12 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 - 页面负责组装，组件负责展示，复杂流程下沉到可测试的纯 Dart 编排层。
 - 副作用通过 service / repository 注入，不把网络、文件、平台调用散落到 UI。
 - 异步流程必须带 session / token / generation guard，防止旧回调污染新状态。
+- 学习统计新写入链路用于全部学习任务（随心听、收藏复习、逐句精听、难句跟读、全文盲听、段落复述和难句补练）：
+  页面 → Provider → StudySessionTimer → StudyTimeService FIFO 队列 → StudyStatisticsDao 单事务；
+  计时器按页面生命周期创建/销毁，播放完成事件写入输入统计，录音完成事件写入输出统计，用户无活动超过
+  2 分钟才暂停总学习时长。学习任务不再保留独立的 StudyEventRecorder、StudyStatisticsRecorder 或旧式 add* 增量写入链路。
+- 新链路使用的日统计、阶段统计和词形事务能力保持集中实现，避免新增调用方绕过
+  统一写入口。
 - 新增能力优先补状态流转测试与关键回归测试。
 
 ## 关键 ADR 索引
@@ -87,6 +95,7 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 - 统一 TTS 架构：合成 → 文件 → 缓存 → 播放，支持平台 TTS 与 Kokoro 本地 TTS。
 - 离线转录与本地模型：复用统一音频处理与模型下载能力。
 - 平台 + 渠道统一识别：`platform + distribution` 决定支付实现和后端配额策略。
+- 通用记忆调度基础设施：以独立调度快照与只追加复习事件建模；上层依赖应用自有接口，FSRS 仅限 adapter 内部，按逐项固定 Profile 保障可迁移与可审计性（见 [memory-scheduler-infrastructure-plan.md](./docs/memory-scheduler-infrastructure-plan.md)）。
 
 详细历史与旧版长文档已归档：
 

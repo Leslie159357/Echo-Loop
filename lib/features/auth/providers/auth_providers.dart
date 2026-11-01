@@ -1,6 +1,5 @@
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -10,11 +9,13 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../analytics/analytics_providers.dart';
-import '../../../config/auth_config.dart' as auth_config;
+import '../../../providers/startup_bootstrap_provider.dart';
 import '../../../services/app_logger.dart';
+import '../../../services/supabase_token_coordinator.dart';
 import '../../../services/user_id_service.dart';
 import '../apple_sign_in_credentials.dart';
 import '../google_sign_in_credentials.dart';
+import '../supabase_startup_gate.dart';
 
 /// 认证仓库接口。
 ///
@@ -86,6 +87,14 @@ class SupabaseAuthRepository implements AuthRepository {
       idToken: idToken,
       nonce: rawNonce,
     );
+
+    if (response.user?.email == null) {
+      AppLogger.log(
+        'Auth',
+        'Apple sign-in without email claim: userId=${response.user?.id} '
+            'credentialHasEmail=${credential.email?.isNotEmpty ?? false}',
+      );
+    }
 
     final userMetadata = _appleUserMetadata(credential);
     if (userMetadata.isNotEmpty) {
@@ -174,6 +183,8 @@ String _sha256Hex(String input) {
   return sha256.convert(utf8.encode(input)).toString();
 }
 
+/// 从 Apple 凭证提取需要回写到 `auth.users.raw_user_meta_data` 的字段。
+///
 Map<String, String> _appleUserMetadata(
   AuthorizationCredentialAppleID credential,
 ) {
@@ -184,11 +195,13 @@ Map<String, String> _appleUserMetadata(
     if (familyName != null && familyName.isNotEmpty) familyName,
   ];
   final fullName = parts.join(' ').trim();
+  final email = credential.email?.trim();
 
   return {
     if (fullName.isNotEmpty) 'full_name': fullName,
     if (givenName != null && givenName.isNotEmpty) 'given_name': givenName,
     if (familyName != null && familyName.isNotEmpty) 'family_name': familyName,
+    if (email != null && email.isNotEmpty) 'apple_email': email,
   };
 }
 
@@ -196,7 +209,7 @@ Map<String, String> _appleUserMetadata(
 ///
 /// 未配置 Supabase 时调用动作会立刻抛错，避免页面误以为认证成功。
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  if (!auth_config.isAuthConfigured) {
+  if (!ref.watch(supabaseSdkReadyProvider)) {
     throw AuthException('Supabase auth is not configured.');
   }
   return SupabaseAuthRepository(Supabase.instance.client.auth);
@@ -224,7 +237,7 @@ class AuthAnalyticsSync {
       await analytics.setUserProperty('email', resolvedEmail);
     }
 
-    final anonymousId = _ref.read(userIdProvider);
+    final anonymousId = await _ref.read(userIdProvider);
     await analytics.setUserProperty('app_anonymous_id', anonymousId);
   }
 
@@ -323,32 +336,93 @@ final authControllerProvider = Provider<AuthController>((ref) {
 
 /// 当前 Supabase Session 的响应式来源。
 ///
-/// 首值：启动时 SDK 已恢复的 `currentSession`（可能为 null）。
-/// 后续：`onAuthStateChange` 的每个事件（signedIn / signedOut / tokenRefreshed
-/// 等都会带 `session`）。
+/// 首值：SDK 启动完成后 `onAuthStateChange` 发出的 `initialSession` 事件。
+/// 后续：该流的每个认证事件（signedIn / signedOut / tokenRefreshed 等都会带
+/// `session`）。不会把 SDK 恢复期间暂时为空的 `currentSession` 当作匿名首值。
 ///
-/// Supabase 未配置（`isAuthConfigured == false`）时永远 emit `null`，
-/// 等价于匿名态，调用方无需特殊判断。
+/// 地区与配置尚未解析时保持 pending；确定当前进程所选 Supabase 配置不完整后
+/// emit `null`，等价于匿名态，调用方无需特殊判断。
 final supabaseSessionProvider = StreamProvider<Session?>((ref) {
-  if (!auth_config.isAuthConfigured) {
-    return Stream<Session?>.value(null);
+  final authConfiguration = ref.watch(supabaseAuthConfiguredProvider.future);
+  return _sessionAfterStartup(ref, authConfiguration);
+});
+
+Stream<Session?> _sessionAfterStartup(
+  Ref ref,
+  Future<bool> authConfiguration,
+) async* {
+  bool isConfigured;
+  try {
+    isConfigured = await authConfiguration;
+  } catch (error) {
+    AppLogger.log(
+      'AuthSession',
+      'Supabase config resolution failed; use anonymous fallback '
+          'errorType=${error.runtimeType}',
+    );
+    yield null;
+    return;
+  }
+  if (!isConfigured) {
+    yield null;
+    return;
+  }
+
+  // SDK 尚未完成第三方启动时，不能把「尚未解析」误当成「确认匿名」。
+  // 否则订阅控制器会提前以匿名身份对账，登录用户随后会出现 free 闪烁。
+  ThirdPartyStartupReport startup;
+  try {
+    startup = await ref.read(thirdPartyStartupProvider.future);
+  } catch (error) {
+    AppLogger.log(
+      'AuthSession',
+      'Supabase startup failed; use anonymous fallback '
+          'errorType=${error.runtimeType}',
+    );
+    yield null;
+    return;
+  }
+  if (!startup.isSupabaseReady) {
+    yield null;
+    return;
   }
 
   final auth = Supabase.instance.client.auth;
-  final controller = StreamController<Session?>();
-  controller.add(auth.currentSession);
-
-  final sub = auth.onAuthStateChange.listen(
-    (event) => controller.add(event.session),
-    onError: controller.addError,
+  final initialSession = auth.currentSession;
+  AppLogger.log(
+    'AuthSession',
+    'provider_created currentSession=${initialSession == null ? "unresolved_or_anonymous" : "signedIn"} '
+        'userId=${initialSession?.user.id ?? "none"}',
   );
 
-  ref.onDispose(() {
-    sub.cancel();
-    controller.close();
+  // currentSession 可能在 Supabase.initialize() 返回时仍为空；必须先监听
+  // onAuthStateChange，等待 initialSession 事件作为首次认证结果。
+  yield* auth.onAuthStateChange.map((event) {
+    final session = event.session;
+    AppLogger.log(
+      'AuthSession',
+      'auth_state_changed event=${event.event.name} '
+          'session=${session == null ? "anonymous" : "signedIn"} '
+          'userId=${session?.user.id ?? "none"}',
+    );
+    return session;
   });
+}
 
-  return controller.stream;
+/// 自建后端鉴权请求共享的 Token Gate。
+///
+/// 未配置 Supabase 的离线构建返回 null；生产 API client 只在非空时安装鉴权拦截器。
+final supabaseTokenCoordinatorProvider = Provider<SupabaseTokenCoordinator?>((
+  ref,
+) {
+  if (!ref.watch(supabaseSdkReadyProvider)) {
+    return null;
+  }
+  final coordinator = SupabaseTokenCoordinator(
+    SupabaseAuthSessionSource(Supabase.instance.client.auth),
+  );
+  ref.onDispose(coordinator.dispose);
+  return coordinator;
 });
 
 /// 当前是否已登录的便捷 Provider。

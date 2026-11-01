@@ -6,14 +6,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
-import '../analytics/geo_interceptor.dart';
+import '../features/auth/providers/auth_providers.dart';
 import '../config/api_config.dart';
 import '../models/word_timestamp.dart';
 import '../providers/package_info_provider.dart';
 import 'api_log_interceptor.dart';
 import 'backend_dio.dart';
+import 'supabase_token_coordinator.dart';
+import 'runtime_endpoint_router.dart';
 import '../utils/srt_generator.dart';
 
 part 'transcription_api_client.g.dart';
@@ -147,18 +148,20 @@ class TranscriptionApiClient {
 
   /// [appVersion] 随请求以 `x-app-version` 上报（版本灰度预留），可为 null。
   /// 平台与渠道标识会随请求携带，后端据此按组合决定是否限额。
-  TranscriptionApiClient({required String baseUrl, String? appVersion})
-    : _dio = createBackendDio(
-        baseUrl: baseUrl,
-        appVersion: appVersion,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
-        apiLogTag: 'DIO',
-      ) {
-    SharedPreferences.getInstance().then(
-      (prefs) => _dio.interceptors.add(GeoInterceptor(prefs)),
-    );
-  }
+  TranscriptionApiClient({
+    required String baseUrl,
+    String? appVersion,
+    SupabaseTokenCoordinator? tokenCoordinator,
+    RuntimeEndpointRouter? endpointRouter,
+  }) : _dio = createAuthenticatedBackendDio(
+         tokenCoordinator: tokenCoordinator,
+         baseUrl: baseUrl,
+         endpointRouter: endpointRouter,
+         appVersion: appVersion,
+         connectTimeout: const Duration(seconds: 15),
+         receiveTimeout: const Duration(seconds: 30),
+         apiLogTag: 'DIO',
+       );
 
   /// 用于测试的构造函数，允许注入 Dio 实例
   TranscriptionApiClient.withDio(this._dio);
@@ -293,7 +296,9 @@ class TranscriptionApiClient {
 TranscriptionApiClient transcriptionApiClient(Ref ref) {
   final client = TranscriptionApiClient(
     baseUrl: apiBaseUrl,
+    endpointRouter: runtimeEndpointRouter,
     appVersion: readAppVersion(ref),
+    tokenCoordinator: ref.read(supabaseTokenCoordinatorProvider),
   );
   ref.onDispose(client.dispose);
   return client;

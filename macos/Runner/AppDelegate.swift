@@ -1,6 +1,7 @@
 import AVFoundation
 import Cocoa
 import CoreAudio
+import Darwin
 import FlutterMacOS
 import NaturalLanguage
 import Speech
@@ -45,6 +46,8 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
   private var hasDetectedSpeech = false
   private var silenceStartAt: Date?
   private var lastReportedSilenceMs = -1
+  /// 有声判定门槛，按环境底噪自适应（替代旧固定门槛 0.015）。
+  private let vadThreshold = AdaptiveVadThreshold()
   private var recordedDurationMs = 0.0
   private var firstDetectedSpeechMs: Double?
   private var lastDetectedSpeechMs: Double?
@@ -510,7 +513,7 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
 
       let file = try AVAudioFile(forWriting: fileURL, settings: inputFormat.settings)
 
-      if recognitionEnabled, let recognizer = cachedRecognizer {
+      if recognitionEnabled, cachedRecognizer != nil {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         request = req
@@ -563,7 +566,10 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     if let fileURL = currentFileURL {
       trimRecordingIfNeeded(fileURL: fileURL)
     }
-    result(["filePath": currentFileURL?.path as Any])
+    result([
+      "filePath": currentFileURL?.path as Any,
+      "diagnostics": vadThreshold.describe(),
+    ])
 
     // 纯录音模式（无 ASR）：手动发空 finalTranscriptReady，与 Android 行为对齐。
     if !recognitionEnabled, let promptId = currentPromptId {
@@ -710,36 +716,9 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     }
   }
 
+  /// 有声判定：buffer 原始 RMS 与自适应门槛比较（见 `AdaptiveVadThreshold`）。
   private func isSpeechDetected(in buffer: AVAudioPCMBuffer) -> Bool {
-    let threshold: Float = 0.015
-
-    if let channelData = buffer.floatChannelData {
-      let frameLength = Int(buffer.frameLength)
-      guard frameLength > 0 else { return false }
-      var sum: Float = 0
-      let channel = channelData[0]
-      for frame in 0..<frameLength {
-        let sample = channel[frame]
-        sum += sample * sample
-      }
-      let rms = sqrt(sum / Float(frameLength))
-      return rms >= threshold
-    }
-
-    if let channelData = buffer.int16ChannelData {
-      let frameLength = Int(buffer.frameLength)
-      guard frameLength > 0 else { return false }
-      var sum: Float = 0
-      let channel = channelData[0]
-      for frame in 0..<frameLength {
-        let normalized = Float(channel[frame]) / Float(Int16.max)
-        sum += normalized * normalized
-      }
-      let rms = sqrt(sum / Float(frameLength))
-      return rms >= threshold
-    }
-
-    return false
+    vadThreshold.isVoiced(rms: rmsLevel(of: buffer))
   }
 
   private func trimRecordingIfNeeded(fileURL: URL) {
@@ -923,6 +902,7 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     recordedDurationMs = 0
     firstDetectedSpeechMs = nil
     lastDetectedSpeechMs = nil
+    vadThreshold.reset()
   }
 
   /// 引擎级清理：removeTap + engine.stop + 释放全部引擎资源。
@@ -965,6 +945,7 @@ final class MacSpeechPracticeHandler: NSObject, FlutterStreamHandler {
     recordedDurationMs = 0
     firstDetectedSpeechMs = nil
     lastDetectedSpeechMs = nil
+    vadThreshold.reset()
     self.audioFile = audioFile
     recognitionRequest = request
   }
@@ -1091,9 +1072,10 @@ final class MacAudioDecodeHandler: NSObject {
         return
       }
 
-      DispatchQueue.global(qos: .userInitiated).async {
+      Task { [weak self] in
+        guard let self else { return }
         do {
-          let payload = try self.decodeAudio(atPath: audioPath)
+          let payload = try await self.decodeAudio(atPath: audioPath)
           DispatchQueue.main.async {
             result(payload)
           }
@@ -1116,7 +1098,7 @@ final class MacAudioDecodeHandler: NSObject {
     }
   }
 
-  private func decodeAudio(atPath audioPath: String) throws -> [String: Any] {
+  private func decodeAudio(atPath audioPath: String) async throws -> [String: Any] {
     let fileURL = URL(fileURLWithPath: audioPath)
     guard FileManager.default.fileExists(atPath: fileURL.path) else {
       throw MacAudioDecodeError(
@@ -1127,7 +1109,8 @@ final class MacAudioDecodeHandler: NSObject {
     }
 
     let asset = AVURLAsset(url: fileURL)
-    guard let track = asset.tracks(withMediaType: .audio).first else {
+    let tracks = try await asset.loadTracks(withMediaType: .audio)
+    guard let track = tracks.first else {
       throw MacAudioDecodeError(
         code: "notAvailable",
         message: "Audio asset has no readable audio track",
@@ -1164,7 +1147,8 @@ final class MacAudioDecodeHandler: NSObject {
       )
     }
 
-    guard let formatDescription = track.formatDescriptions.first else {
+    let formatDescriptions = try await track.load(.formatDescriptions)
+    guard let formatDescription = formatDescriptions.first else {
       throw MacAudioDecodeError(
         code: "notAvailable",
         message: "Audio track missing format description",
@@ -1172,7 +1156,7 @@ final class MacAudioDecodeHandler: NSObject {
       )
     }
     guard let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(
-      formatDescription as! CMAudioFormatDescription
+      formatDescription
     ) else {
       throw MacAudioDecodeError(
         code: "notAvailable",
@@ -1192,9 +1176,10 @@ final class MacAudioDecodeHandler: NSObject {
     }
 
     var outputSamples = [Float]()
+    let duration = try await asset.load(.duration)
     let estimatedFrames = max(
       0,
-      Int(CMTimeGetSeconds(asset.duration) * inputSampleRate)
+      Int(CMTimeGetSeconds(duration) * inputSampleRate)
     )
     let estimatedOutputSamples = max(
       1,
@@ -1289,6 +1274,48 @@ final class MacAudioDecodeHandler: NSObject {
       "sampleRate": Int(autoAlignTargetSampleRate.rounded()),
       "pcmBytes": FlutterStandardTypedData(bytes: pcmBytes)
     ]
+  }
+}
+
+final class MacDeviceInfoHandler {
+  private let methodChannel: FlutterMethodChannel
+
+  init(binaryMessenger: FlutterBinaryMessenger) {
+    methodChannel = FlutterMethodChannel(
+      name: "top.echo-loop/device_info",
+      binaryMessenger: binaryMessenger
+    )
+    methodChannel.setMethodCallHandler(handle)
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "getDeviceInfo":
+      result(deviceInfo())
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func deviceInfo() -> [String: Any] {
+    let processInfo = ProcessInfo.processInfo
+    return [
+      "modelIdentifier": modelIdentifier(),
+      "systemName": "macOS",
+      "systemVersion": processInfo.operatingSystemVersionString,
+      "processorCount": processInfo.processorCount,
+      "activeProcessorCount": processInfo.activeProcessorCount,
+      "physicalMemory": Int64(processInfo.physicalMemory)
+    ]
+  }
+
+  private func modelIdentifier() -> String {
+    var size = 0
+    sysctlbyname("hw.model", nil, &size, nil, 0)
+    guard size > 0 else { return "" }
+    var machine = [CChar](repeating: 0, count: size)
+    sysctlbyname("hw.model", &machine, &size, nil, 0)
+    return String(cString: machine)
   }
 }
 

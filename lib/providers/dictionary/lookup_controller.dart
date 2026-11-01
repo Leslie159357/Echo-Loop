@@ -6,10 +6,12 @@
 library;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
+import '../../features/subscription/models/ai_quota_rejection.dart';
 import '../../features/usage/usage_event.dart';
 import '../../features/usage/usage_providers.dart';
 import '../../models/dictionary/dictionary_lookup_result.dart';
@@ -20,6 +22,13 @@ import 'dictionary_registry.dart';
 import 'visible_sources_provider.dart';
 
 part 'lookup_controller.g.dart';
+
+/// 词典数据层时序日志；仅 debug 构建输出，定位延迟位于触发前还是请求内。
+void _traceDictionaryLookup(String message) {
+  if (!kDebugMode) return;
+  final timestamp = DateTime.now().toIso8601String();
+  debugPrint('[DictionaryTrace][$timestamp][lookup] $message');
+}
 
 /// 单个源的查词态
 sealed class SourceLookupState {
@@ -62,7 +71,9 @@ class LookupPhraseTooLong extends SourceLookupState {
 
 /// 本月免费额度用尽（后端返回 402）——由 UI 引导订阅升级。
 class LookupQuotaExceeded extends SourceLookupState {
-  const LookupQuotaExceeded();
+  const LookupQuotaExceeded({this.reason = AiQuotaRejectionReason.exhausted});
+
+  final AiQuotaRejectionReason reason;
 }
 
 /// 查询失败（网络/服务端等）
@@ -161,7 +172,30 @@ class DictionaryLookupController extends _$DictionaryLookupController {
         if (!t.isCancelled) t.cancel('controller disposed');
       }
     });
+    // 登录前停在 AI 登录引导的当前查询，在认证态转为有效后自动续跑。
+    // 只恢复仍被用户选中的 AI 源，避免用户已切词/切源后后台发起旧请求。
+    ref.listen(supabaseSessionProvider, (previous, next) {
+      final session = next.valueOrNull;
+      final wasAnonymous = previous?.valueOrNull == null;
+      if (session == null || !wasAnonymous) return;
+      if (state.selectedSourceId != AiDictionarySource.sourceId ||
+          state.current is! LookupAuthRequired) {
+        return;
+      }
+      _traceDictionaryLookup(
+        'resume-after-sign-in word="$word" source=${AiDictionarySource.sourceId}',
+      );
+      // 认证事件中的 token 比异步刷新的查词上下文更及时，避免刚登录便再次落入
+      // LookupAuthRequired；目标语言仍从当前设置读取。
+      _lookup(
+        AiDictionarySource.sourceId,
+        accessTokenOverride: session.accessToken,
+      );
+    });
     final defaultId = _resolveInitialSourceId(preferredSourceId);
+    _traceDictionaryLookup(
+      'build word="$word" preferred=$preferredSourceId source=$defaultId',
+    );
     // 进入即查默认源；其它源懒加载（切到才查）
     Future.microtask(() => _lookup(defaultId));
     return DictionaryLookupState(
@@ -214,12 +248,18 @@ class DictionaryLookupController extends _$DictionaryLookupController {
   /// 重试当前选中源
   void retry() => _lookup(state.selectedSourceId);
 
-  Future<void> _lookup(String id) async {
+  Future<void> _lookup(String id, {String? accessTokenOverride}) async {
     final source = ref.read(dictionarySourcesByIdProvider)[id];
-    if (source == null) return;
+    if (source == null) {
+      _traceDictionaryLookup('skip word="$word" source=$id reason=missing');
+      return;
+    }
 
     final seq = (_seq[id] ?? 0) + 1;
     _seq[id] = seq;
+    _traceDictionaryLookup(
+      'start word="$word" source=$id seq=$seq network=${source.requiresNetwork}',
+    );
 
     // 取消该源上一次在途请求
     final prev = _tokens[id];
@@ -229,7 +269,10 @@ class DictionaryLookupController extends _$DictionaryLookupController {
 
     _setState(id, const LookupLoading());
 
-    final request = _buildRequest(source);
+    final request = _buildRequest(
+      source,
+      accessTokenOverride: accessTokenOverride,
+    );
     try {
       if (source is AiDictionarySource) {
         // AI 源：流式逐帧渲染，完成后转 Loaded。每帧套用防竞态守卫。
@@ -273,7 +316,8 @@ class DictionaryLookupController extends _$DictionaryLookupController {
       if (_dropResult(id, seq)) return;
       // 后端本月免费额度用尽 → 由 UI 引导订阅（区别于普通网络错误）。
       if (e.response?.statusCode == 402) {
-        _setState(id, const LookupQuotaExceeded());
+        final rejection = AiQuotaRejection.fromResponseData(e.response?.data);
+        _setState(id, LookupQuotaExceeded(reason: rejection.reason));
         return;
       }
       _setState(id, LookupError(e));
@@ -289,7 +333,10 @@ class DictionaryLookupController extends _$DictionaryLookupController {
   /// 回调过期判定：该源已发起更新的查询
   bool _isStale(String id, int seq) => _seq[id] != seq;
 
-  DictionaryLookupRequest _buildRequest(DictionarySource source) {
+  DictionaryLookupRequest _buildRequest(
+    DictionarySource source, {
+    String? accessTokenOverride,
+  }) {
     // word（= family key）已由调用方清洗一次（剥首尾标点、弯撇号归一、
     // 空白折叠）。此处不再改写；需要小写缓存键的源自行派生。
     if (!source.requiresNetwork) {
@@ -298,12 +345,15 @@ class DictionaryLookupController extends _$DictionaryLookupController {
     final ctx = ref.read(dictionaryLookupContextProvider);
     return DictionaryLookupRequest(
       word: word,
-      accessToken: ctx.accessToken,
+      accessToken: accessTokenOverride ?? ctx.accessToken,
       targetLanguage: ctx.targetLanguage,
     );
   }
 
   void _setState(String id, SourceLookupState s) {
+    _traceDictionaryLookup(
+      'state word="$word" source=$id value=${s.runtimeType}',
+    );
     state = state.copyWith(bySource: {...state.bySource, id: s});
   }
 }

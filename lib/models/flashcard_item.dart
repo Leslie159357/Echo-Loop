@@ -5,6 +5,7 @@
 library;
 
 import '../database/app_database.dart';
+import '../features/memory_scheduler/domain/memory_namespaces.dart';
 import 'dict_entry.dart';
 
 /// 闪卡项基类
@@ -44,6 +45,12 @@ sealed class FlashcardItem {
 
   /// 数据库回写键（单词=word, 意群=phraseText）
   String get dbKey;
+
+  /// 稳定关联 FSRS 调度快照的业务主体 ID（不可变 UUID）。
+  String? get memorySubjectId;
+
+  /// MemorySubjectRef 的业务命名空间：普通词汇=saved_word_or_phrase，意群=saved_sense_group。
+  String get namespace;
 
   /// 带更新词典的副本
   FlashcardItem withDictEntry(DictEntry? entry);
@@ -99,6 +106,12 @@ class FlashcardWordItem extends FlashcardItem {
 
   @override
   String get dbKey => savedWord.word;
+
+  @override
+  String? get memorySubjectId => savedWord.memorySubjectId;
+
+  @override
+  String get namespace => kSavedWordOrPhraseNamespace;
 
   @override
   FlashcardWordItem withDictEntry(DictEntry? entry) => FlashcardWordItem(
@@ -158,6 +171,12 @@ class FlashcardPhraseItem extends FlashcardItem {
 
   @override
   String get dbKey => savedPhrase.phraseText;
+
+  @override
+  String? get memorySubjectId => savedPhrase.memorySubjectId;
+
+  @override
+  String get namespace => kSavedSenseGroupNamespace;
 
   @override
   FlashcardPhraseItem withDictEntry(DictEntry? entry) => FlashcardPhraseItem(

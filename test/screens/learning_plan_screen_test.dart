@@ -1,28 +1,97 @@
 // 学习计划表页面测试
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:echo_loop/features/community_collections/download/community_download_notifier.dart';
+import 'package:echo_loop/features/community_collections/download/download_progress.dart';
+import 'package:echo_loop/features/media_readiness/media_readiness.dart';
+import 'package:echo_loop/features/media_readiness/media_readiness_provider.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/screens/learning_plan_screen.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/learning_progress.dart';
+import 'package:echo_loop/models/media_intensive_listen_startup.dart';
+import 'package:echo_loop/models/media_learning_startup.dart';
+import 'package:echo_loop/models/speech_practice_models.dart';
+import 'package:echo_loop/models/stage_settings_overrides.dart'
+    show StageSettingsSlots, stageSlotKey;
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
+import 'package:echo_loop/providers/audio_sentences_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/asr_model_installation_gate.dart';
+import 'package:echo_loop/providers/asr_model_installation_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/intensive_listen_prefs_provider.dart';
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/database/daos/bookmark_dao.dart';
+import 'package:echo_loop/database/app_database.dart' show Bookmark;
+import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/providers/time_provider.dart';
+import 'package:echo_loop/services/speech_permission_service.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/models/collection.dart';
+import 'package:echo_loop/providers/collection_provider.dart';
+import 'package:echo_loop/screens/audio_detail_screen.dart';
+import 'package:echo_loop/widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart'
+    show ListenAndRepeatBriefingSheet;
+import 'package:echo_loop/widgets/intensive_listen/intensive_listen_briefing_sheet.dart'
+    show IntensiveListenBriefingSheet;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
+
+class _EmptyBookmarkDao implements BookmarkDao {
+  @override
+  Future<Set<int>> getBookmarkedIndices(String audioItemId) async => <int>{};
+
+  @override
+  Stream<List<Bookmark>> watchByAudioId(String audioItemId) =>
+      Stream.value(const <Bookmark>[]);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => Future<void>.value();
+}
+
+class _ReadySpeechPermissionService implements SpeechPermissionService {
+  const _ReadySpeechPermissionService();
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<SpeechPracticePermissionState> getStatus() async =>
+      const SpeechPracticePermissionState(
+        microphone: SpeechPracticePermissionStatus.granted,
+        speech: SpeechPracticePermissionStatus.granted,
+      );
+
+  @override
+  Future<SpeechPracticePermissionState> request({required bool onlyMic}) =>
+      getStatus();
+
+  @override
+  Future<void> openAppSettings() async {}
+}
+
+/// 等待异步点击回调渲染目标控件；pumpAndSettle 不等待未调度新帧的 Future。
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var pumpCount = 0; pumpCount < 20; pumpCount++) {
+    if (finder.evaluate().isNotEmpty) return;
+    await tester.pump();
+  }
+  expect(finder, findsOneWidget);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +125,18 @@ void main() {
     name: 'Test Audio',
     audioPath: 'audios/test.mp3',
     addedDate: DateTime(2026, 1, 1),
+  );
+
+  // 视频条目：audioPath 为 mp4，isVideo 派生为 true。
+  final testVideoItem = AudioItem(
+    id: 'test-1',
+    name: 'Test Video',
+    audioPath: 'videos/test.mp4',
+    transcriptPath: 'transcripts/test.srt',
+    transcriptSource: TranscriptSource.ai,
+    addedDate: DateTime(2026, 1, 1),
+    sentenceCount: 10,
+    wordCount: 50,
   );
 
   Session signedInSession() {
@@ -146,10 +227,14 @@ void main() {
     Locale locale = const Locale('en'),
     LearningProgressState? progressState,
     AudioItem? audioItem,
+    bool autoStart = false,
+    bool retellRatingEnabled = true,
     DateTime? fixedNow,
     ListeningPracticeState? lpState,
     TestListeningPractice Function()? listeningPracticeOverride,
+    List<Sentence>? videoSentences,
     Map<String, DateTime>? completedStageTimes,
+    List<Override> extraOverrides = const [],
   }) {
     final item = audioItem ?? testAudioItem;
     final router = GoRouter(
@@ -163,27 +248,84 @@ void main() {
             return LearningPlanScreen(
               collectionId: collectionId,
               audioItemId: audioId,
+              autoStart: autoStart,
             );
           },
         ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/player',
-          builder: (context, state) => const Scaffold(body: Text('Player')),
+          builder: (context, state) {
+            final routeItem = state.extra;
+            return Scaffold(
+              body: Text(
+                routeItem is AudioItem
+                    ? 'Media Test: ${routeItem.name}'
+                    : 'Missing AudioItem',
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/collections/:collectionId',
+          builder: (context, state) => Scaffold(
+            body: Text(
+              'Collection stub: ${state.pathParameters['collectionId']}',
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/collections/:collectionId/:audioId/plan/audio-detail',
+          builder: (context, state) {
+            final item = state.extra;
+            return item is AudioItem
+                ? AudioDetailScreen(audioItem: item)
+                : const Scaffold(body: Text('Missing AudioItem'));
+          },
         ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/blind-listen',
-          builder: (context, state) =>
-              const Scaffold(body: Text('Blind Listen')),
+          builder: (context, state) {
+            final startup = state.extra;
+            return _MediaStartupTestScreen(
+              startup: startup is MediaLearningStartup ? startup : null,
+              label: 'Listen without subtitles',
+            );
+          },
+        ),
+        GoRoute(
+          path: '/collections/:collectionId/:audioId/retell',
+          builder: (context, state) {
+            final startup = state.extra;
+            return _MediaStartupTestScreen(
+              startup: startup is MediaLearningStartup ? startup : null,
+              label: startup is MediaLearningStartup
+                  ? 'Retell Startup ${startup.showVideoLoading}'
+                  : 'Retell Startup Missing',
+            );
+          },
         ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/intensive-listen',
-          builder: (context, state) =>
-              const Scaffold(body: Text('Intensive Listen')),
+          builder: (context, state) {
+            final startup = state.extra;
+            return _MediaStartupTestScreen(
+              startup: startup is MediaIntensiveListenStartup ? startup : null,
+            );
+          },
         ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/review-difficult-practice',
-          builder: (context, state) =>
-              const Scaffold(body: Text('Review Difficult Practice')),
+          builder: (context, state) {
+            final startup = state.extra;
+            return _MediaStartupTestScreen(
+              startup: startup is MediaIntensiveListenStartup ? startup : null,
+              label: 'Review Difficult Practice',
+            );
+          },
+        ),
+        GoRoute(
+          path: '/collections/:collectionId/:audioId/media-player',
+          builder: (context, state) => const Scaffold(body: Text('Video Test')),
         ),
       ],
     );
@@ -194,7 +336,7 @@ void main() {
         ...studyTimeOverrides(),
         sharedPreferencesProvider.overrideWithValue(prefs),
         // plan 静态全量；默认 autoSkipRetell=false（手动跳过路径）
-        ...learningSettingsOverrides(),
+        ...learningSettingsOverrides(retellRatingEnabled: retellRatingEnabled),
         audioLibraryProvider.overrideWith(
           () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
         ),
@@ -211,12 +353,19 @@ void main() {
               ),
         ),
         audioEngineProvider.overrideWith(() => TestAudioEngine()),
+        // 媒体就绪以本地文件存在为前提；测试中直接视为存在，避免真实 IO 挂起 FakeAsync。
+        localMediaFileExistsProvider(
+          item.id,
+        ).overrideWith((ref) => Future.value(true)),
         learningProgressNotifierProvider.overrideWith(
           () =>
               TestLearningProgressNotifier(withAutoCompletions(progressState)),
         ),
         learningSessionProvider.overrideWith(() => TestLearningSession()),
+        if (videoSentences != null)
+          audioSentencesProvider(item.id).overrideWith((ref) => videoSentences),
         if (fixedNow != null) nowProvider.overrideWithValue(() => fixedNow),
+        ...extraOverrides,
         reviewStageCompletionTimesProvider(item.id).overrideWith(
           (ref) =>
               Stream.value(completedStageTimes ?? const <String, DateTime>{}),
@@ -238,11 +387,46 @@ void main() {
   }
 
   group('LearningPlanScreen', () {
-    testWidgets('显示 AppBar 中的音频名称', (tester) async {
-      await tester.pumpWidget(createTestWidget());
+    testWidgets('AppBar 显示所属合集名，进度卡片标题显示文件名', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(extraOverrides: [_collectionOverride()]),
+      );
       await tester.pumpAndSettle();
 
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('From 新概念第三册（美音）'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('Test Audio'),
+        ),
+        findsNothing,
+      );
       expect(find.text('Test Audio'), findsOneWidget);
+    });
+
+    testWidgets('点击 AppBar 合集名回到所属合集详情页', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(extraOverrides: [_collectionOverride()]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('From 新概念第三册（美音）'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Collection stub: col-1'), findsOneWidget);
+    });
+
+    testWidgets('无进度自动开始时按 v2 首步进入精听而不是盲听', (tester) async {
+      await tester.pumpWidget(createTestWidget(autoStart: true));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Listen sentence by sentence'), findsAtLeast(1));
     });
 
     testWidgets('AppBar 显示强化后的自由练习入口并可点击进入播放器', (tester) async {
@@ -257,12 +441,239 @@ void main() {
       await tester.tap(find.byKey(const Key('learning_plan_free_play_button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Player'), findsOneWidget);
+      expect(find.text('Media Test: Test Audio'), findsOneWidget);
+    });
+
+    testWidgets('视频条目：页面正常渲染不崩溃，AppBar 显示视频名称', (tester) async {
+      final lp = _RecordingListeningPractice();
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testVideoItem,
+          listeningPracticeOverride: () => lp,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 无合集时 AppBar 退回文件名，卡片标题也是文件名
+      expect(find.text('Test Video'), findsWidgets);
+      // 视频条目不进入听力练习引擎：loadAudio 从未被调用（引擎不被该视频 id 触碰）。
+      expect(lp.loadAudioCalls, isEmpty);
+    });
+
+    testWidgets('视频条目：逐句精听走独立媒体会话且不加载音频链路', (tester) async {
+      final lp = _RecordingListeningPractice();
+      final sentences = createTestSentences();
+      final progressState = LearningProgressState(
+        progressMap: {
+          testVideoItem.id: LearningProgress(
+            audioItemId: testVideoItem.id,
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.intensiveListen,
+            updatedAt: DateTime(2026, 7, 28),
+          ),
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testVideoItem,
+          progressState: progressState,
+          listeningPracticeOverride: () => lp,
+          videoSentences: sentences,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(planContext);
+
+      await tester.tap(find.text('Start practicing').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Listen sentence by sentence.'), findsWidgets);
+
+      await tester.tap(find.text('Start Practicing'));
+      await tester.pumpAndSettle();
+
+      final session = container.read(learningSessionProvider);
+      expect(session.learningMode, LearningMode.intensiveListen);
+      expect(session.playbackChain, LearningPlaybackChain.mediaEngine);
+      expect(session.audioItemId, testVideoItem.id);
+      expect(lp.loadAudioCalls, isEmpty);
+      expect(find.text('Listen sentence by sentence'), findsOneWidget);
+    });
+
+    testWidgets('视频条目：计划内复习盲听走独立媒体会话且不加载音频链路', (tester) async {
+      final now = DateTime(2026, 8, 11, 10);
+      final lp = _RecordingListeningPractice();
+      final sentences = createTestSentences();
+      final progressState = LearningProgressState(
+        progressMap: {
+          testVideoItem.id: LearningProgress(
+            audioItemId: testVideoItem.id,
+            currentStage: LearningStage.review1,
+            currentSubStage: SubStageType.blindListen,
+            lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+            updatedAt: now,
+          ),
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testVideoItem,
+          progressState: progressState,
+          fixedNow: now,
+          listeningPracticeOverride: () => lp,
+          videoSentences: sentences,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(planContext);
+
+      await tester.tap(find.text('Continue practicing'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start Practicing'));
+      await tester.pumpAndSettle();
+
+      final session = container.read(learningSessionProvider);
+      expect(session.learningMode, LearningMode.blindListen);
+      expect(session.playbackChain, LearningPlaybackChain.mediaEngine);
+      expect(session.audioItemId, testVideoItem.id);
+      expect(lp.loadAudioCalls, isEmpty);
+      expect(find.text('Listen without subtitles'), findsOneWidget);
+    });
+
+    testWidgets('音频条目：计划内盲听也延迟启动并使用共享媒体会话', (tester) async {
+      final now = DateTime(2026, 8, 11, 10);
+      final sentences = createTestSentences();
+      final lp = _RecordingListeningPractice(
+        ListeningPracticeState(
+          currentAudioItem: testAudioItem,
+          sentences: sentences,
+        ),
+      );
+      final progressState = LearningProgressState(
+        progressMap: {
+          testAudioItem.id: LearningProgress(
+            audioItemId: testAudioItem.id,
+            currentStage: LearningStage.review1,
+            currentSubStage: SubStageType.blindListen,
+            lastStageCompletedAt: now.subtract(const Duration(days: 1)),
+            updatedAt: now,
+          ),
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testAudioItem,
+          progressState: progressState,
+          fixedNow: now,
+          listeningPracticeOverride: () => lp,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(planContext);
+
+      await tester.tap(find.text('Continue practicing'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start Practicing'));
+      await tester.pumpAndSettle();
+
+      final session = container.read(learningSessionProvider);
+      expect(session.learningMode, LearningMode.blindListen);
+      expect(session.playbackChain, LearningPlaybackChain.mediaEngine);
+      expect(session.audioItemId, testAudioItem.id);
+      expect(find.text('Listen without subtitles'), findsOneWidget);
+    });
+
+    testWidgets('视频条目：已完成复习盲听可用媒体链路自由练习并保留补做目标', (tester) async {
+      final now = DateTime(2026, 8, 11, 10);
+      final lp = _RecordingListeningPractice();
+      final sentences = createTestSentences();
+      final progressState = LearningProgressState(
+        progressMap: {
+          testVideoItem.id: LearningProgress(
+            audioItemId: testVideoItem.id,
+            currentStage: LearningStage.review2,
+            currentSubStage: SubStageType.reviewDifficultPractice,
+            updatedAt: now,
+          ),
+        },
+        completionsByAudio: const {
+          'test-1': {'review1:blindListen'},
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testVideoItem,
+          progressState: progressState,
+          fixedNow: now,
+          listeningPracticeOverride: () => lp,
+          videoSentences: sentences,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(planContext);
+
+      await tester.scrollUntilVisible(find.text('Review 2'), 200);
+      await tester.tap(find.text('Review 2'));
+      await tester.pumpAndSettle();
+      final reviewTitleY = tester.getTopLeft(find.text('Review 2')).dy;
+      final reviewBlindText = tester
+          .elementList(find.text('Listen without subtitles'))
+          .where(
+            (element) =>
+                tester.getTopLeft(find.byWidget(element.widget)).dy >
+                reviewTitleY,
+          )
+          .reduce((nearest, candidate) {
+            final nearestY = tester
+                .getTopLeft(find.byWidget(nearest.widget))
+                .dy;
+            final candidateY = tester
+                .getTopLeft(find.byWidget(candidate.widget))
+                .dy;
+            return candidateY < nearestY ? candidate : nearest;
+          });
+      final reviewBlindFinder = find.byWidget(reviewBlindText.widget);
+      await tester.ensureVisible(reviewBlindFinder);
+      await tester.tap(reviewBlindFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start Practicing'));
+      await tester.pumpAndSettle();
+
+      final session = container.read(learningSessionProvider);
+      expect(session.learningMode, LearningMode.blindListen);
+      expect(session.playbackChain, LearningPlaybackChain.mediaEngine);
+      expect(session.isFreePlay, isTrue);
+      expect(session.catchUpStage, LearningStage.review1);
+      expect(session.catchUpSubStage, SubStageType.blindListen);
+      expect(lp.loadAudioCalls, isEmpty);
+    });
+
+    testWidgets('视频条目：随心听进入媒体页', (tester) async {
+      final lp = _RecordingListeningPractice();
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testVideoItem,
+          listeningPracticeOverride: () => lp,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('learning_plan_free_play_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Video Test'), findsOneWidget);
+      expect(find.text('Missing AudioItem'), findsNothing);
     });
 
     testWidgets('AppBar「更多」菜单：有字幕音频显示 4 项操作', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('learning_plan_more_menu')));
       await tester.pumpAndSettle();
@@ -288,25 +699,84 @@ void main() {
       expect(find.text('Export PDF'), findsNothing);
     });
 
+    testWidgets('AppBar「更多」菜单：已有学习进度可确认重置', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.listenAndRepeat,
+            updatedAt: DateTime(2026, 5, 1),
+          ),
+        },
+      );
+
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('learning_plan_more_menu')));
+      await tester.pumpAndSettle();
+
+      final resetLabel = find.text('Reset Progress');
+      expect(resetLabel, findsOneWidget);
+      expect(
+        tester.widget<Text>(resetLabel).style?.color,
+        AppTheme.light().colorScheme.error,
+      );
+
+      await tester.tap(resetLabel);
+      await tester.pumpAndSettle();
+      expect(find.text('Reset Learning Progress?'), findsOneWidget);
+
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Learning progress has been reset'), findsOneWidget);
+      expect(find.text('Start practicing'), findsOneWidget);
+      // 重置成功 SnackBar 位于底部，会暂时遮挡固定的开始学习按钮。
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      ScaffoldMessenger.of(planContext).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Start practicing'));
+      await tester.pumpAndSettle();
+      expect(find.text('Start Practicing'), findsOneWidget);
+    });
+
     testWidgets('显示进度卡片（0%，未开始）', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
       expect(find.text('0%'), findsOneWidget);
-      expect(find.text('Not started'), findsOneWidget);
+      // 卡片不再显示阶段名与状态徽章
+      expect(find.text('Not started'), findsNothing);
     });
 
-    testWidgets('疑似空音频时进度卡片显示内容警告徽章', (tester) async {
-      final suspectEmptyItem = testAudioItem.copyWith(
-        contentStatus: AudioContentStatus.suspectEmpty,
+    testWidgets('音频损坏时进度卡片显示内容警告徽章', (tester) async {
+      final damagedItem = testAudioItem.copyWith(
+        contentStatus: AudioContentStatus.damaged,
       );
-      await tester.pumpWidget(createTestWidget(audioItem: suspectEmptyItem));
+      await tester.pumpWidget(createTestWidget(audioItem: damagedItem));
       await tester.pumpAndSettle();
 
       expect(
         find.byKey(const Key('learning_plan_content_warning_badge')),
         findsOneWidget,
       );
+      expect(find.text('Audio issue'), findsOneWidget);
+    });
+
+    testWidgets('静音音频时进度卡片显示静音警告徽章', (tester) async {
+      final silentItem = testAudioItem.copyWith(
+        contentStatus: AudioContentStatus.silent,
+      );
+      await tester.pumpWidget(createTestWidget(audioItem: silentItem));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('learning_plan_content_warning_badge')),
+        findsOneWidget,
+      );
+      expect(find.text('Possibly silent'), findsOneWidget);
     });
 
     testWidgets('内容正常时进度卡片不显示内容警告徽章', (tester) async {
@@ -319,17 +789,92 @@ void main() {
       );
     });
 
+    testWidgets('进度卡片副标题显示文件描述，最多两行并省略', (tester) async {
+      const description = 'A puma was spotted south of London.';
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testAudioItem.copyWith(description: description),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final text = tester.widget<Text>(find.text(description));
+      expect(text.maxLines, 2);
+      expect(text.overflow, TextOverflow.ellipsis);
+    });
+
+    testWidgets('文件描述为空白时不显示副标题行', (tester) async {
+      Finder subtitleTexts() =>
+          find.byWidgetPredicate((w) => w is Text && w.maxLines == 2);
+
+      // 基线：无描述时卡片上没有任何两行文本
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+      final baselineCount = subtitleTexts().evaluate().length;
+
+      await tester.pumpWidget(
+        createTestWidget(audioItem: testAudioItem.copyWith(description: '  ')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(subtitleTexts().evaluate().length, baselineCount);
+    });
+
+    testWidgets('有难度的音频在进度卡片元信息行显示难度徽章', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(audioItem: testAudioItem.copyWith(difficulty: 'B1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('community_difficulty_badge')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('无难度的音频不显示难度徽章', (tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('community_difficulty_badge')), findsNothing);
+    });
+
+    testWidgets('点击进度卡片进入音频详情页', (tester) async {
+      const description = 'Detail page description.';
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: testAudioItem.copyWith(
+            description: description,
+            difficulty: 'B1',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(description));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AudioDetailScreen), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('audio_detail_description')))
+            .data,
+        description,
+      );
+    });
+
     testWidgets('显示首次学习区域的 4 个步骤', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Initial Learning'), findsOneWidget);
-      expect(find.text('0/4 completed'), findsOneWidget);
+      expect(find.text('First Round'), findsOneWidget);
+      expect(find.text('0/4'), findsOneWidget);
+      expect(find.text('0/4 completed'), findsNothing);
 
-      expect(find.text('Blind Listening'), findsWidgets);
-      expect(find.text('Intensive Listening'), findsOneWidget);
+      expect(find.text('Listen without subtitles'), findsWidgets);
+      expect(find.text('Listen sentence by sentence'), findsOneWidget);
       expect(find.text('Listen & Repeat'), findsOneWidget);
-      expect(find.text('Paragraph Retelling'), findsOneWidget);
+      expect(find.text('Listen & Retell'), findsOneWidget);
     });
 
     testWidgets('复习区显示七个同级轮次', (tester) async {
@@ -380,11 +925,11 @@ void main() {
       expect(find.text('Review 1'), findsWidgets);
 
       // 折叠当前轮次
-      await tester.tap(find.text('Review 1').first);
+      await tester.tap(find.text('Review 1').last);
       await tester.pumpAndSettle();
 
       // 重新展开
-      await tester.tap(find.text('Review 1').first);
+      await tester.tap(find.text('Review 1').last);
       await tester.pumpAndSettle();
     });
 
@@ -424,7 +969,34 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Start Learning'), findsOneWidget);
+      expect(find.text('Start practicing'), findsOneWidget);
+    });
+
+    testWidgets('无字幕时当前步骤和底部按钮可点击并提示先添加字幕', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(audioItem: testAudioItemNoTranscript),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Listen sentence by sentence'));
+      await tester.pump();
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text('This audio has no subtitles yet'),
+        ),
+        findsOneWidget,
+      );
+
+      ScaffoldMessenger.of(
+        tester.element(find.byType(LearningPlanScreen)),
+      ).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Start practicing'));
+      await tester.pump();
+      expect(find.byType(SnackBar), findsOneWidget);
     });
 
     testWidgets('进行中时底部显示"继续学习"', (tester) async {
@@ -442,7 +1014,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      expect(find.text('Continue Learning'), findsOneWidget);
+      expect(find.text('Continue practicing'), findsOneWidget);
     });
 
     testWidgets('复习未到时间时底部继续学习按钮禁用', (tester) async {
@@ -465,7 +1037,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final continueButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Continue Learning'),
+        find.widgetWithText(FilledButton, 'Continue practicing'),
       );
       expect(continueButton.onPressed, isNull);
     });
@@ -485,8 +1057,8 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      expect(find.text('Continue Learning'), findsOneWidget);
-      expect(find.text('Pause Learning'), findsOneWidget);
+      expect(find.text('Continue practicing'), findsOneWidget);
+      expect(find.text('Pause'), findsOneWidget);
     });
 
     testWidgets('暂停态时底部只显示"恢复学习"，不显示"继续学习"或"暂停学习"', (tester) async {
@@ -508,8 +1080,8 @@ void main() {
       // 文案合并「Paused · Resume Learning」，仅一个按钮
       expect(find.textContaining('Resume Learning'), findsOneWidget);
       expect(find.textContaining('Paused'), findsOneWidget);
-      expect(find.text('Continue Learning'), findsNothing);
-      expect(find.text('Pause Learning'), findsNothing);
+      expect(find.text('Continue practicing'), findsNothing);
+      expect(find.text('Pause'), findsNothing);
     });
 
     testWidgets('点击底部"暂停学习"弹出确认弹窗', (tester) async {
@@ -527,7 +1099,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Pause Learning'));
+      await tester.tap(find.text('Pause'));
       await tester.pumpAndSettle();
 
       expect(find.text('Pause Learning?'), findsOneWidget);
@@ -549,7 +1121,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 点击"暂停学习"
-      await tester.tap(find.text('Pause Learning'));
+      await tester.tap(find.text('Pause'));
       await tester.pumpAndSettle();
       expect(find.text('Pause Learning?'), findsOneWidget);
 
@@ -559,8 +1131,8 @@ void main() {
 
       // 对话框关闭，按钮恢复原状
       expect(find.text('Pause Learning?'), findsNothing);
-      expect(find.text('Continue Learning'), findsOneWidget);
-      expect(find.text('Pause Learning'), findsOneWidget);
+      expect(find.text('Continue practicing'), findsOneWidget);
+      expect(find.text('Pause'), findsOneWidget);
     });
 
     testWidgets('暂停确认弹窗→确认：状态翻转 isPaused，按钮变单按钮', (tester) async {
@@ -579,19 +1151,19 @@ void main() {
       await tester.pumpAndSettle();
 
       // 点击"暂停学习"
-      await tester.tap(find.text('Pause Learning'));
+      await tester.tap(find.text('Pause'));
       await tester.pumpAndSettle();
       expect(find.text('Pause Learning?'), findsOneWidget);
 
-      // 弹窗内确认按钮文案也是 "Pause Learning"，取 .last
-      await tester.tap(find.text('Pause Learning').last);
+      // 弹窗内确认按钮文案也是 "Pause"，取 .last
+      await tester.tap(find.text('Pause').last);
       await tester.pumpAndSettle();
 
       // 对话框关闭，state 翻转 — 底部变单按钮
       expect(find.text('Pause Learning?'), findsNothing);
       expect(find.textContaining('Paused'), findsWidgets);
       expect(find.textContaining('Resume'), findsWidgets);
-      expect(find.text('Continue Learning'), findsNothing);
+      expect(find.text('Continue practicing'), findsNothing);
 
       // 验证 Provider 状态 isPaused=true
       final appContext = tester.element(find.byType(LearningPlanScreen));
@@ -622,7 +1194,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final continueButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Continue Learning'),
+        find.widgetWithText(FilledButton, 'Continue practicing'),
       );
       expect(continueButton.onPressed, isNotNull);
     });
@@ -646,14 +1218,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Continue Learning'));
+      await tester.tap(find.text('Continue practicing'));
       await tester.pumpAndSettle();
-      // 跳过复习简报弹窗，直接弹出段落选择弹窗（步骤标签 + 弹窗标题都是 Blind Listening）
-      expect(find.text('Blind Listening'), findsAtLeast(1));
+      // 跳过复习简报弹窗，直接弹出盲听段落选择弹窗。
+      expect(find.text('Listen without subtitles'), findsAtLeast(1));
       // 显示阶段名
       expect(find.text('Review 2'), findsAtLeast(1));
       // 显示开始练习按钮
-      expect(find.text('Start Practice'), findsOneWidget);
+      expect(find.text('Start Practicing'), findsOneWidget);
     });
 
     testWidgets('有进度时显示正确的完成步骤数', (tester) async {
@@ -675,19 +1247,20 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      expect(find.text('2/4 completed'), findsOneWidget);
+      expect(find.text('2/4'), findsOneWidget);
+      expect(find.text('2/4 completed'), findsNothing);
     });
 
     testWidgets('点击"开始学习"显示简报弹窗', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Start Learning'));
+      await tester.tap(find.text('Start practicing'));
       await tester.pumpAndSettle();
 
-      // 当前子步骤是 blindListen，应弹出简报弹窗（步骤标签 + 弹窗标题都是 Blind Listening）
-      expect(find.text('Blind Listening'), findsAtLeast(1));
-      expect(find.text('Start Practice'), findsOneWidget);
+      // 当前子步骤是 blindListen，应弹出盲听简报弹窗。
+      expect(find.text('Listen without subtitles'), findsAtLeast(1));
+      expect(find.text('Start Practicing'), findsOneWidget);
     });
 
     testWidgets('AI 转录完成后 transcriptPath 仍为 null 时开始学习可立即弹出练习面板', (
@@ -719,11 +1292,11 @@ void main() {
           .updateAudioItem(completedItem);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Start Learning'));
+      await tester.tap(find.text('Start practicing'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Blind Listening'), findsAtLeast(1));
-      expect(find.text('Start Practice'), findsOneWidget);
+      expect(find.text('Listen without subtitles'), findsAtLeast(1));
+      expect(find.text('Start Practicing'), findsOneWidget);
       final lpState = container.read(listeningPracticeProvider);
       expect(lpState.sentences, hasLength(reloadedSentences.length));
     });
@@ -732,14 +1305,14 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Start Learning'));
+      await tester.tap(find.text('Start practicing'));
       await tester.pumpAndSettle();
 
       // 点击开始练习
-      await tester.tap(find.text('Start Practice'));
+      await tester.tap(find.text('Start Practicing'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Intensive Listen'), findsOneWidget);
+      expect(find.text('Listen sentence by sentence'), findsOneWidget);
     });
 
     testWidgets('点击当前进行中步骤卡片效果同「开始学习」（弹出简报）', (tester) async {
@@ -759,11 +1332,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // 直接点击当前步骤卡片（不经底部按钮）。
-      await tester.tap(find.text('Intensive Listening'));
+      await tester.tap(find.text('Listen sentence by sentence'));
       await tester.pumpAndSettle();
 
       // 与点击底部「开始学习」一致：弹出精听简报。
-      expect(find.text('Start Practice'), findsOneWidget);
+      expect(find.text('Start Practicing'), findsOneWidget);
     });
 
     testWidgets('无字幕时点击当前步骤卡片无反应', (tester) async {
@@ -786,11 +1359,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Intensive Listening'));
+      await tester.tap(find.text('Listen sentence by sentence'));
       await tester.pumpAndSettle();
 
       // 无字幕 → 回调为 null，点击不弹出任何练习面板。
-      expect(find.text('Start Practice'), findsNothing);
+      expect(find.text('Start Practicing'), findsNothing);
     });
 
     testWidgets('精听子步骤无字幕时显示提示对话框', (tester) async {
@@ -818,31 +1391,77 @@ void main() {
       await tester.pumpAndSettle();
 
       // v2 精听是首步、未开始 → 底部按钮为「Start Learning」
-      await tester.tap(find.text('Start Learning'));
+      await tester.tap(find.text('Start practicing'));
       await tester.pumpAndSettle();
 
       // LP 无句子时应弹出"无字幕"提示对话框
-      expect(find.text('No Subtitle Available'), findsOneWidget);
+      expect(find.text('No Subtitles Available'), findsOneWidget);
     });
 
-    testWidgets('中文本地化正确显示', (tester) async {
+    testWidgets('阶段标题行各列上下对齐且进度列不带完成后缀', (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(createTestWidget(locale: const Locale('zh')));
+      final now = DateTime(2026, 1, 10, 12, 0);
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review7,
+            currentSubStage: SubStageType.reviewDifficultPractice,
+            firstLearnCompletedAt: now.subtract(const Duration(days: 8)),
+            lastStageCompletedAt: now.subtract(const Duration(days: 4)),
+            updatedAt: now,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          locale: const Locale('zh'),
+          progressState: progressState,
+          fixedNow: now,
+          completedStageTimes: {
+            LearningStage.firstLearn.key: now.subtract(const Duration(days: 8)),
+            LearningStage.review0.key: now.subtract(const Duration(days: 7)),
+            LearningStage.review1.key: now.subtract(const Duration(days: 6)),
+            LearningStage.review2.key: now.subtract(const Duration(days: 5)),
+            LearningStage.review4.key: now.subtract(const Duration(days: 4)),
+          },
+        ),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('未开始'), findsOneWidget);
-      expect(find.text('首次学习'), findsOneWidget);
-      expect(find.text('0/4 完成'), findsOneWidget);
-      expect(find.text('全文盲听'), findsWidgets);
-      expect(find.text('开始学习'), findsOneWidget);
+      expect(find.text('4/4 完成'), findsNothing);
+      expect(find.text('3/3 完成'), findsNothing);
+      expect(find.text('0/3 完成'), findsNothing);
+      expect(find.text('4/4'), findsOneWidget);
+      expect(find.text('0/3'), findsWidgets);
 
-      // 滚动到复习轮次区域
-      await tester.scrollUntilVisible(find.text('首轮复习'), 200);
-      expect(find.text('首轮复习'), findsOneWidget);
+      double columnDx(String stageKey, String column) => tester
+          .getTopLeft(
+            find.byKey(Key('learning_plan_stage_${stageKey}_$column')),
+          )
+          .dx;
+
+      void expectAligned(String column) {
+        final firstLearnDx = columnDx('first_learn', column);
+        for (final stageKey in ['review0', 'review7', 'review14']) {
+          expect(
+            columnDx(stageKey, column),
+            moreOrLessEquals(firstLearnDx, epsilon: 0.1),
+            reason: '$column should align for $stageKey',
+          );
+        }
+      }
+
+      expectAligned('title_column');
+      expectAligned('status_icon_column');
+      expectAligned('status_text_column');
+      expectAligned('progress_column');
+      expectAligned('expand_column');
     });
 
     testWidgets('audioItem 找不到时显示错误页面', (tester) async {
@@ -909,6 +1528,7 @@ void main() {
 
       final longAudio = testAudioItemNoTranscript.copyWith(
         totalDuration: 31 * 60,
+        audioPath: 'audios/long.mp3',
       );
       await prefs.setBool('guide_v1_subtitle_sheet_transcription_seen', true);
 
@@ -928,6 +1548,9 @@ void main() {
               ),
             ),
             audioEngineProvider.overrideWith(() => TestAudioEngine()),
+            localMediaFileExistsProvider(
+              longAudio.id,
+            ).overrideWith((ref) => Future.value(true)),
             learningProgressNotifierProvider.overrideWith(
               () => TestLearningProgressNotifier(),
             ),
@@ -976,7 +1599,7 @@ void main() {
       expect(find.textContaining('Audio too long'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
 
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 12));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Audio too long'), findsNothing);
@@ -999,12 +1622,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // 盲听步骤已完成，点击弹出段落选择弹窗（自由练习模式）
-      await tester.tap(find.text('Blind Listening').first);
+      await tester.tap(find.text('Listen without subtitles').first);
       await tester.pumpAndSettle();
 
-      // 应弹出段落选择弹窗（步骤标签 + 弹窗标题都是 Blind Listening）
-      expect(find.text('Blind Listening'), findsAtLeast(2));
-      expect(find.text('Start Practice'), findsOneWidget);
+      // 应弹出盲听段落选择弹窗，并保留步骤标签。
+      expect(find.text('Listen without subtitles'), findsAtLeast(1));
+      expect(find.text('Start Practicing'), findsOneWidget);
     });
 
     testWidgets('未完成盲听步骤不可点击', (tester) async {
@@ -1012,11 +1635,15 @@ void main() {
       await tester.pumpAndSettle();
 
       // 盲听步骤是当前步骤（未完成），点击不应弹出简报弹窗
-      await tester.tap(find.text('Blind Listening').first);
+      final blindListeningCard = find.ancestor(
+        of: find.text('Listen without subtitles').first,
+        matching: find.byType(InkWell),
+      );
+      await tester.tap(blindListeningCard.first);
       await tester.pumpAndSettle();
 
       // 不应弹出简报弹窗（因为没有 onTap），步骤标签仍可见但不会多出弹窗标题
-      expect(find.text('Blind Listening'), findsOneWidget);
+      expect(find.text('Listen without subtitles'), findsOneWidget);
     });
 
     testWidgets('过去阶段跳过的复述可点击进入自由练习（重开复述后补做）', (tester) async {
@@ -1045,16 +1672,16 @@ void main() {
       await tester.pumpAndSettle();
 
       // firstLearn 已是过去阶段，section 默认折叠 → 先展开
-      await tester.tap(find.text('Initial Learning'));
+      await tester.tap(find.text('First Round'));
       await tester.pumpAndSettle();
 
       // 段落复述卡片在 firstLearn 区可见（plan 含 + isPast）。
-      // 注意：review0 也有「Paragraph Retelling」，所以 findsAtLeast(1)。
-      expect(find.text('Paragraph Retelling'), findsAtLeast(1));
+      // 注意：review0 也有「Listen & Retell」，所以 findsAtLeast(1)。
+      expect(find.text('Listen & Retell'), findsAtLeast(1));
 
       // 找到 firstLearn 区的 _StepCard，验证它的 onTap 非空（可点击进入自由练习）。
       final stepCardFinder = find.ancestor(
-        of: find.text('Paragraph Retelling').first,
+        of: find.text('Listen & Retell').first,
         matching: find.byType(InkWell),
       );
       expect(stepCardFinder, findsAtLeast(1));
@@ -1064,20 +1691,95 @@ void main() {
       expect(inkWell.onTap, isNotNull, reason: '过去阶段跳过的复述卡应支持点击进入自由练习');
     });
 
-    testWidgets('无字幕时显示警告横幅且禁用开始按钮', (tester) async {
+    for (final (item, isVideo) in [
+      (testAudioItem, false),
+      (testVideoItem, true),
+    ]) {
+      testWidgets('${isVideo ? '视频' : '音频'}复述补练通过统一媒体启动链路进入', (tester) async {
+        final progressState = LearningProgressState(
+          progressMap: {
+            item.id: LearningProgress(
+              audioItemId: item.id,
+              currentStage: LearningStage.review0,
+              currentSubStage: SubStageType.reviewDifficultPractice,
+              updatedAt: DateTime(2026, 1, 1),
+            ),
+          },
+          completionsByAudio: {
+            item.id: {
+              'firstLearn:blindListen',
+              'firstLearn:intensiveListen',
+              'firstLearn:listenAndRepeat',
+            },
+          },
+        );
+        await tester.pumpWidget(
+          createTestWidget(
+            audioItem: item,
+            progressState: progressState,
+            retellRatingEnabled: false,
+            videoSentences: isVideo ? createTestSentences() : null,
+            extraOverrides: [
+              asrModelInstallationGateProvider.overrideWithValue(
+                AsrModelInstallationGate(({required shouldCommit}) async {}),
+              ),
+              speechPermissionServiceProvider.overrideWithValue(
+                const _ReadySpeechPermissionService(),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        final planContext = tester.element(find.byType(LearningPlanScreen));
+        final container = ProviderScope.containerOf(planContext);
+
+        await tester.tap(find.text('First Round'));
+        await tester.pumpAndSettle();
+        final retellCard = find.ancestor(
+          of: find.text('Listen & Retell').first,
+          matching: find.byType(InkWell),
+        );
+        final retellCardTap = tester
+            .widgetList<InkWell>(retellCard)
+            .map((widget) => widget.onTap)
+            .whereType<VoidCallback>()
+            .first;
+        retellCardTap();
+        final startPracticeButton = find.text('Start Practicing');
+        await _pumpUntilFound(tester, startPracticeButton);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(startPracticeButton);
+        await tester.pumpAndSettle();
+        await tester.tap(startPracticeButton);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Retell Startup $isVideo'), findsOneWidget);
+        expect(
+          container.read(learningSessionProvider).learningMode,
+          LearningMode.retell,
+        );
+        expect(
+          container.read(learningSessionProvider).playbackChain,
+          LearningPlaybackChain.mediaEngine,
+        );
+        expect(container.read(learningSessionProvider).isFreePlay, isTrue);
+      });
+    }
+
+    testWidgets('无字幕时显示警告横幅且开始按钮可点击', (tester) async {
       await tester.pumpWidget(
         createTestWidget(audioItem: testAudioItemNoTranscript),
       );
       await tester.pumpAndSettle();
 
       // 显示无字幕警告
-      expect(find.text('This audio has no transcript yet'), findsOneWidget);
+      expect(find.text('This audio has no subtitles yet'), findsOneWidget);
 
-      // 开始学习按钮应被禁用（查找底部按钮区域）
-      final startButton = find.widgetWithText(FilledButton, 'Start Learning');
+      // 开始学习按钮保留点击反馈（查找底部按钮区域）
+      final startButton = find.widgetWithText(FilledButton, 'Start practicing');
       expect(startButton, findsOneWidget);
       final button = tester.widget<FilledButton>(startButton);
-      expect(button.onPressed, isNull);
+      expect(button.onPressed, isNotNull);
     });
 
     testWidgets('有字幕时显示句子数和单词数', (tester) async {
@@ -1157,6 +1859,123 @@ void main() {
       // 未来阶段既不显示固定间隔文案，也不显示动态倒计时
       expect(find.textContaining('Unlocks in'), findsNothing);
       expect(find.text('After 1 day'), findsNothing);
+    });
+
+    testWidgets('当前复习轮锁定时显示「立即解锁」，点击后解锁并隐藏按钮', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // review0 间隔 6h：1 小时前完成首学 → 还剩 5h，锁定中
+      final firstLearnCompletedAt = DateTime(2026, 1, 1, 11, 0);
+      final now = DateTime(2026, 1, 1, 12, 0);
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review0,
+            currentSubStage: SubStageType.reviewDifficultPractice,
+            firstLearnCompletedAt: firstLearnCompletedAt,
+            lastStageCompletedAt: firstLearnCompletedAt,
+            updatedAt: now,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(progressState: progressState, fixedNow: now),
+      );
+      await tester.pumpAndSettle();
+
+      // 锁定态：显示倒计时与「立即解锁」按钮
+      expect(find.textContaining('Unlocks in'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Unlock now'), 200);
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock now'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SvgPicture &&
+              widget.bytesLoader is SvgAssetLoader &&
+              (widget.bytesLoader as SvgAssetLoader).assetName ==
+                  'assets/icon/unlock.svg',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Unlock now'));
+      await tester.pumpAndSettle();
+
+      // 解锁后：manualUnlockAt 写入，按钮与倒计时消失
+      final context = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(context);
+      final after = container
+          .read(learningProgressNotifierProvider)
+          .progressMap['test-1']!;
+      expect(after.manualUnlockAt, isNotNull);
+      expect(after.isReviewLockedAt(now), isFalse);
+      expect(find.text('Unlock now'), findsNothing);
+      expect(find.textContaining('Unlocks in'), findsNothing);
+    });
+
+    testWidgets('当前复习轮已到期时不显示「立即解锁」', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // review0 间隔 6h：7 小时前完成 → 已到期
+      final now = DateTime(2026, 1, 1, 12, 0);
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review0,
+            currentSubStage: SubStageType.reviewDifficultPractice,
+            firstLearnCompletedAt: now.subtract(const Duration(hours: 7)),
+            lastStageCompletedAt: now.subtract(const Duration(hours: 7)),
+            updatedAt: now,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(progressState: progressState, fixedNow: now),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unlock now'), findsNothing);
+    });
+
+    testWidgets('已暂停时锁定轮次不显示「立即解锁」', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final firstLearnCompletedAt = DateTime(2026, 1, 1, 11, 0);
+      final now = DateTime(2026, 1, 1, 12, 0);
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.review0,
+            currentSubStage: SubStageType.reviewDifficultPractice,
+            firstLearnCompletedAt: firstLearnCompletedAt,
+            lastStageCompletedAt: firstLearnCompletedAt,
+            updatedAt: now,
+            isPaused: true,
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(progressState: progressState, fixedNow: now),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unlock now'), findsNothing);
     });
 
     testWidgets('已完成复习轮次显示相对完成时间', (tester) async {
@@ -1295,13 +2114,26 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('100%'), findsOneWidget);
-      expect(find.text('Completed'), findsOneWidget);
-      expect(find.text('4/4 completed'), findsOneWidget);
+      // 卡片不再显示状态文案
+      expect(find.text('Completed'), findsNothing);
+      expect(find.text('4/4'), findsOneWidget);
+      expect(find.text('4/4 completed'), findsNothing);
+      expect(find.text('✅'), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SvgPicture &&
+              widget.bytesLoader is SvgAssetLoader &&
+              (widget.bytesLoader as SvgAssetLoader).assetName ==
+                  'assets/icon/check-circle-3.svg',
+        ),
+        findsWidgets,
+      );
     });
 
     // ====== Phase 2 Pilot：从 integration_test 下沉的 case ======
 
-    testWidgets('无字幕音频显示警告横幅且开始学习按钮禁用', (tester) async {
+    testWidgets('无字幕音频显示警告横幅且开始学习按钮可点击', (tester) async {
       // v2 入口为精听、未开始 → 底部按钮为「Start Learning」
       final progressState = LearningProgressState(
         progressMap: {
@@ -1325,11 +2157,11 @@ void main() {
       // 验证警告横幅出现（warning 图标）
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
 
-      // 验证底部按钮存在但被禁用
+      // 验证底部按钮存在且保留点击反馈
       final button = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Start Learning'),
+        find.widgetWithText(FilledButton, 'Start practicing'),
       );
-      expect(button.onPressed, isNull);
+      expect(button.onPressed, isNotNull);
     });
 
     testWidgets('Phase 2 Pilot：精听已完成时显示完成标记和继续学习', (tester) async {
@@ -1356,9 +2188,9 @@ void main() {
       // 验证精听步骤显示完成标记（绿色勾图标）
       expect(find.byIcon(Icons.check), findsWidgets);
 
-      // 验证底部按钮文案为"Continue Learning"
-      expect(find.text('Continue Learning'), findsOneWidget);
-      expect(find.text('Start Learning'), findsNothing);
+      // 验证底部按钮文案为"Continue practicing"
+      expect(find.text('Continue practicing'), findsOneWidget);
+      expect(find.text('Start practicing'), findsNothing);
     });
 
     testWidgets('精听阶段点击开始学习弹出精听简报', (tester) async {
@@ -1377,14 +2209,141 @@ void main() {
       await tester.pumpWidget(createTestWidget(progressState: progressState));
       await tester.pumpAndSettle();
 
-      // 点击"Start Learning"
-      await tester.tap(find.text('Start Learning').last);
+      // 点击"Start practicing"
+      await tester.tap(find.text('Start practicing').last);
       await tester.pumpAndSettle();
 
       // 验证弹出的是精听简报（IntensiveListenBriefingSheet）
-      expect(find.text('Intensive Listening'), findsWidgets);
-      expect(find.text('Start Practice'), findsOneWidget);
+      expect(find.text('Listen sentence by sentence'), findsWidgets);
+      expect(find.text('Start Practicing'), findsOneWidget);
     });
+
+    testWidgets('精听入口预计时长按已保存的重复遍数计算', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.intensiveListen,
+            updatedAt: DateTime(2026, 5, 1),
+          ),
+        },
+      );
+      await tester.pumpWidget(createTestWidget(progressState: progressState));
+      await tester.pumpAndSettle();
+
+      final planContext = tester.element(find.byType(LearningPlanScreen));
+      final container = ProviderScope.containerOf(planContext);
+      final slot = stageSlotKey(
+        StageSettingsSlots.intensiveListen,
+        LearningStage.firstLearn,
+      );
+      await container
+          .read(intensiveListenPrefsProvider.notifier)
+          .setRepeatCount(slot, 4);
+
+      await tester.tap(find.text('Start practicing').last);
+      await tester.pumpAndSettle();
+
+      final briefingFinder = find.byType(IntensiveListenBriefingSheet);
+      expect(
+        tester
+            .widget<IntensiveListenBriefingSheet>(briefingFinder)
+            .estimatedDuration,
+        const Duration(seconds: 200),
+      );
+    });
+
+    for (final (isFreePlay, repeatCount) in <(bool, int?)>[
+      (false, 5),
+      (true, 5),
+      (false, 0),
+      (false, null),
+    ]) {
+      testWidgets('${isFreePlay ? '自由练习' : '计划学习'}入口摘要使用已保存的跟读遍数', (
+        tester,
+      ) async {
+        final currentSubStage = isFreePlay
+            ? SubStageType.retell
+            : SubStageType.listenAndRepeat;
+        final progressState = LearningProgressState(
+          progressMap: {
+            'test-1': LearningProgress(
+              audioItemId: 'test-1',
+              currentStage: LearningStage.firstLearn,
+              currentSubStage: currentSubStage,
+              updatedAt: DateTime(2026, 5, 1),
+            ),
+          },
+        );
+        await tester.pumpWidget(
+          createTestWidget(
+            progressState: progressState,
+            extraOverrides: [
+              bookmarkDaoProvider.overrideWithValue(_EmptyBookmarkDao()),
+              asrModelInstallationGateProvider.overrideWithValue(
+                AsrModelInstallationGate(({required shouldCommit}) async {}),
+              ),
+              speechPermissionServiceProvider.overrideWithValue(
+                const _ReadySpeechPermissionService(),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final planContext = tester.element(find.byType(LearningPlanScreen));
+        final container = ProviderScope.containerOf(planContext);
+        final slot = stageSlotKey(
+          StageSettingsSlots.listenAndRepeat,
+          LearningStage.firstLearn,
+        );
+        if (repeatCount != null) {
+          await container
+              .read(intensiveListenPrefsProvider.notifier)
+              .setRepeatCount(slot, repeatCount);
+        }
+
+        if (isFreePlay) {
+          await tester.tap(find.text('Listen & Repeat').first);
+        } else {
+          await tester.tap(find.text('Continue practicing'));
+        }
+        await _pumpUntilFound(
+          tester,
+          find.byType(ListenAndRepeatBriefingSheet),
+        );
+        await tester.pumpAndSettle();
+
+        final effectiveRepeatCount = repeatCount ?? 3;
+        if (effectiveRepeatCount == 0) {
+          expect(find.text('Infinite ∞'), findsOneWidget);
+          expect(find.byIcon(Icons.timer_outlined), findsNothing);
+        } else {
+          expect(
+            find.text('$effectiveRepeatCount plays per sentence'),
+            findsOneWidget,
+          );
+
+          await tester.tap(find.byType(DropdownButton<ListenAndRepeatScope>));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Full Text').last);
+          await tester.pumpAndSettle();
+
+          final sheetContext = tester.element(
+            find.byType(ListenAndRepeatBriefingSheet),
+          );
+          expect(
+            find.text(
+              AppLocalizations.of(
+                sheetContext,
+              )!.estimatedMinutes(effectiveRepeatCount),
+            ),
+            findsOneWidget,
+          );
+        }
+      });
+    }
 
     // ====== Phase 3 Batch：从 integration_test 下沉的更多 case ======
 
@@ -1417,6 +2376,43 @@ void main() {
       expect(find.textContaining('1x'), findsWidgets);
     });
 
+    testWidgets('无难句时跟读状态复用 saved sentences 数量文案', (tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      final context = tester.element(find.byType(LearningPlanScreen));
+      expect(
+        AppLocalizations.of(context)!.listenAndRepeatBriefingDifficultCount(0),
+        '0 saved sentences',
+      );
+    });
+
+    testWidgets('逐句精听零收藏时不显示难句数，仍显示已练习遍数', (tester) async {
+      final progressState = LearningProgressState(
+        progressMap: {
+          'test-1': LearningProgress(
+            audioItemId: 'test-1',
+            currentStage: LearningStage.firstLearn,
+            currentSubStage: SubStageType.intensiveListen,
+            intensiveListenPassCount: 2,
+            updatedAt: DateTime(2026, 5, 1),
+          ),
+        },
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          progressState: progressState,
+          extraOverrides: [
+            bookmarkDaoProvider.overrideWithValue(_EmptyBookmarkDao()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('0 challenging sentences'), findsNothing);
+      expect(find.textContaining('Practiced 2x'), findsOneWidget);
+    });
+
     // ====== 听前预热卡（「首次学习」上方） ======
 
     testWidgets('未开始且有字幕时显示听前预热卡', (tester) async {
@@ -1435,7 +2431,7 @@ void main() {
       await tester.tap(find.text('Warm-up Listening'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Player'), findsOneWidget);
+      expect(find.text('Media Test: Test Audio'), findsOneWidget);
     });
 
     testWidgets('已开始学习后预热卡消失', (tester) async {
@@ -1466,6 +2462,207 @@ void main() {
       expect(find.text('Warm-up Listening'), findsNothing);
     });
   });
+
+  group('媒体就绪（统一由计划页确保）', () {
+    // 路由参数 audioId 为 test-1，条目 id 必须一致才能命中覆盖。
+    final notDownloaded = AudioItem(
+      id: 'test-1',
+      name: 'Puma at Large',
+      addedDate: DateTime(2026, 10, 31),
+      remoteAudioId: 'remote-file-1',
+    );
+
+    testWidgets('未就绪时只显示占位页，不加载学习内容，并自动发起下载', (tester) async {
+      final readiness = StateProvider<MediaReadiness>(
+        (ref) => const MediaNotDownloaded(),
+      );
+      final community = _RecordingCommunityDownload();
+      final listening = _RecordingListeningPractice(
+        ListeningPracticeState(currentAudioItem: notDownloaded),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: notDownloaded,
+          listeningPracticeOverride: () => listening,
+          extraOverrides: [
+            mediaReadinessProvider(
+              notDownloaded.id,
+            ).overrideWith((ref) => ref.watch(readiness)),
+            communityDownloadProvider.overrideWith(() => community),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('media_preparing_retry')), findsOneWidget);
+      expect(community.startedIds, [notDownloaded.id]);
+      expect(listening.loadAudioCalls, isEmpty);
+    });
+
+    testWidgets('下载中显示占位页进度，就绪后切换为正常计划页并加载学习内容', (tester) async {
+      final readiness = StateProvider<MediaReadiness>(
+        (ref) => const MediaDownloading(progress: 0.5),
+      );
+      final listening = _RecordingListeningPractice(
+        ListeningPracticeState(currentAudioItem: notDownloaded),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: notDownloaded,
+          listeningPracticeOverride: () => listening,
+          extraOverrides: [
+            mediaReadinessProvider(
+              notDownloaded.id,
+            ).overrideWith((ref) => ref.watch(readiness)),
+            communityDownloadProvider.overrideWith(
+              () => _RecordingCommunityDownload(),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('50%'), findsOneWidget);
+      expect(listening.loadAudioCalls, isEmpty);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(LearningPlanScreen)),
+      );
+      container.read(readiness.notifier).state = const MediaReady();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('media_preparing_retry')), findsNothing);
+      expect(listening.loadAudioCalls.map((item) => item.id), [
+        notDownloaded.id,
+      ]);
+    });
+
+    testWidgets('下载失败显示错误并支持重试再次发起下载', (tester) async {
+      final failed = DownloadFailed(
+        audioItemId: notDownloaded.id,
+        displayName: notDownloaded.name,
+        error: 'network',
+      );
+      final community = _RecordingCommunityDownload(initial: failed);
+
+      await tester.pumpWidget(
+        createTestWidget(
+          audioItem: notDownloaded,
+          extraOverrides: [
+            mediaReadinessProvider(
+              notDownloaded.id,
+            ).overrideWith((ref) => const MediaFailed('network')),
+            communityDownloadProvider.overrideWith(() => community),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Puma at Large download failed, please retry'),
+        findsOneWidget,
+      );
+      expect(community.startedIds, isEmpty);
+
+      await tester.tap(find.byKey(const Key('media_preparing_retry')));
+      await tester.pumpAndSettle();
+
+      expect(community.startedIds, [notDownloaded.id]);
+    });
+  });
+}
+
+/// 记录下载启动请求；由测试决定初始状态，启动后进入下载中。
+class _RecordingCommunityDownload extends CommunityDownload {
+  _RecordingCommunityDownload({this.initial = const DownloadIdle()});
+
+  final DownloadProgress initial;
+  final List<String> startedIds = [];
+
+  @override
+  DownloadProgress build() => initial;
+
+  @override
+  Future<StartResult> start({
+    required String audioItemId,
+    required String displayName,
+  }) async {
+    startedIds.add(audioItemId);
+    return StartResult.started;
+  }
+}
+
+/// 模拟生产精听页消费路由启动任务，避免入口测试绕过媒体加载契约。
+class _MediaStartupTestScreen extends StatefulWidget {
+  const _MediaStartupTestScreen({this.startup, this.label});
+
+  final MediaIntensiveListenStartup? startup;
+  final String? label;
+
+  @override
+  State<_MediaStartupTestScreen> createState() =>
+      _MediaStartupTestScreenState();
+}
+
+class _MediaStartupTestScreenState extends State<_MediaStartupTestScreen> {
+  @override
+  void initState() {
+    super.initState();
+    final startup = widget.startup;
+    if (startup != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(startup.load());
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Scaffold(body: Text(widget.label ?? 'Listen sentence by sentence'));
+}
+
+/// 记录 loadAudio 调用的测试用 LP，初始为空状态（无 currentAudioItem）。
+///
+/// 用于验证视频条目不进入听力练习引擎：_maybeLoadAudio 对视频早退，loadAudio 不被调用。
+/// 让测试音频属于 col-1「新概念第三册（美音）」合集。
+Override _collectionOverride() {
+  return collectionListProvider.overrideWith(
+    () => TestCollectionList(
+      CollectionState(
+        rawCollections: [
+          Collection(
+            id: 'col-1',
+            name: '新概念第三册（美音）',
+            createdDate: DateTime(2026, 1, 1),
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        ],
+        audioIdsMap: const {
+          'col-1': ['test-1'],
+        },
+      ),
+    ),
+  );
+}
+
+class _RecordingListeningPractice extends TestListeningPractice {
+  _RecordingListeningPractice([super.initialState]);
+
+  final List<AudioItem> loadAudioCalls = [];
+
+  @override
+  Future<void> loadAudio(
+    AudioItem audioItem, {
+    bool forceTranscriptReload = false,
+  }) async {
+    loadAudioCalls.add(audioItem);
+    await super.loadAudio(
+      audioItem,
+      forceTranscriptReload: forceTranscriptReload,
+    );
+  }
 }
 
 class _TranscriptionReloadListeningPractice extends TestListeningPractice {

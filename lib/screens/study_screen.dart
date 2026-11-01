@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,23 +8,31 @@ import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
 import '../features/usage/usage_event.dart';
 import '../features/usage/usage_providers.dart';
-import '../config/api_config.dart';
+import '../services/runtime_endpoint_router.dart';
 import '../database/daos/stage_completion_dao.dart';
 import '../database/enums.dart';
 import '../l10n/app_localizations.dart';
+import '../models/audio_item.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/study_stats_provider.dart';
 import '../providers/study_task_provider.dart';
 import '../providers/time_provider.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../services/app_logger.dart';
+import '../services/startup_trace.dart';
 import '../widgets/speech_permission_dialog.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/learning_progress_icon.dart';
+import '../widgets/media_type_icon.dart';
 import '../widgets/study/study_stats_header.dart';
+
+/// 学习 Tab 待复习分组标题图标。
+const String _studyReviewIconAsset = 'assets/icon/refresh.svg';
 
 /// 学习任务列表页
 ///
@@ -32,7 +41,7 @@ import '../widgets/study/study_stats_header.dart';
 /// 2. 统计 Chips + 7天柱状图
 /// 3. Ready to Review（可开始的复习）
 /// 4. Upcoming Reviews（默认折叠）
-/// 5. First Study（首次学习任务）
+/// 5. 为你推荐
 /// 6. Completed（默认折叠）
 class StudyScreen extends ConsumerStatefulWidget {
   const StudyScreen({super.key});
@@ -43,9 +52,21 @@ class StudyScreen extends ConsumerStatefulWidget {
 
 class _StudyScreenState extends ConsumerState<StudyScreen> {
   /// 引导 step 的 key 需在整个页面生命周期内保持稳定，故放在 State 中持有。
-  final GlobalKey _keyTaskArea = GlobalKey();
   final GlobalKey _keyStatsHeader = GlobalKey();
   final GlobalKey _keyStreakChip = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    activeStartupTrace?.mark('study_tab_mounted');
+    AppLogger.log('StartupLoad', 'study_screen_mounted');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        activeStartupTrace?.mark('study_tab_first_frame_rendered');
+        AppLogger.log('StartupLoad', 'study_screen_first_frame_rendered');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,10 +77,27 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     final completedAudios = ref.watch(completedAudioProvider);
     final now = ref.watch(nowProvider)();
     final statsAsync = ref.watch(studyStatsNotifierProvider);
+    final recommendationAsync = ref.watch(studyRecommendationProvider);
+    final showRecommendation = ref.watch(
+      learningSettingsProvider.select((s) => s.showStudyRecommendation),
+    );
+    final recommendation = showRecommendation
+        ? recommendationAsync.valueOrNull
+        : null;
+    ref.listen(studyRecommendationProvider, (previous, next) {
+      next.whenOrNull(
+        error: (error, stackTrace) => AppLogger.log(
+          'StudyRecommendation',
+          'load failed: $error\n$stackTrace',
+        ),
+      );
+    });
     final isBootstrappingStudy =
         audioLibraryState.isLoading || progressState.isLoading;
 
     final recentCompletionsAsync = ref.watch(recentCompletionsProvider);
+    final hasRecentCompletions =
+        recentCompletionsAsync.valueOrNull?.isNotEmpty ?? false;
 
     final readyReviews = tasks
         .where((t) => t.type == StudyTaskType.reviewReady)
@@ -67,12 +105,19 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     final upcomingReviews = tasks
         .where((t) => t.type == StudyTaskType.reviewUpcoming)
         .toList();
-    final firstStudies = tasks
-        .where((t) => t.type == StudyTaskType.firstStudy)
-        .toList();
-
-    // 判断空状态类型
-    final hasAnyTask = tasks.isNotEmpty || completedAudios.isNotEmpty;
+    final hasVisibleStudyTasks =
+        readyReviews.isNotEmpty || upcomingReviews.isNotEmpty;
+    final hasAnyContent =
+        hasVisibleStudyTasks ||
+        recommendation != null ||
+        hasRecentCompletions ||
+        completedAudios.isNotEmpty;
+    final shouldShowAllDone =
+        !hasVisibleStudyTasks &&
+        recommendation == null &&
+        !hasRecentCompletions &&
+        !recommendationAsync.isLoading &&
+        completedAudios.isNotEmpty;
 
     // AppBar streak chip（始终显示，可点击进入活动日历）
     final streak = statsAsync.valueOrNull?.streak ?? 0;
@@ -122,11 +167,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     );
 
     // ----- 新手引导 flow 声明 -----
-    final stepTaskArea = GuideStep(
-      key: _keyTaskArea,
-      title: l10n.guideStudyTasksOverviewTitle,
-      description: l10n.guideStudyTasksOverviewDescription,
-    );
     final stepStatsHeader = GuideStep(
       key: _keyStatsHeader,
       title: l10n.guideStudyStatsHeaderTitle,
@@ -139,11 +179,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     // 门槛：用户本周已经累计过学习时长才触发引导。
     final hasStudyTime = (statsAsync.valueOrNull?.weekTotalSeconds ?? 0) > 0;
     final flows = <GuideFlow>[
-      GuideFlow(
-        flowId: GuideFlowIds.studyTasksOverview,
-        shouldRun: hasStudyTime && tasks.isNotEmpty,
-        steps: [stepTaskArea],
-      ),
       GuideFlow(
         flowId: GuideFlowIds.studyStatsStreak,
         shouldRun: hasStudyTime,
@@ -158,13 +193,14 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
           title: Text(l10n.studyTasks),
           actions: [GuideTarget(step: stepStreakChip, child: streakChip)],
         ),
-        // 仅在「正在预热且尚无任何任务可展示」时显示骨架，避免冷启动闪空态；
-        // 已有任务时即使触发运行期 reload（如官方合集后台同步）也保留任务，不闪骨架。
-        body: (isBootstrappingStudy && !hasAnyTask)
+        // 任务或推荐尚未加载且当前无内容时显示骨架，避免冷启动闪空态。
+        body:
+            ((isBootstrappingStudy || recommendationAsync.isLoading) &&
+                !hasAnyContent)
             ? const _StudyLoadingSkeleton()
-            : !hasAnyTask
+            : !hasAnyContent
             ? const _EmptyState(type: _EmptyStateType.noTasks)
-            : tasks.isEmpty && completedAudios.isNotEmpty
+            : shouldShowAllDone
             ? _buildAllDoneContent(
                 context,
                 l10n,
@@ -188,61 +224,40 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                   ),
                   const SizedBox(height: AppSpacing.l),
 
-                  // 学习任务区（引导 flow 1 的高亮目标）
-                  if (readyReviews.isNotEmpty ||
-                      upcomingReviews.isNotEmpty ||
-                      firstStudies.isNotEmpty)
-                    GuideTarget(
-                      step: stepTaskArea,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (readyReviews.isNotEmpty) ...[
-                            _TaskSection(
-                              title: l10n.readyToReview(readyReviews.length),
-                              emoji: '🔁',
-                              tasks: readyReviews,
-                              l10n: l10n,
-                              now: now,
-                            ),
-                            const SizedBox(height: AppSpacing.m),
-                          ],
-                          if (upcomingReviews.isNotEmpty) ...[
-                            _CollapsibleSection(
-                              title: l10n.upcomingReviews(
-                                upcomingReviews.length,
-                              ),
-                              summary: l10n.upcomingReviewsSummary(
-                                upcomingReviews.length,
-                              ),
-                              initiallyExpanded: false,
-                              children: upcomingReviews
-                                  .map(
-                                    (t) => _TaskCard(
-                                      task: t,
-                                      l10n: l10n,
-                                      now: now,
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                            const SizedBox(height: AppSpacing.m),
-                          ],
-                          if (firstStudies.isNotEmpty) ...[
-                            _TaskSection(
-                              title: l10n.firstStudySection(
-                                firstStudies.length,
-                              ),
-                              emoji: '🌱',
-                              tasks: firstStudies,
-                              l10n: l10n,
-                              now: now,
-                            ),
-                            const SizedBox(height: AppSpacing.m),
-                          ],
-                        ],
-                      ),
+                  // 可立即复习任务优先显示。
+                  if (readyReviews.isNotEmpty) ...[
+                    _TaskSection(
+                      title: l10n.readyToReview(readyReviews.length),
+                      iconAsset: _studyReviewIconAsset,
+                      tasks: readyReviews,
+                      l10n: l10n,
+                      now: now,
                     ),
+                    const SizedBox(height: AppSpacing.m),
+                  ],
+
+                  if (recommendation != null) ...[
+                    _RecommendedMaterialCard(
+                      material: recommendation,
+                      l10n: l10n,
+                    ),
+                    const SizedBox(height: AppSpacing.m),
+                  ],
+
+                  // 待解锁任务放在推荐卡之后，避免抢占当前可继续学习的入口。
+                  if (upcomingReviews.isNotEmpty) ...[
+                    _CollapsibleSection(
+                      title: l10n.upcomingReviews(upcomingReviews.length),
+                      summary: l10n.upcomingReviewsSummary(
+                        upcomingReviews.length,
+                      ),
+                      initiallyExpanded: false,
+                      children: upcomingReviews
+                          .map((t) => _TaskCard(task: t, l10n: l10n, now: now))
+                          .toList(),
+                    ),
+                    const SizedBox(height: AppSpacing.m),
+                  ],
 
                   // 最近完成（过去24小时，默认折叠）
                   ...recentCompletionsAsync.whenOrNull(
@@ -301,17 +316,17 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 // Task Sections
 // ============================================================
 
-/// 任务区段（emoji + 标题 + 卡片列表）
+/// 任务区段（固定 SVG 图标 + 标题 + 卡片列表）
 class _TaskSection extends StatelessWidget {
   final String title;
-  final String emoji;
+  final String iconAsset;
   final List<StudyTask> tasks;
   final AppLocalizations l10n;
   final DateTime now;
 
   const _TaskSection({
     required this.title,
-    required this.emoji,
+    required this.iconAsset,
     required this.tasks,
     required this.l10n,
     required this.now,
@@ -326,7 +341,7 @@ class _TaskSection extends StatelessWidget {
         // 区段标题
         Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 18)),
+            SvgPicture.asset(iconAsset, width: 20, height: 20),
             const SizedBox(width: 6),
             Text(
               title,
@@ -340,6 +355,221 @@ class _TaskSection extends StatelessWidget {
         ...tasks.map((task) => _TaskCard(task: task, l10n: l10n, now: now)),
       ],
     );
+  }
+}
+
+/// 任务和推荐材料共用的卡片布局，统一标题、阶段信息和进度展示。
+class _StudyMaterialCard extends StatelessWidget {
+  final String title;
+  final Color accentColor;
+  final Widget leading;
+  final Widget subtitle;
+  final Widget action;
+  final double progressPercent;
+  final VoidCallback? onTap;
+
+  const _StudyMaterialCard({
+    required this.title,
+    required this.accentColor,
+    required this.leading,
+    required this.subtitle,
+    required this.action,
+    required this.progressPercent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.s),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(width: 4, color: accentColor),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          leading,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 3),
+                                subtitle,
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.s),
+                          action,
+                        ],
+                      ),
+                      if (progressPercent > 0) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progressPercent,
+                            minHeight: 4,
+                            color: accentColor,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 学习页单条推荐材料卡片。
+class _RecommendedMaterialCard extends ConsumerWidget {
+  final AudioItem material;
+  final AppLocalizations l10n;
+
+  const _RecommendedMaterialCard({required this.material, required this.l10n});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final progressState = ref.watch(learningProgressNotifierProvider);
+    final progress = progressState.progressMap[material.id];
+    final stage = progress?.currentStage ?? LearningStage.firstLearn;
+    final subStage = progress?.currentSubStage ?? SubStageType.blindListen;
+    final completedKeys = progressState.completionsFor(material.id);
+    final hasRoundProgress = completedKeys.any(
+      (key) => key.startsWith('${stage.key}:'),
+    );
+    final plan = ref.watch(learningPlanForAudioProvider(material.id));
+    final progressPercent =
+        progress?.progressPercent(plan, completedKeys) ?? 0.0;
+    final statusText = hasRoundProgress ? l10n.learningInProgress : '';
+    final accentColor = AppTheme.studyRecommendationAccentColor(
+      theme.brightness,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 20,
+              color: AppTheme.studyRecommendationAccentColor(theme.brightness),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              l10n.recommendedForYou,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.6,
+                ),
+              ),
+              tooltip: l10n.hideRecommendationTooltip,
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _confirmHide(context, ref),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s),
+        _StudyMaterialCard(
+          title: material.name,
+          accentColor: accentColor,
+          leading: LearningProgressIcon(
+            progress: progress,
+            size: 36,
+            iconSize: 18,
+            isVideo: material.isVideo,
+          ),
+          subtitle: Wrap(
+            spacing: AppSpacing.s,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                _stageSubStageLabel(l10n, stage, subStage),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (statusText.isNotEmpty)
+                _StatusBadge(
+                  text: statusText,
+                  isOverdue: false,
+                  isInProgress: true,
+                ),
+            ],
+          ),
+          action: FilledButton.tonal(
+            onPressed: () =>
+                context.push(AppRoutes.audioLearningPlan(material.id)),
+            child: Text(
+              hasRoundProgress ? l10n.continueButton : l10n.startButton,
+            ),
+          ),
+          progressPercent: progressPercent,
+          onTap: () => context.push(AppRoutes.audioLearningPlan(material.id)),
+        ),
+      ],
+    );
+  }
+
+  /// 弹出确认框，确认后永久隐藏推荐卡（可在设置 › 学习 › 显示设置中重新开启）。
+  Future<void> _confirmHide(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.hideRecommendationTitle),
+        content: Text(l10n.hideRecommendationMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.confirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref
+        .read(learningSettingsProvider.notifier)
+        .setShowStudyRecommendation(false);
   }
 }
 
@@ -406,148 +636,85 @@ class _TaskCard extends ConsumerWidget {
     final isOverdue = task.isOverdue;
 
     // 获取进度数据
-    final progressMap = ref.watch(learningProgressNotifierProvider).progressMap;
-    final progress = progressMap[task.audioId];
+    final progressState = ref.watch(learningProgressNotifierProvider);
+    final progress = progressState.progressMap[task.audioId];
+    final audioItem = ref
+        .watch(audioLibraryProvider)
+        .audioItems
+        .where((item) => item.id == task.audioId)
+        .firstOrNull;
     final plan = ref.watch(learningPlanForAudioProvider(task.audioId));
-    final completedKeys = ref
-        .watch(learningProgressNotifierProvider)
-        .completionsFor(task.audioId);
+    final completedKeys = progressState.completionsFor(task.audioId);
     final progressPercent =
         progress?.progressPercent(plan, completedKeys) ?? 0.0;
 
     // 左侧色条颜色
     final accentColor = isOverdue
         ? theme.colorScheme.error
-        : task.type == StudyTaskType.firstStudy
-        ? theme.colorScheme.tertiary
         : theme.colorScheme.primary;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.s),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () async {
-          ref
-              .read(usageTrackerProvider)
-              .record(
-                UsageEvent.studyTaskTapped,
-                analyticsParams: {
-                  EventParams.audioId: task.audioId,
-                  EventParams.audioName: task.audioName,
-                  EventParams.taskType: task.type.name.toLowerCase(),
-                  EventParams.stage: task.stage.name,
-                  EventParams.subStage: task.subStage.name,
-                  EventParams.isOverdue: task.isOverdue ? 1 : 0,
-                },
-              );
-          if (!context.mounted) return;
-          context.push(AppRoutes.audioLearningPlan(task.audioId));
-        },
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              // 左侧色条
-              Container(width: 4, color: accentColor),
-              // 内容区
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          LearningProgressIcon(
-                            progress: progress,
-                            size: 36,
-                            iconSize: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  task.audioName,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 3),
-                                Wrap(
-                                  spacing: AppSpacing.s,
-                                  runSpacing: 4,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    Text(
-                                      stageLabel,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                    if (statusText.isNotEmpty)
-                                      _StatusBadge(
-                                        text: statusText,
-                                        isOverdue: isOverdue,
-                                        isInProgress:
-                                            statusText ==
-                                            l10n.learningInProgress,
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.s),
-                          FilledButton.tonal(
-                            onPressed: isDisabled
-                                ? null
-                                : () async {
-                                    final allowed =
-                                        await ensureSpeechReadyForSubStage(
-                                          context,
-                                          ref,
-                                          task.subStage,
-                                        );
-                                    if (!allowed || !context.mounted) return;
-                                    context.push(
-                                      AppRoutes.audioLearningPlan(
-                                        task.audioId,
-                                        autoStart: true,
-                                      ),
-                                    );
-                                  },
-                            child: Text(_actionLabel(l10n, task)),
-                          ),
-                        ],
-                      ),
-                      // 进度条
-                      if (progressPercent > 0) ...[
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: progressPercent,
-                            minHeight: 4,
-                            color: accentColor,
-                            backgroundColor:
-                                theme.colorScheme.surfaceContainerHighest,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return _StudyMaterialCard(
+      title: task.audioName,
+      accentColor: accentColor,
+      leading: LearningProgressIcon(
+        progress: progress,
+        size: 36,
+        iconSize: 18,
+        isVideo: audioItem?.isVideo ?? false,
       ),
+      subtitle: Wrap(
+        spacing: AppSpacing.s,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            stageLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (statusText.isNotEmpty)
+            _StatusBadge(
+              text: statusText,
+              isOverdue: isOverdue,
+              isInProgress: statusText == l10n.learningInProgress,
+            ),
+        ],
+      ),
+      action: FilledButton.tonal(
+        onPressed: isDisabled
+            ? null
+            : () async {
+                final allowed = await ensureSpeechReadyForSubStage(
+                  context,
+                  ref,
+                  task.subStage,
+                );
+                if (!allowed || !context.mounted) return;
+                context.push(
+                  AppRoutes.audioLearningPlan(task.audioId, autoStart: true),
+                );
+              },
+        child: Text(_actionLabel(l10n, task)),
+      ),
+      progressPercent: progressPercent,
+      onTap: () async {
+        ref
+            .read(usageTrackerProvider)
+            .record(
+              UsageEvent.studyTaskTapped,
+              analyticsParams: {
+                EventParams.audioId: task.audioId,
+                EventParams.audioName: task.audioName,
+                EventParams.taskType: task.type.name.toLowerCase(),
+                EventParams.stage: task.stage.name,
+                EventParams.subStage: task.subStage.name,
+                EventParams.isOverdue: task.isOverdue ? 1 : 0,
+              },
+            );
+        if (!context.mounted) return;
+        context.push(AppRoutes.audioLearningPlan(task.audioId));
+      },
     );
   }
 }
@@ -567,7 +734,7 @@ class _CompletedSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-
+    final audioItems = ref.watch(audioLibraryProvider).audioItems;
     return Card(
       child: ExpansionTile(
         title: Text(
@@ -586,10 +753,15 @@ class _CompletedSection extends ConsumerWidget {
             .map(
               (audio) => ListTile(
                 dense: true,
-                leading: Icon(
-                  Icons.check_circle,
-                  color: theme.colorScheme.primary,
+                leading: MediaTypeIcon(
+                  isVideo:
+                      audioItems
+                          .where((item) => item.id == audio.audioId)
+                          .firstOrNull
+                          ?.isVideo ??
+                      false,
                   size: 20,
+                  color: theme.colorScheme.primary,
                 ),
                 title: Text(audio.audioName),
                 contentPadding: EdgeInsets.zero,
@@ -669,6 +841,16 @@ class _RecentCompletionTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final audioItems = ref.watch(audioLibraryProvider).audioItems;
+    final progress = ref
+        .watch(learningProgressNotifierProvider)
+        .progressMap[completion.audioId];
+    final isVideo =
+        audioItems
+            .where((item) => item.id == completion.audioId)
+            .firstOrNull
+            ?.isVideo ??
+        false;
     final stage = LearningStage.fromKey(completion.stage);
     final subStage = SubStageType.fromKey(completion.subStage);
     final stageLabel = _stageSubStageLabel(l10n, stage, subStage);
@@ -684,20 +866,26 @@ class _RecentCompletionTile extends ConsumerWidget {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              // 左侧色条（使用 outline 色表示已完成）
-              Container(width: 4, color: theme.colorScheme.outlineVariant),
+              // 左侧绿色条标记本条子步骤已完成（不用对钩，避免误认为整个音频已学完）。
+              Container(width: 4, color: LearningProgressIcon.completedColor),
               // 内容区
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 10, AppSpacing.m, 10),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: theme.colorScheme.outlineVariant,
-                        size: 36,
+                      SizedBox(
+                        key: const ValueKey('recent_completion_media_icon'),
+                        width: 36,
+                        height: 36,
+                        child: LearningProgressIcon(
+                          progress: progress,
+                          isVideo: isVideo,
+                          size: 36,
+                          iconSize: 18,
+                        ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -756,7 +944,7 @@ String _timeAgo(AppLocalizations l10n, DateTime now, DateTime completedAt) {
 ///
 /// 学习 Tab 顶部置顶，保持单行紧凑样式：
 /// 图标 + 标题 + 副标题 + chevron，颜色对齐发现入口。
-/// 点击行为与设置页「加入学习社群」一致：按 locale 打开对应社群页面。
+/// 点击行为与设置页「加入社区」一致：按 locale 打开对应社群页面。
 class _CommunityInviteCard extends ConsumerWidget {
   const _CommunityInviteCard();
 
@@ -785,13 +973,14 @@ class _CommunityInviteCard extends ConsumerWidget {
           child: InkWell(
             splashColor: palette.inkSplash,
             highlightColor: palette.inkHighlight,
-            onTap: () {
+            onTap: () async {
               ref
                   .read(analyticsServiceProvider)
                   .track(Events.communityInviteTapped);
               final isZh = Localizations.localeOf(context).languageCode == 'zh';
               final path = isZh ? '/zh-CN/social' : '/en/social';
-              launchUrl(Uri.parse('$apiBaseUrl$path'));
+              final uri = runtimeEndpointRouter.apiUri(path);
+              await launchUrl(uri);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(
@@ -803,7 +992,7 @@ class _CommunityInviteCard extends ConsumerWidget {
                   Icon(Icons.group_rounded, size: 20, color: palette.icon),
                   const SizedBox(width: 10),
                   Text(
-                    l10n.joinCommunity,
+                    l10n.aboutCommunity,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -1087,8 +1276,8 @@ String _subStageName(AppLocalizations l10n, SubStageType subStage) {
     SubStageType.listenAndRepeat => l10n.stepShadowing,
     SubStageType.retell => l10n.stepRetelling,
     SubStageType.reviewDifficultPractice => l10n.reviewDifficultPracticeTitle,
-    SubStageType.reviewRetellParagraph => l10n.retellBriefingTitle,
-    SubStageType.reviewRetellSummary => l10n.retellBriefingTitle,
+    SubStageType.reviewRetellParagraph => l10n.stepRetelling,
+    SubStageType.reviewRetellSummary => l10n.stepRetelling,
   };
 }
 

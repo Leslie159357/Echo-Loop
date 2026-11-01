@@ -4,14 +4,19 @@
 library;
 
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 import 'package:echo_loop/providers/app_update_provider.dart';
 import 'package:echo_loop/providers/developer_options_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
@@ -25,14 +30,48 @@ import 'package:echo_loop/features/subscription/models/entitlement.dart';
 import 'package:echo_loop/features/subscription/providers/subscription_availability.dart';
 import 'package:echo_loop/features/subscription/providers/subscription_controller.dart';
 import 'package:echo_loop/features/subscription/state/entitlement_state.dart';
+import 'package:echo_loop/features/user_region/user_region_providers.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/package_info_provider.dart';
 import 'package:echo_loop/services/tts/tts_engine.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
+
+class _FakeUrlLauncher extends UrlLauncherPlatform
+    with MockPlatformInterfaceMixin {
+  final List<LaunchOptions> options = [];
+  final List<String> urls = [];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => true;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions launchOptions) async {
+    urls.add(url);
+    options.add(launchOptions);
+    return true;
+  }
+
+  @override
+  // ignore: deprecated_member_use
+  Future<bool> launch(
+    String url, {
+    required bool useSafariVC,
+    required bool useWebView,
+    required bool enableJavaScript,
+    required bool enableDomStorage,
+    required bool universalLinksOnly,
+    required Map<String, String> headers,
+    String? webOnlyWindowName,
+  }) async => true;
+}
 
 void main() {
   final testPackageInfo = PackageInfo(
@@ -44,9 +83,12 @@ void main() {
 
   // 词典设置等同步读取 SharedPreferences 的 provider 需注入实例
   late SharedPreferences prefs;
+  late _FakeUrlLauncher urlLauncher;
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     prefs = await SharedPreferences.getInstance();
+    urlLauncher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = urlLauncher;
   });
 
   List<Override> buildOverrides({
@@ -56,6 +98,8 @@ void main() {
     OfflineAsrSettingsState? offlineAsrState,
     TtsSettings ttsSettings = const TtsSettings(),
     PackageInfo? packageInfo,
+    bool isChinaUser = false,
+    StateProvider<bool>? simulatedChinaUserProvider,
     // 测试宿主（macOS/无 key）默认不支持订阅，这里默认置 true 以覆盖订阅入口 UI。
     bool subscriptionAvailable = true,
   }) {
@@ -84,12 +128,145 @@ void main() {
       packageInfoProvider.overrideWithValue(packageInfo ?? testPackageInfo),
       appUpdateProvider.overrideWith(() => TestAppUpdate()),
       subscriptionAvailabilityProvider.overrideWithValue(subscriptionAvailable),
+      isChinaUserProvider.overrideWith((ref) {
+        final simulatedProvider = simulatedChinaUserProvider;
+        return simulatedProvider == null
+            ? isChinaUser
+            : ref.watch(simulatedProvider);
+      }),
       analyticsOverride(),
     ];
   }
 
   group('SettingsScreen', () {
+    const settingsSvgAssets = [
+      'assets/icon/account-1.svg',
+      'assets/icon/diamond.svg',
+      'assets/icon/artist-palette.svg',
+      'assets/icon/locale.svg',
+      'assets/icon/speak.svg',
+      'assets/icon/bell.svg',
+      'assets/icon/book-shelf.svg',
+      'assets/icon/microphone.svg',
+      'assets/icon/speaker.svg',
+      'assets/icon/play-pause.svg',
+      'assets/icon/locale-1.svg',
+      'assets/icon/diskette.svg',
+      'assets/icon/trash-bin.svg',
+      'assets/icon/refresh.svg',
+      'assets/icon/documents.svg',
+      'assets/icon/lock.svg',
+      'assets/icon/feedback.svg',
+      'assets/icon/help.svg',
+      'assets/icon/group.svg',
+    ];
+
+    Finder findSvgAsset(String assetName) {
+      return find.byWidgetPredicate(
+        (widget) =>
+            widget is SvgPicture &&
+            widget.bytesLoader is SvgAssetLoader &&
+            (widget.bytesLoader as SvgAssetLoader).assetName == assetName,
+      );
+    }
+
     group('渲染', () {
+      testWidgets('仅中国区路由显示账号行国旗角标', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: buildOverrides(isChinaUser: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(findSvgAsset('assets/icon/china_flag.svg'), findsOneWidget);
+        expect(
+          find.byTooltip('Using China region service routing'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('地区状态改变时更新账号行国旗角标', (tester) async {
+        final simulatedChinaUserProvider = StateProvider<bool>((ref) => false);
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: buildOverrides(
+              simulatedChinaUserProvider: simulatedChinaUserProvider,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(findSvgAsset('assets/icon/china_flag.svg'), findsNothing);
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(SettingsScreen)),
+        );
+        container.read(simulatedChinaUserProvider.notifier).state = true;
+        await tester.pumpAndSettle();
+
+        expect(findSvgAsset('assets/icon/china_flag.svg'), findsOneWidget);
+
+        container.read(simulatedChinaUserProvider.notifier).state = false;
+        await tester.pumpAndSettle();
+
+        expect(findSvgAsset('assets/icon/china_flag.svg'), findsNothing);
+      });
+
+      test('设置页 SVG 图标统一使用 24x24 viewBox', () {
+        for (final asset in settingsSvgAssets) {
+          final content = File(asset).readAsStringSync();
+          final svgTag = RegExp(
+            r'<svg\b[^>]*>',
+            dotAll: true,
+          ).firstMatch(content)?.group(0);
+
+          expect(svgTag, isNotNull, reason: asset);
+          expect(svgTag, contains('viewBox="0 0 24 24"'), reason: asset);
+          expect(svgTag, contains('width="24"'), reason: asset);
+          expect(svgTag, contains('height="24"'), reason: asset);
+          expect(
+            RegExp(r'\sviewBox=').allMatches(svgTag!).length,
+            1,
+            reason: asset,
+          );
+          expect(
+            RegExp(r'\swidth=').allMatches(svgTag).length,
+            1,
+            reason: asset,
+          );
+          expect(
+            RegExp(r'\sheight=').allMatches(svgTag).length,
+            1,
+            reason: asset,
+          );
+          expect(content, isNot(contains('<style')), reason: asset);
+        }
+      });
+
+      test('设置页满框 SVG 图标声明资源级视觉缩放', () {
+        const visuallyScaledAssets = {
+          'assets/icon/diskette.svg',
+          'assets/icon/trash-bin.svg',
+          'assets/icon/refresh.svg',
+          'assets/icon/lock.svg',
+          'assets/icon/group.svg',
+          'assets/icon/play-pause.svg',
+        };
+
+        for (final asset in visuallyScaledAssets) {
+          final content = File(asset).readAsStringSync();
+          expect(
+            content,
+            contains('data-settings-visual-scale='),
+            reason: asset,
+          );
+          expect(content, contains('translate(12 12) scale('), reason: asset);
+        }
+      });
+
       testWidgets('显示主题设置项', (tester) async {
         await tester.pumpWidget(
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
@@ -107,9 +284,154 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Interface Language'), findsOneWidget);
+        expect(find.text('App Language'), findsOneWidget);
         // 默认跟随系统
         expect(find.text('Follow System'), findsAtLeast(1));
+      });
+
+      testWidgets('普通设置项使用 SVG 图标替代 emoji', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: buildOverrides(
+              showDeveloperOptions: false,
+              showOfflineAsrSection: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(findSvgAsset('assets/icon/account-1.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/diamond.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/artist-palette.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/locale.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/speak.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/bell.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/book-shelf.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/microphone.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/speaker.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/play-pause.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/locale-1.svg'), findsOneWidget);
+
+        await tester.scrollUntilVisible(find.text('About'), 200);
+        await tester.pumpAndSettle();
+        expect(findSvgAsset('assets/icon/refresh.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/documents.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/lock.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/feedback.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/help.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/group.svg'), findsOneWidget);
+
+        await tester.scrollUntilVisible(find.text('Backup & Restore'), 200);
+        await tester.pumpAndSettle();
+        expect(findSvgAsset('assets/icon/diskette.svg'), findsOneWidget);
+        expect(findSvgAsset('assets/icon/trash-bin.svg'), findsOneWidget);
+
+        for (final emoji in [
+          '👤',
+          '💎',
+          '🎨',
+          '🌐',
+          '🗣️',
+          '🔔',
+          '📚',
+          '🎙️',
+          '🔊',
+          '▶️',
+          '📖',
+          '💾',
+          '🗑️',
+          '🔄',
+          '📜',
+          '🔒',
+          '✉️',
+          '👥',
+        ]) {
+          expect(find.text(emoji), findsNothing);
+        }
+      });
+
+      testWidgets('设置页普通图标保留 leading 占位并收紧内部绘制尺寸', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(
+            const SettingsScreen(),
+            overrides: buildOverrides(showDeveloperOptions: false),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final accountIcon = tester.widget<SvgPicture>(
+          findSvgAsset('assets/icon/account-1.svg'),
+        );
+        expect(accountIcon.width, 26);
+        expect(accountIcon.height, 26);
+        expect(
+          tester.getSize(
+            find
+                .ancestor(
+                  of: findSvgAsset('assets/icon/account-1.svg'),
+                  matching: find.byType(SizedBox),
+                )
+                .first,
+          ),
+          const Size(32, 32),
+        );
+
+        await tester.scrollUntilVisible(find.text('Open Source Project'), 200);
+        await tester.pumpAndSettle();
+
+        final refreshIcon = tester.widget<SvgPicture>(
+          findSvgAsset('assets/icon/refresh.svg'),
+        );
+        expect(refreshIcon.width, 26);
+        expect(refreshIcon.height, 26);
+
+        final githubIcons = tester.widgetList<FaIcon>(find.byType(FaIcon));
+        expect(githubIcons, hasLength(1));
+        expect(githubIcons.single.size, 20);
+      });
+
+      testWidgets('深色主题下单色 SVG 使用高对比主题前景色', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(
+            Theme(data: AppTheme.dark(), child: const SettingsScreen()),
+            overrides: buildOverrides(
+              showDeveloperOptions: false,
+              showOfflineAsrSection: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final expectedColor = AppTheme.dark().colorScheme.onSurfaceVariant;
+        final paletteIcon = tester.widget<SvgPicture>(
+          findSvgAsset('assets/icon/artist-palette.svg'),
+        );
+        expect(paletteIcon.colorFilter, isNull);
+
+        const visibleAssets = [
+          'assets/icon/account-1.svg',
+          'assets/icon/speak.svg',
+          'assets/icon/microphone.svg',
+          'assets/icon/play-pause.svg',
+          'assets/icon/refresh.svg',
+          'assets/icon/lock.svg',
+          'assets/icon/feedback.svg',
+          'assets/icon/group.svg',
+          'assets/icon/help.svg',
+          'assets/icon/trash-bin.svg',
+        ];
+
+        for (final asset in visibleAssets) {
+          await tester.scrollUntilVisible(findSvgAsset(asset), 200);
+          await tester.pumpAndSettle();
+          final icon = tester.widget<SvgPicture>(findSvgAsset(asset));
+          expect(
+            icon.colorFilter,
+            ColorFilter.mode(expectedColor, BlendMode.srcIn),
+            reason: asset,
+          );
+        }
       });
 
       testWidgets('显示关于信息区域', (tester) async {
@@ -117,11 +439,17 @@ void main() {
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
         );
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.text('Open Source Project'), 200);
+        await tester.pumpAndSettle();
 
         expect(find.text('About'), findsOneWidget);
         expect(find.text('Terms of Service'), findsOneWidget);
         expect(find.text('Privacy Policy'), findsOneWidget);
+        expect(find.text('FAQ'), findsOneWidget);
         expect(find.text('Write Feedback'), findsOneWidget);
+        expect(find.text('Join Community'), findsOneWidget);
+        expect(find.text('Open Source Project'), findsOneWidget);
+        expect(find.text('github.com/echo-loop/Echo-Loop'), findsNothing);
         // 版本标签在页面底部，需要滚动到可见
         await tester.scrollUntilVisible(find.textContaining('Version'), 200);
         await tester.pumpAndSettle();
@@ -138,6 +466,7 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(find.text('Rate Us'), 200);
 
           expect(find.text('Rate Us'), findsOneWidget);
         } finally {
@@ -359,7 +688,7 @@ void main() {
         final upgradeBadge = tester.widget<Text>(find.text('Upgrade'));
         expect(upgradeBadge.style?.color, const Color(0xFF111111));
         // 顶部不再有大金卡的「会员」状态徽章
-        expect(find.text('Member'), findsNothing);
+        expect(find.text('Premium'), findsNothing);
       });
 
       testWidgets('已订阅：显示「会员」徽章与套餐摘要', (tester) async {
@@ -386,7 +715,7 @@ void main() {
 
         // 保持简洁：只有标题 + 「会员」徽章，无副标题详情
         expect(find.text('Subscription'), findsOneWidget);
-        expect(find.text('Member'), findsOneWidget);
+        expect(find.text('Premium'), findsOneWidget);
         expect(find.text('Upgrade'), findsNothing);
       });
 
@@ -452,18 +781,14 @@ void main() {
         expect(find.text('Speech Recognition'), findsOneWidget);
       });
 
-      testWidgets('语音合成入口显示当前平台引擎，不显示口音', (tester) async {
+      testWidgets('语音合成入口显示当前 Echo Loop 引擎，不显示口音', (tester) async {
         await tester.pumpWidget(
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
         );
         await tester.pumpAndSettle();
 
-        final expectedPlatformEngine = Platform.isIOS || Platform.isMacOS
-            ? 'Apple AI'
-            : 'System Speech';
-
         expect(find.text('Text-to-Speech'), findsOneWidget);
-        expect(find.text(expectedPlatformEngine), findsOneWidget);
+        expect(find.text('Echo Loop AI'), findsOneWidget);
         expect(find.text('American'), findsNothing);
       });
 
@@ -472,7 +797,7 @@ void main() {
           createTestScreen(
             const SettingsScreen(),
             overrides: buildOverrides(
-              ttsSettings: const TtsSettings(engine: TtsEngineKind.echoLoop),
+              ttsSettings: const TtsSettings(engine: TtsEngineKind.kokoro),
             ),
           ),
         );
@@ -495,6 +820,50 @@ void main() {
         expect(find.text('Time Machine'), findsNothing);
       });
 
+      testWidgets('开发者区域仅保留选定工具，已删除功能不再出现', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
+        );
+        await tester.pumpAndSettle();
+
+        final titles = <String>{};
+        // 遍历至开发者区域末尾，避免未构建的离屏入口造成误判。
+        for (var step = 0; step < 30; step++) {
+          for (final tile in tester.widgetList<ListTile>(
+            find.byType(ListTile),
+          )) {
+            if (tile.title case Text(:final data?)) titles.add(data);
+          }
+          if (titles.contains('内部存储')) break;
+          await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+          await tester.pumpAndSettle();
+        }
+
+        expect(
+          titles,
+          containsAll([
+            'Time Machine',
+            '日志',
+            'Reset New User Guide',
+            'Reset Onboarding Survey',
+            'Demo Mode',
+            '词典查询',
+            '偏好设置',
+            '内部存储',
+          ]),
+        );
+        expect(
+          titles.intersection({
+            'Analytics',
+            '版本号覆盖',
+            'ASR 引擎测试',
+            '字幕自动校准',
+            '订阅调试',
+          }),
+          isEmpty,
+        );
+      });
+
       testWidgets('开发者选项开启且未设置时时显示系统时间文案', (tester) async {
         await tester.pumpWidget(
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
@@ -507,7 +876,7 @@ void main() {
 
         expect(find.text('Developer'), findsOneWidget);
         expect(find.text('Time Machine'), findsOneWidget);
-        expect(find.text('Using system time'), findsOneWidget);
+        expect(find.text('Use system time'), findsOneWidget);
       });
 
       testWidgets('开发者选项开启且已设置时时显示当前调试时间', (tester) async {
@@ -536,6 +905,26 @@ void main() {
     });
 
     group('交互', () {
+      testWidgets('点击 FAQ 后使用系统外部浏览器打开帮助文档', (tester) async {
+        await tester.pumpWidget(
+          createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.drag(find.byType(ListView), const Offset(0, -600));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('FAQ'));
+        await tester.pump();
+
+        expect(urlLauncher.urls, [
+          'https://my.feishu.cn/docx/OPZRdXkRvoAW5Bx78LocBUdqn80',
+        ]);
+        expect(
+          urlLauncher.options.single.mode,
+          PreferredLaunchMode.externalApplication,
+        );
+      });
+
       testWidgets('点击主题设置弹出选择对话框', (tester) async {
         await tester.pumpWidget(
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
@@ -551,6 +940,12 @@ void main() {
         expect(find.text('Dark Mode'), findsOneWidget);
         // 对话框标题 + 列表中的 Follow System
         expect(find.text('Follow System'), findsAtLeast(1));
+        expect(find.byIcon(Icons.brightness_auto_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.light_mode_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
+        expect(find.text('⚙️'), findsNothing);
+        expect(find.text('☀️'), findsNothing);
+        expect(find.text('🌛'), findsNothing);
       });
 
       testWidgets('选择 Dark 主题后状态更新', (tester) async {
@@ -578,7 +973,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击语言设置项
-        await tester.tap(find.text('Interface Language'));
+        await tester.tap(find.text('App Language'));
         await tester.pumpAndSettle();
 
         // 应弹出对话框，显示三个选项
@@ -626,7 +1021,7 @@ void main() {
         await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Using system time'), findsOneWidget);
+        expect(find.text('Use system time'), findsOneWidget);
         expect(find.text('Debug time: 2026-03-11 22:15'), findsNothing);
       });
     });

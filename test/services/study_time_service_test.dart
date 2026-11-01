@@ -1,325 +1,218 @@
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:echo_loop/database/app_database.dart';
+import 'package:echo_loop/models/study_stage.dart';
 import 'package:echo_loop/services/study_time_service.dart';
 
-AppDatabase _createTestDb() {
-  return AppDatabase(
-    NativeDatabase.memory(
-      setup: (db) => db.execute('PRAGMA foreign_keys = ON'),
-    ),
-  );
-}
-
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
   late AppDatabase db;
   late StudyTimeService service;
 
-  setUp(() async {
-    db = _createTestDb();
+  setUp(() {
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    db = AppDatabase(NativeDatabase.memory());
     service = StudyTimeService(
       db.dailyStudyRecordDao,
       db.dailyStageStudyRecordDao,
+      statisticsDao: db.studyStatisticsDao,
     );
   });
 
   tearDown(() async {
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await db.close();
   });
 
-  group('StudyTimeService', () {
-    test('首次调用 getTodayStudyTime 返回 0', () async {
-      final result = await service.getTodayStudyTime();
-      expect(result, 0);
-    });
-
-    test('addStudyTime 累加到今日 key', () async {
-      await service.addStudyTime(30);
-      expect(await service.getTodayStudyTime(), 30);
-
-      await service.addStudyTime(45);
-      expect(await service.getTodayStudyTime(), 75);
-    });
-
-    test('addStudyTime(0) 不改变已有值', () async {
-      await service.addStudyTime(60);
-      await service.addStudyTime(0);
-      expect(await service.getTodayStudyTime(), 60);
-    });
-
-    test('负数被忽略', () async {
-      await service.addStudyTime(60);
-      await service.addStudyTime(-10);
-      expect(await service.getTodayStudyTime(), 60);
-    });
-
-    test('自定义日期 key 读写正确', () async {
-      final customDate = DateTime(2026, 1, 15);
-
-      await service.addStudyTime(120, date: customDate);
-      expect(await service.getStudyTime(customDate), 120);
-
-      // 今日仍为 0
-      expect(await service.getTodayStudyTime(), 0);
-    });
-
-    test('跨天时 key 自动切换', () async {
-      final day1 = DateTime(2026, 3, 5);
-      final day2 = DateTime(2026, 3, 6);
-
-      await service.addStudyTime(100, date: day1);
-      await service.addStudyTime(200, date: day2);
-
-      expect(await service.getStudyTime(day1), 100);
-      expect(await service.getStudyTime(day2), 200);
-    });
-  });
-
-  group('StudyTimeService - streak', () {
-    test('无学习记录时 streak 为 0', () async {
-      final streak = await service.getStudyStreak(now: DateTime(2026, 3, 8));
-      expect(streak, 0);
-    });
-
-    test('仅今天有记录时 streak 为 1', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addStudyTime(60, date: today);
-
-      final streak = await service.getStudyStreak(now: today);
-      expect(streak, 1);
-    });
-
-    test('连续 3 天学习 streak 为 3', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addStudyTime(60, date: DateTime(2026, 3, 6));
-      await service.addStudyTime(60, date: DateTime(2026, 3, 7));
-      await service.addStudyTime(60, date: today);
-
-      final streak = await service.getStudyStreak(now: today);
-      expect(streak, 3);
-    });
-
-    test('中间断一天则 streak 中断', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addStudyTime(60, date: DateTime(2026, 3, 5));
-      // 3月6日无记录
-      await service.addStudyTime(60, date: DateTime(2026, 3, 7));
-      await service.addStudyTime(60, date: today);
-
-      final streak = await service.getStudyStreak(now: today);
-      expect(streak, 2); // 只有 7号+8号
-    });
-
-    test('今天无记录但昨天有则 streak 从昨天开始计', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addStudyTime(60, date: DateTime(2026, 3, 6));
-      await service.addStudyTime(60, date: DateTime(2026, 3, 7));
-      // 今天无记录
-
-      final streak = await service.getStudyStreak(now: today);
-      expect(streak, 2); // 6号+7号
-    });
-  });
-
-  group('StudyTimeService - weeklyStudyTimes', () {
-    test('无记录时返回全 0', () async {
-      final times = await service.getWeeklyStudyTimes(
-        now: DateTime(2026, 3, 8),
+  Future<void> study(int seconds, {DateTime? date}) =>
+      service.recordActiveDuration(
+        Duration(seconds: seconds),
+        stage: StudyStage.intensiveListen,
+        date: date,
       );
-      expect(times, [0, 0, 0, 0, 0, 0, 0]);
-    });
 
-    test('返回过去 7 天的正确数据', () async {
-      final today = DateTime(2026, 3, 8); // Sunday
-      await service.addStudyTime(100, date: DateTime(2026, 3, 2)); // Mon
-      await service.addStudyTime(200, date: DateTime(2026, 3, 5)); // Thu
-      await service.addStudyTime(300, date: today); // Sun
-
-      final times = await service.getWeeklyStudyTimes(now: today);
-      // [3/2, 3/3, 3/4, 3/5, 3/6, 3/7, 3/8]
-      expect(times, [100, 0, 0, 200, 0, 0, 300]);
-    });
-
-    test('列表长度固定为 7', () async {
-      final times = await service.getWeeklyStudyTimes(
-        now: DateTime(2026, 3, 8),
-      );
-      expect(times.length, 7);
-    });
+  test('事件按日和阶段累计，查询等待队列尾部', () async {
+    final date = DateTime(2026, 3, 8);
+    final write = service.recordActiveDuration(
+      const Duration(milliseconds: 1500),
+      stage: StudyStage.intensiveListen,
+      recordInputDuration: true,
+      date: date,
+    );
+    expect(await service.getStudyTime(date), 1);
+    await write;
+    final record = await db.dailyStudyRecordDao.getByDate(date);
+    expect(record?.studyTimeMilliseconds, 1500);
+    expect(record?.inputTimeMilliseconds, 1500);
+    expect((await service.getStageBreakdown(date)).single.studyTimeSeconds, 1);
   });
 
-  group('StudyTimeService - weekTotalStudyTime', () {
-    test('无记录时返回 0', () async {
-      final total = await service.getWeekTotalStudyTime(
-        now: DateTime(2026, 3, 8),
-      );
-      expect(total, 0);
-    });
+  test('总学习时长和输入时长可以独立累计', () async {
+    final date = DateTime(2026, 3, 8);
+    await service.recordSessionDurations(
+      studyDuration: const Duration(seconds: 5),
+      inputDuration: const Duration(seconds: 2),
+      stage: StudyStage.freePlayer,
+      date: date,
+    );
 
-    test('累加本周一至今的学习时长', () async {
-      // 2026-3-8 是周日，本周一是 3-2
-      final today = DateTime(2026, 3, 8);
-      await service.addStudyTime(100, date: DateTime(2026, 3, 2)); // Mon
-      await service.addStudyTime(200, date: DateTime(2026, 3, 4)); // Wed
-      await service.addStudyTime(300, date: today); // Sun
-      // 上周日 3-1 不计入
-      await service.addStudyTime(999, date: DateTime(2026, 3, 1));
-
-      final total = await service.getWeekTotalStudyTime(now: today);
-      expect(total, 600); // 100+200+300
-    });
-
-    test('周一时只计当天', () async {
-      final monday = DateTime(2026, 3, 2); // Monday
-      await service.addStudyTime(150, date: monday);
-      // 上周日不计入
-      await service.addStudyTime(999, date: DateTime(2026, 3, 1));
-
-      final total = await service.getWeekTotalStudyTime(now: monday);
-      expect(total, 150);
-    });
+    final record = await db.dailyStudyRecordDao.getByDate(date);
+    expect(record?.studyTimeMilliseconds, 5000);
+    expect(record?.inputTimeMilliseconds, 2000);
   });
 
-  group('StudyTimeService - inputWords', () {
-    test('首次读取返回 0', () async {
-      expect(await service.getTodayInputWords(), 0);
-    });
-
-    test('addInputWords 累加', () async {
-      await service.addInputWords(50);
-      expect(await service.getTodayInputWords(), 50);
-
-      await service.addInputWords(30);
-      expect(await service.getTodayInputWords(), 80);
-    });
-
-    test('count <= 0 时忽略', () async {
-      await service.addInputWords(100);
-      await service.addInputWords(0);
-      await service.addInputWords(-5);
-      expect(await service.getTodayInputWords(), 100);
-    });
-
-    test('自定义日期隔离', () async {
-      final day1 = DateTime(2026, 3, 5);
-      final day2 = DateTime(2026, 3, 6);
-
-      await service.addInputWords(100, date: day1);
-      await service.addInputWords(200, date: day2);
-
-      expect(await service.getInputWords(day1), 100);
-      expect(await service.getInputWords(day2), 200);
-    });
+  test('连续天数和周查询保持只读契约', () async {
+    final today = DateTime(2026, 3, 8);
+    await study(60, date: DateTime(2026, 3, 6));
+    await study(60, date: DateTime(2026, 3, 7));
+    await study(60, date: today);
+    expect(await service.getStudyStreak(now: today), 3);
+    expect(await service.getWeeklyStudyTimes(now: today), [
+      0,
+      0,
+      0,
+      0,
+      60,
+      60,
+      60,
+    ]);
+    expect(await service.getWeekTotalStudyTime(now: today), 180);
   });
 
-  group('StudyTimeService - outputWords', () {
-    test('首次读取返回 0', () async {
-      expect(await service.getTodayOutputWords(), 0);
-    });
-
-    test('addOutputWords 累加', () async {
-      await service.addOutputWords(40);
-      expect(await service.getTodayOutputWords(), 40);
-
-      await service.addOutputWords(60);
-      expect(await service.getTodayOutputWords(), 100);
-    });
-
-    test('count <= 0 时忽略', () async {
-      await service.addOutputWords(50);
-      await service.addOutputWords(0);
-      await service.addOutputWords(-1);
-      expect(await service.getTodayOutputWords(), 50);
-    });
-
-    test('输入与输出互不干扰', () async {
-      await service.addInputWords(100);
-      await service.addOutputWords(50);
-
-      expect(await service.getTodayInputWords(), 100);
-      expect(await service.getTodayOutputWords(), 50);
-    });
+  test('输入、输出时长和词数按日期隔离', () async {
+    final day1 = DateTime(2026, 3, 5);
+    final day2 = DateTime(2026, 3, 6);
+    await service.recordSentencePlayback(
+      duration: const Duration(seconds: 2),
+      text: 'one two',
+      stage: StudyStage.freePlayer,
+      date: day1,
+    );
+    await service.recordSpeechRecognition(
+      duration: const Duration(milliseconds: 450),
+      producedWordCount: 3,
+      stage: StudyStage.retell,
+      date: day2,
+    );
+    await service.recordOutputWords(4, stage: StudyStage.retell, date: day2);
+    expect(await service.getInputTime(day1), 2);
+    expect(await service.getInputWords(day1), 2);
+    expect(await service.getOutputTime(day2), 0);
+    expect(await service.getOutputWords(day2), 7);
   });
 
-  group('StudyTimeService - inputTime', () {
-    test('首次读取返回 0', () async {
-      expect(await service.getTodayInputTime(), 0);
-    });
+  test('句子事件自动计算词数，且不计输入时长时仍记录词形', () async {
+    final date = DateTime(2026, 3, 8);
+    await service.recordSentencePlayback(
+      duration: const Duration(milliseconds: 700),
+      text: "Hello, don't re-enter 123 !!! ‘Quoted’",
+      stage: StudyStage.freePlayer,
+      recordInputDuration: false,
+      date: date,
+    );
 
-    test('addInputTime 累加', () async {
-      await service.addInputTime(30);
-      expect(await service.getTodayInputTime(), 30);
-
-      await service.addInputTime(45);
-      expect(await service.getTodayInputTime(), 75);
-    });
-
-    test('seconds <= 0 时忽略', () async {
-      await service.addInputTime(60);
-      await service.addInputTime(0);
-      await service.addInputTime(-5);
-      expect(await service.getTodayInputTime(), 60);
-    });
-
-    test('自定义日期隔离', () async {
-      final day1 = DateTime(2026, 3, 5);
-      final day2 = DateTime(2026, 3, 6);
-
-      await service.addInputTime(100, date: day1);
-      await service.addInputTime(200, date: day2);
-
-      expect(await service.getInputTime(day1), 100);
-      expect(await service.getInputTime(day2), 200);
-    });
-
-    test('getWeeklyInputTimes 返回过去 7 天数据', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addInputTime(100, date: DateTime(2026, 3, 2));
-      await service.addInputTime(200, date: DateTime(2026, 3, 5));
-      await service.addInputTime(300, date: today);
-
-      final times = await service.getWeeklyInputTimes(now: today);
-      expect(times, [100, 0, 0, 200, 0, 0, 300]);
-      expect(times.length, 7);
-    });
+    final row = await db.dailyStudyRecordDao.getByDate(date);
+    expect(row?.inputWords, 6);
+    expect(row?.inputTimeMilliseconds, 0);
+    final forms = await (db.select(
+      db.learnedWordForms,
+    )..orderBy([(t) => OrderingTerm.asc(t.wordForm)])).get();
+    expect(forms.map((form) => form.wordForm), [
+      "don't",
+      'hello',
+      'quoted',
+      're-enter',
+    ]);
   });
 
-  group('StudyTimeService - outputTime', () {
-    test('首次读取返回 0', () async {
-      expect(await service.getTodayOutputTime(), 0);
-    });
+  test('负数由 DAO 抛出，零事件不创建记录', () async {
+    await expectLater(
+      service.recordActiveDuration(
+        const Duration(milliseconds: -1),
+        stage: StudyStage.retell,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(service.flush(), throwsArgumentError);
+    await service.recordOutputWords(0, stage: StudyStage.retell);
+    expect(await db.dailyStudyRecordDao.getAll(), isEmpty);
+  });
 
-    test('addOutputTime 累加', () async {
-      await service.addOutputTime(20);
-      expect(await service.getTodayOutputTime(), 20);
+  test('统计写入不依赖 App 前后台状态', () async {
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
 
-      await service.addOutputTime(30);
-      expect(await service.getTodayOutputTime(), 50);
-    });
+    await service.recordSentencePlayback(
+      duration: const Duration(seconds: 1),
+      text: 'background sentence',
+      stage: StudyStage.freePlayer,
+      date: DateTime(2026, 9, 8),
+    );
+    await service.recordSpeechRecognition(
+      duration: const Duration(seconds: 1),
+      producedWordCount: 3,
+      stage: StudyStage.retell,
+      date: DateTime(2026, 9, 8),
+    );
+    await service.recordOutputWords(
+      4,
+      stage: StudyStage.retell,
+      date: DateTime(2026, 9, 8),
+    );
+    await service.recordActiveDuration(
+      const Duration(milliseconds: 250),
+      stage: StudyStage.freePlayer,
+      date: DateTime(2026, 9, 8),
+    );
+    await service.flush();
+    final record = await db.dailyStudyRecordDao.getByDate(DateTime(2026, 9, 8));
+    expect(record?.inputWords, 2);
+    expect(record?.inputTimeMilliseconds, 1000);
+    expect(record?.outputTimeMilliseconds, 1000);
+    expect(record?.outputWords, 7);
+    expect(record?.studyTimeMilliseconds, 250);
+  });
 
-    test('seconds <= 0 时忽略', () async {
-      await service.addOutputTime(40);
-      await service.addOutputTime(0);
-      await service.addOutputTime(-1);
-      expect(await service.getTodayOutputTime(), 40);
-    });
+  test('单个事件失败后队列继续，flush 报告并清除最早失败', () async {
+    await db.customStatement('''
+      CREATE TRIGGER fail_one_word BEFORE INSERT ON learned_word_forms
+      WHEN NEW.word_form = 'bad'
+      BEGIN SELECT RAISE(ABORT, 'forced service failure'); END
+    ''');
+    final failed = service.recordSentencePlayback(
+      duration: Duration.zero,
+      text: 'bad',
+      stage: StudyStage.intensiveListen,
+    );
+    final continued = service.recordActiveDuration(
+      const Duration(seconds: 1),
+      stage: StudyStage.intensiveListen,
+    );
+    await expectLater(failed, throwsA(isA<Exception>()));
+    await continued;
+    await expectLater(service.flush(), throwsA(isA<Exception>()));
+    await service.flush();
+    expect(
+      (await db.dailyStudyRecordDao.getByDate(
+        DateTime.now(),
+      ))?.studyTimeMilliseconds,
+      1000,
+    );
+  });
 
-    test('getWeeklyOutputTimes 返回过去 7 天数据', () async {
-      final today = DateTime(2026, 3, 8);
-      await service.addOutputTime(50, date: DateTime(2026, 3, 3));
-      await service.addOutputTime(80, date: today);
-
-      final times = await service.getWeeklyOutputTimes(now: today);
-      expect(times, [0, 50, 0, 0, 0, 0, 80]);
-      expect(times.length, 7);
-    });
-
-    test('输入时间与输出时间互不干扰', () async {
-      await service.addInputTime(100);
-      await service.addOutputTime(50);
-
-      expect(await service.getTodayInputTime(), 100);
-      expect(await service.getTodayOutputTime(), 50);
-    });
+  test('submit 失败不会产生未处理 Future 异常', () async {
+    await db.customStatement('''
+      CREATE TRIGGER fail_submit_word BEFORE INSERT ON learned_word_forms
+      BEGIN SELECT RAISE(ABORT, 'forced submit failure'); END
+    ''');
+    service.submitSentencePlayback(
+      duration: Duration.zero,
+      text: 'submit',
+      stage: StudyStage.intensiveListen,
+    );
+    await expectLater(service.flush(), throwsA(isA<Exception>()));
+    await service.flush();
   });
 }

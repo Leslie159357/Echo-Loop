@@ -48,7 +48,7 @@ class _FakeTtsController extends TtsController {
 
 Widget _wrap(
   String? speakingKey, {
-  TtsEngineKind engine = TtsEngineKind.echoLoop,
+  TtsEngineKind engine = TtsEngineKind.kokoro,
 }) {
   return ProviderScope(
     overrides: [
@@ -95,10 +95,7 @@ void main() {
   testWidgets('平台引擎：正在试听的口音行显播放图标（volume_up）', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
-      _wrap(
-        ttsAccentPreviewKey(TtsAccent.us),
-        engine: TtsEngineKind.platform,
-      ),
+      _wrap(ttsAccentPreviewKey(TtsAccent.us), engine: TtsEngineKind.platform),
     );
     await tester.pumpAndSettle();
 

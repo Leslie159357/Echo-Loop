@@ -12,9 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:echo_loop/database/app_database.dart' show TtsCacheData;
 import 'package:echo_loop/database/daos/tts_cache_dao.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/services/app_logger.dart';
 import 'package:echo_loop/providers/tts/kokoro_model_provider.dart';
 import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
+import 'package:echo_loop/providers/short_audio_player_provider.dart';
 import 'package:echo_loop/providers/tts/tts_settings_provider.dart';
+import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
 import 'package:echo_loop/services/tts/kokoro_model_manager.dart'
     show AsrModelDownloadStatus;
 import 'package:echo_loop/services/tts/tts_engine.dart';
@@ -29,6 +32,9 @@ class _FixedKokoroNotifier extends KokoroModelNotifier {
 
   @override
   Future<void> ensureDownloaded(KokoroModelVariant variant) async {}
+
+  @override
+  Future<void> refreshInstalledStates({bool Function()? shouldCommit}) async {}
 }
 
 /// 记录每次合成文本的引擎；合成返回 null（不入库/不播放），可按文本设闸门拦住。
@@ -84,6 +90,26 @@ class _FakePathProvider extends PathProviderPlatform
 
   @override
   Future<String?> getApplicationCachePath() async => rootPath;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => rootPath;
+}
+
+class _NoopShortAudioBackend implements AudioClipPlayerBackend {
+  @override
+  Stream<void> get completed => const Stream<void>.empty();
+  @override
+  Stream<String> get errors => const Stream<String>.empty();
+  @override
+  Stream<Duration> get positions => const Stream<Duration>.empty();
+  @override
+  Duration get position => Duration.zero;
+  @override
+  Future<void> dispose() async {}
+  @override
+  Future<void> open(String filePath, {Duration start = Duration.zero}) async {}
+  @override
+  Future<void> stop() async {}
 }
 
 KokoroModelsState _ready() => const KokoroModelsState({
@@ -104,8 +130,11 @@ void main() {
       overrides: [
         initialTtsSettingsProvider.overrideWithValue(settings),
         kokoroModelProvider.overrideWith(() => _FixedKokoroNotifier(_ready())),
-        ttsEngineFactoryProvider.overrideWithValue((_) => engine),
+        ttsEngineFactoryProvider.overrideWithValue((_, __) => engine),
         ttsCacheDaoProvider.overrideWithValue(dao),
+        shortAudioPlayerProvider.overrideWithValue(
+          LocalAudioClipPlayer(backend: _NoopShortAudioBackend()),
+        ),
       ],
     );
   }
@@ -126,6 +155,7 @@ void main() {
   }
 
   setUp(() {
+    AppLogger.instance.clear();
     SharedPreferences.setMockInitialValues({});
     engine = _RecordingEngine();
     dao = _FakeTtsCacheDao();
@@ -139,9 +169,7 @@ void main() {
 
   group('prewarmTexts', () {
     test('按顺序逐条合成（单词 + 例句）', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
 
       // 等 build 的 microtask 首次 configure 落定（生产中预热恒在配置之后触发，
@@ -154,9 +182,7 @@ void main() {
     });
 
     test('空串/纯空白文本跳过', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
 
       final notifier = c.read(ttsControllerProvider.notifier);
@@ -167,9 +193,7 @@ void main() {
     });
 
     test('cancelTextsPrewarm 中途取消 → 剩余文本不再合成', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
@@ -189,9 +213,7 @@ void main() {
     });
 
     test('词典 token 与试听预热 token 独立（取消试听不影响词典批次）', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
@@ -210,10 +232,28 @@ void main() {
   });
 
   group('prewarmTextsIncremental（流式逐帧预热）', () {
-    test('同一文本多帧重复 → 只合成一次', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
+    test('初始配置前跳过且不占用 seen，配置完成后同文本可预热', () async {
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
+      addTearDown(c.dispose);
+      final notifier = c.read(ttsControllerProvider.notifier);
+
+      // build 将首次 configure 延到 microtask；模拟 Words tile 比它更早的 post-frame
+      // 提交。此时不应建引擎、合成或占用后续增量去重集合。
+      await notifier.prewarmTextsIncremental(['tomorrow']);
+      expect(engine.synthTexts, isEmpty);
+      expect(
+        AppLogger.instance.entries.map((entry) => entry.message),
+        contains(contains('增量文本预热跳过：TTS 尚未配置')),
       );
+
+      await Future<void>(() {});
+      await notifier.prewarmTextsIncremental(['tomorrow']);
+
+      expect(engine.synthTexts, ['tomorrow']);
+    });
+
+    test('同一文本多帧重复 → 只合成一次', () async {
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
@@ -227,9 +267,7 @@ void main() {
     });
 
     test('逐帧递增列表 → 只对新出现的例句合成', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
@@ -240,12 +278,12 @@ void main() {
       await notifier.prewarmTextsIncremental(['run', 'I run.', 'She runs.']);
 
       expect(engine.synthTexts, ['run', 'I run.', 'She runs.']);
+      final logs = AppLogger.instance.entries.map((entry) => entry.message);
+      expect(logs, contains('增量文本预热处理完成：批次=0 请求数=3 新提交=1 跳过=2 当前已提交=3'));
     });
 
     test('cancelTextsPrewarm 清空 seen-set → 切词后同一文本可再次预热', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定
@@ -261,9 +299,7 @@ void main() {
     });
 
     test('cancelTextsPrewarm 中途取消 → 已在途例句结束后剩余不再合成', () async {
-      final c = makeContainer(
-        const TtsSettings(engine: TtsEngineKind.echoLoop),
-      );
+      final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
       await Future<void>(() {}); // 等首次 configure 落定

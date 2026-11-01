@@ -1,7 +1,6 @@
 /// 练习页面共享的遍数 + 模式标签
 ///
-/// 自动模式：显示 "自动 · 第 1/3 遍"，弱化样式。
-/// 手动模式：显示 "手动"，高亮样式。
+/// 自动和手动模式均显示模式与遍数，沿用相同的弱化样式。
 /// 可选 [statusSuffixText] 用于追加当前会话参数，例如播放速度。
 /// 用于所有学习页面（精听、跟读、难句补练、收藏复习、复述、盲听）。
 library;
@@ -54,30 +53,13 @@ class PracticePlayCountLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return isManualMode ? _buildManualLabel() : _buildAutoLabel();
-  }
-
-  /// 手动模式：高亮 "手动"
-  Widget _buildManualLabel() {
+    final modeLabel = isManualMode
+        ? l10n.practiceControlModeManual
+        : l10n.practiceControlModeAuto;
     final suffix = statusSuffixText;
+    final label = '$modeLabel · $playCountText';
     return Text(
-      suffix == null
-          ? l10n.practiceControlModeManual
-          : '${l10n.practiceControlModeManual} · $suffix',
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.colorScheme.primary,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
-  /// 自动模式：弱化 "自动 · 第 1/3 遍"
-  Widget _buildAutoLabel() {
-    final suffix = statusSuffixText;
-    return Text(
-      suffix == null
-          ? '${l10n.practiceControlModeAuto} · $playCountText'
-          : '${l10n.practiceControlModeAuto} · $playCountText · $suffix',
+      suffix == null ? label : '$label · $suffix',
       style: theme.textTheme.bodySmall?.copyWith(
         color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
       ),

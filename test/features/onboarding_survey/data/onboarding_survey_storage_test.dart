@@ -78,6 +78,52 @@ void main() {
       );
     });
 
+    test('toJson 序列化答案并省略未填写字段', () {
+      const answers = OnboardingAnswers(
+        goal: OnboardingGoal.exam,
+        examType: OnboardingExamType.ielts,
+        dailyMinutes: OnboardingDailyMinutes.m20,
+        referralSource: OnboardingReferralSource.xiaohongshu,
+      );
+
+      expect(answers.toJson(), {
+        'goal': OnboardingGoal.exam,
+        'examType': OnboardingExamType.ielts,
+        'dailyMinutes': OnboardingDailyMinutes.m20,
+        'referralSource': OnboardingReferralSource.xiaohongshu,
+      });
+    });
+
+    test('同步读取保留旧用户已有的有效部分答案', () async {
+      SharedPreferences.setMockInitialValues({
+        OnboardingSurveyKeys.completedAtMs: DateTime(
+          2026,
+        ).millisecondsSinceEpoch,
+        OnboardingSurveyKeys.goal: OnboardingGoal.work,
+        OnboardingSurveyKeys.dailyMinutes: OnboardingDailyMinutes.m20,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final storage = OnboardingSurveyStorage(prefs);
+
+      expect(storage.loadAnswers(), isNull);
+      expect(storage.loadAnswersForSync()?.toJson(), {
+        'goal': OnboardingGoal.work,
+        'dailyMinutes': OnboardingDailyMinutes.m20,
+      });
+    });
+
+    test('没有有效答案时同步读取返回 null', () async {
+      SharedPreferences.setMockInitialValues({
+        OnboardingSurveyKeys.completedAtMs: DateTime(
+          2026,
+        ).millisecondsSinceEpoch,
+        OnboardingSurveyKeys.goal: 'invalid',
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(OnboardingSurveyStorage(prefs).loadAnswersForSync(), isNull);
+    });
+
     test('exam → 切到非 exam 时 SP 清掉 examType 残留', () async {
       final prefs = await SharedPreferences.getInstance();
       final storage = OnboardingSurveyStorage(prefs);
@@ -249,11 +295,13 @@ void main() {
           referralSource: OnboardingReferralSource.reddit,
         ),
       );
+      await prefs.setBool(OnboardingSurveyKeys.uploaded, true);
       await storage.clear();
       expect(storage.isCompleted, isFalse);
       expect(storage.loadAnswers(), isNull);
       expect(prefs.getString(OnboardingSurveyKeys.examType), isNull);
       expect(prefs.getString(OnboardingSurveyKeys.referralSource), isNull);
+      expect(prefs.getBool(OnboardingSurveyKeys.uploaded), isNull);
     });
 
     test('readIsCompletedSync 静态方法可在 main() 同步调用', () async {
@@ -367,6 +415,65 @@ void main() {
       );
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
+    });
+
+    test('已下线的旧渠道编码读取时映射到新编码，老用户答案不丢失', () async {
+      const legacyToCurrent = {
+        'douyin': OnboardingReferralSource.shortVideo,
+        'kuaishou': OnboardingReferralSource.shortVideo,
+        'tiktok': OnboardingReferralSource.shortVideo,
+        'instagram': OnboardingReferralSource.shortVideo,
+        'baidu_search': OnboardingReferralSource.searchEngine,
+        'google_play': OnboardingReferralSource.appStore,
+      };
+      for (final entry in legacyToCurrent.entries) {
+        SharedPreferences.setMockInitialValues({
+          OnboardingSurveyKeys.goal: OnboardingGoal.daily,
+          OnboardingSurveyKeys.dailyMinutes: OnboardingDailyMinutes.m10,
+          OnboardingSurveyKeys.referralSource: entry.key,
+          OnboardingSurveyKeys.completedAtMs: 1000,
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final loaded = OnboardingSurveyStorage(prefs).loadAnswers();
+        expect(
+          loaded?.referralSource,
+          equals(entry.value),
+          reason: '旧编码 ${entry.key}',
+        );
+      }
+    });
+
+    test('"其他"补充说明保存时去空白，读取时返回', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final storage = OnboardingSurveyStorage(prefs);
+      await storage.saveCompleted(
+        const OnboardingAnswers(
+          goal: OnboardingGoal.daily,
+          dailyMinutes: OnboardingDailyMinutes.m10,
+          referralSource: OnboardingReferralSource.other,
+          referralOtherText: '  同事推荐的公众号  ',
+        ),
+      );
+
+      expect(storage.loadAnswers()?.referralOtherText, equals('同事推荐的公众号'));
+    });
+
+    test('非"其他"渠道保存时清掉残留补充说明', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final storage = OnboardingSurveyStorage(prefs);
+      await prefs.setString(OnboardingSurveyKeys.referralOtherText, '旧文本');
+
+      await storage.saveCompleted(
+        const OnboardingAnswers(
+          goal: OnboardingGoal.daily,
+          dailyMinutes: OnboardingDailyMinutes.m10,
+          referralSource: OnboardingReferralSource.friend,
+          referralOtherText: '不应保存',
+        ),
+      );
+
+      expect(prefs.getString(OnboardingSurveyKeys.referralOtherText), isNull);
+      expect(storage.loadAnswers()?.referralOtherText, isNull);
     });
   });
 }

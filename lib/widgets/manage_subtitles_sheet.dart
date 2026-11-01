@@ -11,42 +11,48 @@ import 'package:universal_io/io.dart';
 import '../analytics/models/event_names.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/auth/sign_in_required_dialog.dart';
+import '../features/subscription/models/ai_quota_rejection.dart';
 import '../features/subscription/models/premium_feature.dart';
 import '../features/subscription/providers/ai_trial_usage_provider.dart';
 import '../features/subscription/providers/feature_access_provider.dart';
+import '../features/podcast/podcast_transcript_downloader.dart';
 import '../features/subscription/providers/subscription_controller.dart';
-import '../features/subscription/widgets/feature_gate.dart';
+import '../features/subscription/widgets/ai_quota_exceeded_dialog.dart';
+import '../features/remote_config/remote_config_providers.dart';
 import '../features/usage/usage_event.dart';
 import '../features/usage/usage_providers.dart';
 import '../models/audio_item.dart';
 import '../database/providers.dart';
 import '../providers/audio_library_provider.dart';
+import '../providers/favorite_sentence_lifecycle_provider.dart';
 import '../providers/audio_sentences_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
-import '../providers/new_user_guide_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/transcription_task_provider.dart';
 import '../providers/local_transcription_task_provider.dart';
 import '../providers/local_transcription_model_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
-import '../features/custom_api/custom_api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
+import '../services/app_logger.dart';
 import '../services/asr/asr_model_manager.dart';
 import '../services/asr/offline_asr_engine.dart';
 import '../services/subtitle_parser.dart';
 import 'asr_download_prompt_dialog.dart';
 import '../theme/app_theme.dart';
-import '../models/word_timestamp.dart';
-import '../utils/synthetic_word_timestamps.dart';
+import '../utils/media_duration.dart';
+import '../utils/file_size.dart';
 import '../utils/transcript_picker.dart';
-import '../utils/transcript_stats.dart';
 import 'common/anchored_bubble.dart';
-import 'guide_flow.dart';
 
 /// 字幕操作选项
-enum _SubtitleAction { localUpload, aiTranscription, offlineTranscription }
+enum _SubtitleAction {
+  podcastDownload,
+  localUpload,
+  aiTranscription,
+  offlineTranscription,
+}
 
 /// 内联错误提示的种类（决定图标和标题，文案外部传入）。
 enum _UploadErrorKind { unsupportedFormat, formatInvalid, empty, generic }
@@ -58,6 +64,16 @@ class _InlineError {
   const _InlineError(this.kind, this.message);
 }
 
+class _AudioDiagnosticInfo {
+  const _AudioDiagnosticInfo({
+    required this.fileSizeText,
+    required this.durationText,
+  });
+
+  final String fileSizeText;
+  final String durationText;
+}
+
 /// 管理字幕底部弹窗
 ///
 /// 遵循 EditTagMembershipSheet 布局模式：
@@ -66,7 +82,16 @@ class ManageSubtitlesSheet extends ConsumerStatefulWidget {
   /// 要管理字幕的音频项
   final AudioItem audioItem;
 
-  const ManageSubtitlesSheet({super.key, required this.audioItem});
+  /// 字幕内容选择器。
+  ///
+  /// 生产环境使用系统文件选择器；测试可注入失败或固定内容，避免依赖平台 channel。
+  final Future<TranscriptDecodeResult?> Function()? transcriptContentPicker;
+
+  const ManageSubtitlesSheet({
+    super.key,
+    required this.audioItem,
+    this.transcriptContentPicker,
+  });
 
   @override
   ConsumerState<ManageSubtitlesSheet> createState() =>
@@ -75,10 +100,11 @@ class ManageSubtitlesSheet extends ConsumerStatefulWidget {
 
 class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 默认选中首位「AI 转录」（与选项排序一致，避免高亮落在末尾）。
-  /// 未登录时默认选中本地转录。
   _SubtitleAction _selectedAction = _SubtitleAction.aiTranscription;
-  bool _initialDefaultSet = false;
   String _selectedLanguage = 'en';
+
+  /// 播客字幕下载进行中（防重复点击，并在按钮上显示加载态）。
+  bool _isDownloadingSubtitle = false;
 
   /// AI 转录「自动合并短句」开关，初值取自设置（记住上次选择），默认开启。
   bool _autoMergeShortSentences = true;
@@ -91,9 +117,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   _InlineError? _error;
   Timer? _errorClearTimer;
 
-  // Guide step keys
-  final _keyAiTranscription = GlobalKey();
-  final _keyStartTranscription = GlobalKey();
+  /// 防止本地门禁与后端 402 同时抵达时叠加额度提示。
+  bool _isShowingAiQuotaDialog = false;
 
   /// 识别模型档位选择气泡浮层控制器。
   final OverlayPortalController _modelMenuController =
@@ -102,17 +127,19 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 是否展示本地离线转录入口。
   ///
   /// 当前本地转录效果不稳定，先隐藏入口；保留实现和状态处理，便于后续恢复。
-  bool get _showOfflineTranscriptionEntry => true;
+  bool get _showOfflineTranscriptionEntry => false;
 
   @override
   void initState() {
     super.initState();
-    // 未登录时默认选中本地转录（离线可用）
-    _setInitialDefault();
     // 取上次记住的「自动合并短句」选择作为默认值
     _autoMergeShortSentences = ref
         .read(appSettingsProvider)
         .aiTranscriptionAutoMergeEnabled;
+    // 播客已提供字幕地址时默认选中「下载播客字幕」（免费且更快）
+    if (_hasPodcastTranscript(widget.audioItem)) {
+      _selectedAction = _SubtitleAction.podcastDownload;
+    }
     // 打开弹窗时异步清除之前的失败/空结果状态
     final taskState = ref.read(
       transcriptionTaskManagerProvider,
@@ -151,25 +178,14 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     super.dispose();
   }
 
-  /// 未登录时默认选中本地转录（离线可用，无需 Supabase 认证）。
-  void _setInitialDefault() {
-    if (_initialDefaultSet) return;
-    _initialDefaultSet = true;
-    try {
-      final session = ref.read(supabaseSessionProvider).valueOrNull;
-      if (session == null) {
-        _selectedAction = _SubtitleAction.offlineTranscription;
-      }
-    } catch (_) {
-      _selectedAction = _SubtitleAction.offlineTranscription;
-    }
-  }
-
-  /// 显示内联错误条，5 秒后自动消失。重复触发会重置倒计时。
+  /// 显示内联错误条，12 秒后自动消失。重复触发会重置倒计时。
+  ///
+  /// 文件系统异常通常包含路径、errno 和平台返回信息，保留更长时间方便用户截图
+  /// 或打开日志页导出。
   void _showInlineError(_InlineError err) {
     _errorClearTimer?.cancel();
     setState(() => _error = err);
-    _errorClearTimer = Timer(const Duration(seconds: 5), () {
+    _errorClearTimer = Timer(const Duration(seconds: 12), () {
       if (!mounted) return;
       setState(() => _error = null);
     });
@@ -223,6 +239,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     // 是否有进行中的任务
     final isTaskActive =
         taskState is TranscriptionHashing ||
+        taskState is TranscriptionCompressing ||
         taskState is TranscriptionUploading ||
         taskState is TranscriptionProcessing ||
         isLocalTaskActive;
@@ -241,12 +258,12 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
             Navigator.pop(context);
           });
         } else if (next is TranscriptionQuotaExceeded) {
-          // 本月免费额度用尽 → 清状态并引导订阅升级。
+          // 本月免费额度用尽：清状态后由用户决定是否进入订阅页。
           ref
               .read(transcriptionTaskManagerProvider.notifier)
               .clearState(audioItem.id);
           if (mounted && context.mounted) {
-            openPaywall(context, ref);
+            unawaited(_showAiTranscriptionQuotaDialog(reason: next.reason));
           }
         }
       },
@@ -409,29 +426,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         ),
       ),
     );
-    if (audioItem.hasTranscript) return content;
-    return GuideFlowSequenceHost(
-      flows: [
-        GuideFlow(
-          flowId: GuideFlowIds.subtitleSheetTranscription,
-          shouldRun: true,
-          steps: [_stepAiTranscription(l10n), _stepStartTranscription(l10n)],
-        ),
-      ],
-      child: content,
-    );
+    return content;
   }
-
-  GuideStep _stepAiTranscription(AppLocalizations l10n) => GuideStep(
-    key: _keyAiTranscription,
-    title: l10n.guidePlanAiTranscriptionTitle,
-    description: l10n.guidePlanAiTranscriptionDescription,
-  );
-
-  GuideStep _stepStartTranscription(AppLocalizations l10n) => GuideStep(
-    key: _keyStartTranscription,
-    description: l10n.guidePlanStartTranscriptionDescription,
-  );
 
   /// 关闭管理弹窗后打开字幕编辑器，与音频菜单的编辑入口保持一致。
   void _openSubtitleEditor(BuildContext context, AudioItem audioItem) {
@@ -457,6 +453,10 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     } else if (taskState is TranscriptionHashing) {
       icon = Icons.fingerprint;
       text = l10n.transcriptionUploading; // 对用户统一显示"上传中"
+      iconColor = theme.colorScheme.primary;
+    } else if (taskState is TranscriptionCompressing) {
+      icon = Icons.compress;
+      text = l10n.transcriptionCompressing;
       iconColor = theme.colorScheme.primary;
     } else if (taskState is TranscriptionUploading) {
       icon = Icons.cloud_upload;
@@ -585,6 +585,13 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       'connection' => l10n.transcriptionErrorConnection,
       'timeout' => l10n.transcriptionErrorTimeout,
       'server' => l10n.transcriptionErrorServer,
+      'compression' => l10n.transcriptionErrorCompression,
+      'fileTooLarge' => l10n.transcriptionErrorFileTooLarge(25),
+      'compressedFileTooLarge' => l10n.transcriptionErrorCompressedFileTooLarge,
+      'audioNotFound' => l10n.transcriptionErrorAudioNotFound,
+      'audioExpired' => l10n.transcriptionErrorAudioExpired,
+      'requestInvalid' => l10n.transcriptionErrorRequestInvalid,
+      'apiDeprecated' => l10n.transcriptionErrorApiDeprecated,
       _ => l10n.transcriptionErrorUnknown,
     };
   }
@@ -636,8 +643,12 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 17, color: accent),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(icon, size: 17, color: accent),
+            ),
             const SizedBox(width: AppSpacing.s),
             Expanded(
               child: Text.rich(
@@ -650,22 +661,26 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                     TextSpan(text: ' · ${err.message}'),
                   ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.error,
                   height: 1.25,
                 ),
               ),
             ),
-            IconButton(
-              onPressed: _dismissInlineError,
-              icon: const Icon(Icons.close, size: 18),
-              color: colorScheme.error,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: IconButton(
+                onPressed: _dismissInlineError,
+                icon: const Icon(Icons.close, size: 18),
+                color: colorScheme.error,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 28,
+                  height: 28,
+                ),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              ),
             ),
           ],
         ),
@@ -917,18 +932,29 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 排序：AI 转录（推荐默认）→ 本地转录（离线替代）→ 本地上传（进阶手动）。
-          GuideTarget(
-            step: _stepAiTranscription(l10n),
-            child: _buildOptionTile(
+          // 播客 RSS 已提供字幕：排在最前，直接下载入库。
+          if (_hasPodcastTranscript(audioItem)) ...[
+            _buildOptionTile(
               theme: theme,
-              icon: Icons.auto_awesome_outlined,
-              title: l10n.aiTranscription,
-              subtitle: l10n.aiTranscriptionSubtitle,
-              selected: _selectedAction == _SubtitleAction.aiTranscription,
+              icon: Icons.closed_caption_outlined,
+              title: l10n.downloadPodcastSubtitle,
+              subtitle: l10n.downloadPodcastSubtitleSubtitle,
+              selected: _selectedAction == _SubtitleAction.podcastDownload,
               onTap: () => setState(
-                () => _selectedAction = _SubtitleAction.aiTranscription,
+                () => _selectedAction = _SubtitleAction.podcastDownload,
               ),
+            ),
+            const SizedBox(height: AppSpacing.s),
+          ],
+          // 排序：AI 转录（推荐默认）→ 本地转录（离线替代）→ 本地上传（进阶手动）。
+          _buildOptionTile(
+            theme: theme,
+            icon: Icons.auto_awesome_outlined,
+            title: l10n.aiTranscription,
+            subtitle: l10n.aiTranscriptionSubtitle,
+            selected: _selectedAction == _SubtitleAction.aiTranscription,
+            onTap: () => setState(
+              () => _selectedAction = _SubtitleAction.aiTranscription,
             ),
           ),
           // AI 转录语言选择（动画展开/收起）
@@ -1530,6 +1556,12 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     );
   }
 
+  /// 播客 RSS 是否提供了可下载的字幕（地址与格式同时存在）。
+  bool _hasPodcastTranscript(AudioItem audioItem) {
+    return audioItem.podcastTranscriptUrl != null &&
+        audioItem.podcastTranscriptFormat != null;
+  }
+
   /// AI 转录按钮是否禁用
   ///
   /// 当 transcriptSource==ai 且选中的语言==transcriptLanguage 时禁用
@@ -1540,6 +1572,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
 
   /// 操作按钮是否可用
   bool _getActionEnabled(AudioItem audioItem) {
+    if (_selectedAction == _SubtitleAction.podcastDownload) return true;
     if (_selectedAction == _SubtitleAction.localUpload) return true;
     // 本地转录：始终可用（可重复转录/覆盖）。
     if (_selectedAction == _SubtitleAction.offlineTranscription) return true;
@@ -1560,6 +1593,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         taskState is TranscriptionFailed ||
             taskState is TranscriptionEmptyResult
         ? l10n.retryTranscription
+        : _selectedAction == _SubtitleAction.podcastDownload
+        ? l10n.downloadSubtitle
         : _selectedAction == _SubtitleAction.localUpload
         ? l10n.uploadTranscript
         : _selectedAction == _SubtitleAction.aiTranscription &&
@@ -1567,17 +1602,28 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         ? l10n.alreadyTranscribedWithOption
         : l10n.startTranscription;
 
+    final downloading = _isDownloadingSubtitle;
     final button = FilledButton(
-      onPressed: enabled ? () => _handleAction(context, audioItem) : null,
-      child: Text(label),
+      onPressed: enabled && !downloading
+          ? () => _handleAction(context, audioItem)
+          : null,
+      child: downloading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(label),
     );
 
-    return GuideTarget(step: _stepStartTranscription(l10n), child: button);
+    return button;
   }
 
   /// 处理操作按钮点击
   Future<void> _handleAction(BuildContext context, AudioItem audioItem) async {
     switch (_selectedAction) {
+      case _SubtitleAction.podcastDownload:
+        await _handlePodcastDownload(context, audioItem);
       case _SubtitleAction.localUpload:
         await _handleLocalUpload(context, audioItem);
       case _SubtitleAction.aiTranscription:
@@ -1587,7 +1633,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     }
   }
 
-  /// 处理本地（离线）转录：确认覆盖/疑似空音频 → 门控下载模型 → 启动后台任务。
+  /// 处理本地（离线）转录：确认覆盖/异常音频 → 门控下载模型 → 启动后台任务。
   ///
   /// 无需登录、无云端大小/时长限制。
   Future<void> _handleOfflineTranscription(
@@ -1596,26 +1642,15 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   ) async {
     final l10n = AppLocalizations.of(context)!;
 
-    // 疑似空音频确认（与 AI 转录一致，用确认而非硬拦截）。
-    if (audioItem.contentStatus == AudioContentStatus.suspectEmpty) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.transcriptionSilentConfirmTitle),
-          content: Text(l10n.transcriptionSilentConfirmMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(l10n.transcriptionSilentConfirmProceed),
-            ),
-          ],
-        ),
+    // 内容异常确认（与 AI 转录一致，用确认而非硬拦截）。
+    if (audioItem.contentStatus case final status?
+        when status != AudioContentStatus.ok) {
+      final proceed = await _showContentStatusConfirmDialog(
+        context,
+        audioItem,
+        status,
       );
-      if (proceed != true || !context.mounted) return;
+      if (!proceed || !context.mounted) return;
     }
 
     // 已有字幕时弹出覆盖确认。
@@ -1659,6 +1694,112 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         );
   }
 
+  /// 下载播客 RSS 提供的字幕，并以本地字幕主干入库。
+  ///
+  /// 已有字幕时先弹覆盖确认。任何失败（网络、非 2xx、空字幕、解析错误）都以内联错误
+  /// 提示，且不写入数据库，原有字幕保持不变。
+  Future<void> _handlePodcastDownload(
+    BuildContext context,
+    AudioItem audioItem,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final url = audioItem.podcastTranscriptUrl;
+    final format = audioItem.podcastTranscriptFormat;
+    if (url == null || format == null || _isDownloadingSubtitle) return;
+
+    if (audioItem.hasTranscript) {
+      final confirmed = await _confirmOverwriteSubtitle(context);
+      if (!confirmed || !mounted) return;
+    }
+
+    setState(() {
+      _isDownloadingSubtitle = true;
+      _error = null;
+    });
+    try {
+      AppLogger.log(
+        'SubtitleDownload',
+        'start audioId=${audioItem.id} format=$format',
+      );
+      final text = await ref
+          .read(podcastTranscriptDownloaderProvider)
+          .download(url, format: format);
+      if (!mounted) return;
+      // 解析后无句子视为空字幕，不入库。
+      final sentences = await parseSupportedSubtitle(text, ext: format);
+      if (!mounted) return;
+      if (sentences.isEmpty) {
+        throw const SubtitleParseException(SubtitleParseErrorKind.empty);
+      }
+      await importLocalSubtitle(ref, audioItem, text: text, ext: format);
+      ref.invalidate(audioSentencesProvider(audioItem.id));
+      AppLogger.log(
+        'SubtitleDownload',
+        'saved audioId=${audioItem.id} sentences=${sentences.length}',
+      );
+      if (context.mounted) Navigator.pop(context);
+    } on SubtitleParseException catch (e) {
+      AppLogger.log(
+        'SubtitleDownload',
+        'parse failed audioId=${audioItem.id} kind=${e.kind} detail=${e.detail}',
+      );
+      if (!mounted) return;
+      _showInlineError(_inlineErrorFromParseException(l10n, e));
+    } catch (e, st) {
+      AppLogger.log(
+        'SubtitleDownload',
+        'failed audioId=${audioItem.id} errorType=${e.runtimeType} error=$e',
+      );
+      AppLogger.log('SubtitleDownload', st.toString());
+      if (!mounted) return;
+      _showInlineError(
+        _InlineError(
+          _UploadErrorKind.generic,
+          '${l10n.downloadSubtitleFailed}: $e',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloadingSubtitle = false);
+    }
+  }
+
+  /// 把字幕解析异常映射为内联错误（种类决定图标，文案由 l10n 生成）。
+  _InlineError _inlineErrorFromParseException(
+    AppLocalizations l10n,
+    SubtitleParseException e,
+  ) {
+    final kind = switch (e.kind) {
+      SubtitleParseErrorKind.unsupportedFormat =>
+        _UploadErrorKind.unsupportedFormat,
+      SubtitleParseErrorKind.formatInvalid => _UploadErrorKind.formatInvalid,
+      SubtitleParseErrorKind.empty => _UploadErrorKind.empty,
+    };
+    return _InlineError(kind, subtitleParseErrorMessage(l10n, e));
+  }
+
+  /// 已有字幕时的覆盖确认，返回用户是否确认覆盖。
+  Future<bool> _confirmOverwriteSubtitle(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.overwriteExistingSubtitle),
+        content: Text(l10n.overwriteExistingSubtitleMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.overwrite),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   /// 处理本地上传
   Future<void> _handleLocalUpload(
     BuildContext context,
@@ -1691,37 +1832,41 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     }
 
     try {
-      final content = await pickTranscriptContent();
-      if (content == null) return;
-
-      final stats = await getTranscriptStatsFromSrt(content);
-
-      // 本地字幕没有真实词级时间戳，保存时按字符长度生成近似词级时间戳。
-      final wordTimestampsJson = encodeWordTimestamps(
-        await generateSyntheticWordTimestampsFromSrt(content),
+      AppLogger.log(
+        'SubtitleUpload',
+        'start local upload audioId=${audioItem.id} name=${audioItem.name}',
+      );
+      final contentPicker =
+          widget.transcriptContentPicker ?? pickTranscriptContentWithMetadata;
+      final transcript = await contentPicker();
+      if (transcript == null) {
+        AppLogger.log(
+          'SubtitleUpload',
+          'canceled local upload audioId=${audioItem.id}',
+        );
+        return;
+      }
+      AppLogger.log(
+        'SubtitleUpload',
+        'picked transcript audioId=${audioItem.id} '
+            'charset=${transcript.charset} ext=${transcript.ext} '
+            'chars=${transcript.text.length}',
       );
 
-      // 字幕内容 + 近似词级时间戳原子写入 DB；transcriptPath 置 null。
-      await ref
-          .read(audioItemDaoProvider)
-          .saveTranscriptContent(
-            audioItem.id,
-            srt: content,
-            wordTimestampsJson: wordTimestampsJson,
-          );
+      // 按音频时长把字幕（srt/vtt/lrc）规范化为 SRT 并原子入库
+      // （含统计与近似词级时间戳、来源标记）。
+      await importLocalSubtitle(
+        ref,
+        audioItem,
+        text: transcript.text,
+        ext: transcript.ext,
+      );
+      AppLogger.log(
+        'SubtitleUpload',
+        'saved & updated transcript audioId=${audioItem.id}',
+      );
 
       if (!context.mounted) return;
-      ref
-          .read(audioLibraryProvider.notifier)
-          .updateAudioItem(
-            audioItem.copyWith(
-              transcriptPath: null,
-              sentenceCount: stats.$1,
-              wordCount: stats.$2,
-              transcriptSource: TranscriptSource.local,
-              transcriptLanguage: null,
-            ),
-          );
 
       ref
           .read(usageTrackerProvider)
@@ -1732,17 +1877,25 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
               EventParams.audioName: audioItem.name,
             },
           );
+      AppLogger.log(
+        'SubtitleUpload',
+        'completed local upload audioId=${audioItem.id}',
+      );
       if (context.mounted) Navigator.pop(context);
     } on SubtitleParseException catch (e) {
+      AppLogger.log(
+        'SubtitleUpload',
+        'parse failed audioId=${audioItem.id} kind=${e.kind} detail=${e.detail}',
+      );
       if (!mounted) return;
-      final kind = switch (e.kind) {
-        SubtitleParseErrorKind.unsupportedFormat =>
-          _UploadErrorKind.unsupportedFormat,
-        SubtitleParseErrorKind.formatInvalid => _UploadErrorKind.formatInvalid,
-        SubtitleParseErrorKind.empty => _UploadErrorKind.empty,
-      };
-      _showInlineError(_InlineError(kind, subtitleParseErrorMessage(l10n, e)));
-    } catch (e) {
+      _showInlineError(_inlineErrorFromParseException(l10n, e));
+    } catch (e, st) {
+      AppLogger.log(
+        'SubtitleUpload',
+        'failed local upload audioId=${audioItem.id} '
+            'errorType=${e.runtimeType} error=$e',
+      );
+      AppLogger.log('SubtitleUpload', st.toString());
       if (!mounted) return;
       _showInlineError(
         _InlineError(
@@ -1752,12 +1905,6 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       );
     }
   }
-
-  /// AI 转录文件大小上限（50MB）
-  static const _maxFileSize = 50 * 1024 * 1024;
-
-  /// AI 转录时长上限（30 分钟）
-  static const _maxDurationSeconds = 30 * 60;
 
   /// 处理 AI 转录
   Future<void> _handleAiTranscription(
@@ -1770,31 +1917,29 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     ))?.accessToken;
     if (!mounted || !context.mounted) return;
     if (accessToken == null || accessToken.isEmpty) {
-      if (ref.read(customApiConfigNotifierProvider).enabled) {
-      // Skip sign-in when custom API is configured
-    } else {
       await _showTranscriptionSignInDialog(context);
-    }
       return;
     }
-    // 已登录但未解锁（非会员且 AI 转录试用用尽）→ 引导订阅升级。
+    // 已登录但未解锁（非会员且 AI 转录试用用尽）→ 先明确提示额度。
     if (!ref.read(featureAccessProvider(PremiumFeature.aiTranscription))) {
-      await openPaywall(context, ref);
+      await _showAiTranscriptionQuotaDialog();
       return;
     }
 
+    final limits = ref.read(remoteTranscriptionLimitsProvider);
+
     // 检查时长限制
-    if (audioItem.totalDuration > _maxDurationSeconds) {
+    if (audioItem.totalDuration > limits.maxDurationSeconds) {
       _showInlineError(
         _InlineError(
           _UploadErrorKind.generic,
-          l10n.transcriptionErrorTooLong(30),
+          l10n.transcriptionErrorTooLong(limits.maxDurationMinutesForDisplay),
         ),
       );
       return;
     }
 
-    // 检查文件大小限制
+    // 读取文件只确认路径可用；体积判断由任务层处理，超过 25MiB 时会先压缩。
     final fullPath = await audioItem.getFullAudioPath();
     if (fullPath == null) {
       if (!mounted) return;
@@ -1803,39 +1948,16 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       );
       return;
     }
-    final fileSize = await File(fullPath).length();
-    if (!mounted) return;
-    if (fileSize > _maxFileSize) {
-      _showInlineError(
-        _InlineError(
-          _UploadErrorKind.generic,
-          l10n.transcriptionErrorFileTooLarge(50),
-        ),
-      );
-      return;
-    }
-
-    // 疑似空音频（解码失败 / 全程静音）拦截：用确认而非硬拦截，规避检测误判
-    if (audioItem.contentStatus == AudioContentStatus.suspectEmpty) {
+    // 内容异常（损坏 / 静音）确认：用确认而非硬拦截，给用户保留继续转录入口。
+    if (audioItem.contentStatus case final status?
+        when status != AudioContentStatus.ok) {
       if (!context.mounted) return;
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.transcriptionSilentConfirmTitle),
-          content: Text(l10n.transcriptionSilentConfirmMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(l10n.transcriptionSilentConfirmProceed),
-            ),
-          ],
-        ),
+      final proceed = await _showContentStatusConfirmDialog(
+        context,
+        audioItem,
+        status,
       );
-      if (proceed != true) return;
+      if (!proceed) return;
     }
 
     // 已有字幕时弹出覆盖确认
@@ -1886,6 +2008,107 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
             EventParams.audioName: audioItem.name,
           },
         );
+  }
+
+  /// AI 转录额度用尽提示；同一时间只允许一个弹窗存在。
+  Future<void> _showAiTranscriptionQuotaDialog({
+    AiQuotaRejectionReason reason = AiQuotaRejectionReason.exhausted,
+  }) async {
+    if (_isShowingAiQuotaDialog || !mounted) return;
+    _isShowingAiQuotaDialog = true;
+    try {
+      await showAiQuotaExceededDialog(
+        context: context,
+        ref: ref,
+        feature: PremiumFeature.aiTranscription,
+        reason: reason,
+      );
+    } finally {
+      _isShowingAiQuotaDialog = false;
+    }
+  }
+
+  Future<bool> _showContentStatusConfirmDialog(
+    BuildContext context,
+    AudioItem audioItem,
+    AudioContentStatus status,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final info = await _loadAudioDiagnosticInfo(audioItem);
+    if (!context.mounted) return false;
+    final title = switch (status) {
+      AudioContentStatus.damaged => l10n.transcriptionDamagedConfirmTitle,
+      AudioContentStatus.silent => l10n.transcriptionSilentConfirmTitle,
+      AudioContentStatus.ok => l10n.transcriptionSilentConfirmTitle,
+    };
+    final message = switch (status) {
+      AudioContentStatus.damaged => l10n.transcriptionDamagedConfirmMessage,
+      AudioContentStatus.silent => l10n.transcriptionSilentConfirmMessage,
+      AudioContentStatus.ok => l10n.transcriptionSilentConfirmMessage,
+    };
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            Text(l10n.transcriptionAudioFileSize(info.fileSizeText)),
+            Text(l10n.transcriptionAudioDuration(info.durationText)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.transcriptionSilentConfirmProceed),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
+  Future<_AudioDiagnosticInfo> _loadAudioDiagnosticInfo(
+    AudioItem audioItem,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final fullPath = await audioItem.getFullAudioPath();
+    final fileSizeText = fullPath == null
+        ? l10n.transcriptionAudioUnknown
+        : await _formatExistingFileSize(fullPath, l10n);
+    final durationSeconds = audioItem.totalDuration > 0
+        ? audioItem.totalDuration
+        : audioItem.audioPath == null
+        ? 0
+        : await getMediaDurationSeconds(audioItem.audioPath!);
+    final durationText = durationSeconds > 0
+        ? SubtitleParser.formatDuration(Duration(seconds: durationSeconds))
+        : l10n.transcriptionAudioUnknown;
+    return _AudioDiagnosticInfo(
+      fileSizeText: fileSizeText,
+      durationText: durationText,
+    );
+  }
+
+  Future<String> _formatExistingFileSize(
+    String fullPath,
+    AppLocalizations l10n,
+  ) async {
+    try {
+      final file = File(fullPath);
+      if (!await file.exists()) return l10n.transcriptionAudioUnknown;
+      return formatBytes(await file.length());
+    } catch (_) {
+      return l10n.transcriptionAudioUnknown;
+    }
   }
 
   /// 展示 AI 转录登录引导弹窗。
@@ -1983,14 +2206,16 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
         );
 
     // 5. 删除该音频的所有收藏句子
-    await ref.read(bookmarkDaoProvider).removeAllForAudio(audioItem.id);
+    await ref
+        .read(favoriteSentenceLifecycleProvider)
+        .removeAllForAudio(audioItem.id);
 
     // 6. 重置该音频的学习进度
     // 学习进度基于句子索引/段落索引，字幕删除后这些索引失去参照；
     // 若不重置，重新导入字幕时旧断点会指向错位的句子。
     await ref
         .read(learningProgressNotifierProvider.notifier)
-        .deleteProgress(audioItem.id);
+        .resetProgress(audioItem.id);
 
     // 7. 清除 listeningPracticeProvider 中缓存的句子数据
     // 字幕内容入库后 transcriptPath 恒为 null，loadAudio 去重守卫（比较 id +

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:echo_loop/widgets/selection/app_selectable_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/sense_group_result.dart';
@@ -58,20 +59,42 @@ String _renderedRichText() {
   return buf.toString();
 }
 
+/// 替换测试树并推进 Drift/Riverpod 的异步销毁，避免查询流关闭留下 pending timer。
+Future<void> _disposeTree(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+}
+
+/// 统一包装卡片测试，确保每个用例都释放 ProviderScope 及其查询流。
+void cardTest(String description, Future<void> Function(WidgetTester) body) {
+  testWidgets(description, (tester) async {
+    try {
+      await body(tester);
+    } finally {
+      await _disposeTree(tester);
+    }
+  });
+}
+
 void main() {
   group('SentenceAnnotationCard — 基本渲染', () {
-    testWidgets('显示句子文本', (tester) async {
+    cardTest('显示句子文本', (tester) async {
       await tester.pumpWidget(
         createTestApp(SentenceAnnotationCard(text: 'Hello world')),
       );
 
-      // 句子文本通过 RichText 渲染
-      expect(find.byType(RichText), findsWidgets);
+      // 句子正文走自有选区组件（平台手柄画笔 + tight 高亮），不再用 SelectableText。
+      final sentence = tester.widget<AppSelectableText>(
+        find.byType(AppSelectableText),
+      );
+      expect(sentence.text, 'Hello world');
     });
   });
 
   group('SentenceAnnotationCard — 三按钮工具栏', () {
-    testWidgets('有 AI 回调时显示三个工具栏按钮', (tester) async {
+    cardTest('有 AI 回调时显示三个工具栏按钮', (tester) async {
       await tester.pumpWidget(
         createTestApp(
           SentenceAnnotationCard(
@@ -79,7 +102,7 @@ void main() {
             onRequestTranslation: _translate('翻译'),
             onRequestAnalysis: _dummyStream,
             hasWordTimestamps: true,
-            onRequestSenseGroups: () async {},
+            onRequestSenseGroups: (_) async {},
           ),
         ),
       );
@@ -87,12 +110,12 @@ void main() {
       expect(find.byIcon(Icons.auto_fix_high), findsOneWidget);
       expect(find.byIcon(Icons.translate), findsOneWidget);
       expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
-      expect(find.text('Groups'), findsOneWidget);
-      expect(find.text('Translate'), findsOneWidget);
+      expect(find.text('Sense Groups'), findsOneWidget);
+      expect(find.text('Translation'), findsOneWidget);
       expect(find.text('Analysis'), findsOneWidget);
     });
 
-    testWidgets('无词级时间戳时拆意群按钮仍可用', (tester) async {
+    cardTest('无词级时间戳时拆意群按钮仍可用', (tester) async {
       var requested = false;
       await tester.pumpWidget(
         createTestApp(
@@ -101,22 +124,22 @@ void main() {
             onRequestTranslation: _translate('翻译'),
             onRequestAnalysis: _dummyStream,
             hasWordTimestamps: false,
-            onRequestSenseGroups: () async {
+            onRequestSenseGroups: (_) async {
               requested = true;
             },
           ),
         ),
       );
 
-      expect(find.text('Groups'), findsOneWidget);
+      expect(find.text('Sense Groups'), findsOneWidget);
 
       // 点击拆意群按钮可正常触发请求
-      await tester.tap(find.text('Groups'));
+      await tester.tap(find.text('Sense Groups'));
       await tester.pump();
       expect(requested, isTrue);
     });
 
-    testWidgets('无 AI 回调和缓存时翻译/解析按钮禁用', (tester) async {
+    cardTest('无 AI 回调和缓存时翻译/解析按钮禁用', (tester) async {
       await tester.pumpWidget(
         createTestApp(SentenceAnnotationCard(text: 'Test')),
       );
@@ -129,7 +152,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — 翻译交互', () {
-    testWidgets('点击翻译按钮触发请求并展示结果', (tester) async {
+    cardTest('点击翻译按钮触发请求并展示结果', (tester) async {
       var requested = false;
       final completer = Completer<String>();
 
@@ -160,7 +183,7 @@ void main() {
       expect(find.text('这是翻译结果'), findsOneWidget);
     });
 
-    testWidgets('翻译请求中显示单行骨架屏且按钮保留圆形进度', (tester) async {
+    cardTest('翻译请求中显示单行骨架屏且按钮保留圆形进度', (tester) async {
       final controller = StreamController<String>();
       addTearDown(() {
         if (!controller.isClosed) return controller.close();
@@ -193,7 +216,7 @@ void main() {
       expect(find.text('这是翻译结果'), findsOneWidget);
     });
 
-    testWidgets('cachedTranslation 初始自动展开，不触发请求', (tester) async {
+    cardTest('cachedTranslation 初始自动展开，不触发请求', (tester) async {
       var requested = false;
 
       await tester.pumpWidget(
@@ -215,7 +238,7 @@ void main() {
       expect(requested, isFalse);
     });
 
-    testWidgets('内联翻译紧跟在原句下方', (tester) async {
+    cardTest('内联翻译紧跟在原句下方', (tester) async {
       await tester.pumpWidget(
         createTestApp(
           const SentenceAnnotationCard(
@@ -235,7 +258,7 @@ void main() {
       expect(translationTop - sentenceBottom, lessThanOrEqualTo(6));
     });
 
-    testWidgets('翻译请求失败显示 SnackBar', (tester) async {
+    cardTest('翻译请求失败显示 SnackBar', (tester) async {
       var callCount = 0;
 
       await tester.pumpWidget(
@@ -260,7 +283,7 @@ void main() {
       expect(callCount, 1);
     });
 
-    testWidgets('翻译额度异常后恢复待点击状态并允许重试', (tester) async {
+    cardTest('翻译额度异常后恢复待点击状态并允许重试', (tester) async {
       var callCount = 0;
 
       await tester.pumpWidget(
@@ -288,7 +311,7 @@ void main() {
       expect(callCount, 2);
     });
 
-    testWidgets('展开后再次点击可折叠', (tester) async {
+    cardTest('展开后再次点击可折叠', (tester) async {
       await tester.pumpWidget(
         createTestApp(
           SentenceAnnotationCard(
@@ -312,7 +335,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — 自动加载', () {
-    testWidgets('首帧后自动请求翻译和解析，不请求意群，加载中禁止重复点击', (tester) async {
+    cardTest('首帧后自动请求翻译和解析，不请求意群，加载中禁止重复点击', (tester) async {
       var translationCalls = 0;
       var analysisCalls = 0;
       var senseGroupCalls = 0;
@@ -333,7 +356,7 @@ void main() {
               analysisCalls++;
               return analysisController.stream;
             },
-            onRequestSenseGroups: () async {
+            onRequestSenseGroups: (_) async {
               senseGroupCalls++;
             },
           ),
@@ -364,7 +387,36 @@ void main() {
       expect(_renderedRichText().contains('自动解析'), isTrue);
     });
 
-    testWidgets('有缓存时自动加载不触发请求且保持展开', (tester) async {
+    cardTest('自动请求意群时按钮显示 spinner 并传递 automatic 来源', (tester) async {
+      final completer = Completer<void>();
+      SentenceAiRequestSource? source;
+
+      await tester.pumpWidget(
+        createTestApp(
+          SentenceAnnotationCard(
+            text: 'Auto groups',
+            autoLoadSenseGroups: true,
+            hasWordTimestamps: true,
+            onRequestSenseGroups: (requestSource) {
+              source = requestSource;
+              return completer.future;
+            },
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(source, SentenceAiRequestSource.automatic);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      completer.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    cardTest('有缓存时自动加载不触发请求且保持展开', (tester) async {
       var translationCalls = 0;
       var analysisCalls = 0;
 
@@ -396,7 +448,7 @@ void main() {
       expect(_renderedRichText().contains('缓存解析'), isTrue);
     });
 
-    testWidgets('自动加载解析流无内容结束时退出 loading 并允许重试', (tester) async {
+    cardTest('自动加载解析流无内容结束时退出 loading 并允许重试', (tester) async {
       var analysisCalls = 0;
 
       await tester.pumpWidget(
@@ -429,7 +481,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — 解析交互', () {
-    testWidgets('点击解析按钮触发流式请求并逐帧渐显', (tester) async {
+    cardTest('点击解析按钮触发流式请求并逐帧渐显', (tester) async {
       var requested = false;
       final controller = StreamController<SentenceAnalysis>();
 
@@ -472,7 +524,7 @@ void main() {
       expect(rendered.contains('用法结果'), isTrue);
     });
 
-    testWidgets('解析流进行中销毁卡片会取消 CancelToken', (tester) async {
+    cardTest('解析流进行中销毁卡片会取消 CancelToken', (tester) async {
       final controller = StreamController<SentenceAnalysis>();
       addTearDown(controller.close);
       CancelToken? captured;
@@ -500,7 +552,7 @@ void main() {
       expect(captured!.isCancelled, isTrue);
     });
 
-    testWidgets('解析额度异常后恢复待点击状态并允许重试', (tester) async {
+    cardTest('解析额度异常后恢复待点击状态并允许重试', (tester) async {
       var callCount = 0;
 
       await tester.pumpWidget(
@@ -528,7 +580,7 @@ void main() {
       expect(callCount, 2);
     });
 
-    testWidgets('cachedAnalysis 初始自动展开', (tester) async {
+    cardTest('cachedAnalysis 初始自动展开', (tester) async {
       final cached = _analysis(
         grammar: const [('语法分析', '')],
         vocabulary: const [('词汇分析', '')],
@@ -554,7 +606,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — 多内容同时展示', () {
-    testWidgets('翻译和解析可同时展开', (tester) async {
+    cardTest('翻译和解析可同时展开', (tester) async {
       final analysis = _analysis(
         grammar: const [('语法OK', '')],
         vocabulary: const [('词汇OK', '')],
@@ -586,7 +638,7 @@ void main() {
       expect(rendered.contains('用法OK'), isTrue);
     });
 
-    testWidgets('翻译和解析缓存初始自动展开', (tester) async {
+    cardTest('翻译和解析缓存初始自动展开', (tester) async {
       final cached = _analysis(
         grammar: const [('缓存语法', '')],
         vocabulary: const [('缓存词汇', '')],
@@ -615,7 +667,7 @@ void main() {
   });
 
   group('SentenceAnnotationCard — 拆意群交互', () {
-    testWidgets('点击拆意群按钮触发 onRequestSenseGroups', (tester) async {
+    cardTest('点击拆意群按钮触发 onRequestSenseGroups', (tester) async {
       var requested = false;
       await tester.pumpWidget(
         createTestApp(
@@ -623,19 +675,19 @@ void main() {
             text: 'Test sentence here',
             onRequestTranslation: _translate('翻译'),
             hasWordTimestamps: true,
-            onRequestSenseGroups: () async {
+            onRequestSenseGroups: (_) async {
               requested = true;
             },
           ),
         ),
       );
 
-      await tester.tap(find.text('Groups'));
+      await tester.tap(find.text('Sense Groups'));
       await tester.pump();
       expect(requested, isTrue);
     });
 
-    testWidgets('有意群数据时显示色块并可 toggle', (tester) async {
+    cardTest('有意群数据时显示色块并可 toggle', (tester) async {
       final senseGroupResult = SenseGroupResult(
         medium: ['Hello', 'world'],
         fine: ['Hello', 'world'],
@@ -659,7 +711,7 @@ void main() {
             senseGroupResult: senseGroupResult,
             senseGroupTimings: timings,
             hasWordTimestamps: true,
-            onRequestSenseGroups: () async {},
+            onRequestSenseGroups: (_) async {},
           ),
         ),
       );
@@ -681,7 +733,7 @@ void main() {
       expect(find.byType(SenseGroupText), findsOneWidget);
     });
 
-    testWidgets('加载意群时按钮显示 spinner', (tester) async {
+    cardTest('加载意群时按钮显示 spinner', (tester) async {
       final completer = Completer<void>();
       await tester.pumpWidget(
         createTestApp(
@@ -689,13 +741,13 @@ void main() {
             text: 'Test',
             onRequestTranslation: _translate('翻译'),
             hasWordTimestamps: true,
-            onRequestSenseGroups: () => completer.future,
+            onRequestSenseGroups: (_) => completer.future,
           ),
         ),
       );
 
       // 点击意群按钮触发请求
-      await tester.tap(find.text('Groups'));
+      await tester.tap(find.text('Sense Groups'));
       await tester.pump();
 
       // 请求进行中应显示 CircularProgressIndicator
@@ -764,53 +816,53 @@ void main() {
       // cachedAnalysis 在 initState 中自动展开，无需额外点击
     }
 
-    testWidgets('IPA 识别 — 含音节分界点', (tester) async {
+    cardTest('IPA 识别 — 含音节分界点', (tester) async {
       await pumpAnalysisCard(tester, '音标', '/ˈɪŋ.ɡlɪʃ/ 是英语的发音');
       expect(findIpaChip('/ˈɪŋ.ɡlɪʃ/'), findsOneWidget);
     });
 
-    testWidgets('IPA 识别 — 含连字符', (tester) async {
+    cardTest('IPA 识别 — 含连字符', (tester) async {
       await pumpAnalysisCard(tester, '音标', '/pre-ˈfɪks/ 是前缀');
       expect(findIpaChip('/pre-ˈfɪks/'), findsOneWidget);
     });
 
-    testWidgets('IPA 识别 — 单音节弱读', (tester) async {
+    cardTest('IPA 识别 — 单音节弱读', (tester) async {
       await pumpAnalysisCard(tester, '音标', '/tə/ 是弱读形式');
       expect(findIpaChip('/tə/'), findsOneWidget);
     });
 
-    testWidgets('IPA 否决 — 表示或者的斜杠两侧带空格', (tester) async {
+    cardTest('IPA 否决 — 表示或者的斜杠两侧带空格', (tester) async {
       await pumpAnalysisCard(tester, '或者', 'and / or 表示选择');
       expect(anyIpaChipFinder, findsNothing);
     });
 
-    testWidgets('IPA 否决 — 含中文与斜杠', (tester) async {
+    cardTest('IPA 否决 — 含中文与斜杠', (tester) async {
       await pumpAnalysisCard(tester, '搭配', 'English / 英语 互译');
       expect(anyIpaChipFinder, findsNothing);
     });
 
-    testWidgets('IPA 否决 — 路径不被误判', (tester) async {
+    cardTest('IPA 否决 — 路径不被误判', (tester) async {
       await pumpAnalysisCard(tester, '路径', '/path/to/file 是文件路径');
       expect(anyIpaChipFinder, findsNothing);
     });
 
-    testWidgets('IPA 否决 — 冠词 a/an', (tester) async {
+    cardTest('IPA 否决 — 冠词 a/an', (tester) async {
       await pumpAnalysisCard(tester, '冠词', 'a/an 视下一词首音决定');
       expect(anyIpaChipFinder, findsNothing);
     });
 
-    testWidgets('反引号渲染为内联 badge（背景色 + 自然换行）', (tester) async {
+    cardTest('反引号渲染为内联 badge（背景色 + 自然换行）', (tester) async {
       await pumpAnalysisCard(tester, '词义', '`run` 表示经营');
       expect(hasBadgeSpan('run'), isTrue);
     });
 
-    testWidgets('反引号与 IPA 同一行混排：前者 badge，后者灰色 chip', (tester) async {
+    cardTest('反引号与 IPA 同一行混排：前者 badge，后者灰色 chip', (tester) async {
       await pumpAnalysisCard(tester, '弱读', '`have` 常听起来像 /əv/ 这样');
       expect(hasBadgeSpan('have'), isTrue);
       expect(findIpaChip('/əv/'), findsOneWidget);
     });
 
-    testWidgets('标签中的反引号被剥离后再渲染', (tester) async {
+    cardTest('标签中的反引号被剥离后再渲染', (tester) async {
       await pumpAnalysisCard(tester, '`helped to` 的弱读', '弱读为 /tə/');
       final rendered = _renderedRichText();
       // 渲染后的标签应不含反引号字面字符
@@ -819,12 +871,6 @@ void main() {
       expect(rendered.contains('helped to 的弱读'), isTrue);
       // 详解中的 IPA chip 不受影响
       expect(findIpaChip('/tə/'), findsOneWidget);
-    });
-
-    testWidgets('详解中的反引号保留（渲染为 badge）', (tester) async {
-      await pumpAnalysisCard(tester, '词义', '`run` 表示经营');
-      // 详解中的 `run` 应渲染为带背景色的内联 badge
-      expect(hasBadgeSpan('run'), isTrue);
     });
   });
 }

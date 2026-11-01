@@ -4,7 +4,7 @@
 // 使用 IndexedStack 保持两个视图状态。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../features/official_collections/widgets/discover_entry_banner.dart';
+import '../features/community_collections/widgets/discover_entry_banner.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
@@ -28,30 +28,15 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   LibraryViewType _currentView = LibraryViewType.collections;
+  int _libraryTitleTapCount = 0;
+  bool _showAllAudioShortcut = false;
 
-  // Guide steps 的 GlobalKey 在 state 层持有，保证整个 screen 生命周期内稳定。
-  // 同一个 step 会同时被 GuideFlow.steps 和对应的 GuideTarget 引用。
-  final _keyCollectionList = GlobalKey();
-  final _keyCollectionMenu = GlobalKey();
   final _keyCreateCollection = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final collectionState = ref.watch(collectionListProvider);
-    final shouldRunCollectionGuide =
-        _currentView == LibraryViewType.collections &&
-        !collectionState.isLoading;
-    final hasCollections = collectionState.collections.isNotEmpty;
-
-    final stepCollectionList = GuideStep(
-      key: _keyCollectionList,
-      description: l10n.guideLibraryCollectionListDescription,
-    );
-    final stepCollectionMenu = GuideStep(
-      key: _keyCollectionMenu,
-      description: l10n.guideLibraryCollectionMenuDescription,
-    );
     final stepCreateCollection = GuideStep(
       key: _keyCreateCollection,
       description: l10n.guideLibraryCreateCollectionDescription,
@@ -60,53 +45,71 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return GuideFlowSequenceHost(
       flows: [
         GuideFlow(
-          flowId: GuideFlowIds.libraryCollectionList,
-          shouldRun: shouldRunCollectionGuide && hasCollections,
-          steps: [stepCollectionList, if (hasCollections) stepCollectionMenu],
-        ),
-        GuideFlow(
           flowId: GuideFlowIds.libraryCreateCollection,
-          shouldRun: shouldRunCollectionGuide,
+          shouldRun:
+              _currentView == LibraryViewType.collections &&
+              !collectionState.isLoading,
           steps: [stepCreateCollection],
         ),
       ],
       child: Scaffold(
         appBar: AppBar(
-          title: SegmentedButton<LibraryViewType>(
-            segments: [
-              ButtonSegment(
-                value: LibraryViewType.collections,
-                label: Text(l10n.collectionsTab),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                key: const Key('library_title'),
+                behavior: HitTestBehavior.opaque,
+                onTap: _onLibraryTitleTap,
+                child: Text(l10n.myLibrary),
               ),
-              ButtonSegment(
-                value: LibraryViewType.audio,
-                label: Text(l10n.audioTab),
-              ),
+              if (_showAllAudioShortcut) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  key: const Key('library_all_audio_button'),
+                  onPressed: _showAllAudio,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(l10n.libraryShowAll),
+                ),
+              ],
             ],
-            selected: {_currentView},
-            onSelectionChanged: (selected) {
-              setState(() {
-                _currentView = selected.first;
-              });
-            },
-            showSelectedIcon: false,
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
           ),
+          // TODO(资源库 UI 稳定后): 删除以下暂时隐藏的合集/音频选择组件及相关视图切换逻辑。
+          // title: SegmentedButton<LibraryViewType>(
+          //   segments: [
+          //     ButtonSegment(
+          //       value: LibraryViewType.collections,
+          //       label: Text(l10n.collectionsTab),
+          //     ),
+          //     ButtonSegment(
+          //       value: LibraryViewType.audio,
+          //       label: Text(l10n.audioTab),
+          //     ),
+          //   ],
+          //   selected: {_currentView},
+          //   onSelectionChanged: (selected) {
+          //     setState(() {
+          //       _currentView = selected.first;
+          //     });
+          //   },
+          //   showSelectedIcon: false,
+          //   style: ButtonStyle(
+          //     visualDensity: VisualDensity.compact,
+          //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          //   ),
+          // ),
           actions: _buildActions(l10n, stepCreateCollection),
         ),
         body: IndexedStack(
           index: _currentView.index,
           children: [
-            _CollectionListBody(
-              listStep: stepCollectionList,
-              menuStep: stepCollectionMenu,
-            ),
+            const _CollectionListBody(),
             AudioListView(
               guideFirstAudioMenu: true,
-              guideLeadingItems: true,
               guideEnabled: _currentView == LibraryViewType.audio,
             ),
           ],
@@ -115,13 +118,33 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
+  /// 连续点击标题五次后，在标题旁显示临时的全量音频入口。
+  void _onLibraryTitleTap() {
+    if (_showAllAudioShortcut) return;
+    setState(() {
+      if (_libraryTitleTapCount < 5) {
+        _libraryTitleTapCount += 1;
+      }
+      if (_libraryTitleTapCount == 5) {
+        _showAllAudioShortcut = true;
+      }
+    });
+  }
+
+  /// 复用旧音频 Tab 的切换行为，保留音频列表及 AppBar 操作入口。
+  void _showAllAudio() {
+    setState(() {
+      _currentView = LibraryViewType.audio;
+    });
+  }
+
   /// 根据当前视图构建 AppBar actions
   List<Widget> _buildActions(AppLocalizations l10n, GuideStep createStep) {
     if (_currentView == LibraryViewType.collections) {
       return [
         // 合集排序
         const CollectionSortButton(),
-        // 「发现官方合集」入口已改为列表顶部的 DiscoverEntryBanner，更醒目；
+        // 「发现社区合集」入口已改为列表顶部的 DiscoverEntryBanner，更醒目；
         // AppBar 这里不再放 compass icon，避免重复。
         // 创建合集
         GuideTarget(
@@ -131,6 +154,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             onPressed: () => showCreateCollectionDialog(context),
           ),
         ),
+        const SizedBox(width: 8),
       ];
     } else {
       return [
@@ -141,6 +165,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           icon: const Icon(Icons.add),
           onPressed: () => showImportAudioSheet(context),
         ),
+        const SizedBox(width: 8),
       ];
     }
   }
@@ -148,10 +173,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
 /// 合集列表视图体（不含 Scaffold/AppBar）
 class _CollectionListBody extends ConsumerWidget {
-  final GuideStep listStep;
-  final GuideStep menuStep;
-
-  const _CollectionListBody({required this.listStep, required this.menuStep});
+  const _CollectionListBody();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -170,10 +192,6 @@ class _CollectionListBody extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.isEmpty) return const CollectionEmptyState();
-    return CollectionListView(
-      collections: state.collections,
-      firstItemStep: listStep,
-      firstMenuStep: menuStep,
-    );
+    return CollectionListView(collections: state.collections);
   }
 }

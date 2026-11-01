@@ -1,7 +1,8 @@
 // 收藏词汇页 TTS 预热接线测试
 //
-// 验证进入收藏页后 _WordsView 自动预热「单词 + 意群」发音文本，离开时取消。
+// 验证收藏词汇 tile 创建时增量预热发音文本，离开时取消。
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -19,11 +20,19 @@ import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/short_audio_player_provider.dart';
+import 'package:echo_loop/models/pronunciation/pronunciation_clip.dart';
+import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
 import 'package:echo_loop/screens/favorites_screen.dart';
+import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
+import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/utils/app_data_dir.dart';
+import 'package:echo_loop/widgets/common/prewarm_visibility.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -32,8 +41,20 @@ class _MockCacheDao extends Mock implements SentenceAiCacheDao {}
 class _MockApiClient extends Mock implements SentenceAiApiClient {}
 
 class _MockAudioItemDao extends Mock implements AudioItemDao {
+  final Map<String, AudioItem> items = {};
+  final Map<String, String?> transcripts = {};
+
   _MockAudioItemDao() {
-    when(() => getById(any())).thenAnswer((_) async => null);
+    when(() => getById(any())).thenAnswer((invocation) async {
+      final arguments = invocation.positionalArguments;
+      final id = arguments.length == 1 ? arguments.first : null;
+      return id is String ? items[id] : null;
+    });
+    when(() => getTranscriptSrt(any())).thenAnswer((invocation) async {
+      final arguments = invocation.positionalArguments;
+      final id = arguments.length == 1 ? arguments.first : null;
+      return id is String ? transcripts[id] : null;
+    });
   }
 }
 
@@ -67,28 +88,155 @@ class _TestSavedSenseGroupDao implements SavedSenseGroupDao {
 /// 录制预热调用的 TTS 控制器：build 跳过真实协调器/数据库，仅记录 prewarm/cancel。
 class _RecordingTtsController extends TtsController {
   final List<List<String>> prewarmCalls = [];
+  final List<String> spokenTexts = [];
   int cancelCount = 0;
+  int engineWarmupCount = 0;
 
   @override
   TtsControllerState build() => const TtsControllerState();
 
+  /// 模拟异步初始配置落定，触发可见 tile 重新提交预热。
+  void markConfigured() {
+    state = const TtsControllerState(configurationVersion: 1);
+  }
+
   @override
-  Future<void> prewarmTexts(List<String> texts) async {
+  Future<void> prewarmTextsIncremental(List<String> texts) async {
     prewarmCalls.add(List.of(texts));
   }
+
+  @override
+  Future<bool> warmUpCurrentEngine() async {
+    engineWarmupCount++;
+    return true;
+  }
+
+  @override
+  Future<void> speak(String text, {String? key}) async {
+    spokenTexts.add(text);
+  }
+
+  @override
+  Future<AudioPlaybackResult> speakWithResult(
+    String text, {
+    String? key,
+  }) async {
+    spokenTexts.add(text);
+    return AudioPlaybackResult.completed;
+  }
+
+  @override
+  Future<void> stop() async {}
 
   @override
   void cancelTextsPrewarm() => cancelCount++;
 }
 
-SavedWord _word(int id, String word) => SavedWord(
+/// 记录收藏卡片是否把命中的单词交给离线发音控制器，而非直接调用 TTS。
+class _RecordingPronunciationPlayback extends TextPlaybackController {
+  final List<PronunciationClip> playedClips = [];
+
+  @override
+  TextPlaybackState build() => const TextPlaybackState();
+
+  @override
+  Future<AudioPlaybackResult> speakWithResult(
+    String text, {
+    String? key,
+  }) async {
+    final clips = ref.read(pronunciationClipsProvider(text));
+    if (clips.isNotEmpty) {
+      playedClips.add(clips.first);
+      return AudioPlaybackResult.completed;
+    }
+    return ref
+        .read(ttsControllerProvider.notifier)
+        .speakWithResult(text, key: key);
+  }
+}
+
+/// 记录页面交给共享播放器的区间参数；播放器自身区间实现另有独立单测。
+class _RecordingShortAudioPlayer extends LocalAudioClipPlayer {
+  _RecordingShortAudioPlayer() : super(backend: _NoopShortAudioBackend());
+
+  final List<String> openedPaths = [];
+  final List<Duration> openedStarts = [];
+  AudioPlaybackResult rangePlaybackResult = AudioPlaybackResult.completed;
+
+  @override
+  Future<AudioPlaybackResult> playRangeFile(
+    String filePath, {
+    required Duration start,
+    required Duration end,
+    String? playbackKey,
+  }) async {
+    openedPaths.add(filePath);
+    openedStarts.add(start);
+    return rangePlaybackResult;
+  }
+}
+
+class _NoopShortAudioBackend implements AudioClipPlayerBackend {
+  @override
+  Stream<void> get completed => const Stream<void>.empty();
+
+  @override
+  Stream<String> get errors => const Stream<String>.empty();
+
+  @override
+  Stream<Duration> get positions => const Stream<Duration>.empty();
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
+  Future<void> open(String filePath, {Duration start = Duration.zero}) async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
+Database _createDictionaryDatabase() {
+  final database = sqlite3.openInMemory();
+  database.execute('''
+    CREATE TABLE words (
+      word TEXT PRIMARY KEY,
+      phonetic TEXT NOT NULL,
+      translation TEXT,
+      collins INTEGER DEFAULT 0,
+      tag TEXT
+    )
+  ''');
+  database.execute(
+    "INSERT INTO words (word, phonetic, translation) "
+    "VALUES ('tomorrow', 'təmɒrəʊ', 'adv. 明天')",
+  );
+  database.execute(
+    "INSERT INTO words (word, phonetic, translation) "
+    "VALUES ('instructions', '', 'n. 指令')",
+  );
+  return database;
+}
+
+SavedWord _word(
+  int id,
+  String word, {
+  String? audioItemId,
+  int? sentenceIndex,
+  String? sentenceText,
+  int? sentenceStartMs,
+  int? sentenceEndMs,
+}) => SavedWord(
   id: id,
   word: word,
-  audioItemId: null,
-  sentenceIndex: null,
-  sentenceText: null,
-  sentenceStartMs: null,
-  sentenceEndMs: null,
+  audioItemId: audioItemId,
+  sentenceIndex: sentenceIndex,
+  sentenceText: sentenceText,
+  sentenceStartMs: sentenceStartMs,
+  sentenceEndMs: sentenceEndMs,
   practiceCount: 0,
   totalStudyMs: 0,
   viewedBack: false,
@@ -99,15 +247,22 @@ SavedWord _word(int id, String word) => SavedWord(
   syncStatus: 0,
 );
 
-SavedSenseGroup _phrase(int id, String display) => SavedSenseGroup(
+SavedSenseGroup _phrase(
+  int id,
+  String display, {
+  String? audioItemId,
+  String? sentenceText,
+  int? sentenceStartMs,
+  int? sentenceEndMs,
+}) => SavedSenseGroup(
   id: id,
   phraseText: display.toLowerCase(),
   displayText: display,
-  audioItemId: null,
+  audioItemId: audioItemId,
   sentenceIndex: null,
-  sentenceText: null,
-  sentenceStartMs: null,
-  sentenceEndMs: null,
+  sentenceText: sentenceText,
+  sentenceStartMs: sentenceStartMs,
+  sentenceEndMs: sentenceEndMs,
   groupStartMs: null,
   groupEndMs: null,
   practiceCount: 0,
@@ -120,26 +275,63 @@ SavedSenseGroup _phrase(int id, String display) => SavedSenseGroup(
   syncStatus: 0,
 );
 
+AudioItem _audioItem(String id) => AudioItem(
+  id: id,
+  name: 'Source audio',
+  audioPath: 'audios/$id.m4a',
+  transcriptPath: null,
+  addedDate: DateTime(2026),
+  totalDuration: 30,
+  sentenceCount: 1,
+  wordCount: 3,
+  isPinned: false,
+  transcriptSource: 0,
+  updatedAt: DateTime(2026),
+  syncStatus: 0,
+);
+
 void main() {
   late StreamController<List<BookmarkWithAudio>> bookmarkC;
   late StreamController<List<SavedWord>> wordC;
   late StreamController<List<SavedSenseGroup>> phraseC;
   late _RecordingTtsController rec;
+  late _RecordingPronunciationPlayback pronunciationPlayback;
+  late Database dictionaryDatabase;
+  late DictionaryService oldDictionaryService;
+  late Directory appDataDir;
+  late _RecordingShortAudioPlayer shortAudioPlayer;
+  late _MockAudioItemDao audioItemDao;
+  late ValueNotifier<int> activeMainTab;
 
   setUp(() {
     bookmarkC = StreamController<List<BookmarkWithAudio>>.broadcast();
     wordC = StreamController<List<SavedWord>>.broadcast();
     phraseC = StreamController<List<SavedSenseGroup>>.broadcast();
     rec = _RecordingTtsController();
+    pronunciationPlayback = _RecordingPronunciationPlayback();
+    dictionaryDatabase = _createDictionaryDatabase();
+    oldDictionaryService = DictionaryService.replaceInstance(
+      DictionaryService.withDatabase(dictionaryDatabase),
+    );
+    appDataDir = Directory.systemTemp.createTempSync('favorites_audio_test_');
+    appDataDirectoryOverride = appDataDir;
+    shortAudioPlayer = _RecordingShortAudioPlayer();
+    audioItemDao = _MockAudioItemDao();
+    activeMainTab = ValueNotifier<int>(2);
   });
 
   tearDown(() {
     bookmarkC.close();
     wordC.close();
     phraseC.close();
+    DictionaryService.replaceInstance(oldDictionaryService);
+    dictionaryDatabase.dispose();
+    appDataDirectoryOverride = null;
+    if (appDataDir.existsSync()) appDataDir.deleteSync(recursive: true);
+    activeMainTab.dispose();
   });
 
-  Widget createWidget() {
+  Widget createWidget({Set<String> locallyPronouncedWords = const {}}) {
     final router = GoRouter(
       initialLocation: '/favorites',
       routes: [
@@ -153,17 +345,43 @@ void main() {
         ),
       ],
     );
+    final app = MaterialApp.router(
+      locale: const Locale('en'),
+      supportedLocales: const [Locale('en'), Locale('zh')],
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: AppTheme.light(),
+      routerConfig: router,
+    );
     return ProviderScope(
       overrides: [
         analyticsOverride(),
         ...studyTimeOverrides(),
+        pronunciationClipsProvider.overrideWith(
+          (ref, word) => locallyPronouncedWords.contains(word)
+              ? [
+                  PronunciationClip(
+                    word: word,
+                    locale: 'us',
+                    audioFilename: '${word}_us.opus',
+                    absolutePath: '/audio/${word}_us.opus',
+                    reason: null,
+                  ),
+                ]
+              : const [],
+        ),
         bookmarkDaoProvider.overrideWithValue(_TestBookmarkDao(bookmarkC)),
         savedWordDaoProvider.overrideWithValue(_TestSavedWordDao(wordC)),
         savedSenseGroupDaoProvider.overrideWithValue(
           _TestSavedSenseGroupDao(phraseC),
         ),
-        audioItemDaoProvider.overrideWithValue(_MockAudioItemDao()),
+        audioItemDaoProvider.overrideWithValue(audioItemDao),
         audioEngineProvider.overrideWith(() => TestAudioEngine()),
+        shortAudioPlayerProvider.overrideWithValue(shortAudioPlayer),
         sentenceAiNotifierProvider.overrideWithValue(
           SentenceAiNotifier(
             cacheDao: _MockCacheDao(),
@@ -171,18 +389,15 @@ void main() {
           ),
         ),
         ttsControllerProvider.overrideWith(() => rec),
+        textPlaybackProvider.overrideWith(() => pronunciationPlayback),
       ],
-      child: MaterialApp.router(
-        locale: const Locale('en'),
-        supportedLocales: const [Locale('en'), Locale('zh')],
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        theme: AppTheme.light(),
-        routerConfig: router,
+      child: ValueListenableBuilder<int>(
+        valueListenable: activeMainTab,
+        builder: (context, index, _) => MainTabVisibilityScope(
+          currentIndex: index,
+          rootRouteVisible: true,
+          child: app,
+        ),
       ),
     );
   }
@@ -198,7 +413,7 @@ void main() {
     expect(rec.prewarmCalls, isEmpty);
   });
 
-  testWidgets('切到词汇 tab 后预热「单词 + 意群」全部发音文本', (tester) async {
+  testWidgets('切到词汇 tab 后为已创建的 tile 增量预热', (tester) async {
     await tester.pumpWidget(createWidget());
     bookmarkC.add([]);
     wordC.add([_word(1, 'tomorrow'), _word(2, 'finished')]);
@@ -209,9 +424,131 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(rec.prewarmCalls, isNotEmpty);
-    final texts = rec.prewarmCalls.last;
-    // 单词用 word，意群用 displayText（原始大小写）。
-    expect(texts, containsAll(['tomorrow', 'finished', 'can I book a table']));
+    expect(
+      rec.prewarmCalls.expand((texts) => texts),
+      containsAll(['tomorrow', 'finished', 'can I book a table']),
+    );
+    expect(rec.engineWarmupCount, 1);
+  });
+
+  testWidgets('配置完成后仅重新提交当前可见 tile', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'tomorrow'), _word(2, 'finished')]);
+    phraseC.add([_phrase(1, 'can I book a table')]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    final callsBeforeConfiguration = rec.prewarmCalls.length;
+
+    rec.markConfigured();
+    await tester.pumpAndSettle();
+
+    expect(rec.prewarmCalls.length, greaterThan(callsBeforeConfiguration));
+    expect(
+      rec.prewarmCalls.skip(callsBeforeConfiguration).expand((texts) => texts),
+      containsAll(['tomorrow', 'finished', 'can I book a table']),
+    );
+  });
+
+  testWidgets('已有离线发音的收藏单词跳过 TTS 预热，意群保留', (tester) async {
+    await tester.pumpWidget(createWidget(locallyPronouncedWords: {'tomorrow'}));
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'tomorrow'), _word(2, 'finished')]);
+    phraseC.add([_phrase(1, 'can I book a table')]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+
+    final texts = rec.prewarmCalls.expand((texts) => texts);
+    expect(texts, isNot(contains('tomorrow')));
+    expect(texts, containsAll(['finished', 'can I book a table']));
+  });
+
+  testWidgets('收藏意群显示朗读按钮并朗读意群文本', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([]);
+    phraseC.add([_phrase(1, 'said they were shy.')]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('said they were shy.'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('favorite_phrase_speak')));
+
+    expect(find.byKey(const Key('favorite_phrase_speak')), findsOneWidget);
+    expect(rec.spokenTexts, ['said they were shy.']);
+  });
+
+  testWidgets('点击命中离线发音的收藏单词走本地播放器', (tester) async {
+    await tester.pumpWidget(createWidget(locallyPronouncedWords: {'tomorrow'}));
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'tomorrow')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('tomorrow'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('favorite_speak')));
+
+    expect(pronunciationPlayback.playedClips, hasLength(1));
+    expect(
+      pronunciationPlayback.playedClips.single.absolutePath,
+      '/audio/tomorrow_us.opus',
+    );
+  });
+
+  testWidgets('无音标的收藏单词仍显示播放按钮', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'instructions')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('instructions'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('favorite_speak')), findsOneWidget);
+  });
+
+  testWidgets('词典未收录的收藏多词仍显示播放按钮并回退 TTS', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'birthday card')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('birthday card'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('favorite_speak')));
+
+    expect(find.byKey(const Key('favorite_speak')), findsOneWidget);
+    expect(rec.spokenTexts, ['birthday card']);
+  });
+
+  testWidgets('词典未收录的收藏变形词仍显示播放按钮', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'carrying')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('carrying'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('favorite_speak')), findsOneWidget);
   });
 
   testWidgets('切离词汇 tab 取消在途预热', (tester) async {
@@ -231,7 +568,28 @@ void main() {
     expect(rec.cancelCount, greaterThan(cancelsBefore));
   });
 
-  testWidgets('数据流重发相同列表不重复重启预热（签名去重）', (tester) async {
+  testWidgets('切离主 tab 取消预热，返回主 tab 后重新预热', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([_word(1, 'tomorrow')]);
+    phraseC.add([_phrase(1, 'can I book a table')]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    final callsBeforeLeave = rec.prewarmCalls.length;
+    final cancelsBeforeLeave = rec.cancelCount;
+
+    activeMainTab.value = 1;
+    await tester.pumpAndSettle();
+    expect(rec.cancelCount, greaterThan(cancelsBeforeLeave));
+
+    activeMainTab.value = 2;
+    await tester.pumpAndSettle();
+    expect(rec.prewarmCalls.length, greaterThan(callsBeforeLeave));
+  });
+
+  testWidgets('数据流重发相同列表不重复提交已创建 tile', (tester) async {
     await tester.pumpWidget(createWidget());
     bookmarkC.add([]);
     wordC.add([_word(1, 'tomorrow')]);
@@ -243,12 +601,58 @@ void main() {
     final before = rec.prewarmCalls.length;
     expect(before, greaterThanOrEqualTo(1));
 
-    // drift 流可能重发内容相同的新实例列表 → 触发 _WordsView 重建，但发音文本不变。
+    // drift 流可能重发内容相同的新实例列表，既有 tile 不应重复提交。
     wordC.add([_word(1, 'tomorrow')]);
     phraseC.add([]);
     await tester.pumpAndSettle();
 
     expect(rec.prewarmCalls.length, before, reason: '文本未变不应重启预热');
+  });
+
+  testWidgets('滚动后才预热后续由 ListView 创建的 tile', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([for (var i = 1; i <= 100; i++) _word(i, 'word_$i')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+
+    final initialTexts = rec.prewarmCalls.expand((texts) => texts).toSet();
+    expect(initialTexts, isNot(contains('word_1')));
+
+    await tester.scrollUntilVisible(
+      find.text('word_1'),
+      500,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(rec.prewarmCalls.length, greaterThan(initialTexts.length));
+  });
+
+  testWidgets('滚动开始取消未执行预热，停止后恢复可见 tile', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([for (var i = 1; i <= 100; i++) _word(i, 'word_$i')]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    final cancelsBefore = rec.cancelCount;
+    final callsBeforeScroll = rec.prewarmCalls.length;
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(rec.cancelCount, greaterThan(cancelsBefore));
+    expect(
+      rec.prewarmCalls.length,
+      greaterThan(callsBeforeScroll),
+      reason: '停止滚动后应重新提交当前可见 tile 的预热',
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('离开收藏页取消在途预热', (tester) async {
@@ -266,5 +670,141 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(rec.cancelCount, greaterThanOrEqualTo(1));
+  });
+
+  testWidgets('收藏单词来源句使用共享短音频播放器播放冗余时间区间', (tester) async {
+    audioItemDao.items['audio-1'] = _audioItem('audio-1');
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([
+      _word(
+        1,
+        'score',
+        audioItemId: 'audio-1',
+        sentenceText: 'Our team scores a try.',
+        sentenceStartMs: 1200,
+        sentenceEndMs: 3800,
+      ),
+    ]);
+    phraseC.add([]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('score'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Our team scores a try.'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(shortAudioPlayer.openedPaths, [
+      '${appDataDir.path}/audios/audio-1.m4a',
+    ]);
+    expect(shortAudioPlayer.openedStarts, [const Duration(milliseconds: 1200)]);
+  });
+
+  testWidgets('收藏意群来源句使用共享短音频播放器播放句子区间', (tester) async {
+    audioItemDao.items['audio-2'] = _audioItem('audio-2');
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([]);
+    phraseC.add([
+      _phrase(
+        1,
+        'scores a try',
+        audioItemId: 'audio-2',
+        sentenceText: 'When our team scores a try.',
+        sentenceStartMs: 4000,
+        sentenceEndMs: 6200,
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('scores a try'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('When our team scores a try.').last);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(shortAudioPlayer.openedPaths, [
+      '${appDataDir.path}/audios/audio-2.m4a',
+    ]);
+    expect(shortAudioPlayer.openedStarts, [const Duration(milliseconds: 4000)]);
+  });
+
+  testWidgets('收藏意群原声不可用时回退来源句 TTS', (tester) async {
+    shortAudioPlayer.rangePlaybackResult = AudioPlaybackResult.failed;
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([]);
+    phraseC.add([
+      _phrase(
+        1,
+        'scores a try',
+        audioItemId: 'audio-2',
+        sentenceText: 'When our team scores a try.',
+        sentenceStartMs: 4000,
+        sentenceEndMs: 6200,
+      ),
+    ]);
+    audioItemDao.items['audio-2'] = _audioItem('audio-2');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('scores a try'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('When our team scores a try.').last);
+    await tester.pumpAndSettle();
+
+    expect(rec.spokenTexts, ['When our team scores a try.']);
+  });
+
+  testWidgets('收藏意群原声被抢占时不回退来源句 TTS', (tester) async {
+    shortAudioPlayer.rangePlaybackResult = AudioPlaybackResult.cancelled;
+    audioItemDao.items['audio-2'] = _audioItem('audio-2');
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([]);
+    phraseC.add([
+      _phrase(
+        1,
+        'scores a try',
+        audioItemId: 'audio-2',
+        sentenceText: 'When our team scores a try.',
+        sentenceStartMs: 4000,
+        sentenceEndMs: 6200,
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('scores a try'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('When our team scores a try.').last);
+    await tester.pumpAndSettle();
+
+    expect(rec.spokenTexts, isEmpty);
+  });
+
+  testWidgets('展开收藏意群后主 item 不重复显示来源句', (tester) async {
+    await tester.pumpWidget(createWidget());
+    bookmarkC.add([]);
+    wordC.add([]);
+    phraseC.add([
+      _phrase(1, 'scores a try', sentenceText: 'When our team scores a try.'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Vocabulary'));
+    await tester.pumpAndSettle();
+    expect(find.text('When our team scores a try.'), findsOneWidget);
+
+    await tester.tap(find.text('scores a try'));
+    await tester.pumpAndSettle();
+    expect(find.text('When our team scores a try.'), findsOneWidget);
   });
 }

@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import '../tables/saved_sense_groups.dart';
@@ -23,6 +24,21 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .watch();
   }
+
+  /// 获取所有未删除的收藏意群。
+  Future<List<SavedSenseGroup>> getAll() =>
+      (select(savedSenseGroups)
+            ..where((t) => t.deletedAt.isNull())
+            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+          .get();
+
+  /// 按唯一意群文本查询收藏记录，包含回收站中的软删除记录。
+  ///
+  /// 收藏—调度生命周期需要先读取稳定的 [SavedSenseGroup.memorySubjectId]，
+  /// 才能对同一张记忆调度快照执行归档或恢复。
+  Future<SavedSenseGroup?> getByPhraseText(String phraseText) => (select(
+    savedSenseGroups,
+  )..where((t) => t.phraseText.equals(phraseText))).getSingleOrNull();
 
   /// 获取指定音频关联的未删除收藏意群（按来源句子索引升序）
   ///
@@ -55,6 +71,7 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
     return into(savedSenseGroups).insert(
       SavedSenseGroupsCompanion(
         phraseText: Value(phraseText),
+        memorySubjectId: Value(const Uuid().v4()),
         displayText: Value(displayText),
         audioItemId: Value(audioItemId),
         sentenceIndex: Value(sentenceIndex),

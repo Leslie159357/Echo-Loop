@@ -18,9 +18,6 @@ class MockChannel implements AnalyticsChannel {
   bool throwOnRegister = false;
 
   @override
-  String get name => 'Mock';
-
-  @override
   Future<void> initialize() async {}
 
   @override
@@ -36,6 +33,13 @@ class MockChannel implements AnalyticsChannel {
   @override
   Future<void> setUserProperty(String name, String? value) async {
     userProperties.add((name: name, value: value));
+  }
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
+    }
   }
 
   @override
@@ -139,8 +143,12 @@ void main() {
       expect(channel.userProperties.first.value, 'zh');
     });
 
-    test('channelName 返回通道名', () {
-      expect(service.channelName, 'Mock');
+    test('安装来源用户属性转发到 channel', () async {
+      await service.setUserProperty(UserProperties.installSource, 'play');
+
+      expect(channel.userProperties, hasLength(1));
+      expect(channel.userProperties.first.name, 'install_source');
+      expect(channel.userProperties.first.value, 'play');
     });
 
     test('registerSuperProperties 转发到 channel', () async {

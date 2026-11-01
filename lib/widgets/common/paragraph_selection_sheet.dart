@@ -15,8 +15,10 @@ import '../../models/sentence.dart';
 import '../../models/stage_settings_overrides.dart' show BriefingPauseChoice;
 import '../../theme/app_theme.dart';
 import '../../utils/playback_speed.dart';
+import '../../services/app_logger.dart';
 import '../../utils/paragraph_grouping.dart';
 import '../guide_flow.dart';
+import 'learning_briefing_sheet_content.dart';
 import '../review/review_briefing_sheet.dart' show formatEstimatedDuration;
 
 /// 目标段落时长选项（秒）
@@ -26,6 +28,7 @@ const paragraphDurationOptions = [0, 10, 15, 20, 25, 30, 45, 60, 90, -1];
 /// 显示段落选择弹窗
 ///
 /// [icon] 顶部图标
+/// [iconColor] 顶部任务图标颜色；未传时使用主题主色
 /// [title] 标题文字
 /// [subtitle] 说明文字
 /// [sentences] 字幕句子列表
@@ -42,6 +45,7 @@ const paragraphDurationOptions = [0, 10, 15, 20, 25, 30, 45, 60, 90, -1];
 Future<void> showParagraphSelectionSheet({
   required BuildContext context,
   required IconData icon,
+  Color? iconColor,
   required String title,
   required String subtitle,
   required List<Sentence> sentences,
@@ -55,7 +59,7 @@ Future<void> showParagraphSelectionSheet({
   BriefingPauseChoice defaultPause = const BriefingPauseChoice.smart(),
   String? stageLabel,
   String? estimatedDurationText,
-  Duration Function(int targetSeconds, double pauseMultiplier)?
+  Duration? Function(List<List<Sentence>> paragraphs, double pauseMultiplier)?
   estimateDurationBuilder,
   KeywordRatio? defaultKeywordRatio,
   required void Function(
@@ -92,6 +96,7 @@ Future<void> showParagraphSelectionSheet({
     ),
     builder: (context) => _ParagraphSelectionSheet(
       icon: icon,
+      iconColor: iconColor,
       title: title,
       subtitle: subtitle,
       sentences: sentences,
@@ -121,6 +126,7 @@ Future<void> showParagraphSelectionSheet({
 
 class _ParagraphSelectionSheet extends StatefulWidget {
   final IconData icon;
+  final Color? iconColor;
   final String title;
   final String subtitle;
   final List<Sentence> sentences;
@@ -134,7 +140,10 @@ class _ParagraphSelectionSheet extends StatefulWidget {
   final BriefingPauseChoice defaultPause;
   final String? stageLabel;
   final String? estimatedDurationText;
-  final Duration Function(int targetSeconds, double pauseMultiplier)?
+  final Duration? Function(
+    List<List<Sentence>> paragraphs,
+    double pauseMultiplier,
+  )?
   estimateDurationBuilder;
   final KeywordRatio? defaultKeywordRatio;
   final void Function(
@@ -165,6 +174,7 @@ class _ParagraphSelectionSheet extends StatefulWidget {
 
   const _ParagraphSelectionSheet({
     required this.icon,
+    this.iconColor,
     required this.title,
     required this.subtitle,
     required this.sentences,
@@ -220,283 +230,321 @@ class _ParagraphSelectionSheetState extends State<_ParagraphSelectionSheet> {
     );
   }
 
-  int get _paragraphCount {
-    if (_targetSeconds == 0) return widget.sentences.length;
-    if (_targetSeconds < 0) return 1;
-    return groupSentencesIntoParagraphs(
-      widget.sentences,
-      Duration(seconds: _targetSeconds),
-    ).length;
+  /// 诊断：从弹窗状态创建起计时，用于定位首帧耗时
+  final Stopwatch _openStopwatch = Stopwatch()..start();
+
+  /// 缓存的分段结果及其对应的目标时长：段数与估时共用，同一目标时长只分组一次
+  int? _cachedTargetSeconds;
+  List<List<Sentence>> _cachedParagraphs = const [];
+
+  /// 当前目标时长下的分段结果
+  List<List<Sentence>> get _currentParagraphs {
+    if (_cachedTargetSeconds != _targetSeconds) {
+      final stopwatch = Stopwatch()..start();
+      _cachedParagraphs = splitIntoParagraphsForTarget(
+        widget.sentences,
+        _targetSeconds,
+      );
+      _cachedTargetSeconds = _targetSeconds;
+      AppLogger.log(
+        'ParagraphSheet',
+        'paragraphs target=${_targetSeconds}s count=${_cachedParagraphs.length} '
+            'costMs=${stopwatch.elapsedMilliseconds}',
+      );
+    }
+    return _cachedParagraphs;
   }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppLogger.log(
+        'ParagraphSheet',
+        'first frame elapsedMs=${_openStopwatch.elapsedMilliseconds}',
+      );
+    });
+  }
+
+  int get _paragraphCount => _currentParagraphs.length;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final body = SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.l,
-          AppSpacing.s,
-          AppSpacing.l,
-          AppSpacing.l,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 拖拽指示条
-            Center(
-              child: Container(
-                width: 32,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.m),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.4,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
+    final body = LearningBriefingSheetContent(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 拖拽指示条
+          Center(
+            child: Container(
+              width: 32,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: AppSpacing.m),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.4,
                 ),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
+          ),
 
-            // 图标
-            Icon(widget.icon, size: 56, color: theme.colorScheme.primary),
-            const SizedBox(height: AppSpacing.s),
+          // 图标
+          Icon(
+            widget.icon,
+            size: 56,
+            color: widget.iconColor ?? theme.colorScheme.primary,
+          ),
+          const SizedBox(height: AppSpacing.s),
 
-            // 标题
-            Text(
-              widget.title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          // 标题
+          Text(
+            widget.title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
+          ),
 
-            // 阶段名（可选，如"第三轮复习"）
-            if (widget.stageLabel != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                widget.stageLabel!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-
+          // 阶段名（可选，如"第三轮复习"）
+          if (widget.stageLabel != null) ...[
             const SizedBox(height: AppSpacing.xs),
-
-            // 说明
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-              child: Text(
-                widget.subtitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+            Text(
+              widget.stageLabel!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          ],
 
-            const SizedBox(height: AppSpacing.m),
+          const SizedBox(height: AppSpacing.xs),
 
-            // 段落时长行
+          // 学习提示与其他任务入口统一使用灯泡提示卡片。
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.m),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: AppSpacing.s),
+                Expanded(
+                  child: Text(
+                    widget.subtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.m),
+
+          // 段落时长行
+          SettingLabeledRow(
+            label: Text(
+              l10n.blindListenTargetDuration,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            trailing: AppDropdown<int>(
+              value: _targetSeconds,
+              isExpanded: true,
+              isDense: true,
+              items: paragraphDurationOptions.map((s) {
+                final label = switch (s) {
+                  0 => l10n.retellBriefingSentenceLevel,
+                  -1 => l10n.blindListenNoParagraph,
+                  _ => '${s}s',
+                };
+                return DropdownMenuItem(value: s, child: Text(label));
+              }).toList(),
+              onChanged: (v) {
+                if (v != null) {
+                  setState(() => _targetSeconds = v);
+                  _notifyChanged();
+                }
+              },
+            ),
+          ),
+
+          // 段间停顿行（仅盲听显示，且不分段时无段间隔可言，隐藏）
+          if (widget.showPauseMultiplier && _targetSeconds != -1) ...[
+            const SizedBox(height: AppSpacing.s),
             SettingLabeledRow(
               label: Text(
-                l10n.blindListenTargetDuration,
+                l10n.blindListenPauseBetween,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              trailing: AppDropdown<int>(
-                value: _targetSeconds,
+              trailing: PauseChoiceDropdown(
+                value: _pause,
+                fixedOptions: widget.fixedPauseOptions ?? const [],
+                multiplierOptions:
+                    widget.pauseMultiplierOptions ??
+                    BlindListenSettings.multiplierOptions,
+                onChanged: (v) {
+                  setState(() => _pause = v);
+                  _notifyChanged();
+                },
+              ),
+            ),
+          ],
+
+          if (widget.showPlaybackSpeed) ...[
+            const SizedBox(height: AppSpacing.s),
+            SettingLabeledRow(
+              label: Text(
+                l10n.playbackSpeed,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              trailing: AppDropdown<double>(
+                value: _playbackSpeed,
                 isExpanded: true,
                 isDense: true,
-                items: paragraphDurationOptions.map((s) {
-                  final label = switch (s) {
-                    0 => l10n.retellBriefingSentenceLevel,
-                    -1 => l10n.blindListenNoParagraph,
-                    _ => '${s}s',
-                  };
-                  return DropdownMenuItem(value: s, child: Text(label));
-                }).toList(),
+                items:
+                    (widget.playbackSpeedOptions ??
+                            BlindListenSettings.briefingPlaybackSpeedOptions)
+                        .map(
+                          (speed) => DropdownMenuItem(
+                            value: speed,
+                            child: Text(_formatSpeed(speed)),
+                          ),
+                        )
+                        .toList(),
                 onChanged: (v) {
                   if (v != null) {
-                    setState(() => _targetSeconds = v);
+                    setState(() => _playbackSpeed = v);
                     _notifyChanged();
                   }
                 },
               ),
             ),
+          ],
 
-            // 段间停顿行（仅盲听显示，且不分段时无段间隔可言，隐藏）
-            if (widget.showPauseMultiplier && _targetSeconds != -1) ...[
-              const SizedBox(height: AppSpacing.s),
-              SettingLabeledRow(
-                label: Text(
-                  l10n.blindListenPauseBetween,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+          // 可见词比例行（仅复述时传入 defaultKeywordRatio 才显示）
+          if (_keywordRatio != null) ...[
+            const SizedBox(height: AppSpacing.s),
+            SettingLabeledRow(
+              label: Text(
+                l10n.retellKeywordRatio,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                trailing: PauseChoiceDropdown(
-                  value: _pause,
-                  fixedOptions: widget.fixedPauseOptions ?? const [],
-                  multiplierOptions:
-                      widget.pauseMultiplierOptions ??
-                      BlindListenSettings.multiplierOptions,
-                  onChanged: (v) {
-                    setState(() => _pause = v);
+              ),
+              trailing: AppDropdown<KeywordRatio>(
+                value: _keywordRatio,
+                isExpanded: true,
+                isDense: true,
+                items: KeywordRatio.values
+                    .map(
+                      (r) => DropdownMenuItem(
+                        value: r,
+                        child: Text('${r.percent}%'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setState(() => _keywordRatio = v);
                     _notifyChanged();
-                  },
-                ),
+                  }
+                },
               ),
-            ],
+            ),
+          ],
 
-            if (widget.showPlaybackSpeed) ...[
-              const SizedBox(height: AppSpacing.s),
-              SettingLabeledRow(
-                label: Text(
-                  l10n.playbackSpeed,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+          // 段落数 + 预计时长（同一行节省空间）
+          // 不分段时段落数无意义，仅显示预计时长（若有）
+          Builder(
+            builder: (_) {
+              final showParagraphCount = _targetSeconds != -1;
+              final estimatedDuration = widget.estimateDurationBuilder?.call(
+                _currentParagraphs,
+                // 固定/自动 走 smart 估算(-1);仅倍数模式用真实倍数。
+                // 固定模式的精确预估为次要,显示近似值可接受。
+                _pause.legacyPauseMultiplier,
+              );
+              final dynamicText = estimatedDuration == null
+                  ? null
+                  : formatEstimatedDuration(l10n, estimatedDuration);
+              final estimatedText = dynamicText ?? widget.estimatedDurationText;
+              if (!showParagraphCount && estimatedText == null) {
+                return const SizedBox.shrink();
+              }
+              final pieces = <Widget>[];
+              if (showParagraphCount) {
+                pieces.add(
+                  Text(
+                    l10n.blindListenParagraphCount(_paragraphCount),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                trailing: AppDropdown<double>(
-                  value: _playbackSpeed,
-                  isExpanded: true,
-                  isDense: true,
-                  items:
-                      (widget.playbackSpeedOptions ??
-                              BlindListenSettings.briefingPlaybackSpeedOptions)
-                          .map(
-                            (speed) => DropdownMenuItem(
-                              value: speed,
-                              child: Text(_formatSpeed(speed)),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (v) {
-                    if (v != null) {
-                      setState(() => _playbackSpeed = v);
-                      _notifyChanged();
-                    }
-                  },
-                ),
-              ),
-            ],
-
-            // 可见词比例行（仅复述时传入 defaultKeywordRatio 才显示）
-            if (_keywordRatio != null) ...[
-              const SizedBox(height: AppSpacing.s),
-              SettingLabeledRow(
-                label: Text(
-                  l10n.retellKeywordRatio,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                trailing: AppDropdown<KeywordRatio>(
-                  value: _keywordRatio,
-                  isExpanded: true,
-                  isDense: true,
-                  items: KeywordRatio.values
-                      .map(
-                        (r) => DropdownMenuItem(
-                          value: r,
-                          child: Text('${r.percent}%'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) {
-                      setState(() => _keywordRatio = v);
-                      _notifyChanged();
-                    }
-                  },
-                ),
-              ),
-            ],
-
-            // 段落数 + 预计时长（同一行节省空间）
-            // 不分段时段落数无意义，仅显示预计时长（若有）
-            Builder(
-              builder: (_) {
-                final showParagraphCount = _targetSeconds != -1;
-                final dynamicText = widget.estimateDurationBuilder != null
-                    ? formatEstimatedDuration(
-                        l10n,
-                        widget.estimateDurationBuilder!(
-                          _targetSeconds,
-                          // 固定/自动 走 smart 估算(-1);仅倍数模式用真实倍数。
-                          // 固定模式的精确预估为次要,显示近似值可接受。
-                          _pause.legacyPauseMultiplier,
-                        ),
-                      )
-                    : null;
-                final estimatedText =
-                    dynamicText ?? widget.estimatedDurationText;
-                if (!showParagraphCount && estimatedText == null) {
-                  return const SizedBox.shrink();
-                }
-                final pieces = <Widget>[];
-                if (showParagraphCount) {
+                );
+              }
+              if (estimatedText != null) {
+                if (pieces.isNotEmpty) {
                   pieces.add(
-                    Text(
-                      l10n.blindListenParagraphCount(_paragraphCount),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.s,
+                      ),
+                      child: Text(
+                        '·',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   );
                 }
-                if (estimatedText != null) {
-                  if (pieces.isNotEmpty) {
-                    pieces.add(
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.s,
-                        ),
-                        child: Text(
-                          '·',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  pieces.addAll([
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 16,
+                pieces.addAll([
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    estimatedText,
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      estimatedText,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ]);
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.s),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: pieces,
                   ),
-                );
-              },
-            ),
+                ]);
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.s),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: pieces,
+                ),
+              );
+            },
+          ),
 
-            const SizedBox(height: AppSpacing.m),
+          const SizedBox(height: AppSpacing.m),
 
-            // 跳过 + 开始练习按钮（宽度 1:2，仅当 onSkip 提供时显示跳过）
-            _buildActionButtons(context, l10n),
-          ],
-        ),
+          // 跳过 + 开始练习按钮（宽度 1:2，仅当 onSkip 提供时显示跳过）
+          _buildActionButtons(context, l10n),
+        ],
       ),
     );
 

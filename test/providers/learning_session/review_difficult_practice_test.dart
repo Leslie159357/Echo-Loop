@@ -24,6 +24,16 @@ void main() {
       expect(state.isTextRevealed, false);
       expect(state.targetRepeatCount, 3);
       expect(state.stepFinished, false);
+      expect(state.hasVideo, false);
+    });
+
+    test('copyWith — 媒体播放标记可独立更新', () {
+      const state = ReviewDifficultPracticeState();
+      final media = state.copyWith(hasVideo: true);
+
+      expect(media.hasVideo, true);
+      expect(media.isPlaying, false);
+      expect(media.isAnnotationMode, false);
     });
 
     test('stepFinished — copyWith 设置和重置', () {

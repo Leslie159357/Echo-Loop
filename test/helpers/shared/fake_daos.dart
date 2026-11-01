@@ -95,6 +95,7 @@ class FakeBookmarkDao implements BookmarkDao {
         .map(
           (i) => Bookmark(
             id: i,
+            memorySubjectId: 'fake-subject-$audioItemId-$i',
             audioItemId: audioItemId,
             sentenceIndex: i,
             sentenceText: 'test sentence $i',
@@ -112,6 +113,28 @@ class FakeBookmarkDao implements BookmarkDao {
   @override
   Future<Set<int>> getBookmarkedIndices(String audioItemId) {
     return Future.value(_store[audioItemId] ?? {});
+  }
+
+  @override
+  Future<Bookmark?> getByAudioAndSentence(
+    String audioItemId,
+    int sentenceIndex,
+  ) async {
+    if (!(_store[audioItemId]?.contains(sentenceIndex) ?? false)) {
+      return null;
+    }
+    return Bookmark(
+      id: sentenceIndex,
+      memorySubjectId: 'fake-subject-$audioItemId-$sentenceIndex',
+      audioItemId: audioItemId,
+      sentenceIndex: sentenceIndex,
+      sentenceText: 'test sentence $sentenceIndex',
+      startTime: 0.0,
+      endTime: 1.0,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      syncStatus: 0,
+    );
   }
 
   @override
@@ -161,6 +184,7 @@ class FakeBookmarkDao implements BookmarkDao {
           BookmarkWithAudio(
             bookmark: Bookmark(
               id: index,
+              memorySubjectId: 'fake-subject-${entry.key}-$index',
               audioItemId: entry.key,
               sentenceIndex: index,
               sentenceText: 'test sentence $index',

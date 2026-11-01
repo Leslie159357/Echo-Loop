@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
+    show sharedPreferencesProvider;
 import '../services/app_logger.dart';
 
 /// 页面级引导流程的运行状态。
@@ -27,6 +29,12 @@ class GuideRegistry {
 
   Future<SharedPreferences> get _preferences async =>
       _prefs ?? SharedPreferences.getInstance();
+
+  /// 新手引导总开关的 SP key。
+  ///
+  /// 与各 flow 的 `guide_v1_<id>_seen` 独立：关闭后 Host 直接不启动任何 flow，
+  /// 但已 seen 状态保留（重新开启不会重复弹已看过的引导，需「重置」才重播）。
+  static const enabledKey = 'guide_enabled';
 
   String keyFor(String flowId) => 'guide_v1_${flowId}_seen';
 
@@ -54,6 +62,35 @@ final guideRegistryProvider = Provider<GuideRegistry>((ref) {
   return GuideRegistry();
 });
 
+/// 新手引导是否允许弹出（默认 true，仅本机保存，不参与云同步）。
+///
+/// 用户在引导中点「跳过」时写为 false，之后所有页面的引导都不再启动；
+/// 「重置」时写回 true。[GuideFlowSequenceHost] 启动 flow 前读取此值。
+class GuideEnabledNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    return prefs.getBool(GuideRegistry.enabledKey) ?? true;
+  }
+
+  /// 写入新手引导是否允许弹出，持久化到 SP。
+  Future<void> setEnabled(bool enabled) async {
+    if (state == enabled) return;
+    state = enabled;
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(GuideRegistry.enabledKey, enabled);
+      AppLogger.log('Guide', 'setEnabled=$enabled');
+    } catch (e) {
+      AppLogger.log('Guide', 'setEnabled 写 SP 失败: $e');
+    }
+  }
+}
+
+final guideEnabledProvider = NotifierProvider<GuideEnabledNotifier, bool>(
+  GuideEnabledNotifier.new,
+);
+
 /// 是否"首次启动"。
 ///
 /// 在 `main()` 启动时读取 SharedPreferences 的 `first_launch_done` 哨兵 key：
@@ -73,22 +110,17 @@ final isFirstLaunchProvider = Provider<bool>((ref) {
 /// 没有任何 screen 仍在引用，新增 flow 时不要往里加。
 /// [all] 用于设置页"重置引导"一键清空，合并 active + legacy。
 abstract final class GuideFlowIds {
-  static const mainShellVisitLibrary = 'main_shell_visit_library';
   static const libraryCreateCollection = 'library_create_collection';
-  static const libraryCollectionList = 'library_collection_list';
   static const collectionDetailUpload = 'collection_detail_upload';
   static const collectionDetailAudioList = 'collection_detail_audio_list';
   static const learningPlanNoTranscript = 'learning_plan_no_transcript';
   static const learningPlanWithTranscript = 'learning_plan_with_transcript';
   static const learningPlanPauseLearning = 'learning_plan_pause_learning';
-  static const subtitleSheetTranscription = 'subtitle_sheet_transcription';
   static const retellBriefingSkip = 'retell_briefing_skip';
-  static const studyTasksOverview = 'study_tasks_overview';
   static const studyStatsStreak = 'study_stats_streak';
+  static const favoritesTabsOverview = 'favorites_tabs_overview';
   static const favoritesSentencesReview = 'favorites_sentences_review';
   static const favoritesVocabularyReview = 'favorites_vocabulary_review';
-  static const intensiveListenCantUnderstand =
-      'intensive_listen_cant_understand';
   static const intensiveListenAnnotationActions =
       'intensive_listen_annotation_actions';
   static const sentenceAnnotationTour = 'sentence_annotation_tour';
@@ -97,21 +129,15 @@ abstract final class GuideFlowIds {
       'subtitle_editor_sentence_actions';
 
   static const active = [
-    mainShellVisitLibrary,
     libraryCreateCollection,
-    libraryCollectionList,
     collectionDetailUpload,
     collectionDetailAudioList,
     learningPlanNoTranscript,
     learningPlanWithTranscript,
     learningPlanPauseLearning,
-    subtitleSheetTranscription,
     retellBriefingSkip,
-    studyTasksOverview,
     studyStatsStreak,
-    favoritesSentencesReview,
-    favoritesVocabularyReview,
-    intensiveListenCantUnderstand,
+    favoritesTabsOverview,
     intensiveListenAnnotationActions,
     sentenceAnnotationTour,
     sentenceTileTour,
@@ -119,6 +145,8 @@ abstract final class GuideFlowIds {
   ];
 
   static const legacy = [
+    favoritesSentencesReview,
+    favoritesVocabularyReview,
     'library',
     'collection_detail',
     'library_examples',
@@ -179,6 +207,20 @@ class GuideController extends Notifier<GuideControllerState> {
     await ref.read(guideRegistryProvider).markSeen(flowId);
     state = GuideControllerState(resetGeneration: state.resetGeneration);
     AppLogger.log('Guide', 'complete flow=$flowId');
+  }
+
+  /// 用户在引导中点「跳过」：关闭之后所有页面的引导。
+  ///
+  /// 同步先写入开关，保证随后 showcase 结束触发的状态回调不会启动下一个 flow。
+  Future<void> skipAll() async {
+    await ref.read(guideEnabledProvider.notifier).setEnabled(false);
+    AppLogger.log('Guide', 'skipAll');
+  }
+
+  /// 重置新手引导：重新开启开关并清空所有 flow 的已看状态。
+  Future<void> resetAll() async {
+    await ref.read(guideEnabledProvider.notifier).setEnabled(true);
+    await resetFlows(GuideFlowIds.all);
   }
 
   Future<void> resetFlows(List<String> flowIds) async {

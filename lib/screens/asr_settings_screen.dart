@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/offline_asr_settings_provider.dart';
+import '../providers/asr_model_installation_provider.dart';
 import '../services/asr/asr_model_manager.dart';
 import '../services/asr/offline_asr_engine.dart';
 import '../theme/app_theme.dart';
@@ -29,6 +30,9 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(asrModelInstallationGateProvider)
+          .ensureInstallationStatesLoaded();
       final state = ref.read(offlineAsrSettingsProvider);
       if (state.enabled &&
           state.backend == AsrBackend.offline &&
@@ -229,7 +233,9 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
     } else if (state.isReady) {
       children.add(
         Text(
-          l10n.speechModelReady(_formatBytes(state.localSizeBytes)),
+          l10n.speechModelReady(
+            state.localSizeBytes > 0 ? _formatBytes(state.localSizeBytes) : '—',
+          ),
           style: theme.textTheme.bodySmall?.copyWith(
             color: AppTheme.successColor,
             fontWeight: FontWeight.w500,
@@ -250,7 +256,7 @@ class _AsrSettingsScreenState extends ConsumerState<AsrSettingsScreen> {
     AsrModelState state,
     bool isSelected,
   ) {
-    if (state.isDownloading) {
+    if (state.isDownloading && !isSelected) {
       return TextButton(
         onPressed: () => ref
             .read(offlineAsrSettingsProvider.notifier)

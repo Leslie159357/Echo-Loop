@@ -9,7 +9,7 @@
 
   <p><strong>You no longer have to figure out how to practice English on your own.</strong></p>
 
-  <p>Blind listening · Intensive listening · Shadowing · Retelling · Review — Echo Loop guides you through every step at a scientifically-paced rhythm.</p>
+  <p>Intensive listening · Shadowing · Blind listening · Retelling · Review — Echo Loop guides you through every step at a scientifically-paced rhythm.</p>
 
   <p><sub><em>This project is academically advised by <a href="https://sfs.muc.edu.cn/info/1063/3729.htm"> Yang Yan</a> from the School of Foreign Studies, Minzu University of China.</em></sub></p>
 
@@ -30,8 +30,6 @@
     <a href="https://play.google.com/store/apps/details?id=app.echoloop"><img src="assets/badges/google-play-en.png" alt="Get it on Google Play" height="48" /></a>
   </p>
 </div>
-
-> 🇨🇳 **Note for China users**: The China App Store listing is temporarily off the shelf while we complete ICP registration. Users in mainland China can still install Echo Loop with an App Store account from another region (e.g. US or Hong Kong). It will be relisted once registration is complete.
 
 ---
 
@@ -77,7 +75,7 @@ When using other English-learning apps, you have to decide for yourself: how man
 
 **Those decisions themselves are what drains your willpower** — it's not that you can't understand, it's that you don't know what to do next.
 
-Echo Loop takes those decisions off your plate. Pick a piece of audio you want to understand, hit start, and from blind listening to completion, every step tells you "what to do right now".
+Echo Loop takes those decisions off your plate. Pick a piece of audio you want to understand, hit start, and from intensive listening to completion, every step tells you "what to do right now".
 
 You just need to keep opening the app — Echo Loop handles the rest. Practicing one piece thoroughly beats listening to 100 random ones.
 
@@ -106,12 +104,12 @@ We picked four English-learning apps most familiar to Chinese learners for compa
 
 ## 🧠 Methodology
 
-**Blind listening → Intensive listening → Shadowing → Retelling → Spaced review → Completion.**
+**Intensive listening → Shadowing → Blind listening → Retelling → Spaced review → Completion.**
 
 ```mermaid
 flowchart LR
-  A[Blind listening<br/>Listen through once, gauge overall difficulty] --> B[Intensive listening<br/>Understand sentence by sentence, mark hard ones]
-  B --> C[Shadowing<br/>Imitate pronunciation and intonation]
+  A[Intensive listening<br/>Understand sentence by sentence, mark hard ones] --> B[Shadowing<br/>Imitate pronunciation and intonation]
+  B --> C[Blind listening<br/>Listen through once, check overall comprehension]
   C --> D[Retelling<br/>Express in your own words, build output ability]
   D --> E[Spaced review<br/>Re-practice before forgetting, consolidate long-term memory]
   E --> F[Completion<br/>Finish this round of learning]
@@ -130,7 +128,7 @@ Each piece of material is split into 1 first-pass session + 7 spaced reviews. In
 
 | Stage | Interval since last | Tasks |
 |---|---|---|
-| First pass | — | Blind → Intensive → Shadowing → Retelling |
+| First pass | — | Intensive → Shadowing → Blind → Retelling |
 | Review 1 | After 6 hours | Hard-sentence drills + retelling |
 | Review 2 | After 1 day | Blind listening + drills + retelling |
 | Review 3 | After 2 days | Blind listening + drills + retelling |
@@ -170,21 +168,115 @@ Each piece of material is split into 1 first-pass session + 7 spaced reviews. In
 
 ---
 
+## ❓ FAQ
+
+<details>
+<summary><strong>Is Echo Loop free?</strong></summary>
+
+All core features are free, with no usage caps and no item limits:
+
+- **Unlimited imports**: local files, links, Baidu Netdisk and podcast subscriptions
+- **Unlimited favorites**: save as many hard sentences, words and sense groups as you like
+- **The full learning loop**: intensive listening, shadowing, blind listening and retelling, plus 7 rounds of spaced review with reminders
+- **Focused review of hard sentences + in-context flashcards**
+- **Shadowing evaluation**: runs on your device's built-in speech recognition, with no usage count
+- **Offline transcription**: download a model and generate subtitles on your device, no sign-in needed
+- **Offline dictionary, learning statistics, PDF note export, backup & restore**
+
+AI explanation features come with a free monthly quota, which covers everyday study for most people. Only heavy AI users need to upgrade to a membership in the app.
+
+</details>
+
+<details>
+<summary><strong>Which features use the AI quota?</strong></summary>
+
+Only the AI explanation features: AI translation, sentence analysis, sense-group splitting, word analysis, the AI study assistant, retelling evaluation and cloud transcription. None of the free features listed above use the quota.
+
+</details>
+
+<details>
+<summary><strong>What happens when the free quota runs out?</strong></summary>
+
+You can keep studying as usual. AI features come back when the quota resets next month, or you can upgrade to a membership in the app if you don't want to wait.
+
+</details>
+
+<details>
+<summary><strong>Why does an open-source project charge anything?</strong></summary>
+
+The code is fully open source (AGPL-3.0). Every AI request costs us money paid to the model provider, and memberships cover that cost so the project can keep going.
+
+</details>
+
+<details>
+<summary><strong>Which platforms are supported?</strong></summary>
+
+Right now the focus is **iOS and Android**: get it from the App Store or Google Play, or download the Android APK from [Releases](https://github.com/echo-loop/Echo-Loop/releases). Native macOS and Windows versions are in development and will be released later.
+
+To use it on a computer today:
+
+- **Mac (Apple silicon)**: search for Echo Loop in the Mac App Store and install the iOS version directly
+- **Windows**: install Tencent's YingYongBao (应用宝) app store, then install the Echo Loop Android APK inside it
+
+</details>
+
+<details>
+<summary><strong>How is it different from other English apps?</strong></summary>
+
+Other apps mostly give you materials and tools and leave it to you to work out how to practice. Echo Loop handles the *how*: intensive listening, shadowing, blind listening, retelling and spaced review run as a single flow, and the app tells you what to do at every step. You don't need to make a plan, count repetitions or track review dates. See "🆚 How it differs from other solutions" above for a detailed comparison.
+
+</details>
+
+<details>
+<summary><strong>What materials are supported?</strong></summary>
+
+- **Audio**: mp3, m4a, wav, aac, flac
+- **Video**: mp4, mov, m4v, mkv (you can hide the picture and practice with audio only)
+- **Subtitles**: srt, vtt, lrc; subtitle files with the same name as the audio are paired automatically. No subtitles? Generate them with AI transcription
+- **Sources**: local files, direct audio links, Baidu Netdisk, podcast subscriptions
+
+Podcasts, TED talks, TV clips and textbook audio all work. For best results, pick content **you're interested in and that's slightly above your current level**.
+
+</details>
+
+<details>
+<summary><strong>What English level do I need?</strong></summary>
+
+If you can follow the gist of a material with subtitles, you're ready. When a sentence is hard to follow, break it down with sense-group splitting, AI translation and sentence analysis. If you're still building your basics, start with short, slow-paced materials.
+
+</details>
+
+<details>
+<summary><strong>How soon will I see results?</strong></summary>
+
+After the first study session on a material, you'll understand it and be able to retell it in your own words. The 7 rounds of spaced review that follow take about 8 weeks and lock it into long-term memory. Overall listening and speaking skills build up over time: practice 20–30 minutes a day with 2–3 materials at once, and within a few weeks listening should feel easier and speaking more fluent.
+
+</details>
+
+<details>
+<summary><strong>Can I use it offline?</strong></summary>
+
+Yes. The learning flow, reviews, favorites, shadowing evaluation and local transcription all work offline. Only cloud AI features need a connection.
+
+</details>
+
+<details>
+<summary><strong>Where is my data stored? What if I switch phones?</strong></summary>
+
+Your learning data is stored on your device. Before switching phones or reinstalling, export a backup from **Settings → Backup & Restore**, then restore it on the new device.
+
+</details>
+
+---
+
 ## 💬 Join the community
 
 Practice English alongside other committed learners: share methods, give feedback, and be the first to hear about new features.
 
-<table>
-  <tr>
-    <td valign="middle" align="center" width="140">
-      <img src="assets/qr/wechat-group.jpg" alt="WeChat group QR code" width="110" /><br/>
-      <sub>Scan to join WeChat group</sub>
-    </td>
-    <td valign="middle">
-      <p><sub>If the QR code expires or the group hits the 200-member cap, add WeChat <code>echo-loop-app</code> first and the admin will invite you in.</sub></p>
-    </td>
-  </tr>
-</table>
+- [Join the QQ group (1109595757)](https://qm.qq.com/q/f4YeczPPUc): Share learning methods and resources with other committed learners.
+- [Contact us on WeChat](https://i.postimg.cc/P5tVpPTV/echo-loop-wecom.jpg): Scan the QR code to contact Echo Loop.
+- [Follow us on Bilibili](https://space.bilibili.com/509449049/upload/video): Get English-learning content and feature updates.
+- [Follow us on Xiaohongshu](https://xhslink.cn/m/4zOdGUcDH4N): Get practical tips, feature updates, and English-learning content.
 
 ---
 
@@ -192,7 +284,7 @@ Practice English alongside other committed learners: share methods, give feedbac
 
 ### ✅ 1 · Core features
 
-- [x] Learning loop: blind / intensive / shadowing / retelling
+- [x] Learning loop: intensive / shadowing / blind / retelling
 - [x] Spaced review scheduling (6h → 28d)
 - [x] Sense-group splitting for long sentences
 - [x] Saved hard sentences + focused review
@@ -205,8 +297,8 @@ Practice English alongside other committed learners: share methods, give feedbac
 ### 🚧 2 · AI capabilities
 
 - [ ] AI speaking partner
-- [ ] AI learning assistant (on-demand Q&A)
-- [ ] Word deep-dive analysis
+- [x] AI learning assistant (on-demand Q&A)
+- [x] AI word lookup
 - [ ] Personalized material recommendations
 
 ### 🔭 3 · Experience & platforms
@@ -224,8 +316,13 @@ Practice English alongside other committed learners: share methods, give feedbac
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=echo-loop/Echo-Loop&type=Date)](https://star-history.com/#echo-loop/Echo-Loop&Date)
-
+<a href="https://www.star-history.com/?repos=echo-loop%2FEcho-Loop&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&theme=dark&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=echo-loop/Echo-Loop&type=date&legend=top-left&sealed_token=Yn1CvBygp-TANTMrrjOoIPcBqfBW4dJBno9qMlDVPTRaqlNZEvy5k6QNjheAb8AxwJ3ygwow4Zszp0Z5XCtxf7OP4MOtE_fCjKTjyBALH5gvoX-6BOLIIQ" />
+ </picture>
+</a>
 ---
 
 ## 🎓 Academic guidance & acknowledgements
@@ -251,15 +348,29 @@ Thanks to [Yang Yan](https://sfs.muc.edu.cn/info/1063/3729.htm) (School of Forei
 ```bash
 git clone git@github.com:echo-loop/Echo-Loop.git
 cd Echo-Loop
-cp .dev.env.template .dev.env   # fill in Supabase / Google / API base URL
+cp .dev.env.template .dev.env   # fill in Supabase / Google settings
 flutter pub get
 dart run build_runner build
 flutter run -d <ios|android|macos> --dart-define-from-file=.dev.env
 ```
 
-> Compile-time variables (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, `API_BASE_URL`)
-> live in `.dev.env` (debug) / `.prod.env` (release) and are injected via `--dart-define-from-file`.
-> Both files are gitignored — do not commit them. `.prod.env` uses the same keys with the production `API_BASE_URL`.
+> Supabase, Google, and other compile-time settings live in `.dev.env` (debug) / `.prod.env`
+> (release) and are injected via `--dart-define-from-file`. Both files are gitignored.
+> The global API defaults to `https://www.echo-loop.top` and can be overridden at compile time
+> with `API_BASE_URL`. The model CDN addresses are configured in
+> `lib/config/regional_service_endpoints.dart`.
+> The China API defaults to `https://www.echo-loop.cn` and can be overridden with
+> `API_CHINA_BASE_URL`. Local builds can override them in `.prod.env`; GitHub Actions CI/Release
+> passes the corresponding GitHub Variables directly to the build commands.
+> release builds use one `isChinaUser` result: China Apple Storefront, device country, or
+> `/api/v1/client/config` `context.countryCode` set to `CN`/`CHN` selects China, so one package
+> contains both global and China API candidates and serves both regions. When there is no China
+> evidence, the first API request uses the global endpoint. When the region conclusion changes,
+> the app keeps its current API endpoint while a
+> config request probes the new preference. It tries the other region once on a network error or
+> 5xx. A successful probe activates the preferred region; alternate success keeps API requests on
+> the available endpoint for the session, and a later config refresh probes the preference again.
+> Model CDN routing always follows `isChinaUser`; source API defaults apply when no override is set.
 
 </details>
 
@@ -345,8 +456,17 @@ open -a Simulator
 flutter analyze                          # Static analysis
 flutter test                             # All tests
 flutter test integration_test -d macos   # Integration tests
+# Maestro UI smoke test (start a device and install the dev build first)
+MAESTRO_APP_ID=app.echoloop.dev scripts/test_maestro.sh
+# Android device: build, install the dev build, then run the Study tests
+scripts/test_maestro_android.sh
+# With multiple devices, specify the target; alternatively export MAESTRO_ANDROID_DEVICE=<adb-serial> once
+scripts/test_maestro_android.sh --device <adb-serial>
 dart format .                            # Format
 ```
+
+> Install the Maestro CLI with `curl -fsSL https://get.maestro.mobile.dev | bash`.
+> For the iOS dev build, use `MAESTRO_APP_ID=top.echo-loop.dev`; flows live in `maestro/`.
 
 **Code generation** (after modifying Riverpod providers)
 
@@ -357,7 +477,7 @@ dart run build_runner build
 **Build**
 
 ```bash
-# Compile-time variables are injected from an env file (.dev.env for debug, .prod.env for release)
+# Supabase / Google compile-time variables are injected from an env file (.prod.env for release)
 flutter build macos --dart-define-from-file=.prod.env
 flutter build apk   --dart-define-from-file=.prod.env
 flutter build ios   --dart-define-from-file=.prod.env
@@ -379,6 +499,8 @@ flutter run --release -d <DEVICE_ID> --dart-define-from-file=.dev.env
 </details>
 
 ---
+
+AtomGit mirror for users in China: <a href="https://atomgit.com/echo-loop/Echo-Loop">Echo Loop on AtomGit</a>
 
 ## 📄 License
 

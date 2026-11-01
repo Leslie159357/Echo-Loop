@@ -1,17 +1,30 @@
 import 'package:echo_loop/config/revenuecat_config.dart';
+import 'package:echo_loop/config/paddle_config.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
+import 'package:echo_loop/features/remote_config/remote_config.dart';
+import 'package:echo_loop/features/remote_config/remote_config_providers.dart';
+import 'package:echo_loop/features/remote_config/remote_config_service.dart';
 import 'package:echo_loop/features/subscription/models/entitlement.dart';
+import 'package:echo_loop/features/subscription/models/entitlement_source.dart';
 import 'package:echo_loop/features/subscription/models/subscription_plan.dart';
 import 'package:echo_loop/features/subscription/providers/subscription_availability.dart';
 import 'package:echo_loop/features/subscription/providers/subscription_controller.dart';
+import 'package:echo_loop/features/subscription/providers/subscription_identity.dart';
 import 'package:echo_loop/features/subscription/providers/subscription_plans_provider.dart';
 import 'package:echo_loop/features/subscription/screens/paywall_screen.dart';
+import 'package:echo_loop/features/subscription/services/purchase_service.dart';
 import 'package:echo_loop/features/subscription/state/entitlement_state.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+import '../../helpers/mock_providers.dart';
 
 /// 固定权益态的 controller 替身（不跑对账 / 监听 / 订阅流）。
 class _FixedController extends SubscriptionController {
@@ -19,6 +32,11 @@ class _FixedController extends SubscriptionController {
   final EntitlementState _state;
   @override
   EntitlementState build() => _state;
+
+  @override
+  Future<void> refreshIfStale({
+    Duration maxAge = const Duration(hours: 24),
+  }) async {}
 }
 
 /// 记录购买 / 恢复调用次数的替身，用于验证登录门是否拦截了动作。
@@ -27,12 +45,60 @@ class _SpyController extends SubscriptionController {
   final EntitlementState _state;
   int purchaseCalls = 0;
   int restoreCalls = 0;
+  int refreshCalls = 0;
+  int checkoutCalls = 0;
+  int portalCalls = 0;
+  int refreshIfStaleCalls = 0;
+  String? checkoutPlanId;
+  bool? checkoutAllowStoreFallback;
+  Object? restoreError;
+  Object? checkoutError;
+  EntitlementState? stateAfterCheckoutError;
   @override
   EntitlementState build() => _state;
   @override
   Future<void> purchase(String planId) async => purchaseCalls++;
   @override
-  Future<void> restore() async => restoreCalls++;
+  Future<void> restore() async {
+    restoreCalls++;
+    final error = restoreError;
+    if (error != null) throw error;
+  }
+
+  @override
+  Future<void> refresh({bool force = false}) async => refreshCalls++;
+  @override
+  Future<void> refreshIfStale({
+    Duration maxAge = const Duration(hours: 24),
+  }) async {
+    refreshIfStaleCalls++;
+  }
+
+  @override
+  Future<Uri> startPaddleCheckout(
+    String planId, {
+    bool allowStoreFallback = false,
+  }) async {
+    checkoutCalls++;
+    checkoutPlanId = planId;
+    checkoutAllowStoreFallback = allowStoreFallback;
+    final error = checkoutError;
+    if (error != null) {
+      final next = stateAfterCheckoutError;
+      if (next != null) state = next;
+      throw error;
+    }
+    return Uri.parse(
+      'https://sandbox-pay.paddle.io/hsc_test'
+      '?transaction_id=txn_1&user_email=user%40example.com',
+    );
+  }
+
+  @override
+  Future<Uri> createPaddlePortal() async {
+    portalCalls++;
+    return Uri.parse('https://customer-portal.paddle.test/session');
+  }
 }
 
 class _FixedPlansController extends SubscriptionPlansController {
@@ -45,6 +111,130 @@ class _FixedPlansController extends SubscriptionPlansController {
 
   @override
   Future<void> refresh({bool force = false}) async {}
+}
+
+class _ErrorPlansController extends SubscriptionPlansController {
+  @override
+  AsyncValue<List<SubscriptionPlan>> build() =>
+      AsyncError(StateError('store plans unavailable'), StackTrace.current);
+}
+
+class _FixedPaddlePlansController extends PaddleSubscriptionPlansController {
+  _FixedPaddlePlansController(this._plans);
+
+  final List<SubscriptionPlan> _plans;
+
+  @override
+  AsyncValue<List<SubscriptionPlan>> build() => AsyncData(_plans);
+
+  @override
+  Future<void> refresh({bool force = false}) async {}
+}
+
+class _SpyPlansController extends SubscriptionPlansController {
+  _SpyPlansController(this._plans);
+
+  final List<SubscriptionPlan> _plans;
+  final List<bool> forceCalls = [];
+
+  @override
+  AsyncValue<List<SubscriptionPlan>> build() => AsyncData(_plans);
+
+  @override
+  Future<void> refresh({bool force = false}) async {
+    forceCalls.add(force);
+  }
+}
+
+class _SpyPaddlePlansController extends PaddleSubscriptionPlansController {
+  _SpyPaddlePlansController(this._plans);
+
+  final List<SubscriptionPlan> _plans;
+  final List<bool> forceCalls = [];
+
+  @override
+  AsyncValue<List<SubscriptionPlan>> build() => AsyncData(_plans);
+
+  @override
+  Future<void> refresh({bool force = false}) async {
+    forceCalls.add(force);
+  }
+}
+
+class _ErrorSpyPlansController extends _SpyPlansController {
+  _ErrorSpyPlansController() : super(const []);
+
+  @override
+  AsyncValue<List<SubscriptionPlan>> build() =>
+      AsyncError(StateError('store plans unavailable'), StackTrace.current);
+}
+
+/// Paywall 只需要触发 remote config 后台刷新；测试中用假 service 避免依赖 SP。
+class _SpyRemoteConfigService implements RemoteConfigService {
+  int fetchCalls = 0;
+
+  @override
+  DateTime? get lastFetchedAt => DateTime(2026, 7, 23, 14);
+
+  @override
+  Future<RemoteConfig> fetchRemote() async {
+    fetchCalls++;
+    return const RemoteConfig(
+      version: RemoteConfig.currentVersion,
+      ttlSeconds: RemoteConfig.defaultTtlSeconds,
+      context: RemoteConfigContext(countryCode: 'CN'),
+      features: RemoteConfigFeatures.defaults,
+    );
+  }
+
+  @override
+  Future<RemoteConfig> fetchRemoteFromBaseUrl(
+    String baseUrl, {
+    required Duration timeout,
+  }) => fetchRemote();
+
+  @override
+  Future<RemoteConfig> load() async => fetchRemote();
+
+  @override
+  RemoteConfig loadInitialFromCache() => RemoteConfig.defaults;
+}
+
+/// 记录 Web checkout 打开参数的假 url_launcher 平台实现。
+class _FakeUrlLauncher extends UrlLauncherPlatform
+    with MockPlatformInterfaceMixin {
+  final List<String> launched = [];
+  final List<LaunchOptions> options = [];
+  bool launchReturns = true;
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => true;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launched.add(url);
+    this.options.add(options);
+    return launchReturns;
+  }
+
+  @override
+  // ignore: deprecated_member_use
+  Future<bool> launch(
+    String url, {
+    required bool useSafariVC,
+    required bool useWebView,
+    required bool enableJavaScript,
+    required bool enableDomStorage,
+    required bool universalLinksOnly,
+    required Map<String, String> headers,
+    String? webOnlyWindowName,
+  }) async {
+    launched.add(url);
+    return launchReturns;
+  }
 }
 
 const _plans = [
@@ -64,30 +254,86 @@ const _plans = [
   ),
 ];
 
+const _paddlePlans = [
+  SubscriptionPlan(
+    planId: 'plus_monthly',
+    title: 'Echo Loop Plus Monthly',
+    priceString: r'$4.99',
+    period: SubscriptionPeriod.monthly,
+  ),
+  SubscriptionPlan(
+    planId: 'plus_yearly',
+    title: 'Echo Loop Plus Yearly',
+    priceString: r'$49.99',
+    period: SubscriptionPeriod.yearly,
+    introOffer: SubscriptionIntroOffer(
+      priceString: r'$24.99',
+      period: SubscriptionOfferPeriod.year,
+      periodNumberOfUnits: 1,
+      cycles: 1,
+      isFreeTrial: false,
+      renewalPriceString: r'$49.99',
+    ),
+  ),
+  SubscriptionPlan(
+    planId: 'plus_yearly_one_time',
+    title: 'Echo Loop Plus One-time Year',
+    priceString: r'$44.99',
+    period: SubscriptionPeriod.yearly,
+    purchaseType: PurchaseType.oneTime,
+  ),
+];
+
 Widget _harness({
   required EntitlementState state,
   List<SubscriptionPlan> plans = _plans,
+  List<SubscriptionPlan> paddlePlans = _paddlePlans,
   bool? authenticated,
   SubscriptionController Function()? controller,
+  SubscriptionPlansController Function()? plansController,
+  PaddleSubscriptionPlansController Function()? paddlePlansController,
   // 测试宿主（macOS/无 key）默认不支持订阅，这里默认置 true 以覆盖购买页 UI。
   bool available = true,
   // 网页支付渠道（侧载 APK / 桌面）：切换到浏览器结账购买态。
   bool webCheckout = false,
+  bool showStoreWebCheckoutFallback = false,
+  bool storePlansError = false,
+  _SpyRemoteConfigService? remoteConfigService,
+  SubscriptionIdentity? identity,
+  ThemeMode themeMode = ThemeMode.light,
+  Locale locale = const Locale('en'),
 }) {
+  final remoteService = remoteConfigService ?? _SpyRemoteConfigService();
   return ProviderScope(
     overrides: [
+      analyticsOverride(),
+      remoteConfigServiceProvider.overrideWithValue(remoteService),
       subscriptionAvailabilityProvider.overrideWithValue(available),
       webCheckoutModeProvider.overrideWithValue(webCheckout),
+      showStoreWebCheckoutFallbackProvider.overrideWithValue(
+        showStoreWebCheckoutFallback,
+      ),
       subscriptionControllerProvider.overrideWith(
         controller ?? () => _FixedController(state),
       ),
       subscriptionPlansProvider.overrideWith(
-        () => _FixedPlansController(plans),
+        plansController ??
+            () => storePlansError
+                ? _ErrorPlansController()
+                : _FixedPlansController(plans),
+      ),
+      paddleSubscriptionPlansProvider.overrideWith(
+        paddlePlansController ?? () => _FixedPaddlePlansController(paddlePlans),
       ),
       if (authenticated != null)
         isAuthenticatedProvider.overrideWithValue(authenticated),
+      if (identity != null)
+        subscriptionIdentityProvider.overrideWithValue(identity),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
+      themeMode: themeMode,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       localizationsDelegates: [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -95,19 +341,47 @@ Widget _harness({
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: [Locale('en'), Locale('zh')],
-      home: PaywallScreen(),
+      locale: locale,
+      home: const PaywallScreen(),
     ),
   );
 }
 
 void main() {
+  late _FakeUrlLauncher urlLauncher;
+
   // manageSubscriptionsUrl 依赖 Platform（Linux CI 恒为 null），固定为商店链接使
   // 「管理订阅」按钮的断言不随宿主平台漂移。
   setUp(() {
+    urlLauncher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = urlLauncher;
+    debugIsPaddleCheckoutChannelOverride = true;
     debugManageSubscriptionsUrlOverride = () =>
         'https://apps.apple.com/account/subscriptions';
   });
-  tearDown(() => debugManageSubscriptionsUrlOverride = null);
+  tearDown(() {
+    debugIsPaddleCheckoutChannelOverride = null;
+    debugManageSubscriptionsUrlOverride = null;
+  });
+
+  test('Hosted Checkout 不追加邮箱 fragment，旧支付链接仍预填邮箱', () {
+    final hosted = paddleCheckoutUriWithEmail(
+      Uri.parse(
+        'https://sandbox-pay.paddle.io/hsc_test'
+        '?transaction_id=txn_1',
+      ),
+      ' user@example.com ',
+    );
+    expect(hosted.fragment, isEmpty);
+
+    final legacy = paddleCheckoutUriWithEmail(
+      Uri.parse(
+        'https://sandbox-checkout.paddle.com/checkout/txn_1#source=app',
+      ),
+      ' user@example.com ',
+    );
+    expect(legacy.toString(), contains('#source=app&email=user%40example.com'));
+  });
 
   testWidgets('平台未启用订阅：渲染占位页，不展示套餐与购买 CTA', (tester) async {
     await tester.pumpWidget(
@@ -124,31 +398,655 @@ void main() {
     expect(find.text('Restore Purchases'), findsNothing);
   });
 
-  testWidgets('网页支付渠道：展示网页结账 CTA，不展示商店套餐卡与恢复购买', (tester) async {
+  testWidgets('打开 Paywall 时后台强制刷新 remote config', (tester) async {
+    final remoteConfigService = _SpyRemoteConfigService();
     await tester.pumpWidget(
-      _harness(state: const EntitlementState.free(), webCheckout: true),
+      _harness(
+        state: const EntitlementState.free(),
+        remoteConfigService: remoteConfigService,
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(remoteConfigService.fetchCalls, 1);
+  });
+
+  testWidgets('Direct Paywall 进入时强制刷新 Paddle 价格', (tester) async {
+    final storeController = _SpyPlansController(_plans);
+    final paddleController = _SpyPaddlePlansController(_paddlePlans);
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plansController: () => storeController,
+        paddlePlansController: () => paddleController,
+        webCheckout: true,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(paddleController.forceCalls, [true]);
+    expect(storeController.forceCalls, isEmpty);
+    expect(find.text(r'$24.99'), findsOneWidget);
+    expect(find.text(r'$39.99'), findsNothing);
+  });
+
+  testWidgets('商店 Paywall 进入时强制刷新原生价格', (tester) async {
+    final storeController = _SpyPlansController(_plans);
+    final paddleController = _SpyPaddlePlansController(_paddlePlans);
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plansController: () => storeController,
+        paddlePlansController: () => paddleController,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(storeController.forceCalls, [true]);
+    expect(paddleController.forceCalls, isEmpty);
+    expect(find.text(r'$39.99'), findsOneWidget);
+  });
+
+  testWidgets('商店包切换 Web 兜底时强制刷新 Paddle 且不清空当前价格', (tester) async {
+    final storeController = _SpyPlansController(_plans);
+    final paddleController = _SpyPaddlePlansController(_paddlePlans);
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plansController: () => storeController,
+        paddlePlansController: () => paddleController,
+        showStoreWebCheckoutFallback: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(r'$39.99'), findsOneWidget);
+
+    await tester.tap(
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
+      ),
+    );
+    await tester.pump();
+
+    expect(paddleController.forceCalls, [true]);
+    expect(find.text(r'$24.99'), findsOneWidget);
+  });
+
+  testWidgets('价格错误态重试直接刷新原 Controller，不 invalidate Provider', (tester) async {
+    final storeController = _ErrorSpyPlansController();
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plansController: () => storeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(storeController.forceCalls, [true]);
+
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+
+    expect(storeController.forceCalls, [true, true]);
+  });
+
+  testWidgets('direct 渠道：展示 Paddle 订阅与一次性年付，默认仍选中年订', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+      ),
     );
     await tester.pumpAndSettle();
 
     // 权益列表仍展示
-    expect(find.text('More AI subtitle transcription'), findsOneWidget);
-    expect(find.text('Special offer:'), findsNothing);
-    // 网页结账 CTA + 说明，不出现商店套餐卡
+    expect(find.text('More AI subtitle transcriptions'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Subscribe'), findsOneWidget);
+    expect(find.textContaining('RevenueCat'), findsNothing);
+    expect(find.textContaining('Paddle'), findsNothing);
+    expect(find.text('Monthly'), findsOneWidget);
+    expect(find.text('Yearly'), findsOneWidget);
+    expect(find.text('1 year · One-time'), findsOneWidget);
     expect(
-      find.widgetWithText(FilledButton, 'Continue to checkout'),
+      find.text('One payment, 1 year of access, no auto-renewal'),
       findsOneWidget,
     );
+    expect(find.text('One-time'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsOneWidget);
+    expect(find.text('/first yr'), findsOneWidget);
+    // direct/Web 渠道同样用用户语义「恢复购买」，底层走后端权益同步。
+    expect(find.text('Restore Purchases'), findsOneWidget);
+    expect(find.text('Refresh'), findsNothing);
+  });
+
+  testWidgets('direct 渠道：一次性年付原样创建 checkout', (tester) async {
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final oneTimePlan = find.text('1 year · One-time');
+    await tester.ensureVisible(oneTimePlan);
+    await tester.tap(oneTimePlan);
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Buy one year'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Buy one year'));
+    await tester.pump();
+
+    expect(spy.checkoutPlanId, 'plus_yearly_one_time');
+    expect(spy.checkoutAllowStoreFallback, isFalse);
+    expect(urlLauncher.launched, [
+      'https://sandbox-pay.paddle.io/hsc_test'
+          '?transaction_id=txn_1&user_email=user%40example.com',
+    ]);
+    expect(Uri.parse(urlLauncher.launched.single).fragment, isEmpty);
+
+    await tester.pump(const Duration(seconds: 121));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('商店 Web 兜底：一次性 planId 不映射成年订阅', (tester) async {
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        showStoreWebCheckoutFallback: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
+      ),
+    );
+    await tester.pumpAndSettle();
+    final oneTimePlan = find.text('1 year · One-time');
+    await tester.ensureVisible(oneTimePlan);
+    await tester.tap(oneTimePlan);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Buy one year'));
+    await tester.pump();
+
+    expect(spy.checkoutPlanId, 'plus_yearly_one_time');
+    expect(spy.checkoutAllowStoreFallback, isTrue);
+
+    await tester.pump(const Duration(seconds: 121));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('商店包：切换到 Web 支付后展示 Paddle 套餐并创建 Paddle checkout', (tester) async {
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        showStoreWebCheckoutFallback: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
     expect(
-      find.text(
-        'Plans, current prices, and offers are shown on the secure checkout page.',
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
       ),
       findsOneWidget,
     );
-    expect(find.text('Monthly'), findsNothing);
-    expect(find.text('Yearly'), findsNothing);
-    // appbar action 为「刷新」，非商店「恢复购买」
-    expect(find.text('Refresh'), findsOneWidget);
-    expect(find.text('Restore Purchases'), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, 'Start 7-day free trial'),
+      findsOneWidget,
+    );
+    expect(find.text(r'$39.99'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsNothing);
+
+    await tester.tap(
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with store payment'), findsOneWidget);
+    expect(find.textContaining('secure browser'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Subscribe'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsOneWidget);
+    expect(find.text('/first yr'), findsOneWidget);
+    expect(find.text(r'$39.99'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Subscribe'));
+    await tester.pump();
+
+    expect(spy.checkoutCalls, 1);
+    expect(spy.checkoutPlanId, 'plus_yearly');
+    expect(spy.checkoutAllowStoreFallback, isTrue);
+    expect(urlLauncher.launched, [
+      'https://sandbox-pay.paddle.io/hsc_test'
+          '?transaction_id=txn_1&user_email=user%40example.com',
+    ]);
+
+    await tester.pump(const Duration(seconds: 121));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('商店包：切换到 Web 支付后可返回商店支付', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        showStoreWebCheckoutFallback: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with store payment'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(
+        OutlinedButton,
+        'Store payment not working? Use web checkout',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Continue with store payment'), findsNothing);
+    expect(find.text(r'$39.99'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsNothing);
+  });
+
+  testWidgets('商店包：远程开关关闭时不展示 Web 支付切换入口', (tester) async {
+    await tester.pumpWidget(_harness(state: const EntitlementState.free()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Store payment not working? Use web checkout'),
+      findsNothing,
+    );
+    expect(find.text('Continue with store payment'), findsNothing);
+  });
+
+  testWidgets('商店套餐为空时仍展示 Web 支付兜底入口', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: const [],
+        showStoreWebCheckoutFallback: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Store payment not working? Use web checkout'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Store payment not working? Use web checkout'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with store payment'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsOneWidget);
+  });
+
+  testWidgets('商店套餐获取失败时仍展示 Web 支付兜底入口', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        storePlansError: true,
+        showStoreWebCheckoutFallback: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Store payment not working? Use web checkout'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('direct 渠道：未登录点击订阅不创建 Paddle checkout', (tester) async {
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: false,
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Subscribe'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in to Echo Loop'), findsOneWidget);
+    expect(urlLauncher.launched, isEmpty);
+    expect(spy.refreshCalls, 0);
+    expect(spy.checkoutCalls, 0);
+  });
+
+  testWidgets('direct 渠道：创建 Paddle checkout 后进入权益确认等待态', (tester) async {
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user 1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+        themeMode: ThemeMode.dark,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Subscribe'));
+    await tester.pump();
+
+    expect(spy.checkoutCalls, 1);
+    expect(spy.checkoutPlanId, 'plus_yearly');
+    expect(urlLauncher.launched, [
+      'https://sandbox-pay.paddle.io/hsc_test'
+          '?transaction_id=txn_1&user_email=user%40example.com',
+    ]);
+    expect(
+      urlLauncher.options.single.mode,
+      PreferredLaunchMode.externalApplication,
+    );
+    final waitingButton = find.widgetWithText(
+      FilledButton,
+      'Waiting for payment to be confirmed…',
+    );
+    expect(waitingButton, findsOneWidget);
+    final button = tester.widget<FilledButton>(waitingButton);
+    expect(button.onPressed, isNull);
+    expect(
+      button.style?.backgroundColor?.resolve({WidgetState.disabled}),
+      AppTheme.premiumAccent(Brightness.dark),
+    );
+    final progress = tester.widget<CircularProgressIndicator>(
+      find.descendant(
+        of: waitingButton,
+        matching: find.byType(CircularProgressIndicator),
+      ),
+    );
+    expect(progress.color, AppTheme.onPremiumAccent(Brightness.dark));
+    expect(
+      find.widgetWithText(OutlinedButton, 'I\'ve completed payment'),
+      findsNothing,
+    );
+    await tester.tap(waitingButton);
+    await tester.pump();
+    expect(spy.checkoutCalls, 1);
+    expect(spy.refreshCalls, 1);
+    await tester.pump(const Duration(seconds: 4));
+    expect(spy.refreshCalls, 1);
+    await tester.pump(const Duration(seconds: 1));
+    expect(spy.refreshCalls, 2);
+
+    await tester.pump(const Duration(seconds: 121));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('direct 渠道：Paddle 页面打不开时提示失败且不进入等待态', (tester) async {
+    urlLauncher.launchReturns = false;
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Subscribe'));
+    await tester.pumpAndSettle();
+
+    expect(urlLauncher.launched, [
+      'https://sandbox-pay.paddle.io/hsc_test'
+          '?transaction_id=txn_1&user_email=user%40example.com',
+    ]);
+    expect(
+      find.text('Couldn\'t open the checkout page. Please try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Waiting for payment to be confirmed…'), findsNothing);
+    expect(spy.refreshCalls, 0);
+  });
+
+  testWidgets('权益 unknown 时自动尝试刷新并禁止 checkout', (tester) async {
+    final spy = _SpyController(const EntitlementState.unknown());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.unknown(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(spy.refreshIfStaleCalls, 1);
+    expect(
+      find.text(
+        'We couldn\'t confirm your membership status. Retry before purchasing.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(FilledButton, 'Subscribe'), findsNothing);
+    expect(spy.checkoutCalls, 0);
+  });
+
+  testWidgets('已确认 fresh Free 后台刷新时保持套餐购买区', (tester) async {
+    const refreshingFree = EntitlementState(
+      status: EntitlementStatus.free,
+      entitlement: Entitlement(isPremium: false),
+      isRefreshing: true,
+    );
+    final spy = _SpyController(refreshingFree);
+    await tester.pumpWidget(
+      _harness(
+        state: refreshingFree,
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, 'Subscribe'), findsOneWidget);
+    expect(find.text('Checking your membership status…'), findsNothing);
+  });
+
+  testWidgets('checkout already_entitled 不打开浏览器并提示权益已更新', (tester) async {
+    final spy = _SpyController(const EntitlementState.free())
+      ..checkoutError = PurchaseException(
+        'already entitled',
+        alreadyEntitled: true,
+      )
+      ..stateAfterCheckoutError = const EntitlementState(
+        status: EntitlementStatus.premium,
+        entitlement: Entitlement(
+          isPremium: true,
+          source: EntitlementSource.paddle,
+        ),
+      );
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Subscribe'));
+    await tester.pumpAndSettle();
+
+    expect(spy.checkoutCalls, 1);
+    expect(urlLauncher.launched, isEmpty);
+    expect(
+      find.text('Your membership status has been updated.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Couldn\'t open the checkout page. Please try again.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('direct Premium 用户：管理订阅打开 Paddle Customer Portal', (
+    tester,
+  ) async {
+    final spy = _SpyController(
+      const EntitlementState(
+        status: EntitlementStatus.premium,
+        entitlement: Entitlement(isPremium: true),
+      ),
+    );
+    await tester.pumpWidget(
+      _harness(
+        state: spy._state,
+        plans: _paddlePlans,
+        webCheckout: true,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Manage Subscription'));
+    await tester.pumpAndSettle();
+
+    expect(spy.portalCalls, 1);
+    expect(urlLauncher.launched, [
+      'https://customer-portal.paddle.test/session',
+    ]);
+    expect(
+      urlLauncher.options.single.mode,
+      PreferredLaunchMode.externalApplication,
+    );
+  });
+
+  testWidgets('商店包 Paddle Premium 用户：管理订阅打开 Paddle Customer Portal', (
+    tester,
+  ) async {
+    final spy = _SpyController(
+      const EntitlementState(
+        status: EntitlementStatus.premium,
+        entitlement: Entitlement(
+          isPremium: true,
+          productId: 'plus_yearly',
+          source: EntitlementSource.paddle,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      _harness(
+        state: spy._state,
+        authenticated: true,
+        identity: const SubscriptionIdentity(
+          userId: 'user-1',
+          accessToken: 'token',
+        ),
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Manage Subscription'));
+    await tester.pumpAndSettle();
+
+    expect(spy.portalCalls, 1);
+    expect(urlLauncher.launched, [
+      'https://customer-portal.paddle.test/session',
+    ]);
+    expect(
+      urlLauncher.options.single.mode,
+      PreferredLaunchMode.externalApplication,
+    );
+  });
+
+  testWidgets('一次性年付会员：展示固定期限且不显示管理订阅入口', (tester) async {
+    final expiry = DateTime.now().toUtc().add(const Duration(days: 300));
+    final state = EntitlementState(
+      status: EntitlementStatus.premium,
+      entitlement: Entitlement(
+        isPremium: true,
+        productId: 'pri_one_time',
+        period: SubscriptionPeriod.yearly,
+        purchaseType: PurchaseType.oneTime,
+        expiresAt: expiry,
+        source: EntitlementSource.paddle,
+      ),
+    );
+    await tester.pumpWidget(
+      _harness(state: state, plans: _paddlePlans, webCheckout: true),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('One-year membership'), findsOneWidget);
+    expect(find.text('One-time purchase'), findsOneWidget);
+    expect(find.textContaining('Valid until'), findsOneWidget);
+    expect(find.text('Manage Subscription'), findsNothing);
   });
 
   testWidgets('free 用户：展示权益、套餐卡片、试用 CTA 与恢复购买', (tester) async {
@@ -156,32 +1054,60 @@ void main() {
     await tester.pumpAndSettle();
 
     // 权益列表
-    expect(find.text('Get more AI-powered learning'), findsOneWidget);
-    expect(find.text('More AI subtitle transcription'), findsOneWidget);
-    expect(find.text('More AI translation'), findsOneWidget);
-    expect(find.text('More AI word explanation'), findsOneWidget);
-    expect(find.text('More AI sentence breakdown'), findsOneWidget);
-    expect(find.text('More AI sentence chunking'), findsOneWidget);
-    expect(find.text('Special offer:'), findsNothing);
+    expect(find.text('Echo Loop Premium'), findsWidgets);
+    expect(find.text('Unlimited AI to power your learning'), findsOneWidget);
+    expect(find.text('Unlimited AI translations'), findsOneWidget);
+    expect(
+      find.text('Unlimited AI word and phrase explanations'),
+      findsOneWidget,
+    );
+    expect(find.text('Unlimited AI sentence analysis'), findsOneWidget);
+    expect(find.text('Unlimited AI assistant chats'), findsOneWidget);
+    expect(find.text('Priority support'), findsOneWidget);
+    expect(find.text('Unlimited AI sentence chunking'), findsOneWidget);
+    expect(find.text('More AI subtitle transcriptions'), findsOneWidget);
     expect(find.byKey(const ValueKey('paywall_header_logo')), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('More AI subtitle transcription')).dy <
-          tester.getTopLeft(find.text('More AI translation')).dy,
+      tester.getTopLeft(find.text('Unlimited AI translations')).dy <
+          tester
+              .getTopLeft(
+                find.text('Unlimited AI word and phrase explanations'),
+              )
+              .dy,
       isTrue,
     );
     expect(
-      tester.getTopLeft(find.text('More AI translation')).dy <
-          tester.getTopLeft(find.text('More AI word explanation')).dy,
+      tester
+              .getTopLeft(
+                find.text('Unlimited AI word and phrase explanations'),
+              )
+              .dy <
+          tester.getTopLeft(find.text('Unlimited AI sentence analysis')).dy,
       isTrue,
     );
     expect(
-      tester.getTopLeft(find.text('More AI word explanation')).dy <
-          tester.getTopLeft(find.text('More AI sentence breakdown')).dy,
+      tester.getTopLeft(find.text('Unlimited AI sentence analysis')).dy <
+          tester.getTopLeft(find.text('Unlimited AI assistant chats')).dy,
       isTrue,
     );
     expect(
-      tester.getTopLeft(find.text('More AI sentence breakdown')).dy <
-          tester.getTopLeft(find.text('More AI sentence chunking')).dy,
+      tester.getTopLeft(find.text('Unlimited AI assistant chats')).dy <
+          tester.getTopLeft(find.text('Unlimited AI sentence chunking')).dy,
+      isTrue,
+    );
+    expect(
+      tester.getTopLeft(find.text('Unlimited AI sentence chunking')).dy <
+          tester.getTopLeft(find.text('Unlimited AI retell reviews')).dy,
+      isTrue,
+    );
+    expect(
+      tester.getTopLeft(find.text('Unlimited AI retell reviews')).dy <
+          tester.getTopLeft(find.text('More AI subtitle transcriptions')).dy,
+      isTrue,
+    );
+    expect(
+      tester.getTopLeft(find.text('More AI subtitle transcriptions')).dy <
+          tester.getTopLeft(find.text('Priority support')).dy,
       isTrue,
     );
     // 套餐卡片用派生简洁名（非冗长商店标题）
@@ -223,6 +1149,31 @@ void main() {
     );
   });
 
+  testWidgets('中文 Paywall 权益列表展示 AI 助手和优先客户支持', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        locale: const Locale('zh'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('无限 AI 助手对话'), findsOneWidget);
+    expect(find.text('无限 AI 句子解析'), findsOneWidget);
+    expect(find.text('更多 AI 字幕转录'), findsOneWidget);
+    expect(find.text('优先客户支持'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('无限 AI 复述评估')).dy <
+          tester.getTopLeft(find.text('更多 AI 字幕转录')).dy,
+      isTrue,
+    );
+    expect(
+      tester.getTopLeft(find.text('更多 AI 字幕转录')).dy <
+          tester.getTopLeft(find.text('优先客户支持')).dy,
+      isTrue,
+    );
+  });
+
   testWidgets('选中月付套餐后 CTA 变为订阅', (tester) async {
     await tester.pumpWidget(_harness(state: const EntitlementState.free()));
     await tester.pumpAndSettle();
@@ -244,7 +1195,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text("You're a member"), findsOneWidget);
+    expect(find.text("You're already on the Premium plan."), findsOneWidget);
     expect(find.text('Manage Subscription'), findsOneWidget);
     // 无到期时间 → 永久状态 + 永久说明；套餐无法判定 → 兜底「会员」徽章
     expect(find.text('Lifetime'), findsOneWidget);
@@ -258,7 +1209,7 @@ void main() {
     expect(find.text('Restore Purchases'), findsOneWidget);
   });
 
-  testWidgets('年付首期促销：展示首年价、续费价与相对月付折扣', (tester) async {
+  testWidgets('年付 intro offer：展示首年价、续费价与相对月付折扣', (tester) async {
     const promoPlans = [
       SubscriptionPlan(
         planId: 'monthly',
@@ -291,11 +1242,6 @@ void main() {
       find.text(r'First year US$30.00, then US$59.99/yr'),
     );
     expect(offerSubtitle.maxLines, 1);
-    expect(find.text('Special offer: 50% off your first year'), findsOneWidget);
-    final offerHeadline = tester.widget<Text>(
-      find.text('Special offer: 50% off your first year'),
-    );
-    expect(offerHeadline.style?.color, const Color(0xFF111111));
     expect(
       find.ancestor(
         of: find.byKey(const ValueKey('paywall_special_offer')),
@@ -318,7 +1264,46 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Subscribe'), findsOneWidget);
   });
 
-  testWidgets('非 50% 首期促销：顶部优惠条动态显示真实折扣', (tester) async {
+  testWidgets('顶部优惠条：monthly/yearly 都有优惠时只展示 yearly', (tester) async {
+    const promoPlans = [
+      SubscriptionPlan(
+        planId: 'monthly',
+        title: 'Monthly',
+        priceString: r'$12.00',
+        period: SubscriptionPeriod.monthly,
+        introOffer: SubscriptionIntroOffer(
+          priceString: r'$3.00',
+          period: SubscriptionOfferPeriod.month,
+          periodNumberOfUnits: 1,
+          cycles: 1,
+          isFreeTrial: false,
+          renewalPriceString: r'$12.00',
+        ),
+      ),
+      SubscriptionPlan(
+        planId: 'yearly',
+        title: 'Yearly',
+        priceString: r'$60.00',
+        period: SubscriptionPeriod.yearly,
+        introOffer: SubscriptionIntroOffer(
+          priceString: r'$30.00',
+          period: SubscriptionOfferPeriod.year,
+          periodNumberOfUnits: 1,
+          cycles: 1,
+          isFreeTrial: false,
+          renewalPriceString: r'$60.00',
+        ),
+      ),
+    ];
+    await tester.pumpWidget(
+      _harness(state: const EntitlementState.free(), plans: promoPlans),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('paywall_special_offer')), findsOneWidget);
+  });
+
+  testWidgets('顶部优惠条：yearly 没有优惠时展示 monthly', (tester) async {
     const promoPlans = [
       SubscriptionPlan(
         planId: 'monthly',
@@ -340,13 +1325,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Special offer: 75% off your first month'),
-      findsOneWidget,
-    );
+    expect(find.text(r'$3.00'), findsOneWidget);
+    expect(find.text('/first mo'), findsOneWidget);
+    expect(find.text(r'First month $3.00, then $12.00/mo'), findsOneWidget);
   });
 
-  testWidgets('首期价不低于续费价：不显示顶部优惠条', (tester) async {
+  testWidgets('顶部优惠条：monthly/yearly 都没有优惠时不显示', (tester) async {
+    await tester.pumpWidget(
+      _harness(state: const EntitlementState.free(), plans: _plans),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('paywall_special_offer')), findsNothing);
+  });
+
+  testWidgets('顶部优惠条：intro offer 价格不低于续费价时不显示', (tester) async {
     const promoPlans = [
       SubscriptionPlan(
         planId: 'yearly',
@@ -367,8 +1360,6 @@ void main() {
       _harness(state: const EntitlementState.free(), plans: promoPlans),
     );
     await tester.pumpAndSettle();
-
-    expect(find.textContaining('Special offer:'), findsNothing);
   });
 
   testWidgets('小屏购买区保持紧凑，CTA 可见且法律链接弱化显示', (tester) async {
@@ -399,6 +1390,38 @@ void main() {
     expect(yearlyTop - (monthlyTop + monthlyHeight), greaterThanOrEqualTo(24));
     expect(privacyLeft - termsRight, greaterThanOrEqualTo(24));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('购买面板背景贴底且法律链接紧邻系统手势区', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    await tester.pumpWidget(_harness(state: const EntitlementState.free()));
+    await tester.pumpAndSettle();
+
+    final panel = tester.getRect(
+      find.byKey(const ValueKey('paywall_fixed_purchase_panel')),
+    );
+    final screenBottom =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    expect(panel.bottom, screenBottom);
+    final termsRect = tester.getRect(find.text('Terms'));
+    final privacyRect = tester.getRect(find.text('Privacy'));
+    final termsButtonRect = tester.getRect(
+      find.ancestor(of: find.text('Terms'), matching: find.byType(TextButton)),
+    );
+
+    // 链接文字进入完整 SafeArea 范围，消除过大的视觉留白；按钮点击区域仍保留 12pt。
+    expect(termsRect.bottom, greaterThan(screenBottom - 34));
+    expect(privacyRect.bottom, greaterThan(screenBottom - 34));
+    expect(termsButtonRect.bottom, screenBottom - 12);
   });
 
   testWidgets('会员（年付续订中）：展示年度会员套餐、有效状态与续订日期', (tester) async {
@@ -462,6 +1485,11 @@ void main() {
 
     // 走通用 ensureSignedInForAction 登录引导弹窗，且未真正发起购买
     expect(find.text('Sign in to Echo Loop'), findsOneWidget);
+    expect(find.text('Please sign in before subscribing.'), findsOneWidget);
+    expect(
+      find.text('Please sign in before restoring purchases.'),
+      findsNothing,
+    );
     expect(spy.purchaseCalls, 0);
   });
 
@@ -480,7 +1508,96 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in to Echo Loop'), findsOneWidget);
+    expect(
+      find.text('Please sign in before restoring purchases.'),
+      findsOneWidget,
+    );
+    expect(find.text('Please sign in before subscribing.'), findsNothing);
     expect(spy.restoreCalls, 0);
+  });
+
+  testWidgets('恢复购买归属冲突：展示登录原账号提示', (tester) async {
+    final spy = _SpyController(const EntitlementState.free())
+      ..restoreError = PurchaseException(
+        'owner mismatch',
+        ownershipConflict: true,
+      );
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        authenticated: true,
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore Purchases'));
+    await tester.pumpAndSettle();
+
+    expect(spy.restoreCalls, 1);
+    expect(
+      find.text(
+        'This subscription is linked to another Echo Loop account. '
+        'Sign in to the original account and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Purchase failed. Please try again.'), findsNothing);
+  });
+
+  testWidgets('Paddle 会员：按钮文案为刷新会员状态，点击走统一 restore', (tester) async {
+    final spy = _SpyController(
+      const EntitlementState(
+        status: EntitlementStatus.premium,
+        entitlement: Entitlement(
+          isPremium: true,
+          productId: 'plus_yearly',
+          source: EntitlementSource.paddle,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      _harness(state: spy._state, authenticated: true, controller: () => spy),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Refresh premium status'), findsOneWidget);
+    expect(find.text('Restore Purchases'), findsNothing);
+
+    await tester.tap(find.text('Refresh premium status'));
+    await tester.pumpAndSettle();
+
+    // 统一走 controller.restore()（无 webMode 分流）。
+    expect(spy.restoreCalls, 1);
+    expect(spy.refreshCalls, 0);
+  });
+
+  testWidgets('购买成功但权益未收敛：提示同步中，不提示购买失败', (tester) async {
+    // spy.purchase 成功返回但 state 仍为 free（模拟成交后收敛未确认）。
+    final spy = _SpyController(const EntitlementState.free());
+    await tester.pumpWidget(
+      _harness(
+        state: const EntitlementState.free(),
+        authenticated: true,
+        controller: () => spy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Start 7-day free trial'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(spy.purchaseCalls, 1);
+    expect(
+      find.text(
+        'Purchase successful. Your membership is syncing '
+        'and will activate shortly.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Purchase failed. Please try again.'), findsNothing);
   });
 
   testWidgets('已登录点订阅：不弹登录、直接发起购买', (tester) async {

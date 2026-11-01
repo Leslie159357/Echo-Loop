@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:universal_io/io.dart';
+
 import 'package:dio/dio.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:echo_loop/models/dictionary/dictionary_entry.dart';
+import 'package:echo_loop/models/retell_review_evaluation.dart';
 import 'package:echo_loop/services/ai_http_client_adapter.dart';
 import 'package:echo_loop/services/dictionary/dictionary_source.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
@@ -731,6 +734,188 @@ void main() {
 
       await expectLater(
         client.lookupWordStream('run', accessToken: 'tok').toList(),
+        throwsA(
+          isA<DioException>().having(
+            (e) => e.response?.statusCode,
+            'statusCode',
+            402,
+          ),
+        ),
+      );
+    });
+  });
+
+  group('evaluateReviewStream', () {
+    Response<ResponseBody> bodyResponse(String body, {int status = 200}) {
+      final bytes = Uint8List.fromList(utf8.encode(body));
+      return Response(
+        data: ResponseBody(Stream<Uint8List>.fromIterable([bytes]), status),
+        statusCode: status,
+        requestOptions: RequestOptions(
+          path: '/api/v1/stream/evaluate-review',
+          method: 'POST',
+        ),
+      );
+    }
+
+    Response<ResponseBody> ndjsonResponse(String ndjson) =>
+        bodyResponse(ndjson);
+
+    test('meta 首帧即产出一帧（先出转录），后续 ops 逐帧累积', () async {
+      final file = File(
+        '${Directory.systemTemp.path}/retell-review-client-test.m4a',
+      );
+      await file.writeAsBytes([0, 1, 2]);
+      addTearDown(() async {
+        if (await file.exists()) await file.delete();
+      });
+      when(
+        () => mockDio.post<ResponseBody>(
+          '/api/v1/stream/evaluate-review',
+          data: any(named: 'data'),
+          // 端点已鉴权化：不带 Bearer 的请求打不中这个 stub。
+          options: any(
+            named: 'options',
+            that: isA<Options>().having(
+              (o) => o.headers?['Authorization'],
+              'Authorization',
+              'Bearer access-token',
+            ),
+          ),
+          cancelToken: any(named: 'cancelToken'),
+        ),
+      ).thenAnswer(
+        (_) async => ndjsonResponse(
+          '${jsonEncode({
+            'meta': {'transcript': 'I practiced today.'},
+          })}\n'
+          '${jsonEncode({
+            'ops': [
+              {
+                'p': ['summary'],
+                'v': '表达清楚。',
+              },
+              {
+                'p': ['keyPoints', 0, 'keyPoint'],
+                'v': '练习提升流利度',
+              },
+            ],
+          })}\n'
+          '${jsonEncode({
+            'ops': [
+              {
+                'p': ['keyPoints', 0, 'status'],
+                'v': 'covered',
+              },
+              {
+                'p': ['keyPoints', 1, 'keyPoint'],
+                'v': '睡眠巩固记忆',
+              },
+              {
+                'p': ['keyPoints', 1, 'status'],
+                'v': 'missed',
+              },
+              {
+                'p': ['keyPoints', 1, 'feedback'],
+                'v': '完全没有提到。',
+              },
+              {
+                'p': ['suggestion'],
+                'v': '复述前先列三个关键词。',
+              },
+              {
+                'p': ['corrections', 0, 'type'],
+                'v': 'grammar',
+              },
+              {
+                'p': ['corrections', 0, 'transcript'],
+                'v': "he don't know",
+              },
+              {
+                'p': ['corrections', 0, 'correction'],
+                'v': "he doesn't know",
+              },
+              {
+                'p': ['rating'],
+                'v': 'good',
+              },
+            ],
+          })}\n'
+          '${jsonEncode({'done': true})}\n',
+        ),
+      );
+
+      final frames = await client
+          .evaluateReviewStream(
+            audioFile: file,
+            originalText: 'Practice every day.',
+            targetLanguage: 'zh-CN',
+            accessToken: 'access-token',
+          )
+          .toList();
+
+      expect(frames, hasLength(4));
+      // meta 首帧独立成帧：AI 还没吐字，先让 UI 有转录可显示。
+      final metaFrame = frames.first.evaluation;
+      expect(metaFrame.transcript, 'I practiced today.');
+      expect(metaFrame.summary, '');
+      expect(metaFrame.keyPoints, isEmpty);
+      expect(frames.first.isFinal, isFalse);
+
+      // 第二帧：AI 首批文本到达，要点状态尚未到达。
+      final second = frames[1].evaluation;
+      expect(second.transcript, 'I practiced today.');
+      expect(second.summary, '表达清楚。');
+      expect(second.rating, isNull);
+      expect(second.keyPoints.single.keyPoint, '练习提升流利度');
+      expect(second.keyPoints.single.status, isNull);
+
+      final last = frames.last.evaluation;
+      expect(frames.last.isFinal, isTrue);
+      expect(last.transcript, 'I practiced today.');
+      expect(last.rating, RetellReviewRating.good);
+      expect(last.suggestion, '复述前先列三个关键词。');
+      expect(last.keyPoints, hasLength(2));
+      expect(last.keyPoints.first.status, RetellReviewKeyPointStatus.covered);
+      expect(last.keyPoints.last.status, RetellReviewKeyPointStatus.missed);
+      expect(last.keyPoints.last.feedback, '完全没有提到。');
+      expect(last.corrections.single.type, RetellReviewCorrectionType.grammar);
+      expect(last.corrections.single.transcript, "he don't know");
+      expect(last.corrections.single.correction, "he doesn't know");
+      expect(last.corrections.single.explanation, '');
+    });
+
+    test('402 → 带状态码的 DioException（供 controller 转额度态）', () async {
+      final file = File(
+        '${Directory.systemTemp.path}/retell-review-quota-test.m4a',
+      );
+      await file.writeAsBytes([0, 1, 2]);
+      addTearDown(() async {
+        if (await file.exists()) await file.delete();
+      });
+      when(
+        () => mockDio.post<ResponseBody>(
+          '/api/v1/stream/evaluate-review',
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+          cancelToken: any(named: 'cancelToken'),
+        ),
+      ).thenAnswer(
+        (_) async => bodyResponse(
+          jsonEncode({'error': 'quota', 'code': 'quota_exceeded'}),
+          status: 402,
+        ),
+      );
+
+      await expectLater(
+        client
+            .evaluateReviewStream(
+              audioFile: file,
+              originalText: 'Practice every day.',
+              targetLanguage: 'zh-CN',
+              accessToken: 'access-token',
+            )
+            .toList(),
         throwsA(
           isA<DioException>().having(
             (e) => e.response?.statusCode,

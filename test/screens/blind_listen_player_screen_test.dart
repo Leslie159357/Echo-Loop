@@ -2,6 +2,8 @@
 //
 // 验证共享段落骨架已经接入，页面底部只有一套播放控制，
 // 且文本显隐开关位于句子列表下方。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/blind_listen_settings.dart';
+import 'package:echo_loop/models/media_learning_startup.dart';
+import 'package:echo_loop/models/media_load_result.dart';
 import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
 import 'package:echo_loop/models/sentence.dart';
@@ -31,8 +35,14 @@ import '../helpers/mock_providers.dart';
 class _StaticBlindListenPlayer extends TestBlindListenPlayer {
   _StaticBlindListenPlayer(super.initialState);
 
+  VoidCallback? onStart;
+  int activityCalls = 0;
+
   @override
-  Future<void> startPlaying() async {}
+  Future<void> startPlaying() async => onStart?.call();
+
+  @override
+  void markStudyActivity() => activityCalls += 1;
 }
 
 class _MutableBlindListenPlayer extends _StaticBlindListenPlayer {
@@ -79,6 +89,7 @@ void main() {
     Locale locale = const Locale('en'),
     BlindListenPlayerState? playerState,
     List<Override> extraOverrides = const [],
+    MediaLearningStartup? mediaStartup,
     TestBlindListenPlayer Function(BlindListenPlayerState initialState)?
     playerFactory,
   }) {
@@ -103,6 +114,7 @@ void main() {
             return BlindListenPlayerScreen(
               collectionId: collectionId,
               audioItemId: audioId,
+              mediaStartup: mediaStartup,
             );
           },
         ),
@@ -143,6 +155,86 @@ void main() {
   }
 
   group('BlindListenPlayerScreen', () {
+    testWidgets('视频启动完成后显示共享画面，启动前不播放', (tester) async {
+      final load = Completer<MediaLoadResult>();
+      var starts = 0;
+      final session = TestLearningSession(
+        const LearningSessionState(
+          learningMode: LearningMode.blindListen,
+          playbackChain: LearningPlaybackChain.mediaEngine,
+        ),
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          mediaStartup: MediaLearningStartup(
+            loadKey: 'video-1',
+            load: () => load.future,
+            cancel: () async {},
+          ),
+          playerFactory: (state) =>
+              _StaticBlindListenPlayer(state)..onStart = () => starts += 1,
+          extraOverrides: [learningSessionProvider.overrideWith(() => session)],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Loading video…'), findsOneWidget);
+      // 加载层只覆盖 Scaffold.body，不能像整页遮罩一样吞掉盲听的 AppBar。
+      expect(find.text('Listen without subtitles'), findsOneWidget);
+      final canvasTop = tester
+          .getTopLeft(
+            find.byKey(const ValueKey('managed-media-overlay-canvas')),
+          )
+          .dy;
+      expect(canvasTop, greaterThan(0));
+      expect(starts, 0);
+
+      load.complete(MediaLoadResult.ready);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('media-video-canvas')), findsOneWidget);
+      expect(starts, 1);
+    });
+
+    testWidgets('音频启动复用加载托管层且不展示视频画布', (tester) async {
+      final load = Completer<MediaLoadResult>();
+      var starts = 0;
+      final session = TestLearningSession(
+        const LearningSessionState(
+          learningMode: LearningMode.blindListen,
+          playbackChain: LearningPlaybackChain.mediaEngine,
+        ),
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          mediaStartup: MediaLearningStartup(
+            loadKey: 'audio-1',
+            showVideoLoading: false,
+            load: () => load.future,
+            cancel: () async {},
+          ),
+          playerFactory: (state) =>
+              _StaticBlindListenPlayer(state)..onStart = () => starts += 1,
+          extraOverrides: [learningSessionProvider.overrideWith(() => session)],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Loading video…'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('managed-media-overlay-canvas')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('media-video-canvas')), findsNothing);
+      expect(starts, 0);
+
+      load.complete(MediaLoadResult.ready);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('media-video-canvas')), findsNothing);
+      expect(starts, 1);
+    });
+
     testWidgets('只渲染一套底部播放控制', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -182,13 +274,30 @@ void main() {
       await tester.pumpAndSettle();
 
       final sentenceCard = find.byType(Card).first;
-      final toggleText = find.text('Peek');
+      final toggleText = find.text('Peek at subtitles');
 
       expect(toggleText, findsOneWidget);
       expect(
         tester.getRect(toggleText).top,
         greaterThanOrEqualTo(tester.getRect(sentenceCard).bottom - 1),
       );
+    });
+
+    testWidgets('用户操作转发给页面学习计时器', (tester) async {
+      final player = _StaticBlindListenPlayer(
+        const BlindListenPlayerState(
+          currentParagraphIndex: 0,
+          totalParagraphs: 2,
+          currentRepeatCount: 1,
+        ),
+      );
+
+      await tester.pumpWidget(createTestWidget(playerFactory: (_) => player));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Peek at subtitles'));
+
+      expect(player.activityCalls, greaterThan(0));
     });
 
     testWidgets('倒计时阶段复用共享骨架并显示进度条', (tester) async {
@@ -207,9 +316,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // 多段模式进度条按段落驱动，且可拖动跳段（共享骨架的进度区域）
-      expect(find.byType(PracticeProgressSection), findsOneWidget);
+      expect(find.byType(PracticeProgressBar), findsOneWidget);
+      expect(find.byType(PracticeSentenceInfoRow), findsOneWidget);
       // 倒计时阶段不再显示多余的「回忆提示」label（仅倒计时行）。
-      expect(find.text('Try to recall what you just heard'), findsNothing);
+      expect(find.text('Recall what you just heard'), findsNothing);
       expect(find.byType(PlaybackControls), findsOneWidget);
     });
 
@@ -230,7 +340,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Listen first, then recall'), findsOneWidget);
-      expect(find.text('Try to recall what you just heard'), findsNothing);
+      expect(find.text('Recall what you just heard'), findsNothing);
     });
 
     testWidgets('WaitingForUser 态即使 isPlaying 为 true 也显示播放图标', (tester) async {
@@ -269,7 +379,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Try to recall what you just heard'), findsOneWidget);
+      expect(find.text('Recall what you just heard'), findsOneWidget);
       expect(find.text('Listen first, then recall'), findsNothing);
     });
 
@@ -289,7 +399,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Listen first, then recall'), findsOneWidget);
-      expect(find.text('Try to recall what you just heard'), findsNothing);
+      expect(find.text('Recall what you just heard'), findsNothing);
     });
 
     testWidgets('waiting for user 状态显示先听再回忆提示', (tester) async {
@@ -308,8 +418,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Listen first, then recall'), findsOneWidget);
-      expect(find.text('Listen carefully...'), findsNothing);
-      expect(find.text('Try to recall what you just heard'), findsNothing);
+      expect(find.text('Listen closely...'), findsNothing);
+      expect(find.text('Recall what you just heard'), findsNothing);
     });
 
     testWidgets('完成后不再检查学习版通知提示', (tester) async {
@@ -346,11 +456,38 @@ void main() {
     });
 
     // 盲听页面不再支持点词查词（已移除 onWordTap）
-    // 点编号→seekToSentence 的链路由 Provider 单测 + Widget 单测 + 复述 Screen 单测 共同覆盖：
+    // 点正文→seekToSentence 的链路由 Provider 单测 + Widget 单测 + 复述 Screen 单测 共同覆盖：
     // - Provider 单测验证 seekToSentence 行为
-    // - Widget 单测（masked_sentence_tile_test）验证 tile 编号区→onPlayFromTap 分发
+    // - Widget 单测（masked_sentence_tile_test）验证 tile 正文→onPlayFromTap 分发
     // - 复述 Screen 单测验证 onPlayFromTap → player.seekToSentence 的接线
     // 盲听 Screen 接入是同款代码（_handleSentencePlayFrom + onSentencePlayFrom 透传），不重复测。
+
+    testWidgets('盲听遮盖句子的长按菜单复用收藏切换入口', (tester) async {
+      final trackingPlayer = _TrackingBlindListenPlayer(
+        const BlindListenPlayerState(
+          currentParagraphIndex: 0,
+          totalParagraphs: 2,
+          displayMode: BlindListenDisplayMode.hideAll,
+        ),
+        _testParagraphs(),
+      );
+      await tester.pumpWidget(
+        createTestWidget(playerFactory: (_) => trackingPlayer),
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(
+        find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-0')),
+      );
+      await tester.pumpAndSettle();
+      expect(trackingPlayer.bookmarkCalls, 0);
+      await tester.tap(
+        find.byKey(const ValueKey('sentence-menu-toggleBookmark')),
+      );
+      await tester.pumpAndSettle();
+      expect(trackingPlayer.bookmarkCalls, 1);
+      expect(trackingPlayer.lastBookmarkedSentenceIndex, 0);
+      expect(find.text('Sentence saved'), findsOneWidget);
+    });
 
     testWidgets('点击右侧收藏按钮直接切换收藏，不进入讲解页', (tester) async {
       final trackingPlayer = _TrackingBlindListenPlayer(

@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 
 import '../../models/sentence.dart';
+import '../../models/sentence_playback_result.dart';
 import '../../services/app_logger.dart';
 import '../learning_session/countdown_controller.dart';
 import 'blind_practice_flow_phase.dart';
@@ -28,8 +29,8 @@ class BlindPracticeFlowConfig {
   /// 每成功播放一遍后的回调
   final void Function(Sentence sentence)? onSentencePlayed;
 
-  /// 是否为手动模式。手动模式下当前句播完后直接进入等待态。
-  final bool Function()? isManualMode;
+  /// 是否为手动模式。手动模式完成设置的循环后等待用户切句。
+  final bool Function() isManualMode;
 
   const BlindPracticeFlowConfig({
     required this.getRepeatCount,
@@ -37,7 +38,7 @@ class BlindPracticeFlowConfig {
     required this.getSentenceIntervalDuration,
     this.onBeforeSentenceStart,
     this.onSentencePlayed,
-    this.isManualMode,
+    required this.isManualMode,
   });
 }
 
@@ -46,12 +47,25 @@ class BlindPracticeFlowCallbacks {
   /// 暂停音频播放
   final void Function() pauseAudio;
 
-  /// 播放句子音频，返回 false 表示当前句不可播放，应跳过
-  final Future<bool> Function(Sentence sentence, int flowToken) playSentence;
+  /// 播放句子音频；只有明确失败才会跳过当前句。
+  final Future<SentencePlaybackResult> Function(
+    Sentence sentence,
+    int flowToken,
+  )
+  playSentence;
+
+  /// 从暂停位置继续播放当前句；未提供时退回普通起播。
+  final Future<SentencePlaybackResult> Function(
+    Sentence sentence,
+    int flowToken,
+    Duration startAt,
+  )?
+  resumeSentence;
 
   const BlindPracticeFlowCallbacks({
     required this.pauseAudio,
     required this.playSentence,
+    this.resumeSentence,
   });
 }
 
@@ -137,13 +151,35 @@ class BlindPracticeFlowEngine {
     _updateState(
       _state.copyWith(
         phase: const BlindWaitingForUser(BlindWaitingReason.userInteraction),
+        // 主动暂停会取消当前播放；递增 token，避免取消结果被误判为不可播放。
+        flowToken: _state.flowToken + 1,
       ),
     );
     AppLogger.log(logTag, '-> WaitingForUser (from ${phase.runtimeType})');
   }
 
+  /// 重播当前句；手动模式从本轮第一遍重新开始。
   Future<void> replayCurrentSentence() async {
     if (_disposed) return;
+    final sentence = currentSentence;
+    _waitAfterCurrentPrompt = false;
+    _stopActiveResources();
+    _updateState(
+      _state.copyWith(
+        phase: const BlindIdle(),
+        repeatIndex: _config.isManualMode() ? 0 : _state.repeatIndex,
+        totalRepeats: sentence == null
+            ? _state.totalRepeats
+            : _config.getRepeatCount(sentence),
+        flowToken: _state.flowToken + 1,
+      ),
+    );
+    await _playCurrentSentence();
+  }
+
+  /// 从给定媒体位置继续当前句，保留本轮重复次数和流程状态。
+  Future<void> resumeCurrentSentence(Duration startAt) async {
+    if (_disposed || currentSentence == null) return;
     _waitAfterCurrentPrompt = false;
     _stopActiveResources();
     _updateState(
@@ -152,7 +188,7 @@ class BlindPracticeFlowEngine {
         flowToken: _state.flowToken + 1,
       ),
     );
-    await _playCurrentSentence();
+    await _playCurrentSentence(startAt: startAt);
   }
 
   Future<void> nextSentence() async {
@@ -245,10 +281,13 @@ class BlindPracticeFlowEngine {
     _sentences = [];
   }
 
-  Future<void> _playCurrentSentence() async {
+  /// 播放当前句，并在异步前置检查后校验本次 flowToken。
+  /// [startAt] 仅属于本次启动，避免切句后串用旧的恢复位置。
+  Future<void> _playCurrentSentence({Duration? startAt}) async {
     if (_disposed) return;
     final sentence = currentSentence;
     if (sentence == null) return;
+    final initialFlowToken = _state.flowToken;
 
     if (sentence.duration <= Duration.zero) {
       await _advanceToNextSentence();
@@ -257,9 +296,9 @@ class BlindPracticeFlowEngine {
 
     final canStart =
         await _config.onBeforeSentenceStart?.call(_state.sentenceIndex) ?? true;
-    if (_disposed) return;
+    if (_disposed || initialFlowToken != _state.flowToken) return;
     if (!canStart) {
-      await _skipCurrentSentence();
+      await _skipCurrentSentence(reason: 'before-sentence-start-rejected');
       return;
     }
 
@@ -267,18 +306,71 @@ class BlindPracticeFlowEngine {
     final token = _state.flowToken;
     AppLogger.log(
       logTag,
-      'play sentence ${_state.sentenceIndex + 1}/${_state.totalSentences} '
-      'repeat ${_state.repeatIndex + 1}/${_state.totalRepeats}',
+      'event=play-start sentenceIndex=${_state.sentenceIndex} '
+      'sentence=${_state.sentenceIndex + 1}/${_state.totalSentences} '
+      'repeat=${_state.repeatIndex + 1}/${_state.totalRepeats} '
+      'flowToken=$token',
     );
 
-    final played = await callbacks.playSentence(sentence, token);
+    final resumeSentence = callbacks.resumeSentence;
+    final result = startAt != null && resumeSentence != null
+        ? await resumeSentence(sentence, token, startAt)
+        : await callbacks.playSentence(sentence, token);
     if (_disposed) return;
-    if (!played) {
-      await _skipCurrentSentence();
+    final currentFlowToken = _state.flowToken;
+    AppLogger.log(
+      logTag,
+      'event=play-result sentenceIndex=${sentence.index} '
+      'flowToken=$token currentFlowToken=$currentFlowToken '
+      'currentIndex=${_state.sentenceIndex} '
+      'phase=${_state.phase.runtimeType} result=$result',
+    );
+    if (token != currentFlowToken) {
+      AppLogger.log(
+        logTag,
+        'event=play-result-ignored reason=stale-flow-token '
+        'flowToken=$token currentFlowToken=$currentFlowToken '
+        'result=$result',
+      );
+      return;
+    }
+    if (result == SentencePlaybackResult.cancelled) {
+      _handlePromptCancelled(token);
+      return;
+    }
+    if (result == SentencePlaybackResult.failed) {
+      await _handlePromptNotPlayed(token);
       return;
     }
 
     _onPromptFinished(token);
+  }
+
+  /// 区分当前句真实不可播放和旧播放请求被取消两种结果。
+  ///
+  /// 当前请求只有明确失败才跳过；旧请求通过 flow token 校验后静默丢弃。
+  Future<void> _handlePromptNotPlayed(int token) async {
+    if (token != _state.flowToken) return;
+    await _skipCurrentSentence(reason: 'playback-failed');
+  }
+
+  /// 当前流程的播放被取消时保留句子，等待用户重新播放或切换。
+  void _handlePromptCancelled(int token) {
+    if (token != _state.flowToken || _state.phase is! BlindPlayingPrompt) {
+      return;
+    }
+    _waitAfterCurrentPrompt = false;
+    _updateState(
+      _state.copyWith(
+        phase: const BlindWaitingForUser(BlindWaitingReason.userInteraction),
+        flowToken: _state.flowToken + 1,
+      ),
+    );
+    AppLogger.log(
+      logTag,
+      'event=play-cancelled action=wait sentenceIndex=${_state.sentenceIndex} '
+      'flowToken=$token nextFlowToken=${_state.flowToken}',
+    );
   }
 
   void _onPromptFinished(int token) {
@@ -289,7 +381,11 @@ class BlindPracticeFlowEngine {
     final sentence = currentSentence;
     if (sentence == null) return;
     _config.onSentencePlayed?.call(sentence);
-    AppLogger.log(logTag, 'prompt finished');
+    AppLogger.log(
+      logTag,
+      'event=prompt-finished sentenceIndex=${_state.sentenceIndex} '
+      'flowToken=$token',
+    );
 
     if (_waitAfterCurrentPrompt) {
       _waitAfterCurrentPrompt = false;
@@ -303,18 +399,18 @@ class BlindPracticeFlowEngine {
       return;
     }
 
-    if (_config.isManualMode?.call() ?? false) {
-      _updateState(
-        _state.copyWith(
-          repeatIndex: 0,
-          totalRepeats: _config.getRepeatCount(sentence),
-          phase: const BlindWaitingForUser(BlindWaitingReason.userInteraction),
-        ),
-      );
-      return;
-    }
-
     if (_state.isLastRepeat) {
+      if (_config.isManualMode()) {
+        // 手动模式完成所有循环后停在当前句，不触发句间倒计时或自动推进。
+        _updateState(
+          _state.copyWith(
+            phase: const BlindWaitingForUser(
+              BlindWaitingReason.userInteraction,
+            ),
+          ),
+        );
+        return;
+      }
       unawaited(_startSentenceInterval(sentence));
       return;
     }
@@ -368,16 +464,30 @@ class BlindPracticeFlowEngine {
   Future<void> _advanceToNextSentence() async {
     if (_disposed) return;
     if (_state.isLastSentence) {
-      AppLogger.log(logTag, 'session completed');
+      AppLogger.log(
+        logTag,
+        'event=session-completed sentenceIndex=${_state.sentenceIndex} '
+        'flowToken=${_state.flowToken}',
+      );
       _updateState(_state.copyWith(phase: const BlindSessionCompleted()));
       return;
     }
+    AppLogger.log(
+      logTag,
+      'event=auto-advance reason=interval-completed '
+      'fromIndex=${_state.sentenceIndex} toIndex=${_state.sentenceIndex + 1} '
+      'flowToken=${_state.flowToken}',
+    );
     await _jumpToSentence(_state.sentenceIndex + 1);
   }
 
-  Future<void> _skipCurrentSentence() async {
+  Future<void> _skipCurrentSentence({required String reason}) async {
     if (_disposed) return;
-    AppLogger.log(logTag, 'skip current sentence');
+    AppLogger.log(
+      logTag,
+      'event=skip-current reason=$reason '
+      'sentenceIndex=${_state.sentenceIndex} flowToken=${_state.flowToken}',
+    );
     await _advanceToNextSentence();
   }
 

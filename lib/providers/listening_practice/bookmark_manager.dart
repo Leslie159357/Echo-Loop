@@ -1,12 +1,8 @@
-import 'package:drift/drift.dart';
-
-import '../../database/app_database.dart';
 import '../../services/app_logger.dart';
 import '../../database/daos/bookmark_dao.dart';
 import '../../models/sentence.dart';
 
-/// 书签管理器
-/// 负责书签的添加、删除、加载和保存
+/// 书签读取与句子收藏状态转换工具。
 class BookmarkManager {
   /// 规范化文本用于书签比较：转小写并移除首尾标点符号
   /// 用于检测相同文本的书签，忽略大小写和首尾标点差异
@@ -36,55 +32,6 @@ class BookmarkManager {
     }
   }
 
-  /// 保存单个书签到 Drift 数据库
-  static Future<void> addBookmarkToDb(
-    String audioId,
-    Sentence sentence, {
-    required BookmarkDao dao,
-  }) async {
-    try {
-      final now = DateTime.now();
-      await dao.addBookmark(
-        BookmarksCompanion(
-          audioItemId: Value(audioId),
-          sentenceIndex: Value(sentence.index),
-          sentenceText: Value(sentence.text),
-          startTime: Value(sentence.startTime.inMilliseconds / 1000.0),
-          endTime: Value(sentence.endTime.inMilliseconds / 1000.0),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
-    } catch (e) {
-      AppLogger.log('Bookmark', '✗ 添加书签失败: $e');
-    }
-  }
-
-  /// 从 Drift 数据库移除书签
-  static Future<void> removeBookmarksFromDb(
-    String audioId,
-    Set<int> indices, {
-    required BookmarkDao dao,
-  }) async {
-    try {
-      await dao.removeBookmarks(audioId, indices);
-    } catch (e) {
-      AppLogger.log('Bookmark', '✗ 移除书签失败: $e');
-    }
-  }
-
-  /// 自动添加 [] 包裹的句子为书签
-  static Set<int> autoAddBracketBookmarks(List<Sentence> sentences) {
-    final bookmarks = <int>{};
-    for (var sentence in sentences) {
-      final text = sentence.text.trim();
-      if (text.startsWith('[') && text.endsWith(']')) {
-        bookmarks.add(sentence.index);
-      }
-    }
-    return bookmarks;
-  }
-
   /// 更新句子的书签状态
   static void updateSentenceBookmarkStatus(
     List<Sentence> sentences,
@@ -95,8 +42,39 @@ class BookmarkManager {
     }
   }
 
+  /// 基于收藏索引创建会话专用的句子快照。
+  ///
+  /// 字幕缓存是跨页面共享的只读投影，不能在进入某个学习会话时原地写入
+  /// [Sentence.isBookmarked]。调用方应使用本方法得到独立副本，避免一个会话
+  /// 的收藏状态污染其他页面或后续会话。
+  static List<Sentence> createSentenceBookmarkSnapshot(
+    Iterable<Sentence> sentences,
+    Set<int> bookmarkedIndices,
+  ) {
+    return [
+      for (final sentence in sentences)
+        sentence.copyWith(
+          isBookmarked: bookmarkedIndices.contains(sentence.index),
+        ),
+    ];
+  }
+
+  /// 基于收藏索引创建保留段落结构的会话句子快照。
+  static List<List<Sentence>> createParagraphBookmarkSnapshot(
+    Iterable<List<Sentence>> paragraphs,
+    Set<int> bookmarkedIndices,
+  ) {
+    return [
+      for (final paragraph in paragraphs)
+        createSentenceBookmarkSnapshot(paragraph, bookmarkedIndices),
+    ];
+  }
+
   /// 切换书签状态
-  /// 返回: (isRemoving, indicesToRemove, nextIndex)
+  /// 返回: (isRemoving, indicesToRemove, replacementIndex)
+  ///
+  /// 收藏模式删除当前句时，替代焦点优先取后一条；后面没有可用
+  /// 收藏时回退到前一条。只有删除后确实无收藏可选时才返回 null。
   static (bool, Set<int>, int?) toggleBookmark(
     int index,
     List<Sentence> sentences,
@@ -105,7 +83,7 @@ class BookmarkManager {
   ) {
     final isRemoving = bookmarkedIndices.contains(index);
     Set<int> indicesToRemove = {};
-    int? nextIndex;
+    int? replacementIndex;
 
     if (isRemoving) {
       // 计算所有同文本（不区分大小写，忽略首尾标点）的书签
@@ -126,17 +104,28 @@ class BookmarkManager {
       if (inBookmarksMode) {
         final pos = bookmarkedSentences.indexWhere((s) => s.index == index);
         if (pos != -1) {
-          // 找下一个句子（跳过将被移除的条目）
+          // 优先找后一个句子（跳过将被移除的条目）。
           for (int i = pos + 1; i < bookmarkedSentences.length; i++) {
             if (!indicesToRemove.contains(bookmarkedSentences[i].index)) {
-              nextIndex = bookmarkedSentences[i].index;
+              replacementIndex = bookmarkedSentences[i].index;
               break;
+            }
+          }
+
+          // 当前句在收藏末尾时，回退到最近的前一条，避免收藏仍有
+          // 内容却丢失当前焦点，导致精听页误退回列表。
+          if (replacementIndex == null) {
+            for (int i = pos - 1; i >= 0; i--) {
+              if (!indicesToRemove.contains(bookmarkedSentences[i].index)) {
+                replacementIndex = bookmarkedSentences[i].index;
+                break;
+              }
             }
           }
         }
       }
     }
 
-    return (isRemoving, indicesToRemove, nextIndex);
+    return (isRemoving, indicesToRemove, replacementIndex);
   }
 }

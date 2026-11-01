@@ -12,12 +12,18 @@ void main() {
     expect(ids.toSet().length, ids.length, reason: 'id 必须唯一');
   });
 
-  test('已确认的 14 个网页源都在、Macmillan/欧陆 不在', () {
+  test('Britannica 排在主要词典之后', () {
+    final ids = kWebDictConfigs.map((config) => config.id).toList();
+    expect(ids.indexOf('britannica'), greaterThan(ids.indexOf('collins')));
+  });
+
+  test('已确认的 16 个网页源都在、Macmillan 不在', () {
     final ids = kWebDictConfigs.map((c) => c.id).toSet();
     expect(ids, {
       'cambridge',
       'oxford',
       'longman',
+      'britannica',
       'merriamWebster',
       'collins',
       'vocabulary',
@@ -29,9 +35,40 @@ void main() {
       'wordReference',
       'etymonline',
       'youdao',
+      'eudic',
     });
     expect(ids.contains('macmillan'), isFalse);
-    expect(ids.contains('eudic'), isFalse);
+  });
+
+  test('Britannica Dictionary 使用词条页 URL 模板', () async {
+    final source = WebDictionarySource(
+      kWebDictConfigs.singleWhere((config) => config.id == 'britannica'),
+    );
+    final result = await source.lookup(
+      const DictionaryLookupRequest(word: 'ice cream'),
+    );
+
+    expect(result, isA<WebDictResult>());
+    expect(
+      (result! as WebDictResult).url.toString(),
+      'https://www.britannica.com/dictionary/ice%20cream',
+    );
+  });
+
+  test('欧路词典使用英汉词条 URL 并编码词组空格', () async {
+    final source = WebDictionarySource(
+      kWebDictConfigs.singleWhere((config) => config.id == 'eudic'),
+    );
+    final result = await source.lookup(
+      const DictionaryLookupRequest(word: 'ice cream'),
+    );
+
+    if (result case WebDictResult(:final sourceId, :final url)) {
+      expect(sourceId, 'eudic');
+      expect(url.toString(), 'https://dict.eudic.net/mdicts/en/ice%20cream');
+    } else {
+      fail('Expected an Eudic web dictionary result.');
+    }
   });
 
   for (final config in kWebDictConfigs) {

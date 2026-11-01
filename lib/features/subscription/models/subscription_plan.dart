@@ -6,6 +6,28 @@
 /// 降低未来迁移成本（critic warning）。
 library;
 
+/// 套餐的购买类型。
+enum PurchaseType {
+  /// 自动续费订阅。
+  subscription,
+
+  /// 一次性付款，不会自动续费。
+  oneTime,
+}
+
+/// 解析后端与本地缓存中的购买类型；未知值安全回退为空。
+PurchaseType? purchaseTypeFromName(Object? value) => switch (value) {
+  'subscription' => PurchaseType.subscription,
+  'one_time' || 'oneTime' => PurchaseType.oneTime,
+  _ => null,
+};
+
+/// 转为后端统一使用的 snake_case 名称。
+String purchaseTypeName(PurchaseType type) => switch (type) {
+  PurchaseType.subscription => 'subscription',
+  PurchaseType.oneTime => 'one_time',
+};
+
 /// 订阅周期。
 enum SubscriptionPeriod {
   /// 月订。
@@ -67,13 +89,16 @@ class SubscriptionPlan {
   /// 订阅周期。
   final SubscriptionPeriod period;
 
+  /// 购买类型；原生商店和旧调用方默认都是自动续费订阅。
+  final PurchaseType purchaseType;
+
   /// 是否提供免费试用。
   final bool hasFreeTrial;
 
   /// 免费试用天数（[hasFreeTrial] 为 false 时为 0）。
   final int trialDays;
 
-  /// 平台配置的首期促销（免费试用 / 首期折扣），为空表示当前用户不应看到促销价。
+  /// 平台配置的 intro offer（免费试用 / 折扣），为空表示当前用户不应看到优惠价。
   final SubscriptionIntroOffer? introOffer;
 
   const SubscriptionPlan({
@@ -81,6 +106,7 @@ class SubscriptionPlan {
     required this.title,
     required this.priceString,
     required this.period,
+    this.purchaseType = PurchaseType.subscription,
     this.hasFreeTrial = false,
     this.trialDays = 0,
     this.introOffer,
@@ -94,6 +120,7 @@ class SubscriptionPlan {
           title == other.title &&
           priceString == other.priceString &&
           period == other.period &&
+          purchaseType == other.purchaseType &&
           hasFreeTrial == other.hasFreeTrial &&
           trialDays == other.trialDays &&
           introOffer == other.introOffer;
@@ -104,15 +131,16 @@ class SubscriptionPlan {
     title,
     priceString,
     period,
+    purchaseType,
     hasFreeTrial,
     trialDays,
     introOffer,
   );
 }
 
-/// 单个套餐的首期促销展示信息。
+/// 单个套餐的 intro offer 展示信息。
 class SubscriptionIntroOffer {
-  /// 首期促销价（本地化价格字符串）；免费试用时通常为 `$0.00`。
+  /// Intro offer 优惠价（本地化价格字符串）；免费试用时通常为 `$0.00`。
   final String priceString;
 
   /// 促销周期单位。

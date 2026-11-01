@@ -35,7 +35,7 @@ import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/models/app_update_info.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/services/notification_permission_service.dart';
-import 'package:echo_loop/services/study_event_recorder.dart';
+import 'package:echo_loop/services/study_time_service.dart';
 import 'package:echo_loop/services/transcription_api_client.dart';
 import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
 
@@ -120,8 +120,6 @@ class TestForegroundAudioEngine extends FakeForegroundAudioEngine {
   });
 }
 
-class TestFlashcardNotifier extends FakeFlashcardNotifier {}
-
 class TestDailyStudyTime extends FakeDailyStudyTime {}
 
 class TestOfflineAsrSettings extends FakeOfflineAsrSettings {
@@ -156,9 +154,6 @@ class TestSavedWordDao extends FakeSavedWordDao {}
 /// 测试用 AnalyticsChannel — 不做任何操作
 class NoOpAnalyticsChannel implements AnalyticsChannel {
   @override
-  String get name => 'NoOp';
-
-  @override
   Future<void> initialize() async {}
 
   @override
@@ -169,6 +164,9 @@ class NoOpAnalyticsChannel implements AnalyticsChannel {
 
   @override
   Future<void> setUserProperty(String name, String? value) async {}
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {}
 
   @override
   Future<void> registerSuperProperties(Map<String, Object> properties) async {}
@@ -305,23 +303,33 @@ class _TestDictionary extends Dictionary {
 /// 返回学习设置 Provider 系列的 override 列表
 List<Override> learningSettingsOverrides({
   bool autoSkipRetell = false,
+  bool autoShowAiExplanation = true,
+  bool autoShowAiAnalysis = true,
+  bool autoShowAiTranslation = true,
+  bool autoShowAiSenseGroups = false,
   bool autoPlayRetellRecordingAfterCompletion = false,
   bool listenAndRepeatRatingEnabled = true,
   bool retellRatingEnabled = true,
   bool retellAutoPlaybackPromptShown = false,
   bool pdfExportReminderShown = false,
+  bool unclearAutoSaveReminderShown = false,
   SharedPreferences? prefs,
 }) {
   return [
     initialLearningSettingsProvider.overrideWithValue(
       LearningSettings(
         autoSkipRetell: autoSkipRetell,
+        autoShowAiExplanation: autoShowAiExplanation,
+        autoShowAiAnalysis: autoShowAiAnalysis,
+        autoShowAiTranslation: autoShowAiTranslation,
+        autoShowAiSenseGroups: autoShowAiSenseGroups,
         autoPlayRetellRecordingAfterCompletion:
             autoPlayRetellRecordingAfterCompletion,
         listenAndRepeatRatingEnabled: listenAndRepeatRatingEnabled,
         retellRatingEnabled: retellRatingEnabled,
         retellAutoPlaybackPromptShown: retellAutoPlaybackPromptShown,
         pdfExportReminderShown: pdfExportReminderShown,
+        unclearAutoSaveReminderShown: unclearAutoSaveReminderShown,
       ),
     ),
     if (prefs != null) sharedPreferencesProvider.overrideWithValue(prefs),
@@ -408,14 +416,19 @@ class TestLocalTranscriptionTaskManager extends LocalTranscriptionTaskManager {
 
 /// 测试用 SpeechRecordingController — 不依赖平台通道
 class TestSpeechRecordingController extends SpeechRecordingController {
+  void Function(Duration duration)? recordingCompletionHandler;
+
   final SpeechRecordingPhase initialPhase;
+  final SpeechPracticeAttempt? initialAttempt;
 
   TestSpeechRecordingController({
     this.initialPhase = SpeechRecordingPhase.idle,
+    this.initialAttempt,
   });
 
   @override
-  SpeechRecordingState build() => SpeechRecordingState(phase: initialPhase);
+  SpeechRecordingState build() =>
+      SpeechRecordingState(phase: initialPhase, currentAttempt: initialAttempt);
 
   @override
   Future<void> startRecording({
@@ -444,7 +457,15 @@ class TestSpeechRecordingController extends SpeechRecordingController {
   Future<void> deleteRecording(String filePath) async {}
 
   @override
-  void setRecorder(StudyEventRecorder? recorder) {}
+  void setRecordingCompletionHandler(
+    void Function(Duration duration)? handler,
+  ) {
+    recordingCompletionHandler = handler;
+  }
+
+  void emitRecordingCompleted(Duration duration) {
+    recordingCompletionHandler?.call(duration);
+  }
 }
 
 // ========== RetellRecordingController ==========
@@ -452,6 +473,7 @@ class TestSpeechRecordingController extends SpeechRecordingController {
 /// 测试用 RetellRecordingController — 不依赖平台通道
 class TestRetellRecordingController extends RetellRecordingController {
   final RetellRecordingState _initialState;
+  void Function(Duration duration)? recordingCompletionHandler;
 
   TestRetellRecordingController([
     this._initialState = const RetellRecordingState(),
@@ -461,7 +483,11 @@ class TestRetellRecordingController extends RetellRecordingController {
   RetellRecordingState build() => _initialState;
 
   @override
-  void setRecorder(StudyEventRecorder? recorder) {}
+  void setRecordingCompletionHandler(
+    void Function(Duration duration)? handler,
+  ) {
+    recordingCompletionHandler = handler;
+  }
 
   @override
   Future<void> startRecording({
@@ -516,6 +542,11 @@ class TestRetellRecordingController extends RetellRecordingController {
 
   /// 直接设置 state（测试辅助方法）
   void setState(RetellRecordingState newState) => state = newState;
+
+  /// 模拟底层录音服务完成一次有效录音。
+  void emitRecordingCompleted(Duration duration) {
+    recordingCompletionHandler?.call(duration);
+  }
 }
 
 // ========== TranscriptionApiClient ==========
@@ -528,11 +559,16 @@ TranscriptionApiClient createTestTranscriptionApiClient() {
 // ========== studyTimeOverrides ==========
 
 /// 返回录音控制器 + study time 的 override 列表
-List<Override> studyTimeOverrides() {
+List<Override> studyTimeOverrides({
+  StudyTimeService? studyTimeService,
+  TestSpeechRecordingController Function()? speechControllerFactory,
+}) {
   return [
-    studyTimeServiceProvider.overrideWithValue(FakeStudyTimeService()),
+    studyTimeServiceProvider.overrideWithValue(
+      studyTimeService ?? FakeStudyTimeService(),
+    ),
     speechRecordingControllerProvider.overrideWith(
-      TestSpeechRecordingController.new,
+      speechControllerFactory ?? TestSpeechRecordingController.new,
     ),
     retellRecordingControllerProvider.overrideWith(
       TestRetellRecordingController.new,

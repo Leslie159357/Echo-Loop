@@ -77,31 +77,41 @@ flutter run --dart-define-from-file=auth.env
 **订阅实现由 `platform + DISTRIBUTION_CHANNEL` 本地决定**：
 
 - `ios|macos + app_store` → Apple IAP / StoreKit；`android + play` → Google Play / RevenueCat Google。
-- `android|macos|windows + direct` → RevenueCat Web Purchase Link / Paddle。
+- `android|macos|windows + direct` → App 套餐页 + 后端 Paddle Checkout。
 - 未注入 key 的平台：RC 不初始化、**订阅入口整体隐藏**（设置页 tile 不渲染、`openPaywall` 拦截并提示、Paywall 路由显示占位页），app 照常匿名运行。
 - 未注入或非法 distribution 保守隐藏支付入口；旧值 `apk` / `desktop` 仅在客户端解析层兼容为 `direct`，不再作为正式 header 值。
 - 停用/启用支付需要发版；**限额侧按平台+渠道组合由后端 env 控制**（见第 7 节 `AI_QUOTA_ENFORCED_CLIENTS`）。
 
 相关代码：`lib/config/revenuecat_config.dart`（读 key + `isSubscriptionSupported`）、`lib/features/subscription/providers/subscription_availability.dart`（UI 门控 provider）、`lib/main.dart`（`Purchases.configure`）。
 
-### 非商店渠道：RevenueCat Web Paywall + Paddle
+### 非商店渠道：Paddle Checkout
 
-Android 侧载 APK / 桌面等非商店渠道不初始化 RevenueCat 原生 SDK，购买入口打开
-RevenueCat 托管 Web Paywall（底层 Paddle 计费），权益仍经 RevenueCat webhook
-落库后由 `/api/entitlements` 读回。
+Android 侧载 APK / 桌面等非商店渠道不初始化 RevenueCat 原生 SDK。App 从
+`GET /api/paddle/plans` 拉取月付/年付订阅和可选的 `oneTimePlans`。当前一次性套餐为
+`plus_yearly_one_time`，一次付款获得一年权益且不会自动续费。登录后统一通过
+`POST /api/paddle/checkout` 创建 Paddle transaction，并在系统浏览器容器中打开
+服务端返回的 checkout URL。
+权益只由 Paddle webhook 更新，App 通过 `/api/entitlements` 读回。
+
+Checkout 完成后，Paddle 通过 `echo-loop://paddle-success` 把用户带回 App。
+这个 Deep Link 只表示回跳，不是支付凭证；App 会等待第三方启动完成，再从
+`/api/entitlements` 强制回源确认权益。不要根据 URL 参数或回跳本身直接解锁，
+最终状态以服务端 webhook 和权益接口为准。
+
+桌面端收到回跳时，应用会通过 `window_manager` 恢复、显示并聚焦主窗口；iOS 和
+Android 的前台唤醒由系统负责。窗口激活失败不会阻断 Deep Link 的权益刷新流程。
 
 构建时注入：
 
 ```
 DISTRIBUTION_CHANNEL=direct
-WEB_PURCHASE_LINK_TEMPLATE=https://pay.rev.cat/<token>/{app_user_id}/paywall
 ```
 
-`{app_user_id}` 会被客户端替换为 URL-encoded 的 Supabase user.id。模板未配置或缺
-`{app_user_id}` 时，网页支付入口不可用。
-
-Web/Paddle 的价格、五折优惠码、节日促销文案在 RevenueCat 托管 Paywall /
-Paddle Checkout 中维护；客户端不读取 Paddle discount，也不硬编码 Web 价格。
+客户端不接收 price ID、discount ID 或 redirect URL。价格与首年优惠由后端 Paddle
+catalog 返回；checkout completion 只进入等待态，必须等 `/api/entitlements` 确认。
+真实订阅通过 `POST /api/paddle/portal` 创建短期 Customer Portal session；一次性购买
+不显示管理入口，付款凭证由 Paddle 邮件提供。后端未返回 `oneTimePlans` 时客户端保持
+原有订阅套餐和购买行为。
 
 ---
 
@@ -137,7 +147,6 @@ Paddle Checkout 中维护；客户端不读取 Paddle discount，也不硬编码
 
 **注意：**
 - 本模式只测「购买 UI / Paywall 门禁 / 权益状态流转」，**不验证 RC → entitlement 端到端映射**；后者必须走第 5 节真实 Sandbox 账号。
-- 只测会员 UI、连购买都不想发起时，用 App 内「开发者选项 → 订阅调试 → 手动覆盖权益」更省事（连 `.storekit` 都不用挂）。
 - release 构建禁止注入 `USE_LOCAL_STOREKIT`。
 
 ---

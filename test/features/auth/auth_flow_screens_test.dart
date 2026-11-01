@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../helpers/mock_providers.dart';
@@ -419,6 +420,32 @@ void main() {
     expect(find.text('Source Page'), findsNothing);
     expect(find.text('Authentication is not configured yet.'), findsOneWidget);
     expect(find.text('Supabase auth is not configured.'), findsNothing);
+  });
+
+  testWidgets('用户取消 Apple 登录后停留在主登录页且不显示错误', (tester) async {
+    final router = _authRouter(
+      initialLocation: AppRoutes.study,
+      onAppleSignIn: () async {
+        throw const SignInWithAppleAuthorizationException(
+          code: AuthorizationErrorCode.canceled,
+          message: 'canceled',
+        );
+      },
+    );
+
+    await tester.pumpWidget(_app(router));
+    await tester.pumpAndSettle();
+
+    router.push(AppRoutes.login);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with Apple'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in to Echo Loop'), findsOneWidget);
+    expect(find.text('Continue with Email Code'), findsOneWidget);
+    expect(find.text('Source Page'), findsNothing);
+    expect(find.text('Something went wrong. Try again.'), findsNothing);
+    expect(find.text('Settings'), findsNothing);
   });
 
   testWidgets('点击邮箱后进入单邮箱 OTP 页面', (tester) async {
@@ -832,6 +859,51 @@ void main() {
     expect(find.text('Apple account'), findsOneWidget);
     expect(find.text('mbfpw8sdy7@privaterelay.appleid.com'), findsOneWidget);
     expect(find.text('mbfpw8sd...@erelay.appleid.com'), findsNothing);
+  });
+
+  testWidgets('账号页 Apple 邮箱不可用时显示邮箱暂不可用，不暴露用户 ID', (tester) async {
+    final user = User(
+      id: 'internal-user-id',
+      appMetadata: const {
+        'provider': 'apple',
+        'providers': ['apple'],
+      },
+      userMetadata: const {},
+      aud: 'authenticated',
+      email: '   ',
+      createdAt: '2026-06-04T00:00:00.000Z',
+    );
+    final session = Session(
+      accessToken: 'token',
+      tokenType: 'bearer',
+      user: user,
+      refreshToken: 'refresh',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          supabaseSessionProvider.overrideWith((ref) => Stream.value(session)),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('en'), Locale('zh')],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light(),
+          home: const AccountScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apple account'), findsOneWidget);
+    expect(find.text('Email unavailable'), findsOneWidget);
+    expect(find.text('internal-user-id'), findsNothing);
   });
 
   testWidgets('账号页 Google 登录显示 Google 账户和完整邮箱', (tester) async {

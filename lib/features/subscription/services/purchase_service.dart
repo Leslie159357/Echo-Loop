@@ -11,7 +11,13 @@ import '../models/subscription_plan.dart';
 
 /// 购买流程异常。
 class PurchaseException implements Exception {
-  PurchaseException(this.message, {this.cancelled = false});
+  PurchaseException(
+    this.message, {
+    this.cancelled = false,
+    this.ownershipConflict = false,
+    this.receiptInUse = false,
+    this.alreadyEntitled = false,
+  });
 
   /// 错误描述。
   final String message;
@@ -19,8 +25,39 @@ class PurchaseException implements Exception {
   /// 是否为用户主动取消（取消不应视为错误弹窗，仅回到 Paywall）。
   final bool cancelled;
 
+  /// 是否为恢复购买时发现订阅归属于另一个 App User ID。
+  final bool ownershipConflict;
+
+  /// 收据已被其他 RevenueCat 订阅者占用（receiptAlreadyInUseError）。
+  /// 本账号可能已被后端判为会员（如 Paddle 订阅），调用方应转回源确认，
+  /// 而不是当作「购买失败」。
+  final bool receiptInUse;
+
+  /// Paddle 后端确认当前账号已有有效权益，客户端应转为强制对账。
+  final bool alreadyEntitled;
+
   @override
-  String toString() => 'PurchaseException($message, cancelled: $cancelled)';
+  String toString() =>
+      'PurchaseException($message, cancelled: $cancelled, '
+      'ownershipConflict: $ownershipConflict, receiptInUse: $receiptInUse, '
+      'alreadyEntitled: $alreadyEntitled)';
+}
+
+/// 恢复购买结果。
+///
+/// [originalAppUserId] 来自 RevenueCat CustomerInfo，用于恢复购买后校验订阅是否
+/// 归属于当前 Echo Loop 账号；非 RevenueCat 渠道无法提供时为 null。
+class RestorePurchaseResult {
+  const RestorePurchaseResult({
+    required this.entitlement,
+    this.originalAppUserId,
+  });
+
+  /// 恢复后平台返回的权益快照。
+  final Entitlement entitlement;
+
+  /// RevenueCat 记录的原始 App User ID。
+  final String? originalAppUserId;
 }
 
 /// IAP 购买服务抽象。
@@ -31,6 +68,7 @@ abstract class PurchaseService {
   /// 阻塞 paywall 首屏；购买行为始终由平台在成交时应用真实可用 offer。
   Future<List<SubscriptionPlan>> fetchPlans({
     bool includeIntroEligibility = true,
+    bool force = false,
   });
 
   /// 当前权益快照（来自平台 / RevenueCat 已校验的 CustomerInfo）。
@@ -50,7 +88,7 @@ abstract class PurchaseService {
   Future<Entitlement> purchase(String planId);
 
   /// 恢复购买。返回恢复后的权益快照（无可恢复购买返回 [Entitlement.free]）。
-  Future<Entitlement> restore();
+  Future<RestorePurchaseResult> restore();
 
   /// 将购买服务绑定到指定用户（如 RevenueCat `logIn`）。匿名为 null。
   Future<void> identify(String? userId);
@@ -62,19 +100,6 @@ abstract class PurchaseService {
   /// RC 实现：`logIn(userId)` 后核对 `Purchases.appUserID == userId`；
   /// 未就绪 / 不匹配 / 异常一律返回 false，调用方据此中止购买。
   Future<bool> ensureIdentified(String userId);
-
-  /// 使平台 SDK 的 CustomerInfo 本地缓存失效，强制下次回源服务端。
-  ///
-  /// 调试用：后台删除订阅后，SDK 仍会优先返回本地缓存的 CustomerInfo，
-  /// 导致权益看似仍生效。失效后配合 [currentEntitlement] 重新对账可看到真实结果。
-  Future<void> invalidateCustomerInfoCache();
-
-  /// 返回平台 SDK 的原始权益诊断快照（调试面板展示用）。
-  ///
-  /// 暴露 activeEntitlements / allEntitlements / activeSubscriptions /
-  /// originalAppUserId / 期望的 entitlementId 等原始字段，便于定位
-  /// 「商品没挂 entitlement」「entitlement 标识没对上」等配置问题。
-  Future<Map<String, Object?>> debugCustomerInfoSnapshot();
 
   /// 当前 App Store / 商店账号所在 storefront 的国家码（ISO 3166-1 alpha-3，
   /// 如 `USA` / `CHN`）。用于按用户真实商店区判定行为（如更新检查查哪个区的
@@ -92,6 +117,7 @@ class StubPurchaseService implements PurchaseService {
   @override
   Future<List<SubscriptionPlan>> fetchPlans({
     bool includeIntroEligibility = true,
+    bool force = false,
   }) async => const [];
 
   @override
@@ -106,19 +132,14 @@ class StubPurchaseService implements PurchaseService {
   }
 
   @override
-  Future<Entitlement> restore() async => Entitlement.free;
+  Future<RestorePurchaseResult> restore() async =>
+      const RestorePurchaseResult(entitlement: Entitlement.free);
 
   @override
   Future<void> identify(String? userId) async {}
 
   @override
   Future<bool> ensureIdentified(String userId) async => false;
-
-  @override
-  Future<void> invalidateCustomerInfoCache() async {}
-
-  @override
-  Future<Map<String, Object?>> debugCustomerInfoSnapshot() async => const {};
 
   @override
   Future<String?> storefrontCountryCode() async => null;

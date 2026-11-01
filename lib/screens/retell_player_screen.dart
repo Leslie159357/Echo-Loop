@@ -13,21 +13,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../database/enums.dart';
+import '../models/practice_completion_result.dart';
+import '../features/auth/sign_in_required_dialog.dart';
+import '../features/subscription/models/premium_feature.dart';
+import '../features/subscription/widgets/ai_quota_exceeded_dialog.dart';
+import '../features/subscription/widgets/feature_gate.dart' show openPaywall;
 import '../l10n/app_localizations.dart';
 import '../utils/playback_speed.dart';
+import '../models/retell_review_sample.dart';
+import '../models/media_learning_startup.dart';
+import '../models/media_playback_state.dart';
 import '../models/retell_settings.dart';
 import '../models/sentence.dart';
 import '../models/speech_practice_models.dart';
+import '../models/word_highlight_binding.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
 import '../providers/learning_settings_provider.dart';
+import '../providers/settings_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/learning_session/learning_session_provider.dart';
 import '../providers/learning_session/retell_player_provider.dart';
+import '../providers/media_engine/media_engine_provider.dart';
+import '../providers/media_engine/media_sense_group_range_playback.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../providers/retell_recording_controller_provider.dart';
-import '../services/audio_playback_service.dart';
+import '../providers/retell_review_evaluation_provider.dart';
+import '../services/audio_preview_controller.dart';
 import '../services/app_logger.dart';
 import '../utils/wakelock_mixin.dart';
 import '../router/app_router.dart';
@@ -39,22 +52,27 @@ import '../widgets/common/speech_rating_badge.dart';
 import '../widgets/common/countdown_chip.dart';
 import '../widgets/common/repeat_practice_panel.dart';
 import '../widgets/common/paragraph_practice_scaffold.dart';
+import '../widgets/common/managed_media_visual_surface.dart';
+import '../widgets/common/practice_media_presentation_host.dart';
 import '../widgets/common/paragraph_sentence_list_card.dart';
+import '../widgets/study/study_activity_detector.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/common/paragraph_visibility_controls.dart';
 import '../widgets/retell/retell_settings_sheet.dart';
 import '../widgets/player_hotkey_scope.dart';
 import '../widgets/speech_permission_dialog.dart';
 import '../widgets/practice/practice_play_count_label.dart';
+import '../widgets/retell/retell_review_sheet.dart';
 
-/// 复述录音 badge 回放使用的播放服务。
+/// 复述录音回放使用的试听控制器。
 ///
-/// 自动回放和用户手动点击 badge 共用这一个服务，保证播放状态、
-/// 停止图标和点击停止行为一致；测试中可注入无平台依赖的替身。
-final retellAutoPlaybackServiceProvider = Provider<AudioPlaybackService>((ref) {
-  final service = AudioPlaybackService();
-  ref.onDispose(() => unawaited(service.dispose()));
-  return service;
+/// 自动回放、用户手动点击 badge、评估弹窗里的播放按钮共用这一个 controller，
+/// 三个入口因此共享同一份播放状态，图标和点击停止行为天然一致；
+/// 测试中可注入包着无平台依赖 service 的替身。
+final retellRecordingPreviewProvider = Provider<AudioPreviewController>((ref) {
+  final preview = AudioPreviewController();
+  ref.onDispose(() => unawaited(preview.dispose()));
+  return preview;
 });
 
 /// 复述播放器页面
@@ -65,10 +83,14 @@ class RetellPlayerScreen extends ConsumerStatefulWidget {
   /// 音频项 ID
   final String audioItemId;
 
+  /// 进入页面后统一延迟准备音频或视频媒体。
+  final MediaLearningStartup? mediaStartup;
+
   const RetellPlayerScreen({
     super.key,
     this.collectionId,
     required this.audioItemId,
+    this.mediaStartup,
   });
 
   @override
@@ -85,9 +107,12 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   /// seekToSentence 同步阶段 guard（同 blind_listen 注释）。
   bool _isSeeking = false;
 
-  /// 新手引导：编号区 / 主体区 Showcase key（随 State 生命周期存在）
-  final GlobalKey _guideNumberKey = GlobalKey(
-    debugLabel: 'retellGuideSentenceNumber',
+  /// 切段清理期间冻结录音状态副作用和自动启动。
+  bool _isParagraphTransitioning = false;
+
+  /// 新手引导：讲解按钮 / 主体播放区 Showcase key（随 State 生命周期存在）
+  final GlobalKey _guideExplanationKey = GlobalKey(
+    debugLabel: 'retellGuideSentenceExplanation',
   );
   final GlobalKey _guideBodyKey = GlobalKey(
     debugLabel: 'retellGuideSentenceBody',
@@ -104,9 +129,23 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   final SpeechRatingBadgeController _ratingBadgeController =
       SpeechRatingBadgeController();
   bool _isHandlingEvaluationComplete = false;
+  bool _isShowingReviewSheet = false;
+
+  bool _mediaStartupReady = false;
+  bool _speechReady = false;
+  bool _didStartPlaying = false;
+  bool _isExitingMediaFullscreenForRetell = false;
+  PracticeMediaPresentationSession? _mediaPresentationSession;
+
+  /// 防止同一轮评估的状态更新叠加多个额度提示。
+  bool _isShowingAiQuotaDialog = false;
 
   ProviderSubscription<RetellPlayerState>? _playerSubscription;
   ProviderSubscription<RetellRecordingState>? _recordingSubscription;
+  ProviderSubscription<RetellReviewEvaluationState>? _reviewSubscription;
+
+  /// 在初始化期保存 controller，销毁期不再通过已失效的 ref 访问 provider。
+  late final RetellReviewEvaluationController _reviewController;
   StreamSubscription<Duration>? _silenceSkipSub;
 
   @override
@@ -120,12 +159,19 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       retellRecordingControllerProvider,
       _onRetellRecordingStateChanged,
     );
+    _reviewController = ref.read(retellReviewEvaluationProvider.notifier);
+    _reviewSubscription = ref.listenManual<RetellReviewEvaluationState>(
+      retellReviewEvaluationProvider,
+      _onRetellReviewStateChanged,
+    );
     _silenceSkipSub = ref
         .read(retellPlayerProvider.notifier)
         .silenceSkipEventStream
         .listen(_showSilenceSkippedSnackBar);
     _latestPlayerState = ref.read(retellPlayerProvider);
-    _latestRecordingState = ref.read(retellRecordingControllerProvider);
+    final initialRecordingState = ref.read(retellRecordingControllerProvider);
+    _latestRecordingState = initialRecordingState;
+    _syncReviewAttempt(initialRecordingState);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ok = await ensureSpeechReadyForSubStage(
@@ -135,29 +181,75 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       );
       if (!mounted) return;
       if (!ok) {
+        await widget.mediaStartup?.cancel();
+        if (!mounted) return;
         if (context.canPop()) context.pop();
         return;
       }
+      _speechReady = true;
       final settings = ref.read(retellPlayerProvider).settings;
       ref
           .read(retellRecordingControllerProvider.notifier)
           .setManualMode(settings.isManualMode);
-      ref.read(retellPlayerProvider.notifier).startPlaying();
-      final playerState = _latestPlayerState;
-      final recState = _latestRecordingState;
-      if (playerState != null && recState != null) {
-        _maybeAutoStartRecording(playerState: playerState, recState: recState);
-      }
+      _tryStartPlaying();
     });
+  }
+
+  /// 语音能力与媒体都 ready 后只启动一次。
+  void _tryStartPlaying() {
+    if (!mounted || !_speechReady || _didStartPlaying) return;
+    if (widget.mediaStartup == null || !_mediaStartupReady) return;
+    _didStartPlaying = true;
+    ref.read(retellPlayerProvider.notifier).startPlaying();
+    final playerState = _latestPlayerState;
+    final recState = _latestRecordingState;
+    if (playerState != null && recState != null) {
+      _maybeAutoStartRecording(playerState: playerState, recState: recState);
+    }
+  }
+
+  void _handleMediaStartupReady() {
+    if (!mounted || _mediaStartupReady) return;
+    setState(() => _mediaStartupReady = true);
+    _tryStartPlaying();
+  }
+
+  Future<void> _handleMediaStartupExit() async {
+    _isExiting = true;
+    await widget.mediaStartup?.cancel();
+    if (mounted) context.pop();
+  }
+
+  Future<void> _handleClose() async {
+    if (widget.mediaStartup != null && !_mediaStartupReady) {
+      await _handleMediaStartupExit();
+      return;
+    }
+    await _handleExit();
+  }
+
+  Widget _wrapMediaStartup(Widget child) {
+    final startup = widget.mediaStartup;
+    if (startup == null) return child;
+    return ManagedMediaVisualSurface(
+      loadKey: startup.loadKey,
+      load: startup.load,
+      cancel: startup.cancel,
+      onReady: _handleMediaStartupReady,
+      showVideoLoading: startup.showVideoLoading,
+      child: child,
+    );
   }
 
   @override
   void dispose() {
     _autoPlaybackToken += 1;
     _isHandlingEvaluationComplete = false;
+    _reviewController.syncAttempt(null);
     unawaited(_ratingBadgeController.stop());
     _playerSubscription?.close();
     _recordingSubscription?.close();
+    _reviewSubscription?.close();
     _silenceSkipSub?.cancel();
     super.dispose();
   }
@@ -185,7 +277,6 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     _logRetellPlayerStateTransition(prev, next);
 
     if (!prev.stepFinished && next.stepFinished) {
-      ref.read(learningSessionProvider.notifier).pauseStudyTimer();
       shortenIdleTimeout(5);
       _handleCompleted();
     }
@@ -206,12 +297,45 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
 
     if (prev.currentParagraphIndex != next.currentParagraphIndex) {
       _manualStoppedThisParagraph = false;
-      ref.read(retellRecordingControllerProvider.notifier).clearRecording();
+      if (!_isParagraphTransitioning) {
+        unawaited(
+          ref.read(retellRecordingControllerProvider.notifier).clearRecording(),
+        );
+      }
     }
 
     final recState = _latestRecordingState;
     if (recState != null) {
+      final enteredRetelling =
+          prev.phase == RetellPhase.listening &&
+          next.phase == RetellPhase.retelling;
+      final presentation = _mediaPresentationSession;
+      if (enteredRetelling &&
+          presentation != null &&
+          presentation.readState().expanded) {
+        unawaited(_exitFullscreenThenStartRetelling());
+        return;
+      }
       _maybeAutoStartRecording(playerState: next, recState: recState);
+    }
+  }
+
+  /// 视频段落播完先退出全屏，再允许自动录音，保证复述控制始终可见。
+  Future<void> _exitFullscreenThenStartRetelling() async {
+    if (_isExitingMediaFullscreenForRetell) return;
+    _isExitingMediaFullscreenForRetell = true;
+    try {
+      await _mediaPresentationSession?.setFullscreen(false);
+      if (!mounted || _isExiting) return;
+      final latestPlayer = ref.read(retellPlayerProvider);
+      final latestRecording = ref.read(retellRecordingControllerProvider);
+      if (latestPlayer.phase != RetellPhase.retelling) return;
+      _maybeAutoStartRecording(
+        playerState: latestPlayer,
+        recState: latestRecording,
+      );
+    } finally {
+      _isExitingMediaFullscreenForRetell = false;
     }
   }
 
@@ -220,13 +344,16 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     RetellRecordingState next,
   ) {
     _latestRecordingState = next;
+    _syncReviewAttempt(next);
     if (!mounted || _isExiting) return;
     if (prev != null) {
       _logRetellRecordingStateTransition(prev, next);
     }
     // 评估完成（有 ASR: processing→idle，无 ASR: recording→idle）
     if (prev?.phase != RetellRecordingPhase.idle &&
-        next.phase == RetellRecordingPhase.idle) {
+        next.phase == RetellRecordingPhase.idle &&
+        next.currentAttempt != null &&
+        !_isParagraphTransitioning) {
       // 复述完成后一律显示全部字幕（不影响用户在复述过程中的设置）
       ref
           .read(retellPlayerProvider.notifier)
@@ -247,13 +374,183 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     }
   }
 
+  /// 将 AI 评估缓存精确绑定到 panel 中可见的录音 badge。
+  void _syncReviewAttempt(RetellRecordingState recordingState) {
+    final attempt = recordingState.currentAttempt;
+    final showRating = ref.read(learningSettingsProvider).retellRatingEnabled;
+    final isBadgeVisible =
+        attempt != null &&
+        (showRating ? attempt.hasFinalFeedback : attempt.hasRecording);
+    final path = attempt?.filePath;
+    final attemptKey = isBadgeVisible && path != null && path.isNotEmpty
+        ? '${attempt.promptId}:$path'
+        : null;
+    ref.read(retellReviewEvaluationProvider.notifier).syncAttempt(attemptKey);
+  }
+
+  void _onRetellReviewStateChanged(
+    RetellReviewEvaluationState? previous,
+    RetellReviewEvaluationState next,
+  ) {
+    if (!mounted || _isExiting) return;
+    // 流一有返回就开弹窗：`meta` 首帧（转录）已在 client 层独立成帧，
+    // 因此这里的「首个带 evaluation 的帧」就是服务端最早的一次推送。
+    if (next.phase == RetellReviewEvaluationPhase.streaming &&
+        previous?.evaluation == null &&
+        next.evaluation != null) {
+      unawaited(_openRetellReviewSheet());
+      return;
+    }
+    if (next.phase == RetellReviewEvaluationPhase.failed &&
+        !_isShowingReviewSheet) {
+      // 未登录与额度用尽有明确出路，走对应引导；其余仍是一次性 SnackBar。
+      switch (next.errorCode) {
+        case 'auth_required':
+          unawaited(_showRetellReviewSignInDialog());
+          return;
+        case 'quota_exceeded':
+          unawaited(_showRetellReviewQuotaDialog());
+          return;
+      }
+      final message = retellReviewErrorMessage(
+        AppLocalizations.of(context)!,
+        next.errorCode,
+        quotaReason: next.quotaReason,
+      );
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  /// 云端 AI 复述评估的登录引导（与 AI 转录、意群共用同一个通用弹窗）。
+  Future<void> _showRetellReviewSignInDialog() async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    await ensureSignedInForAction(
+      context: context,
+      ref: ref,
+      title:
+          l10n?.retellAiReviewSignInRequiredTitle ??
+          'Sign in to use AI retell review',
+      message:
+          l10n?.retellAiReviewSignInRequiredMessage ??
+          'AI retell review uses the cloud AI service. Sign in to get '
+              'feedback on your retelling.',
+    );
+  }
+
+  /// 复述评估额度用尽时先明确告知用户，再由用户选择是否进入订阅页。
+  ///
+  /// 用户主动点击 AI 评估时，和句子翻译/解析一致，不受全局提醒冷却期限制；
+  /// 仍记录已展示时间，使其它自动触发的 AI 提醒遵守统一节流规则。
+  Future<void> _showRetellReviewQuotaDialog() async {
+    if (_isShowingAiQuotaDialog || !mounted) return;
+    _isShowingAiQuotaDialog = true;
+    try {
+      await showAiQuotaExceededDialog(
+        context: context,
+        ref: ref,
+        feature: PremiumFeature.aiRetellReview,
+        reason: ref.read(retellReviewEvaluationProvider).quotaReason,
+      );
+    } finally {
+      _isShowingAiQuotaDialog = false;
+    }
+  }
+
+  /// 额度用尽引导订阅（平台是否支持订阅由 openPaywall 内部兜底）。
+  Future<void> _openRetellReviewPaywall() async {
+    if (!mounted) return;
+    await openPaywall(context, ref);
+  }
+
+  Future<void> _openRetellReviewSheet() async {
+    if (_isShowingReviewSheet || !mounted) return;
+    final recordingPath = ref
+        .read(retellRecordingControllerProvider)
+        .currentAttempt
+        ?.filePath;
+    if (recordingPath == null || recordingPath.isEmpty) return;
+    _isShowingReviewSheet = true;
+    try {
+      await showRetellReviewSheet(
+        context,
+        recordingPath: recordingPath,
+        preview: ref.read(retellRecordingPreviewProvider),
+        onBeforePlayback: _takeOverForAiReview,
+        onRetry: _retryReviewEvaluation,
+        onUpgrade: _openRetellReviewPaywall,
+        onSignIn: _showRetellReviewSignInDialog,
+      );
+    } finally {
+      _isShowingReviewSheet = false;
+    }
+  }
+
+  Future<void> _handleAiReviewTap(SpeechPracticeAttempt? attempt) async {
+    final path = attempt?.filePath;
+    if (attempt == null || path == null || path.isEmpty) return;
+    await _takeOverForAiReview();
+    // 假数据模式下直接出弹窗，不发请求（见 [retellReviewSampleEnabled]）。
+    if (retellReviewSampleEnabled) {
+      ref
+          .read(retellReviewEvaluationProvider.notifier)
+          .loadSample(attemptKey: '${attempt.promptId}:$path');
+      await _openRetellReviewSheet();
+      return;
+    }
+    final reviewState = ref.read(retellReviewEvaluationProvider);
+    if (reviewState.attemptKey == '${attempt.promptId}:$path' &&
+        reviewState.hasCachedResult) {
+      await _openRetellReviewSheet();
+      return;
+    }
+    // 弹窗不在这里打开：等流的首帧到达后由 [_onRetellReviewStateChanged] 打开，
+    // 等待期间 badge 上是 loading 态。
+    await _startReviewEvaluation(attempt);
+  }
+
+  /// 弹窗内失败重试：此时已接管播放，不再重复 takeover。
+  Future<void> _retryReviewEvaluation() => _startReviewEvaluation(
+    ref.read(retellRecordingControllerProvider).currentAttempt,
+  );
+
+  Future<void> _startReviewEvaluation(SpeechPracticeAttempt? attempt) async {
+    final path = attempt?.filePath;
+    if (attempt == null || path == null || path.isEmpty) return;
+    await ref
+        .read(retellReviewEvaluationProvider.notifier)
+        .evaluate(
+          attemptKey: '${attempt.promptId}:$path',
+          recordingPath: path,
+          originalText: ref
+              .read(retellPlayerProvider.notifier)
+              .currentParagraphReferenceText,
+          targetLanguage: ref.read(appSettingsProvider).nativeLanguage,
+        );
+  }
+
+  /// AI 评估是用户主动操作：终止倒计时和自动流程，保留当前段给用户手动接管。
+  Future<void> _takeOverForAiReview() async {
+    _manualStoppedThisParagraph = true;
+    await _cancelAutoPlayback();
+    final playerState = ref.read(retellPlayerProvider);
+    if (playerState.phase == RetellPhase.retelling) {
+      ref
+          .read(retellPlayerProvider.notifier)
+          .enterWaitingForUser(stopImmediately: true);
+    }
+  }
+
   void _maybeAutoStartRecording({
     required RetellPlayerState playerState,
     required RetellRecordingState recState,
   }) {
-    if (!mounted || _isShowingDialog) return;
+    if (!mounted || _isShowingDialog || _isParagraphTransitioning) return;
 
     if (playerState.phase != RetellPhase.retelling ||
+        _isExitingMediaFullscreenForRetell ||
         playerState.isWaitingForUser ||
         playerState.stepFinished ||
         playerState.settings.isManualMode ||
@@ -288,6 +585,10 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (_isParagraphTransitioning || _currentPromptId() != promptId) {
+        AppLogger.log('RetellScreen', '⏭ 自动录音跳过: 段落已切换');
+        return;
+      }
       if (_isHandlingEvaluationComplete) {
         AppLogger.log('RetellScreen', '⏭ 自动录音跳过: 评估完成处理中');
         return;
@@ -518,6 +819,14 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
           attempt?.hasRecording == true) {
         await _playAttemptRecordingAutomatically(token);
         if (!_isAutoPlaybackCurrent(token)) return;
+      }
+
+      // 用户之前停止过倒计时/播放并接管本段时，本次新录音仍应自动回放；
+      // 但回放完成后继续保持 waiting，不能重新启动段间倒计时。
+      if (_manualStoppedThisParagraph) {
+        AppLogger.log('RetellScreen', '评估完成后保持用户接管状态');
+        player.enterWaitingForUser();
+        return;
       }
 
       final latestState = ref.read(retellPlayerProvider);
@@ -810,11 +1119,11 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   }
 
   /// 执行退出
-  Future<void> _exit() async {
+  Future<void> _exit({PracticeCompletionResult? result}) async {
     _isExiting = true;
     await ref.read(retellRecordingControllerProvider.notifier).fullReset();
     await ref.read(learningSessionProvider.notifier).exitLearningMode();
-    if (mounted) context.pop();
+    if (mounted) context.pop(result);
   }
 
   /// 获取当前步骤的上下文信息（按 plan 派生）
@@ -840,6 +1149,8 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   Future<void> _handleCompleted() async {
     if (_isShowingDialog || _isExiting || !mounted) return;
     _isShowingDialog = true;
+    final player = ref.read(retellPlayerProvider.notifier);
+    player.pauseStudySession();
 
     final l10n = AppLocalizations.of(context)!;
     final sessionState = ref.read(learningSessionProvider);
@@ -878,6 +1189,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
         ],
         replayLabel: l10n.retellPracticeAgain,
         onStudyAgain: () async {
+          player.resumeStudySession();
           await ref
               .read(retellRecordingControllerProvider.notifier)
               .fullReset();
@@ -891,7 +1203,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                 null,
                 isFreePlay: true,
               );
-          await _exit();
+          await _exit(result: PracticeCompletionResult.completed);
         },
       );
       _isShowingDialog = false;
@@ -927,19 +1239,79 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
       await ref
           .read(learningProgressNotifierProvider.notifier)
           .completeCurrentSubStage(widget.audioItemId);
-      await _exit();
+      await _exit(result: PracticeCompletionResult.completed);
     } else {
-      // 关闭弹窗 → 留在页面，不做操作
+      // 关闭弹窗 → 留在页面，恢复页面级学习计时。
+      player.resumeStudySession();
     }
   }
 
   /// 重播当前段落
+  ///
+  /// clearRecording 会先把录音置为 idle 再等待原生清理，期间若跑过一帧，
+  /// idle 触发的自动录音会抢在原文播放前启动（把原音录进去）。
+  /// 因此清理期间先挡住自动录音，清理完、即将切到 listening 时再放开。
   Future<void> _handleReplay() async {
-    _manualStoppedThisParagraph = false;
+    _manualStoppedThisParagraph = true;
     AppLogger.log('RetellScreen', '重播当前段落');
     await _cancelRecordingAndPlayback();
-    ref.read(retellRecordingControllerProvider.notifier).clearRecording();
+    await ref.read(retellRecordingControllerProvider.notifier).clearRecording();
+    if (!mounted) return;
+    // replayDuringCountdown 同步切到 listening，之后残留的自动录音回调会跳过。
+    _manualStoppedThisParagraph = false;
     await ref.read(retellPlayerProvider.notifier).replayDuringCountdown();
+  }
+
+  /// 主播放按钮统一先处理录音状态，再切换原文播放。
+  ///
+  /// 录音状态由独立 controller 管理，不能只根据播放器 phase 决定播放动作；
+  /// 录音中的播放点击应先取消录音，避免音频与麦克风同时工作。
+  Future<void> _handleMainPlaybackTap() async {
+    var playerState = ref.read(retellPlayerProvider);
+    final recordingState = ref.read(retellRecordingControllerProvider);
+
+    if (recordingState.phase == RetellRecordingPhase.recording) {
+      // 先阻止取消录音触发的 idle listener 自动重新开始录音。
+      _manualStoppedThisParagraph = true;
+      if (playerState.phase == RetellPhase.retelling) {
+        ref
+            .read(retellPlayerProvider.notifier)
+            .enterWaitingForUser(stopImmediately: true);
+      }
+
+      final recordingController = ref.read(
+        retellRecordingControllerProvider.notifier,
+      );
+      await recordingController.cancelActiveRecording();
+      await recordingController.clearRecording();
+      if (!mounted) return;
+
+      playerState = ref.read(retellPlayerProvider);
+      if (playerState.phase == RetellPhase.retelling) {
+        _manualStoppedThisParagraph = false;
+        await ref.read(retellPlayerProvider.notifier).replayDuringCountdown();
+        return;
+      }
+      _manualStoppedThisParagraph = false;
+    }
+
+    if (playerState.phase == RetellPhase.listening) {
+      final player = ref.read(retellPlayerProvider.notifier);
+      if (_isRetellMainPlaybackActive(playerState)) {
+        await player.pause();
+      } else {
+        await player.resume();
+      }
+      return;
+    }
+
+    await _handleReplay();
+  }
+
+  /// 停止倒计时意味着当前段落后续都由用户手动接管。
+  void _takeOverCountdown() {
+    _manualStoppedThisParagraph = true;
+    ref.read(retellPlayerProvider.notifier).enterWaitingForUser();
   }
 
   /// 切段：retelling 阶段走 completeRetellingTurn（记录统计 + 遍数逻辑）。
@@ -947,36 +1319,67 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
   /// 最后一段时保留录音结果（badge）和手动标记，避免完成弹窗期间
   /// 触发自动录音或 badge 消失。
   Future<void> _goToNextParagraph() async {
+    if (_isParagraphTransitioning) return;
+    _isParagraphTransitioning = true;
     final retellState = ref.read(retellPlayerProvider);
     final isLastParagraph =
         retellState.currentParagraphIndex >= retellState.totalParagraphs - 1;
 
-    if (!isLastParagraph) {
-      _manualStoppedThisParagraph = false;
-      ref.read(retellRecordingControllerProvider.notifier).clearRecording();
-    }
+    try {
+      // 先禁止清理期间的 listener 自动录音，再取消音频和录音；
+      // clearRecording 会等待底层 warmup/录音会话确实结束。
+      await _cancelRecordingAndPlayback();
+      if (!isLastParagraph) {
+        _manualStoppedThisParagraph = false;
+        await ref
+            .read(retellRecordingControllerProvider.notifier)
+            .clearRecording();
+      }
 
-    AppLogger.log('RetellScreen', '→ 下一段 (last=$isLastParagraph)');
-    await _cancelRecordingAndPlayback();
+      AppLogger.log('RetellScreen', '→ 下一段 (last=$isLastParagraph)');
+      if (retellState.phase == RetellPhase.retelling) {
+        await ref.read(retellPlayerProvider.notifier).completeRetellingTurn();
+      } else {
+        await ref.read(retellPlayerProvider.notifier).goToNextParagraph();
+      }
 
-    if (retellState.phase == RetellPhase.retelling) {
-      await ref.read(retellPlayerProvider.notifier).completeRetellingTurn();
-    } else {
-      await ref.read(retellPlayerProvider.notifier).goToNextParagraph();
-    }
-
-    // 最后一段 → 直接触发完成处理
-    if (isLastParagraph) {
-      _handleCompleted();
+      // 最后一段仍可能需要重播；仅在 Provider 确认完成后处理完成弹窗。
+      if (isLastParagraph && ref.read(retellPlayerProvider).stepFinished) {
+        _handleCompleted();
+      }
+    } finally {
+      _isParagraphTransitioning = false;
+      if (mounted && !isLastParagraph) {
+        final latestPlayer = ref.read(retellPlayerProvider);
+        final latestRecording = ref.read(retellRecordingControllerProvider);
+        _maybeAutoStartRecording(
+          playerState: latestPlayer,
+          recState: latestRecording,
+        );
+      }
     }
   }
 
   Future<void> _goToPreviousParagraph() async {
+    if (_isParagraphTransitioning) return;
+    _isParagraphTransitioning = true;
     _manualStoppedThisParagraph = false;
     AppLogger.log('RetellScreen', '→ 上一段');
-    await _cancelRecordingAndPlayback();
-    ref.read(retellRecordingControllerProvider.notifier).clearRecording();
-    await ref.read(retellPlayerProvider.notifier).goToPreviousParagraph();
+    try {
+      await _cancelRecordingAndPlayback();
+      await ref
+          .read(retellRecordingControllerProvider.notifier)
+          .clearRecording();
+      await ref.read(retellPlayerProvider.notifier).goToPreviousParagraph();
+    } finally {
+      _isParagraphTransitioning = false;
+      if (mounted) {
+        _maybeAutoStartRecording(
+          playerState: ref.read(retellPlayerProvider),
+          recState: ref.read(retellRecordingControllerProvider),
+        );
+      }
+    }
   }
 
   Future<void> _openSettings() async {
@@ -1000,7 +1403,7 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     await showRetellSettingsSheet(context);
   }
 
-  /// 点击句子编号 → 从该句开始播放
+  /// 点击句子正文 → 从该句开始播放
   ///
   /// 分场景处理：
   /// - **listening 阶段**：seekToSentence 内 _cancelAll 已经处理音频清理，
@@ -1074,16 +1477,27 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
 
     final lpState = ref.read(listeningPracticeProvider);
     final audioName = lpState.currentAudioItem?.name ?? '';
+    final usesMedia =
+        _mediaStartupReady &&
+        ref.read(learningSessionProvider).playbackChain ==
+            LearningPlaybackChain.mediaEngine;
 
-    await context.push(
-      AppRoutes.sentenceDetail,
+    await AppRoutes.pushNested(
+      context,
+      AppRoutes.sentenceDetailSegment,
       extra: SentenceDetailArgs(
         audioItemId: widget.audioItemId,
         audioName: audioName,
         sentenceText: sentence.text,
         sentenceIndex: sentence.index,
+        totalSentenceCount: ref
+            .read(retellPlayerProvider.notifier)
+            .totalSentenceCount,
         startTimeMs: sentence.startTime.inMilliseconds,
         endTimeMs: sentence.endTime.inMilliseconds,
+        rangePlayback: _retellMediaRangePlayback,
+        wordHighlightSource: _wordHighlightSource(),
+        mediaSession: usesMedia ? _buildMediaSession() : null,
       ),
     );
 
@@ -1094,6 +1508,43 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     await ref
         .read(retellPlayerProvider.notifier)
         .initializeBookmarks(widget.audioItemId);
+  }
+
+  late final MediaSenseGroupRangePlayback _retellMediaRangePlayback =
+      MediaSenseGroupRangePlayback(
+        engine: ref.read(mediaEngineProvider.notifier),
+        playbackSpeed: () =>
+            ref.read(retellPlayerProvider).settings.playbackSpeed,
+      );
+
+  WordHighlightSource _wordHighlightSource() {
+    final engine = ref.read(mediaEngineProvider.notifier);
+    return WordHighlightSource(
+      audioItemId: widget.audioItemId,
+      positionStream: engine.wordHighlightPositionStream,
+      currentPosition: engine.wordHighlightPosition,
+      playbackStatus: engine.wordHighlightPlaybackStatus,
+      playbackStatusStream: engine.wordHighlightPlaybackStatusStream,
+    );
+  }
+
+  SentenceDetailMediaSession? _buildMediaSession() {
+    final session = _mediaPresentationSession;
+    if (session == null) return null;
+    return SentenceDetailMediaSession(
+      readState: () {
+        final state = session.readState();
+        return MediaPlaybackState(
+          visualTrackVisible: state.visualTrackVisible,
+          visualTrackExpanded: state.expanded,
+          videoSubtitleVisible: state.subtitleVisible,
+        );
+      },
+      setVisible: session.setVisible,
+      setSubtitleVisible: session.setSubtitleVisible,
+      setFullscreen: session.setFullscreen,
+      buildVideoView: session.buildVideoView,
+    );
   }
 
   @override
@@ -1137,6 +1588,9 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     final retellRatingEnabled = ref.watch(
       learningSettingsProvider.select((s) => s.retellRatingEnabled),
     );
+    final reviewPhase = ref.watch(
+      retellReviewEvaluationProvider.select((s) => s.phase),
+    );
 
     // 录音按钮模式（RetellRecordingPhase → RecordingButtonMode）
     final recordingMode = switch (retellRecState.phase) {
@@ -1174,163 +1628,178 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     // 录音结果（从 controller state 获取）
     final currentAttempt = retellRecState.currentAttempt;
 
-    // 新手引导：编号→开播、文本→讲解。统一挂在第 1 句（idx=0），首项最显眼。
+    // 新手引导：文本→开播、左侧图标→讲解。统一挂在第 1 句（idx=0），首项最显眼。
     // 盲听和复述共用同一个 flow id —— 用户先在任一页看过就不再弹另一页。
     const guideTargetLocalIdx = 0;
-    final numberStep = GuideStep(
-      key: _guideNumberKey,
-      description: l10n.guideSentenceTileNumberDescription,
-    );
     final bodyStep = GuideStep(
       key: _guideBodyKey,
       description: l10n.guideSentenceTileBodyDescription,
+    );
+    final explanationStep = GuideStep(
+      key: _guideExplanationKey,
+      description: l10n.guideSentenceTileExplanationDescription,
     );
     final guideFlows = <GuideFlow>[
       GuideFlow(
         flowId: GuideFlowIds.sentenceTileTour,
         shouldRun: sentences.isNotEmpty,
-        steps: [numberStep, bodyStep],
+        steps: [bodyStep, explanationStep],
       ),
     ];
 
-    return wakelockBody(
-      child: LearningHotkeyScope(
-        onPlayPause: () {
-          if (state.phase == RetellPhase.listening) {
-            state.isPlaying ? player.pause() : player.resume();
-          } else if (state.isRetellCountdown) {
-            _handleReplay();
-          } else {
-            _handleReplay();
-          }
-        },
-        onPrevious: _goToPreviousParagraph,
-        onNext: _goToNextParagraph,
-        child: PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, _) async {
-            if (didPop) return;
-            await _handleExit();
-          },
-          child: GuideFlowSequenceHost(
-            flows: guideFlows,
-            child: ParagraphPracticeScaffold(
-              title: l10n.retellTitle,
-              onClose: _handleExit,
-              onOpenSettings: _openSettings,
-              current: progressCurrent,
-              total: progressTotal,
-              progressText: progressText,
-              durationText: _formatDurationText(
-                l10n,
-                paragraphDuration: paragraphDuration,
-                totalDuration: player.totalDuration,
-                paragraphTotal: state.totalParagraphs,
+    final mediaStartup = widget.mediaStartup;
+    return StudyActivityDetector(
+      onActivity: player.markStudyActivity,
+      child: wakelockBody(
+        child: PracticeMediaPresentationHost(
+          enabled:
+              mediaStartup != null &&
+              _mediaStartupReady &&
+              mediaStartup.showVideoLoading &&
+              ref.read(learningSessionProvider).playbackChain ==
+                  LearningPlaybackChain.mediaEngine,
+          suppressVisualView: _isNavigatingToDetail,
+          audioItemId: widget.audioItemId,
+          isPlaying: state.isPlaying,
+          onPlayPause: () => unawaited(_handleMainPlaybackTap()),
+          onSessionChanged: (session) => _mediaPresentationSession = session,
+          builder: (context, presentation, mediaSurface) => LearningHotkeyScope(
+            onPlayPause: _handleMainPlaybackTap,
+            onPrevious: _goToPreviousParagraph,
+            onNext: _goToNextParagraph,
+            child: PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) async {
+                if (didPop) return;
+                await _handleClose();
+              },
+              child: GuideFlowSequenceHost(
+                flows: guideFlows,
+                child: ParagraphPracticeScaffold(
+                  title: l10n.retellTitle,
+                  onClose: _handleClose,
+                  onOpenSettings: _openSettings,
+                  current: progressCurrent,
+                  total: progressTotal,
+                  progressText: progressText,
+                  durationText: _formatDurationText(
+                    l10n,
+                    paragraphDuration: paragraphDuration,
+                  ),
+                  elapsed: sentences.isEmpty ? null : sentences.first.startTime,
+                  remaining: sentences.isEmpty
+                      ? null
+                      : player.totalDuration - sentences.first.startTime,
+                  onSeekToIndex: isMultiParagraph
+                      ? (p) => notifier.seekToParagraph(p)
+                      : (i) => notifier.seekToSentence(i),
+                  topContent: presentation.enabled ? mediaSurface : null,
+                  bodyWrapper: _wrapMediaStartup,
+                  fullscreenBody: presentation.expanded ? mediaSurface : null,
+                  paragraphContent: ParagraphSentenceListCard(
+                    sentences: sentences,
+                    displayMode:
+                        state.settings.keywordMethod != KeywordMethod.off
+                        ? state.displayMode
+                        : RetellDisplayMode.hideAll,
+                    keywordMap: keywords,
+                    playingSentenceIndex: state.phase == RetellPhase.listening
+                        ? state.playingSentenceIndex
+                        : -1,
+                    wordHighlightSource: _wordHighlightSource(),
+                    bookmarkedSentenceIndices: state.bookmarkedSentenceIndices,
+                    onSentenceExplanationTap: _handleSentenceDetail,
+                    onSentencePlayFrom: _handleSentencePlayFrom,
+                    onSentenceBookmarkToggle: (sentence) => ref
+                        .read(retellPlayerProvider.notifier)
+                        .toggleBookmark(widget.audioItemId, sentence),
+                    guideTargetLocalIdx: guideTargetLocalIdx,
+                    explanationAreaGuideStep: explanationStep,
+                    bodyAreaGuideStep: bodyStep,
+                  ),
+                  contentControls:
+                      state.settings.keywordMethod != KeywordMethod.off
+                      ? ParagraphVisibilityControls(
+                          selectedMode: state.displayMode,
+                          onChanged: player.setDisplayMode,
+                        )
+                      : null,
+                  practiceControls: RepeatPracticePanel(
+                    l10n: l10n,
+                    theme: theme,
+                    recordingMode: recordingMode,
+                    isProcessing: isProcessing,
+                    currentAttempt: currentAttempt,
+                    hintText: state.phase == RetellPhase.listening
+                        ? (state.isPlaying
+                              ? l10n.retellListeningPhase
+                              : l10n.retellPreListenHint)
+                        : null,
+                    showCountdown: state.isRetellCountdown,
+                    isInPause:
+                        state.phase == RetellPhase.retelling &&
+                        !state.isRetellCountdown,
+                    countdownWidget: state.isRetellCountdown
+                        ? Consumer(
+                            builder: (context, ref, _) {
+                              final s = ref.watch(
+                                retellPlayerProvider.select(
+                                  (s) => (
+                                    total: s.pauseDuration,
+                                    paused: s.isCountdownPaused,
+                                    fastForward: s.isCountdownFastForward,
+                                  ),
+                                ),
+                              );
+                              return CountdownChip(
+                                total: s.total,
+                                isPaused: s.paused,
+                                isFastForward: s.fastForward,
+                                onTap: _takeOverCountdown,
+                                onPause: () => ref
+                                    .read(retellPlayerProvider.notifier)
+                                    .pauseCountdown(),
+                                onResume: () => ref
+                                    .read(retellPlayerProvider.notifier)
+                                    .resumeCountdown(),
+                              );
+                            },
+                          )
+                        : null,
+                    onRecordTap: _handleRecordTap,
+                    onBeforePlayback: _prepareAttemptPlayback,
+                    showRatingBadge: retellRatingEnabled,
+                    ratingBadgeController: _ratingBadgeController,
+                    ratingPreviewControllerFactory: () =>
+                        ref.read(retellRecordingPreviewProvider),
+                    thresholds: RatingThresholds.retell,
+                    showAiReviewButton: true,
+                    isAiReviewLoading:
+                        reviewPhase == RetellReviewEvaluationPhase.loading ||
+                        reviewPhase == RetellReviewEvaluationPhase.streaming,
+                    onAiReviewTap: () =>
+                        unawaited(_handleAiReviewTap(currentAttempt)),
+                  ),
+                  canGoPrev: state.currentParagraphIndex > 0,
+                  isLast:
+                      state.currentParagraphIndex >= state.totalParagraphs - 1,
+                  centerIcon: _isRetellMainPlaybackActive(state)
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  onPrevious: _goToPreviousParagraph,
+                  onNext: _goToNextParagraph,
+                  onCenter: () => unawaited(_handleMainPlaybackTap()),
+                  isManualMode: state.settings.isManualMode,
+                  playCountText: formatPracticePlayCount(
+                    l10n,
+                    currentCount: state.currentRepeatCount,
+                    totalCount: state.settings.repeatCount,
+                  ),
+                  statusSuffixText: _formatSpeed(state.settings.playbackSpeed),
+                  l10n: l10n,
+                  theme: theme,
+                ),
               ),
-              onSeekToIndex: isMultiParagraph
-                  ? (p) => notifier.seekToParagraph(p)
-                  : (i) => notifier.seekToSentence(i),
-              paragraphContent: ParagraphSentenceListCard(
-                sentences: sentences,
-                displayMode: state.settings.keywordMethod != KeywordMethod.off
-                    ? state.displayMode
-                    : RetellDisplayMode.hideAll,
-                keywordMap: keywords,
-                playingSentenceIndex: state.phase == RetellPhase.listening
-                    ? state.playingSentenceIndex
-                    : -1,
-                bookmarkedSentenceIndices: state.bookmarkedSentenceIndices,
-                onSentenceTap: _handleSentenceDetail,
-                onSentencePlayFrom: _handleSentencePlayFrom,
-                onSentenceBookmarkToggle: (sentence) => ref
-                    .read(retellPlayerProvider.notifier)
-                    .toggleBookmark(widget.audioItemId, sentence),
-                guideTargetLocalIdx: guideTargetLocalIdx,
-                numberAreaGuideStep: numberStep,
-                bodyAreaGuideStep: bodyStep,
-              ),
-              contentControls: state.settings.keywordMethod != KeywordMethod.off
-                  ? ParagraphVisibilityControls(
-                      selectedMode: state.displayMode,
-                      onChanged: player.setDisplayMode,
-                    )
-                  : null,
-              practiceControls: RepeatPracticePanel(
-                l10n: l10n,
-                theme: theme,
-                recordingMode: recordingMode,
-                isProcessing: isProcessing,
-                currentAttempt: currentAttempt,
-                hintText: state.phase == RetellPhase.listening
-                    ? (state.isPlaying
-                          ? l10n.retellListeningPhase
-                          : l10n.retellPreListenHint)
-                    : null,
-                showCountdown: state.isRetellCountdown,
-                isInPause:
-                    state.phase == RetellPhase.retelling &&
-                    !state.isRetellCountdown,
-                countdownWidget: state.isRetellCountdown
-                    ? Consumer(
-                        builder: (context, ref, _) {
-                          final s = ref.watch(
-                            retellPlayerProvider.select(
-                              (s) => (
-                                total: s.pauseDuration,
-                                paused: s.isCountdownPaused,
-                                fastForward: s.isCountdownFastForward,
-                              ),
-                            ),
-                          );
-                          return CountdownChip(
-                            total: s.total,
-                            isPaused: s.paused,
-                            isFastForward: s.fastForward,
-                            onPause: () => ref
-                                .read(retellPlayerProvider.notifier)
-                                .pauseCountdown(),
-                            onResume: () => ref
-                                .read(retellPlayerProvider.notifier)
-                                .resumeCountdown(),
-                          );
-                        },
-                      )
-                    : null,
-                onRecordTap: _handleRecordTap,
-                onFastForward:
-                    state.isRetellCountdown && !state.isCountdownPaused
-                    ? () => ref
-                          .read(retellPlayerProvider.notifier)
-                          .toggleCountdownFastForward()
-                    : null,
-                onBeforePlayback: _prepareAttemptPlayback,
-                showRatingBadge: retellRatingEnabled,
-                ratingBadgeController: _ratingBadgeController,
-                ratingPlaybackServiceFactory: () =>
-                    ref.read(retellAutoPlaybackServiceProvider),
-                thresholds: RatingThresholds.retell,
-              ),
-              canGoPrev: state.currentParagraphIndex > 0,
-              isLast: state.currentParagraphIndex >= state.totalParagraphs - 1,
-              centerIcon: _isRetellMainPlaybackActive(state)
-                  ? Icons.pause_rounded
-                  : Icons.play_arrow_rounded,
-              onPrevious: _goToPreviousParagraph,
-              onNext: _goToNextParagraph,
-              onCenter: state.phase == RetellPhase.listening
-                  ? (_isRetellMainPlaybackActive(state)
-                        ? player.pause
-                        : player.resume)
-                  : _handleReplay,
-              isManualMode: state.settings.isManualMode,
-              playCountText: formatPracticePlayCount(
-                l10n,
-                currentCount: state.currentRepeatCount,
-                totalCount: state.settings.repeatCount,
-              ),
-              statusSuffixText: _formatSpeed(state.settings.playbackSpeed),
-              l10n: l10n,
-              theme: theme,
             ),
           ),
         ),
@@ -1357,17 +1826,11 @@ String _formatHumanDuration(AppLocalizations l10n, Duration duration) {
   return l10n.durationMinutesSeconds(totalSec ~/ 60, totalSec % 60);
 }
 
-/// 时长文案：单段时只显示总长，多段时显示「段长 / 总长」
+/// 时长文案：仅显示当前段落时长。
 String _formatDurationText(
   AppLocalizations l10n, {
   required Duration paragraphDuration,
-  required Duration totalDuration,
-  required int paragraphTotal,
-}) {
-  if (paragraphTotal <= 1) return _formatHumanDuration(l10n, totalDuration);
-  return '${_formatHumanDuration(l10n, paragraphDuration)} / '
-      '${_formatHumanDuration(l10n, totalDuration)}';
-}
+}) => _formatHumanDuration(l10n, paragraphDuration);
 
 /// 统一显示速度标签：始终保留一位小数。
 String _formatSpeed(double speed) => formatPlaybackSpeedLabel(speed);

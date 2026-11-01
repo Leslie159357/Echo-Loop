@@ -10,12 +10,15 @@ import '../../models/audio_item.dart';
 import '../../models/sentence.dart';
 import '../../models/playback_settings.dart';
 import '../../models/listening_practice_state.dart';
+import '../../models/study_stage.dart';
 import '../../services/app_logger.dart';
+import '../../services/study_session_timer.dart';
 import '../../services/storage_service.dart';
 import '../audio_engine/audio_engine_provider.dart';
 import '../collection_provider.dart';
 import '../notification_permission_provider.dart';
 import 'bookmark_manager.dart';
+import '../favorite_sentence_lifecycle_provider.dart';
 import 'playback_reducer.dart';
 import 'playback_state_storage.dart';
 import 'sentence_tracker.dart';
@@ -84,6 +87,9 @@ class ListeningPractice extends _$ListeningPractice {
   /// 句级模式下由协程消费，provider 的全局 playerState 监听必须忽略，避免双推进。
   bool _activeSentenceDrivenPlayback = false;
 
+  /// 连续整篇播放的统计游标；它只记录本次播放会话已经跨过的句尾。
+  Duration? _lastGaplessStatsPosition;
+
   /// 当前是否处于句间 / 整篇循环间隔。
   ///
   /// 停顿仍属于刚播完的当前播放单元；此时「上一句」应先重播当前句，而不是按索引
@@ -125,6 +131,11 @@ class ListeningPractice extends _$ListeningPractice {
 
   /// 跨句自动保存进度的并发护栏：上一次写库未完成时跳过本次，避免堆积写入。
   bool _autoSaving = false;
+  StudySessionTimer? _studySessionTimer;
+  int _studyPageGeneration = 0;
+  int? _activeStudyPageGeneration;
+  Future<void>? _finishStudyPageInFlight;
+  int? _finishStudyPageInFlightGeneration;
 
   @override
   ListeningPracticeState build() {
@@ -132,6 +143,10 @@ class ListeningPractice extends _$ListeningPractice {
     ref.onDispose(() {
       _playbackGen++;
       _disposeListeners();
+      final generation = _activeStudyPageGeneration;
+      if (generation != null) {
+        unawaited(endStudyPage(generation));
+      }
     });
     _loadSettings();
     return const ListeningPracticeState();
@@ -139,6 +154,128 @@ class ListeningPractice extends _$ListeningPractice {
 
   // --- 获取 AudioEngine ---
   AudioEngine get _engine => ref.read(audioEngineProvider.notifier);
+
+  /// 建立随心听页面级学习会话；页面退出前播放器状态不会结束该会话。
+  int beginStudyPage() {
+    final generation = ++_studyPageGeneration;
+    _activeStudyPageGeneration = generation;
+    if (_studySessionTimer == null) {
+      final timer = StudySessionTimer(
+        studyTimeService: ref.read(studyTimeServiceProvider),
+        stage: StudyStage.freePlayer,
+        activityGate: ref.read(studyActivityGateProvider),
+        allowBackgroundPlayback: true,
+        idleTimeout: const Duration(minutes: 2),
+        logScope: 'FreePlayerAudioTimer',
+      );
+      _studySessionTimer = timer;
+      timer.start();
+    } else {
+      _studySessionTimer?.markActivity();
+    }
+    _studySessionTimer?.setPlaybackActive(state.isPlaying);
+    return generation;
+  }
+
+  /// 标记随心听页面上的用户活动。
+  void markStudyActivity() {
+    _studySessionTimer?.markActivity();
+  }
+
+  /// 将播放器活动状态同步给页面学习会话。
+  void _setStudyPlaybackActive(bool active) {
+    _studySessionTimer?.setPlaybackActive(active);
+  }
+
+  /// 结束指定页面会话；过期页面的异步清理不会关闭新页面会话。
+  Future<void> endStudyPage(int generation) async {
+    if (_activeStudyPageGeneration != generation) return;
+    final timer = _studySessionTimer;
+    try {
+      if (timer != null) await timer.dispose();
+    } catch (error, stackTrace) {
+      // 统计属于退出时的非关键副作用；播放器必须继续完成页面收尾。
+      // StudySessionTimer 已经在 dispose 的 finally 中释放自身监听和计时器，
+      // 因此这里记录失败后仍可安全清空 Provider 持有的页面状态。
+      AppLogger.log(
+        'StudyExit',
+        'audio timer flush failed generation=$generation error=$error\n$stackTrace',
+      );
+    } finally {
+      if (_activeStudyPageGeneration == generation &&
+          identical(_studySessionTimer, timer)) {
+        _activeStudyPageGeneration = null;
+        _studySessionTimer = null;
+      }
+    }
+  }
+
+  /// 完成当前随心听页面的退出收尾。
+  ///
+  /// 正常路由退出和页面销毁兜底都调用此入口，确保暂停播放、最终 flush
+  /// 与断点保存只编排一次。传入页面代际时，过期页面不会影响新页面会话。
+  Future<void> finishStudyPage({int? generation}) {
+    final activeGeneration = _activeStudyPageGeneration;
+    if (activeGeneration == null ||
+        (generation != null && generation != activeGeneration)) {
+      if (generation != null && activeGeneration != generation) {
+        AppLogger.log(
+          'StudyExit',
+          'audio finish skipped reason=stale-generation '
+              'requestedGeneration=$generation activeGeneration=$activeGeneration',
+        );
+      }
+      return Future<void>.value();
+    }
+
+    final inFlight = _finishStudyPageInFlight;
+    if (inFlight != null &&
+        _finishStudyPageInFlightGeneration == activeGeneration) {
+      AppLogger.log(
+        'StudyExit',
+        'audio finish joined generation=$activeGeneration',
+      );
+      return inFlight;
+    }
+
+    final targetGeneration = activeGeneration;
+    AppLogger.log(
+      'StudyExit',
+      'audio finish start generation=$targetGeneration',
+    );
+    final operation = _finishStudyPage(targetGeneration);
+    late final Future<void> scheduled;
+    scheduled = operation.whenComplete(() {
+      if (identical(_finishStudyPageInFlight, scheduled)) {
+        _finishStudyPageInFlight = null;
+        _finishStudyPageInFlightGeneration = null;
+      }
+    });
+    _finishStudyPageInFlight = scheduled;
+    _finishStudyPageInFlightGeneration = targetGeneration;
+    return scheduled;
+  }
+
+  /// 按页面代际执行暂停、最终计时 flush 和断点保存。
+  Future<void> _finishStudyPage(int generation) async {
+    if (_activeStudyPageGeneration != generation) return;
+    try {
+      await pause();
+      if (_activeStudyPageGeneration != generation) return;
+      await endStudyPage(generation);
+      await saveCurrentPlaybackState();
+      AppLogger.log(
+        'StudyExit',
+        'audio finish complete generation=$generation',
+      );
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'StudyExit',
+        'audio finish failed generation=$generation error=$error\n$stackTrace',
+      );
+      rethrow;
+    }
+  }
 
   /// 缓存的 AudioEngine 引用，仅用于 [_disposeListeners] 中清空锁屏切句回调。
   ///
@@ -277,9 +414,7 @@ class ListeningPractice extends _$ListeningPractice {
   // ===========================================================================
 
   /// 当前播放列表：全文模式=全部句子；收藏模式=收藏句子。
-  List<Sentence> get _playable => state.playlistMode == PlaylistMode.bookmarks
-      ? state.bookmarkedSentences
-      : state.sentences;
+  List<Sentence> get _playable => state.playableSentences;
 
   /// 是否使用句级 clip 驱动。
   ///
@@ -291,20 +426,7 @@ class ListeningPractice extends _$ListeningPractice {
       state.settings.loopSentence;
 
   /// 当前句在播放列表中的序号（0-based）。列表为空返回 null。
-  int? get _currentPos {
-    final playable = _playable;
-    if (playable.isEmpty) return null;
-    if (state.playlistMode == PlaylistMode.bookmarks) {
-      final ci = state.currentBookmarkIndex;
-      if (ci == null) return 0;
-      final p = playable.indexWhere((s) => s.index == ci);
-      return p == -1 ? 0 : p;
-    } else {
-      final ci = state.currentFullIndex;
-      if (ci == null || ci < 0 || ci >= playable.length) return 0;
-      return ci;
-    }
-  }
+  int? get _currentPos => state.currentPlayablePosition;
 
   // ===========================================================================
   // 引擎事件监听
@@ -313,6 +435,7 @@ class ListeningPractice extends _$ListeningPractice {
   void _onPositionChanged(Duration absolutePosition) {
     if (!_engine.isActiveSession(_playbackSessionId)) return;
     if (!_engine.isPlaying) return;
+    _recordGaplessStatsThrough(absolutePosition);
     if (_activeSentenceDrivenPlayback) return;
     // 延迟暂停：记下推进前的当前句，跨句边界即「当前句已播完」。
     final indexBeforeAdvance = state.currentFullIndex;
@@ -416,6 +539,40 @@ class ListeningPractice extends _$ListeningPractice {
   void _setLogicalPlaying(bool playing) {
     if (state.isPlaying == playing) return;
     state = state.copyWith(isPlaying: playing);
+    _setStudyPlaybackActive(playing);
+  }
+
+  /// 记录连续播放位置前进期间自然结束的字幕句子。
+  ///
+  /// 计时器独立负责听力时长；这里仅复用句子统计入口写入听到的词数和唯一词形。
+  /// 位置倒退表示 seek 或回卷，重置游标而不把跳过的内容算作听到。
+  void _recordGaplessStatsThrough(Duration position) {
+    if (_activeSentenceDrivenPlayback || state.sentences.isEmpty) return;
+
+    final previous = _lastGaplessStatsPosition;
+    if (previous == null) {
+      _lastGaplessStatsPosition = position;
+      return;
+    }
+    if (position <= previous) {
+      if (position < previous) _lastGaplessStatsPosition = position;
+      return;
+    }
+
+    _lastGaplessStatsPosition = position;
+
+    final completed = SentenceTracker.findSentencesCompletedBetween(
+      state.sentences,
+      previous,
+      position,
+    );
+    for (final sentence in completed) {
+      _recordCompletedSentenceStatistics(sentence);
+    }
+  }
+
+  void _resetGaplessStatsPosition(Duration position) {
+    _lastGaplessStatsPosition = position;
   }
 
   /// 启动整篇连续播放的确定性循环（gapless）。
@@ -461,6 +618,8 @@ class ListeningPractice extends _$ListeningPractice {
       _autoSaveProgress();
     }
 
+    _resetGaplessStatsPosition(_engine.currentPosition);
+
     _setLogicalPlaying(true);
     final s = state.settings;
     AppLogger.log(
@@ -492,6 +651,9 @@ class ListeningPractice extends _$ListeningPractice {
         );
         return;
       }
+
+      final endPosition = _engine.totalDuration ?? _engine.currentPosition;
+      _recordGaplessStatsThrough(endPosition);
 
       _wholeLoopsDone += 1;
       _autoSaveProgress();
@@ -550,6 +712,7 @@ class ListeningPractice extends _$ListeningPractice {
         );
       }
       await _engine.seek(first.startTime);
+      _resetGaplessStatsPosition(_engine.currentPosition);
       _autoSaveProgress();
     }
   }
@@ -642,6 +805,7 @@ class ListeningPractice extends _$ListeningPractice {
     while (gen == _playbackGen && _engine.isActiveSession(sid)) {
       final playable = _playable;
       if (playable.isEmpty || pos < 0 || pos >= playable.length) {
+        _setLogicalPlaying(false);
         await _engine.stop();
         return;
       }
@@ -651,6 +815,7 @@ class ListeningPractice extends _$ListeningPractice {
       await _engine.playClipOnce(sentence, sid);
       if (gen != _playbackGen || !_engine.isActiveSession(sid)) return;
 
+      _recordCompletedSentenceStatistics(sentence);
       _sentenceRepeatsDone += 1;
       _autoSaveProgress();
 
@@ -717,6 +882,20 @@ class ListeningPractice extends _$ListeningPractice {
           pos = position;
       }
     }
+  }
+
+  /// 在按句或连续整篇播放自然完成后写入输入统计；连续整篇播放的总时长仍由计时器负责。
+  ///
+  /// 统计提交必须不阻塞播放循环，写入失败由统一记录器捕获并输出诊断日志。
+  void _recordCompletedSentenceStatistics(Sentence sentence) {
+    ref
+        .read(studyTimeServiceProvider)
+        .submitSentencePlayback(
+          duration: sentence.duration,
+          text: sentence.text,
+          stage: StudyStage.freePlayer,
+          recordInputDuration: false,
+        );
   }
 
   /// gapless 播放中打开单句循环后，等待当前句自然结束，再在“当前句边界”交接到 clip。
@@ -854,13 +1033,6 @@ class ListeningPractice extends _$ListeningPractice {
         sentences: [],
         clearCurrentFullIndex: true,
         clearCurrentBookmarkIndex: true,
-        // 循环开关是「现在想刷这条」的临时意图，加载新音频时一律重置为关
-        // （仅改内存，不持久化）；循环参数作为偏好保留。
-        fullSettings: state.fullSettings.copyWith(
-          loopWhole: false,
-          loopSentence: false,
-        ),
-        bookmarkSettings: withBookmarkLoopDefaults(state.bookmarkSettings),
       );
 
       try {
@@ -882,47 +1054,14 @@ class ListeningPractice extends _$ListeningPractice {
         audioItem.id,
         dao: bookmarkDao,
       );
-      var bookmarkedIndices = Set<int>.from(storedBookmarks);
+      final bookmarkedIndices = Set<int>.from(storedBookmarks);
 
-      final isFirstLoad = storedBookmarks.isEmpty;
-      if (isFirstLoad) {
-        final autoBookmarks = BookmarkManager.autoAddBracketBookmarks(
-          sentences,
-        );
-        bookmarkedIndices = {...bookmarkedIndices, ...autoBookmarks};
-
-        if (autoBookmarks.isNotEmpty) {
-          for (final idx in autoBookmarks) {
-            await BookmarkManager.addBookmarkToDb(
-              audioItem.id,
-              sentences[idx],
-              dao: bookmarkDao,
-            );
-          }
-        }
-      }
-
-      // 清理 [] 包裹的句子文本
-      final cleanedSentences = <Sentence>[];
-      for (int i = 0; i < sentences.length; i++) {
-        final text = sentences[i].text.trim();
-        if (text.startsWith('[') && text.endsWith(']') && text.length > 2) {
-          cleanedSentences.add(
-            sentences[i].copyWith(
-              text: text.substring(1, text.length - 1).trim(),
-            ),
-          );
-        } else {
-          cleanedSentences.add(sentences[i]);
-        }
-      }
-
-      for (var sentence in cleanedSentences) {
+      for (var sentence in sentences) {
         sentence.isBookmarked = bookmarkedIndices.contains(sentence.index);
       }
 
       state = state.copyWith(
-        sentences: cleanedSentences,
+        sentences: sentences,
         bookmarkedIndices: bookmarkedIndices,
         currentFullIndex: 0,
       );
@@ -1131,6 +1270,7 @@ class ListeningPractice extends _$ListeningPractice {
   }
 
   Future<void> pause() async {
+    _recordGaplessStatsThrough(_engine.currentPosition);
     _playbackGen++;
     _awaitingReplayFromStart = false;
     // 句级循环正在驱动时暂停 → 续播保留遍数；任何待定的延迟暂停被立即暂停取代。
@@ -1157,6 +1297,7 @@ class ListeningPractice extends _$ListeningPractice {
   }
 
   Future<void> stop() async {
+    _recordGaplessStatsThrough(_engine.currentPosition);
     _playbackGen++;
     _awaitingReplayFromStart = false;
     _sentenceLoopResumePending = false;
@@ -1169,6 +1310,7 @@ class ListeningPractice extends _$ListeningPractice {
 
   Future<void> seek(Duration position) async {
     await _engine.seek(position);
+    _resetGaplessStatsPosition(_engine.currentPosition);
   }
 
   /// 离开讲解页返回后，把共享引擎显式对齐回当前句起点。
@@ -1191,6 +1333,7 @@ class ListeningPractice extends _$ListeningPractice {
     if (state.sentences.isEmpty) {
       await _engine.clearClip();
       await _engine.seek(absolutePosition);
+      _resetGaplessStatsPosition(_engine.currentPosition);
       return;
     }
 
@@ -1246,6 +1389,7 @@ class ListeningPractice extends _$ListeningPractice {
     await _engine.clearClip();
 
     await _engine.seek(target);
+    _resetGaplessStatsPosition(_engine.currentPosition);
     _sentenceRepeatsDone = 0;
     _wholeLoopsDone = 0;
 
@@ -1437,7 +1581,7 @@ class ListeningPractice extends _$ListeningPractice {
     final (
       isRemoving,
       indicesToRemove,
-      nextIndex,
+      replacementIndex,
     ) = BookmarkManager.toggleBookmark(
       index,
       state.sentences,
@@ -1477,7 +1621,7 @@ class ListeningPractice extends _$ListeningPractice {
 
     final inBookmarksMode = state.playlistMode == PlaylistMode.bookmarks;
     final shouldResume =
-        inBookmarksMode && _engine.isPlaying && nextIndex != null;
+        inBookmarksMode && _engine.isPlaying && replacementIndex != null;
 
     if (inBookmarksMode && isRemoving && _engine.isPlaying) {
       await pause();
@@ -1496,11 +1640,12 @@ class ListeningPractice extends _$ListeningPractice {
       }
 
       if (inBookmarksMode) {
-        if (nextIndex != null && nextIndex < newSentences.length) {
+        if (replacementIndex != null &&
+            replacementIndex < newSentences.length) {
           state = state.copyWith(
             bookmarkedIndices: newBookmarks,
             sentences: newSentences,
-            currentBookmarkIndex: nextIndex,
+            currentBookmarkIndex: replacementIndex,
           );
         } else {
           state = state.copyWith(
@@ -1527,23 +1672,18 @@ class ListeningPractice extends _$ListeningPractice {
     }
 
     if (state.currentAudioItem != null) {
-      final bookmarkDao = ref.read(bookmarkDaoProvider);
       if (isRemoving) {
-        await BookmarkManager.removeBookmarksFromDb(
-          state.currentAudioItem!.id,
-          indicesToRemove,
-          dao: bookmarkDao,
-        );
+        await ref
+            .read(favoriteSentenceLifecycleProvider)
+            .remove(state.currentAudioItem!.id, indicesToRemove);
       } else {
-        await BookmarkManager.addBookmarkToDb(
-          state.currentAudioItem!.id,
-          state.sentences[index],
-          dao: bookmarkDao,
-        );
+        await ref
+            .read(favoriteSentenceLifecycleProvider)
+            .save(state.currentAudioItem!.id, state.sentences[index]);
       }
     }
 
-    // 收藏模式下移除当前句后，从下一收藏句继续播放
+    // 收藏模式下移除当前句后，从替代焦点继续播放。
     if (inBookmarksMode &&
         shouldResume &&
         state.bookmarkedSentences.isNotEmpty) {

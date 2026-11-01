@@ -29,8 +29,24 @@ class AppTheme {
   /// 导航栏选中态颜色：明亮蓝
   static const Color navActiveColor = Color(0xFF3AA0FF);
 
+  /// 视频类型图标的紫色强调色；深色主题下提亮，维持可辨识度。
+  static Color videoMediaTypeColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFFB39DDB)
+      : const Color(0xFF7655A6);
+
+  /// 学习页「为你推荐」区段的蓝紫强调色。
+  static Color studyRecommendationAccentColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFFB39DDB)
+      : const Color(0xFF7655A6);
+
   /// 语义色：书签/收藏/星标
   static const Color bookmarkColor = Colors.amber;
+  static const Color bookmarkCountBadgeColor = bookmarkColor;
+  static const Color bookmarkCountBadgeTextColor = Color(0xFF3D2E00);
+  static const Color bookmarkCountSelectedBadgeColor = Color(0xFF405A7A);
+  static const Color bookmarkCountSelectedBadgeTextColor = Colors.white;
 
   /// 语义色：置顶图钉
   static const Color pinColor = Color(0xFFE53935);
@@ -43,6 +59,12 @@ class AppTheme {
       brightness == Brightness.dark
       ? Colors.orange.shade300
       : Colors.orange.shade400;
+
+  /// 当前播放词的底色：用明显的绿色区分当前播放位置，同时保持文字易读。
+  static Color wordHighlightBackgroundColor(ColorScheme colorScheme) =>
+      colorScheme.brightness == Brightness.dark
+      ? const Color(0xFF245D35)
+      : const Color(0xFFBCE7C6);
 
   /// 语义色：成功/完成（用于完成对话框的勾选徽章，清新绿）
   static const Color successColor = Color(0xFF2E9E5B);
@@ -117,9 +139,32 @@ class AppTheme {
       ? _premiumStatusExpiringDark
       : _premiumStatusExpiringLight;
 
-  /// 语义色：官方合集角标（深橙金色，对应"认证/精选"的通用视觉）
-  /// 选 Material Orange 800：白字对比足够，区别于品牌蓝、不会与封面同色系混淆
-  static const Color officialBadgeColor = Color(0xFFEF6C00);
+  /// 语义色：本地合集角标（深蓝，配白字）。
+  static const Color localCollectionBadgeColor = Color(0xFF1565C0);
+
+  /// 语义色：共享合集角标（绿色，配白字）。
+  static const Color communityBadgeColor = successColor;
+
+  /// 语义色：Podcast 合集角标（深紫，配白字）。
+  static const Color podcastCollectionBadgeColor = Color(0xFF6A1B9A);
+
+  /// 设置类底部弹窗的分组卡片背景色。
+  ///
+  /// 浅色比弹层背景略灰（内凹分组，类似 iOS 分组列表）；
+  /// 深色保持透明，让设置项融入弹层背景，避免出现突兀的灰色块。
+  static Color settingsSectionBackground(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? Colors.transparent
+      : const Color(0xFFF2F3F7);
+
+  /// 设置类底部弹窗中，展开态的可折叠分组标题行背景色。
+  ///
+  /// 比分组卡片背景更深一档（浅色）/更亮一档（深色），让用户能一眼看出
+  /// 当前哪个分组处于展开状态；收起态仍保持透明，融入卡片背景。
+  static Color settingsExpandedBackground(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFF2E2E32)
+      : const Color(0xFFE8E9EF);
 
   /// 亮色主题
   static ThemeData light() {
@@ -427,5 +472,17 @@ class AppTextStyles {
   static TextStyle label(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant);
+  }
+
+  /// 分组标题文字样式：用于设置类弹窗内的二级分组标题
+  ///
+  /// 基于 titleSmall 加粗，颜色与普通行内文字一致（不染主色），避免与
+  /// 可点击/可折叠元素的语义混淆；层级区分完全依赖字重与间距。
+  static TextStyle? sectionHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      color: theme.colorScheme.onSurface,
+    );
   }
 }

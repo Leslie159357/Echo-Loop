@@ -7,14 +7,14 @@ part of 'review_difficult_practice_provider.dart';
 // **************************************************************************
 
 String _$reviewDifficultPracticeHash() =>
-    r'5423467b2a0b4d6d0af9462f2987b4c7fc59b887';
+    r'3dd1857392f5b1dc2cbb668ce2363e8fd7a53bb7';
 
 /// 难句补练 Provider
 ///
 /// Copied from [ReviewDifficultPractice].
 @ProviderFor(ReviewDifficultPractice)
 final reviewDifficultPracticeProvider =
-    NotifierProvider<
+    AutoDisposeNotifierProvider<
       ReviewDifficultPractice,
       ReviewDifficultPracticeState
     >.internal(
@@ -27,6 +27,7 @@ final reviewDifficultPracticeProvider =
       allTransitiveDependencies: null,
     );
 
-typedef _$ReviewDifficultPractice = Notifier<ReviewDifficultPracticeState>;
+typedef _$ReviewDifficultPractice =
+    AutoDisposeNotifier<ReviewDifficultPracticeState>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

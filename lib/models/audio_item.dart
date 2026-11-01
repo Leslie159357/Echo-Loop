@@ -29,14 +29,17 @@ enum TranscriptSource {
 
 /// 音频内容有效性状态。
 ///
-/// 仅在新下载/导入完成时检测一次：解码失败（解不出时长）或全程静音都判为
-/// [suspectEmpty]。null 表示尚未检测（旧数据或检测前），不展示警告。
+/// 仅在新下载/导入完成时检测一次：先确认文件可解码，再判断是否静音。
+/// null 表示尚未检测（旧数据或检测前），不展示警告。
 enum AudioContentStatus {
-  /// 内容正常（能解码且有有效音量）。
+  /// 内容正常（能解码且未判定为静音）。
   ok,
 
-  /// 疑似为空：文件损坏/解码失败，或全程静音、无人声。
-  suspectEmpty;
+  /// 音频可能损坏，或当前设备无法解码第一条音频流。
+  damaged,
+
+  /// 音频可解码，但疑似全程静音、无人声。
+  silent;
 
   /// 从整数值创建（数据库存储用）。
   static AudioContentStatus? fromIndex(int? index) {
@@ -46,10 +49,29 @@ enum AudioContentStatus {
   }
 }
 
+/// 支持导入的视频扩展名（小写、不含点）。是 mediaType 判定的唯一依据，
+/// 其他文件（如 subtitle_pairing.dart）复用这个常量，不要另外定义一份。
+const videoFileExtensions = {'mp4', 'mov', 'm4v', 'mkv'};
+
+/// 媒体类型：按文件扩展名派生，不落库。
+enum MediaType { audio, video }
+
+/// 按文件路径扩展名判定媒体类型。path 为 null（未下载/未就绪）或无扩展名时
+/// 按 audio 处理——该 fallback 不影响功能，mediaType 只在文件已落盘后被实际读取。
+MediaType mediaTypeForPath(String? filePath) {
+  if (filePath == null) return MediaType.audio;
+  final ext = path.extension(filePath);
+  if (ext.isEmpty) return MediaType.audio;
+  final normalized = ext.substring(1).toLowerCase();
+  return videoFileExtensions.contains(normalized)
+      ? MediaType.video
+      : MediaType.audio;
+}
+
 /// 用户导入音频的来源类型。
 ///
-/// 精选/官方合集不使用该字段，继续由 `remoteAudioId` 与合集 `source=official`
-/// 表达远端 catalog 身份。
+/// 社区合集不使用该字段，继续由 `remoteAudioId` 与合集 `source=community`
+/// 表达远端 v2 身份。
 enum AudioImportSourceType {
   /// 从设备本地文件导入。
   local,
@@ -78,14 +100,20 @@ enum AudioImportSourceType {
   }
 }
 
+/// 一条可学习的媒体条目（音频或视频通用）。
+///
+/// 历史上仅表示音频，故类名与多数字段带 `audio` 前缀；视频接入后复用同一模型，
+/// `audioPath` 等字段语义等价于「主媒体文件」，与音视频类型无关。类型由 [mediaType]
+/// 从 [audioPath] 扩展名派生，不落库。命名遗留与未来中性重命名意图见 `AudioItems` 表注释。
 class AudioItem {
   final String id;
   final String name;
 
-  /// 音频文件相对路径。
+  /// 主媒体文件相对路径（音频或视频）。
   ///
-  /// NULL 表示未就绪（官方合集加入后、下载完成前）；非 NULL 表示文件已在本地。
-  /// 是「音频是否可用」的单一真实来源 —— 播放入口据此判断「直接播」或「触发下载」。
+  /// NULL 表示未就绪（社区合集加入后、下载完成前）；非 NULL 表示文件已在本地。
+  /// 是「媒体是否可用」的单一真实来源 —— 播放入口据此判断「直接播」或「触发下载」，
+  /// 也是 [mediaType]（video/audio）的派生依据。
   final String? audioPath;
 
   /// 字幕文件相对路径。NULL 表示无字幕或尚未下载。
@@ -99,7 +127,7 @@ class AudioItem {
   /// 字幕来源：null 表示无字幕
   final TranscriptSource? transcriptSource;
 
-  /// 音频文件 SHA256 指纹（缓存，避免重复计算）
+  /// 媒体文件 SHA256 指纹（缓存，避免重复计算）。纯文件哈希，音视频通用。
   final String? audioSha256;
 
   /// 转码前原始音频 SHA256 指纹。
@@ -113,21 +141,31 @@ class AudioItem {
 
   /// 音频内容有效性状态（新下载时检测一次）。
   ///
-  /// null 表示未检测（旧数据或检测前）；[AudioContentStatus.suspectEmpty]
-  /// 表示解码失败或全程静音，列表项展示警告、转录前拦截。
+  /// null 表示未检测（旧数据或检测前）；非 ok 状态会在列表项展示警告，并在
+  /// 转录前二次确认。
   final AudioContentStatus? contentStatus;
 
-  /// 官方合集中该音频在后端的 UUID；用户自建音频为 null。
+  /// 社区合集中该音频在后端的 UUID；用户自建音频为 null。
   /// 同步时按此反查本地行（复用 id）。
   final String? remoteAudioId;
 
-  /// 原始发布/播出日期（官方合集音频专用，如 VOA 某期节目日期）；
-  /// 用户自建音频为 null。供官方合集详情页「最早/最新发布」排序用。
+  /// 原始发布/播出日期（社区合集音频专用，如 VOA 某期节目日期）；
+  /// 用户自建音频为 null。供社区合集详情页「最早/最新发布」排序用。
   final DateTime? originalDate;
+
+  /// 社区合集文件从服务端消失的时间；文件恢复后清空。
+  final DateTime? communityUnavailableAt;
+
+  /// 社区媒体从服务端目录同步的 CEFR 难度；非社区媒体保持 null。
+  final String? difficulty;
+
+  /// 文件描述。社区合集文件从服务端目录同步，播客单集来自 RSS item description；
+  /// 用户导入音频保持 null。
+  final String? description;
 
   /// 用户导入来源类型。
   ///
-  /// 仅用户导入音频使用；官方/精选合集音频保持 null，避免和 catalog 同步身份混淆。
+  /// 仅用户导入音频使用；社区合集音频保持 null，避免和 v2 同步身份混淆。
   final AudioImportSourceType? importSourceType;
 
   /// 用户导入来源 URL。
@@ -146,14 +184,17 @@ class AudioItem {
   /// Enclosure MIME type，如 audio/mpeg
   final String? podcastEnclosureType;
 
-  /// Episode 的简介文本，来自 RSS item description。
-  final String? podcastDescription;
-
   /// Episode 的封面图，优先来自 RSS item itunes:image。
   final String? podcastImageUrl;
 
   /// Episode 的网页链接，来自 RSS item link。
   final String? podcastLink;
+
+  /// Episode 字幕地址，来自 RSS `<podcast:transcript>`；无则为 null。
+  final String? podcastTranscriptUrl;
+
+  /// 字幕格式 `srt` / `vtt`，与 [podcastTranscriptUrl] 同时有值。
+  final String? podcastTranscriptFormat;
 
   AudioItem({
     required this.id,
@@ -172,18 +213,34 @@ class AudioItem {
     this.contentStatus,
     this.remoteAudioId,
     this.originalDate,
+    this.communityUnavailableAt,
+    this.difficulty,
+    this.description,
     this.importSourceType,
     this.importSourceUrl,
     this.podcastEpisodeGuid,
     this.podcastEnclosureUrl,
     this.podcastEnclosureType,
-    this.podcastDescription,
     this.podcastImageUrl,
     this.podcastLink,
+    this.podcastTranscriptUrl,
+    this.podcastTranscriptFormat,
   });
 
-  /// 音频文件是否已就绪（在本地可播）。
+  /// 媒体文件是否已就绪（在本地可播）。音视频通用。
   bool get isAudioReady => audioPath != null && audioPath!.isNotEmpty;
+
+  /// 媒体类型（按 audioPath 扩展名派生的计算属性，不落库）
+  MediaType get mediaType => mediaTypeForPath(audioPath);
+
+  /// 是否为视频条目
+  bool get isVideo => mediaType == MediaType.video;
+
+  /// 社区文件是否已被服务端下架。
+  bool get isCommunityUnavailable => communityUnavailableAt != null;
+
+  /// 是否为社区合集媒体条目。
+  bool get isCommunity => remoteAudioId != null;
 
   /// 是否有字幕。
   ///
@@ -191,7 +248,7 @@ class AudioItem {
   /// 文件路径）。所有创建点设置 source、删除时清空。
   bool get hasTranscript => transcriptSource != null;
 
-  /// 获取音频文件的完整路径；未就绪时返回 null。
+  /// 获取媒体文件（音频或视频）的完整路径；未就绪时返回 null。
   Future<String?> getFullAudioPath() async {
     if (!isAudioReady) return null;
     final dataDir = await getAppDataDirectory();
@@ -225,14 +282,18 @@ class AudioItem {
     'contentStatus': contentStatus?.index,
     'remoteAudioId': remoteAudioId,
     'originalDate': originalDate?.toIso8601String(),
+    'communityUnavailableAt': communityUnavailableAt?.toIso8601String(),
+    'difficulty': difficulty,
+    'description': description,
     'importSourceType': importSourceType?.storageValue,
     'importSourceUrl': importSourceUrl,
     'podcastEpisodeGuid': podcastEpisodeGuid,
     'podcastEnclosureUrl': podcastEnclosureUrl,
     'podcastEnclosureType': podcastEnclosureType,
-    'podcastDescription': podcastDescription,
     'podcastImageUrl': podcastImageUrl,
     'podcastLink': podcastLink,
+    'podcastTranscriptUrl': podcastTranscriptUrl,
+    'podcastTranscriptFormat': podcastTranscriptFormat,
   };
 
   factory AudioItem.fromJson(Map<String, dynamic> json) => AudioItem(
@@ -254,6 +315,14 @@ class AudioItem {
     originalDate: json['originalDate'] == null
         ? null
         : DateTime.parse(json['originalDate'] as String),
+    communityUnavailableAt: json['communityUnavailableAt'] == null
+        ? null
+        : DateTime.parse(json['communityUnavailableAt'] as String),
+    difficulty: switch (json['difficulty']) {
+      String value => value,
+      _ => null,
+    },
+    description: json['description'] as String?,
     importSourceType: AudioImportSourceType.fromStorageValue(
       json['importSourceType'] as String?,
     ),
@@ -261,9 +330,10 @@ class AudioItem {
     podcastEpisodeGuid: json['podcastEpisodeGuid'] as String?,
     podcastEnclosureUrl: json['podcastEnclosureUrl'] as String?,
     podcastEnclosureType: json['podcastEnclosureType'] as String?,
-    podcastDescription: json['podcastDescription'] as String?,
     podcastImageUrl: json['podcastImageUrl'] as String?,
     podcastLink: json['podcastLink'] as String?,
+    podcastTranscriptUrl: json['podcastTranscriptUrl'] as String?,
+    podcastTranscriptFormat: json['podcastTranscriptFormat'] as String?,
   );
 
   AudioItem copyWith({
@@ -283,14 +353,18 @@ class AudioItem {
     Object? contentStatus = _sentinel,
     Object? remoteAudioId = _sentinel,
     Object? originalDate = _sentinel,
+    Object? communityUnavailableAt = _sentinel,
+    Object? difficulty = _sentinel,
+    Object? description = _sentinel,
     Object? importSourceType = _sentinel,
     Object? importSourceUrl = _sentinel,
     Object? podcastEpisodeGuid = _sentinel,
     Object? podcastEnclosureUrl = _sentinel,
     Object? podcastEnclosureType = _sentinel,
-    Object? podcastDescription = _sentinel,
     Object? podcastImageUrl = _sentinel,
     Object? podcastLink = _sentinel,
+    Object? podcastTranscriptUrl = _sentinel,
+    Object? podcastTranscriptFormat = _sentinel,
   }) {
     return AudioItem(
       id: id ?? this.id,
@@ -325,6 +399,11 @@ class AudioItem {
       originalDate: originalDate == _sentinel
           ? this.originalDate
           : originalDate as DateTime?,
+      communityUnavailableAt: communityUnavailableAt == _sentinel
+          ? this.communityUnavailableAt
+          : communityUnavailableAt as DateTime?,
+      difficulty: _copyNullableString(difficulty, this.difficulty),
+      description: _copyNullableString(description, this.description),
       importSourceType: importSourceType == _sentinel
           ? this.importSourceType
           : importSourceType as AudioImportSourceType?,
@@ -340,15 +419,27 @@ class AudioItem {
       podcastEnclosureType: podcastEnclosureType == _sentinel
           ? this.podcastEnclosureType
           : podcastEnclosureType as String?,
-      podcastDescription: podcastDescription == _sentinel
-          ? this.podcastDescription
-          : podcastDescription as String?,
       podcastImageUrl: podcastImageUrl == _sentinel
           ? this.podcastImageUrl
           : podcastImageUrl as String?,
       podcastLink: podcastLink == _sentinel
           ? this.podcastLink
           : podcastLink as String?,
+      podcastTranscriptUrl: podcastTranscriptUrl == _sentinel
+          ? this.podcastTranscriptUrl
+          : podcastTranscriptUrl as String?,
+      podcastTranscriptFormat: podcastTranscriptFormat == _sentinel
+          ? this.podcastTranscriptFormat
+          : podcastTranscriptFormat as String?,
     );
   }
+}
+
+String? _copyNullableString(Object? value, String? current) {
+  if (identical(value, _sentinel)) return current;
+  return switch (value) {
+    String string => string,
+    null => null,
+    _ => throw ArgumentError.value(value, 'difficulty'),
+  };
 }

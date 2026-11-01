@@ -1,5 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/features/podcast/podcast_transcript_downloader.dart';
+import 'package:echo_loop/features/remote_config/remote_config.dart';
+import 'package:echo_loop/features/remote_config/remote_config_providers.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
@@ -13,7 +21,12 @@ import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/transcription_task_provider.dart';
 import 'package:echo_loop/providers/local_transcription_task_provider.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/subscription/models/premium_feature.dart';
+import 'package:echo_loop/features/subscription/models/ai_quota_rejection.dart';
+import 'package:echo_loop/features/subscription/services/free_allowance_policy.dart';
+import 'package:echo_loop/services/app_logger.dart';
 import 'package:echo_loop/services/transcription_api_client.dart';
+import 'package:echo_loop/utils/transcript_picker.dart';
 import 'package:echo_loop/widgets/manage_subtitles_sheet.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +35,43 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
+
+/// 可在字幕管理面板已打开后推送转录任务状态的测试 controller。
+class _ManualTranscriptionTaskManager extends TestTranscriptionTaskManager {
+  void emit(String audioId, TranscriptionTaskState taskState) {
+    state = Map.of(state)..[audioId] = taskState;
+  }
+}
+
+/// 播客 RSS 字幕内容（合法 SRT，可通过解析入库）。
+const _podcastSrt = '1\n00:00:00,000 --> 00:00:01,000\nHello podcast\n';
+
+/// 可预设返回内容或抛错、并记录请求地址的播客字幕下载器。
+class _FakePodcastTranscriptDownloader extends PodcastTranscriptDownloader {
+  _FakePodcastTranscriptDownloader({this.text = _podcastSrt, this.error});
+
+  final String text;
+  final Object? error;
+  final List<String> requestedUrls = [];
+
+  @override
+  Future<String> download(
+    String url, {
+    required String format,
+    CancelToken? cancelToken,
+  }) async {
+    requestedUrls.add(url);
+    if (error case final e?) throw e;
+    return text;
+  }
+}
+
+class _DenyAiAllowancePolicy implements FreeAllowancePolicy {
+  const _DenyAiAllowancePolicy();
+
+  @override
+  bool allows(PremiumFeature feature) => false;
+}
 
 void main() {
   Session signedInSession() {
@@ -50,6 +100,8 @@ void main() {
       AppSettingsState appSettingsState = const AppSettingsState(
         locale: Locale('en'),
       ),
+      bool subscriptionPro = true,
+      Future<TranscriptDecodeResult?> Function()? transcriptContentPicker,
       List<Override> extraOverrides = const [],
     }) {
       final libraryState = AudioLibraryState(audioItems: [audioItem]);
@@ -60,7 +112,10 @@ void main() {
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
-                builder: (_) => ManageSubtitlesSheet(audioItem: audioItem),
+                builder: (_) => ManageSubtitlesSheet(
+                  audioItem: audioItem,
+                  transcriptContentPicker: transcriptContentPicker,
+                ),
               );
             },
             child: const Text('Open'),
@@ -95,11 +150,15 @@ void main() {
             (ref) => Stream<Session?>.value(session),
           ),
           // 已登录用户视为已解锁（Pro），使转录机制测试不被额度闸拦截。
-          subscriptionEntitlementOverride(),
+          subscriptionEntitlementOverride(pro: subscriptionPro),
           ...extraOverrides,
         ],
       );
     }
+
+    setUp(() {
+      AppLogger.instance.clear();
+    });
 
     group('初始状态', () {
       testWidgets('无字幕音频：显示两个 Radio 选项，无删除按钮', (tester) async {
@@ -116,7 +175,7 @@ void main() {
         expect(find.text('Cloud Transcription'), findsOneWidget);
 
         // 无删除按钮
-        expect(find.byTooltip('Delete Subtitle'), findsNothing);
+        expect(find.byTooltip('Delete Subtitles'), findsNothing);
       });
 
       testWidgets('有本地字幕音频：显示编辑和红色删除按钮', (tester) async {
@@ -131,11 +190,11 @@ void main() {
 
         // 标题栏右侧依次显示编辑和删除按钮。
         expect(find.byTooltip('Edit subtitles'), findsOneWidget);
-        expect(find.byTooltip('Delete Subtitle'), findsOneWidget);
+        expect(find.byTooltip('Delete Subtitles'), findsOneWidget);
 
         final deleteButton = tester.widget<IconButton>(
           find.descendant(
-            of: find.byTooltip('Delete Subtitle'),
+            of: find.byTooltip('Delete Subtitles'),
             matching: find.byType(IconButton),
           ),
         );
@@ -193,7 +252,7 @@ void main() {
 
         // FilledButton 显示"上传字幕"
         expect(
-          find.widgetWithText(FilledButton, 'Upload Transcript'),
+          find.widgetWithText(FilledButton, 'Upload Subtitles'),
           findsOneWidget,
         );
       });
@@ -209,12 +268,12 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击删除图标按钮
-        await tester.tap(find.byTooltip('Delete Subtitle'));
+        await tester.tap(find.byTooltip('Delete Subtitles'));
         await tester.pumpAndSettle();
 
         // 确认对话框出现
         expect(
-          find.text('Are you sure you want to delete the subtitle?'),
+          find.text('Are you sure you want to delete the subtitles?'),
           findsOneWidget,
         );
         expect(find.text('Cancel'), findsOneWidget);
@@ -231,7 +290,7 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byTooltip('Delete Subtitle'));
+        await tester.tap(find.byTooltip('Delete Subtitles'));
         await tester.pumpAndSettle();
 
         // 点击取消
@@ -239,7 +298,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 删除按钮仍在（状态不变）
-        expect(find.byTooltip('Delete Subtitle'), findsOneWidget);
+        expect(find.byTooltip('Delete Subtitles'), findsOneWidget);
       });
 
       testWidgets('AI(en) 已转录 + 选中 auto → 按钮可点击', (tester) async {
@@ -295,11 +354,120 @@ void main() {
         expect(find.text('Sign in to use AI transcription'), findsNothing);
       });
 
-      testWidgets('AI 转录音频过长时在弹窗内显示 5 秒错误提示', (tester) async {
+      testWidgets('免费用户点击 AI 转录时先显示额度提示', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final item = createTestAudioItem(transcriptPath: null);
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            session: signedInSession(),
+            subscriptionPro: false,
+            extraOverrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              freeAllowancePolicyProvider.overrideWithValue(
+                const _DenyAiAllowancePolicy(),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Start Transcription'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(
+            "This month's free AI subtitle transcription quota is used up",
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Got it'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ManageSubtitlesSheet), findsOneWidget);
+      });
+
+      testWidgets('后端转录额度用尽时清状态并显示额度提示', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final item = createTestAudioItem(transcriptPath: null);
+        final manager = _ManualTranscriptionTaskManager();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            session: signedInSession(),
+            extraOverrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              transcriptionTaskManagerProvider.overrideWith(() => manager),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        manager.emit(
+          item.id,
+          const TranscriptionQuotaExceeded(
+            reason: AiQuotaRejectionReason.unsupportedForFreePlan,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text("The free plan doesn't support AI subtitle transcription"),
+          findsOneWidget,
+        );
+        expect(manager.getTaskState(item.id), isA<TranscriptionIdle>());
+
+        await tester.tap(find.text('Got it'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ManageSubtitlesSheet), findsOneWidget);
+      });
+
+      testWidgets('服务端文件超限时显示本地化的 25MB 提示', (tester) async {
+        final item = createTestAudioItem(transcriptPath: null);
+        final manager = _ManualTranscriptionTaskManager();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              transcriptionTaskManagerProvider.overrideWith(() => manager),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        manager.emit(
+          item.id,
+          const TranscriptionFailed(message: 'fileTooLarge'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('File too large (max 25MB)'), findsOneWidget);
+      });
+
+      testWidgets('AI 转录读取远程时长限制并在弹窗内显示错误提示', (tester) async {
         final item = createTestAudioItem(
-          totalDuration: 31 * 60,
+          totalDuration: 2 * 60,
         ).copyWith(transcriptSource: TranscriptSource.local);
-        await tester.pumpWidget(buildSheet(item, session: signedInSession()));
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            session: signedInSession(),
+            extraOverrides: [
+              remoteTranscriptionLimitsProvider.overrideWithValue(
+                const RemoteTranscriptionLimits(maxDurationSeconds: 60),
+              ),
+            ],
+          ),
+        );
         await tester.pumpAndSettle();
 
         await tester.tap(find.text('Open'));
@@ -314,13 +482,126 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.textContaining('Audio too long'), findsOneWidget);
+        expect(
+          find.textContaining('Audio too long (max 1 minutes)'),
+          findsOneWidget,
+        );
         expect(find.byType(SnackBar), findsNothing);
 
-        await tester.pump(const Duration(seconds: 5));
+        await tester.pump(const Duration(seconds: 12));
         await tester.pumpAndSettle();
 
         expect(find.textContaining('Audio too long'), findsNothing);
+      });
+
+      testWidgets('大文件预压缩时显示音频压缩中状态', (tester) async {
+        final item = createTestAudioItem();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              transcriptionTaskManagerProvider.overrideWith(
+                () => TestTranscriptionTaskManager({
+                  item.id: const TranscriptionCompressing(),
+                }),
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        // 压缩态的进度条是不定态动画，不能等待 settle。
+        await tester.pump();
+
+        expect(find.text('Compressing audio...'), findsOneWidget);
+        expect(find.byIcon(Icons.compress), findsOneWidget);
+      });
+
+      testWidgets('本地上传失败时完整显示错误并写入日志', (tester) async {
+        const failurePath =
+            '/private/var/mobile/Containers/Shared/AppGroup/subtitle.srt';
+        final item = createTestAudioItem(transcriptPath: null);
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            transcriptContentPicker: () async =>
+                throw const FileSystemException(
+                  'Operation not permitted',
+                  failurePath,
+                  OSError('Permission denied', 1),
+                ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Local Upload'));
+        await tester.pumpAndSettle();
+
+        await runZoned<Future<void>>(() async {
+          await tester.tap(
+            find.widgetWithText(FilledButton, 'Upload Subtitles'),
+          );
+          await tester.pump();
+        }, zoneSpecification: ZoneSpecification(print: (_, _, _, _) {}));
+
+        expect(find.textContaining(failurePath), findsOneWidget);
+        expect(find.textContaining('Operation not permitted'), findsOneWidget);
+
+        final logLines = AppLogger.instance.entries.map((e) => e.toString());
+        expect(
+          logLines,
+          contains(
+            allOf(
+              contains('[SubtitleUpload] failed local upload'),
+              contains('errorType=FileSystemException'),
+              contains(failurePath),
+            ),
+          ),
+        );
+
+        await tester.pump(const Duration(seconds: 12));
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('本地上传成功时日志记录解码字符集', (tester) async {
+        final item = createTestAudioItem(transcriptPath: null);
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            transcriptContentPicker: () async => const TranscriptDecodeResult(
+              text: '1\n00:00:00,000 --> 00:00:01,000\n你好\n',
+              charset: 'gb18030',
+            ),
+            extraOverrides: [
+              audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Local Upload'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Upload Subtitles'));
+        await tester.pumpAndSettle();
+
+        final logLines = AppLogger.instance.entries.map((e) => e.toString());
+        expect(
+          logLines,
+          contains(
+            allOf(
+              contains('[SubtitleUpload] picked transcript'),
+              contains('charset=gb18030'),
+            ),
+          ),
+        );
       });
     });
 
@@ -335,13 +616,13 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byTooltip('Delete Subtitle'));
+        await tester.tap(find.byTooltip('Delete Subtitles'));
         await tester.pumpAndSettle();
 
         // 显示收藏句子删除警告
         expect(
           find.text(
-            'Deleting the subtitle will also clear all bookmarked sentences and learning progress for this audio.',
+            'Deleting the subtitles will also clear all saved sentences and learning progress of this audio.',
           ),
           findsOneWidget,
         );
@@ -567,6 +848,184 @@ void main() {
         // 取消后状态回 Idle，进度视图消失；本地转录入口保持隐藏。
         expect(find.textContaining('Keep the app open'), findsNothing);
         expect(find.text('On-Device Transcription'), findsNothing);
+      });
+    });
+
+    group('播客字幕下载', () {
+      const podcastUrl = 'https://example.com/episode.srt';
+
+      AudioItem podcastItem({required bool hasTranscript}) {
+        return createTestAudioItem(
+          transcriptPath: hasTranscript ? 'transcripts/test.srt' : null,
+        ).copyWith(
+          podcastTranscriptUrl: podcastUrl,
+          podcastTranscriptFormat: 'srt',
+        );
+      }
+
+      testWidgets('无字幕地址：不显示下载播客字幕选项', (tester) async {
+        final item = createTestAudioItem(transcriptPath: null);
+        await tester.pumpWidget(buildSheet(item));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Download Podcast Subtitles'), findsNothing);
+      });
+
+      testWidgets('有字幕地址：默认选中并下载入库，成功后关闭弹窗', (tester) async {
+        final item = podcastItem(hasTranscript: false);
+        final downloader = _FakePodcastTranscriptDownloader();
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Download Podcast Subtitles'), findsOneWidget);
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(downloader.requestedUrls, [podcastUrl]);
+        expect(dao.transcriptSrtStore[item.id], contains('Hello podcast'));
+        expect(find.byType(ManageSubtitlesSheet), findsNothing);
+      });
+
+      testWidgets('已有字幕：覆盖确认取消后不发起下载', (tester) async {
+        final item = podcastItem(hasTranscript: true);
+        final downloader = _FakePodcastTranscriptDownloader();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(TestAudioItemDao()),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Overwrite existing subtitles?'), findsOneWidget);
+
+        await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+        await tester.pumpAndSettle();
+
+        expect(downloader.requestedUrls, isEmpty);
+        expect(find.byType(ManageSubtitlesSheet), findsOneWidget);
+      });
+
+      testWidgets('已有字幕：确认覆盖后替换为播客字幕', (tester) async {
+        final item = podcastItem(hasTranscript: true);
+        final downloader = _FakePodcastTranscriptDownloader();
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Overwrite'));
+        await tester.pumpAndSettle();
+
+        expect(downloader.requestedUrls, [podcastUrl]);
+        expect(dao.transcriptSrtStore[item.id], contains('Hello podcast'));
+      });
+
+      testWidgets('下载失败：显示内联错误，弹窗保留且不改动字幕', (tester) async {
+        final item = podcastItem(hasTranscript: false);
+        final downloader = _FakePodcastTranscriptDownloader(
+          error: const PodcastTranscriptException('HTTP 500'),
+        );
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('Failed to download subtitles'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('HTTP 500'), findsOneWidget);
+        expect(find.byType(ManageSubtitlesSheet), findsOneWidget);
+        expect(dao.transcriptSrtStore[item.id], isNull);
+
+        // 内联错误 5 秒后自动消失，等待计时器结束避免残留。
+        await tester.pump(const Duration(seconds: 12));
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('下载到空字幕：提示为空且不入库', (tester) async {
+        final item = podcastItem(hasTranscript: false);
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(
+                _FakePodcastTranscriptDownloader(text: ''),
+              ),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('no subtitle entries found'),
+          findsOneWidget,
+        );
+        expect(dao.transcriptSrtStore[item.id], isNull);
+
+        await tester.pump(const Duration(seconds: 12));
+        await tester.pumpAndSettle();
       });
     });
   });

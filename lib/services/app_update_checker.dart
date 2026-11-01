@@ -19,6 +19,7 @@ import '../utils/version_compare.dart';
 import 'android_update_bridge.dart';
 import 'app_logger.dart';
 import 'client_info.dart';
+import 'runtime_endpoint_router.dart';
 
 /// App Store Lookup API endpoint。
 const _iosLookupBase = 'https://itunes.apple.com/lookup';
@@ -28,22 +29,23 @@ const _logTag = 'AppUpdateChecker';
 
 /// App 版本更新检查器
 ///
-/// 版本检查 URL 基于 [apiBaseUrl]（通过 `--dart-define=API_BASE_URL` 配置），
-/// 本地开发时访问 `http://localhost:3000/version.json`，
-/// 生产环境访问 `https://www.echo-loop.top/version.json`。
+/// 版本检查 URL 通过运行时地区路由选择；未注入路由时使用 [apiBaseUrl]。
 ///
 /// iOS 单独走 App Store Lookup API，[bundleId] 必填。
 class AppUpdateChecker {
+  static const _chinaApkProbeTimeout = Duration(seconds: 5);
+
   final Dio _dio;
   final String _url;
   final String? _bundleId;
+  final RuntimeEndpointRouter? _endpointRouter;
   final AppUpdateRuntimePlatform _platform;
   final AndroidUpdateBridge _androidBridge;
 
   /// 使用默认配置创建检查器
   ///
   /// [bundleId] 用于 iOS App Store Lookup（其他平台忽略此参数）。
-  AppUpdateChecker({String? bundleId})
+  AppUpdateChecker({String? bundleId, RuntimeEndpointRouter? endpointRouter})
     : _dio = Dio(
         BaseOptions(
           connectTimeout: const Duration(seconds: 15),
@@ -52,6 +54,7 @@ class AppUpdateChecker {
       ),
       _url = '$apiBaseUrl/version.json',
       _bundleId = bundleId,
+      _endpointRouter = endpointRouter,
       _platform = _currentPlatform(),
       _androidBridge = const MethodChannelAndroidUpdateBridge();
 
@@ -65,10 +68,12 @@ class AppUpdateChecker {
     String? bundleId,
     bool useIosLookup = false,
     AppUpdateRuntimePlatform? platform,
+    RuntimeEndpointRouter? endpointRouter,
     AndroidUpdateBridge androidBridge =
         const MethodChannelAndroidUpdateBridge(),
   }) : _url = url,
        _bundleId = bundleId,
+       _endpointRouter = endpointRouter,
        _platform =
            platform ??
            (useIosLookup
@@ -145,7 +150,7 @@ class AppUpdateChecker {
         manifest.platforms.android.apk.latestVersion ?? manifest.latestVersion;
     // 只认渠道级 minimumVersion；顶层仅供旧版本 App 兼容，新版本忽略。
     final minimum = manifest.platforms.android.apk.minimumVersion ?? '0.0.0';
-    final apkUrl = _apkDownloadUrl(manifest);
+    final apkUrl = await _apkDownloadUrlForCurrentRegion(manifest);
     return AppUpdateInfo(
       latestVersion: latest,
       minimumVersion: minimum,
@@ -251,12 +256,14 @@ class AppUpdateChecker {
 
   /// 非 iOS 平台：拉取远程 version.json
   Future<AppUpdateInfo?> _checkVersionJson() async {
-    AppLogger.log(_logTag, 'version.json start: url=$_url');
     try {
+      final endpointRouter = _endpointRouter;
+      final url = endpointRouter?.apiUri('/version.json').toString() ?? _url;
+      AppLogger.log(_logTag, 'version.json start: url=$url');
       // 仅本请求打自家后端，per-request 携带平台/渠道标识（同一 _dio 还用于打
       // 外部 App Store Lookup，故不在 BaseOptions 全局注入，避免把标识泄漏给苹果）。
       final response = await _dio.get<Map<String, dynamic>>(
-        _url,
+        url,
         options: Options(headers: clientInfoHeaders()),
       );
       final data = response.data;
@@ -298,6 +305,45 @@ class AppUpdateChecker {
     return manifest.platforms.android.apk.downloadUrl ??
         manifest.downloadUrl['androidApk'] ??
         manifest.downloadUrl['android'];
+  }
+
+  Future<String?> _apkDownloadUrlForCurrentRegion(
+    AppUpdateInfo manifest,
+  ) async {
+    final defaultUrl = _apkDownloadUrl(manifest);
+    final chinaUrl = manifest.platforms.android.apk.downloadUrlChina;
+    if (_endpointRouter?.isChinaUser != true ||
+        chinaUrl == null ||
+        chinaUrl.trim().isEmpty) {
+      return defaultUrl;
+    }
+
+    if (await _chinaApkFileIsMissing(chinaUrl)) {
+      AppLogger.log(_logTag, 'China APK missing: using default download URL');
+      return defaultUrl;
+    }
+    return chinaUrl;
+  }
+
+  /// 仅把明确的 404/410 当作中国区 APK 文件不存在；其他探测失败保留原链接。
+  Future<bool> _chinaApkFileIsMissing(String url) async {
+    try {
+      final response = await _dio.head<void>(
+        url.trim(),
+        options: Options(
+          connectTimeout: _chinaApkProbeTimeout,
+          receiveTimeout: _chinaApkProbeTimeout,
+          followRedirects: true,
+          validateStatus: (_) => true,
+        ),
+      );
+      final statusCode = response.statusCode;
+      AppLogger.log(_logTag, 'China APK HEAD status=${statusCode ?? "null"}');
+      return statusCode == 404 || statusCode == 410;
+    } catch (error) {
+      AppLogger.log(_logTag, 'China APK HEAD failed: $error');
+      return false;
+    }
   }
 }
 

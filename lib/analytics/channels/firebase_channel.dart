@@ -16,9 +16,6 @@ class FirebaseChannel implements AnalyticsChannel {
   late final FirebaseAnalytics _analytics;
 
   @override
-  String get name => 'Firebase';
-
-  @override
   Future<void> initialize() async {
     _analytics = FirebaseAnalytics.instance;
     await _analytics.setAnalyticsCollectionEnabled(true);
@@ -37,6 +34,13 @@ class FirebaseChannel implements AnalyticsChannel {
   @override
   Future<void> setUserProperty(String name, String? value) {
     return _analytics.setUserProperty(name: name, value: value);
+  }
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
+    }
   }
 
   @override

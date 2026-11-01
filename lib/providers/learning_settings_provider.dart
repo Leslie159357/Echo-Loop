@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
 import '../services/app_logger.dart';
+import '../features/user_preferences/domain/user_preferences_sync_events.dart';
 
 export '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
@@ -33,6 +34,10 @@ abstract final class LearningSettingsKeys {
   static const autoSkipRetell = 'learning_auto_skip_retell';
   static const autoExpandCachedAnnotation =
       'learning_auto_expand_cached_annotation';
+  static const autoShowAiExplanation = 'learning_auto_show_ai_explanation';
+  static const autoShowAiAnalysis = 'learning_auto_show_ai_analysis';
+  static const autoShowAiTranslation = 'learning_auto_show_ai_translation';
+  static const autoShowAiSenseGroups = 'learning_auto_show_ai_sense_groups';
   static const autoPlayRetellRecordingAfterCompletion =
       'learning_auto_play_retell_recording_after_completion';
   static const listenAndRepeatRatingEnabled =
@@ -41,6 +46,10 @@ abstract final class LearningSettingsKeys {
   static const retellAutoPlaybackPromptShown =
       'learning_retell_auto_playback_prompt_shown';
   static const pdfExportReminderShown = 'learning_pdf_export_reminder_shown';
+  static const showStudyRecommendation = 'learning_show_study_recommendation';
+  static const autoSaveOnUnclear = 'learning_auto_favorite_on_cant_understand';
+  static const unclearAutoSaveReminderShown =
+      'learning_unclear_auto_save_reminder_shown';
 
   /// 历史 SP key，启动期会被清理。
   static const legacyOfflineAsrEnabled = 'offline_asr_enabled';
@@ -58,6 +67,18 @@ class LearningSettings {
   /// 是否自动展开缓存的解析/翻译/意群（默认 true）。
   final bool autoExpandCachedAnnotation;
 
+  /// 是否自动显示 AI 讲解（默认 true）。
+  final bool autoShowAiExplanation;
+
+  /// 是否自动显示句子解析（默认 true）。
+  final bool autoShowAiAnalysis;
+
+  /// 是否自动显示句子翻译（默认 true）。
+  final bool autoShowAiTranslation;
+
+  /// 是否自动显示意群分割（默认 false）。
+  final bool autoShowAiSenseGroups;
+
   /// 复述完成后是否自动播放用户录音（默认 false）。
   final bool autoPlayRetellRecordingAfterCompletion;
 
@@ -73,14 +94,30 @@ class LearningSettings {
   /// 是否已经展示过首次导出 PDF 的补充复习材料提醒（默认 false）。
   final bool pdfExportReminderShown;
 
+  /// 是否在学习页展示「为你推荐」卡片（默认 true）。
+  final bool showStudyRecommendation;
+
+  /// 精听点击「听不太懂」时是否自动收藏当前句（默认 true）。
+  final bool autoSaveOnUnclear;
+
+  /// 是否已弹过「听不太懂自动收藏」说明弹窗（默认 false，参与跨设备同步）。
+  final bool unclearAutoSaveReminderShown;
+
   const LearningSettings({
     this.autoSkipRetell = false,
     this.autoExpandCachedAnnotation = true,
+    this.autoShowAiExplanation = true,
+    this.autoShowAiAnalysis = true,
+    this.autoShowAiTranslation = true,
+    this.autoShowAiSenseGroups = false,
     this.autoPlayRetellRecordingAfterCompletion = false,
     this.listenAndRepeatRatingEnabled = true,
     this.retellRatingEnabled = true,
     this.retellAutoPlaybackPromptShown = false,
     this.pdfExportReminderShown = false,
+    this.showStudyRecommendation = true,
+    this.autoSaveOnUnclear = true,
+    this.unclearAutoSaveReminderShown = false,
   });
 
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
@@ -91,6 +128,14 @@ class LearningSettings {
       autoExpandCachedAnnotation:
           prefs.getBool(LearningSettingsKeys.autoExpandCachedAnnotation) ??
           true,
+      autoShowAiExplanation:
+          prefs.getBool(LearningSettingsKeys.autoShowAiExplanation) ?? true,
+      autoShowAiAnalysis:
+          prefs.getBool(LearningSettingsKeys.autoShowAiAnalysis) ?? true,
+      autoShowAiTranslation:
+          prefs.getBool(LearningSettingsKeys.autoShowAiTranslation) ?? true,
+      autoShowAiSenseGroups:
+          prefs.getBool(LearningSettingsKeys.autoShowAiSenseGroups) ?? false,
       autoPlayRetellRecordingAfterCompletion:
           prefs.getBool(
             LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion,
@@ -106,22 +151,43 @@ class LearningSettings {
           false,
       pdfExportReminderShown:
           prefs.getBool(LearningSettingsKeys.pdfExportReminderShown) ?? false,
+      showStudyRecommendation:
+          prefs.getBool(LearningSettingsKeys.showStudyRecommendation) ?? true,
+      autoSaveOnUnclear:
+          prefs.getBool(LearningSettingsKeys.autoSaveOnUnclear) ?? true,
+      unclearAutoSaveReminderShown:
+          prefs.getBool(LearningSettingsKeys.unclearAutoSaveReminderShown) ??
+          false,
     );
   }
 
   LearningSettings copyWith({
     bool? autoSkipRetell,
     bool? autoExpandCachedAnnotation,
+    bool? autoShowAiExplanation,
+    bool? autoShowAiAnalysis,
+    bool? autoShowAiTranslation,
+    bool? autoShowAiSenseGroups,
     bool? autoPlayRetellRecordingAfterCompletion,
     bool? listenAndRepeatRatingEnabled,
     bool? retellRatingEnabled,
     bool? retellAutoPlaybackPromptShown,
     bool? pdfExportReminderShown,
+    bool? showStudyRecommendation,
+    bool? autoSaveOnUnclear,
+    bool? unclearAutoSaveReminderShown,
   }) {
     return LearningSettings(
       autoSkipRetell: autoSkipRetell ?? this.autoSkipRetell,
       autoExpandCachedAnnotation:
           autoExpandCachedAnnotation ?? this.autoExpandCachedAnnotation,
+      autoShowAiExplanation:
+          autoShowAiExplanation ?? this.autoShowAiExplanation,
+      autoShowAiAnalysis: autoShowAiAnalysis ?? this.autoShowAiAnalysis,
+      autoShowAiTranslation:
+          autoShowAiTranslation ?? this.autoShowAiTranslation,
+      autoShowAiSenseGroups:
+          autoShowAiSenseGroups ?? this.autoShowAiSenseGroups,
       autoPlayRetellRecordingAfterCompletion:
           autoPlayRetellRecordingAfterCompletion ??
           this.autoPlayRetellRecordingAfterCompletion,
@@ -132,6 +198,11 @@ class LearningSettings {
           retellAutoPlaybackPromptShown ?? this.retellAutoPlaybackPromptShown,
       pdfExportReminderShown:
           pdfExportReminderShown ?? this.pdfExportReminderShown,
+      showStudyRecommendation:
+          showStudyRecommendation ?? this.showStudyRecommendation,
+      autoSaveOnUnclear: autoSaveOnUnclear ?? this.autoSaveOnUnclear,
+      unclearAutoSaveReminderShown:
+          unclearAutoSaveReminderShown ?? this.unclearAutoSaveReminderShown,
     );
   }
 
@@ -142,23 +213,37 @@ class LearningSettings {
           runtimeType == other.runtimeType &&
           autoSkipRetell == other.autoSkipRetell &&
           autoExpandCachedAnnotation == other.autoExpandCachedAnnotation &&
+          autoShowAiExplanation == other.autoShowAiExplanation &&
+          autoShowAiAnalysis == other.autoShowAiAnalysis &&
+          autoShowAiTranslation == other.autoShowAiTranslation &&
+          autoShowAiSenseGroups == other.autoShowAiSenseGroups &&
           autoPlayRetellRecordingAfterCompletion ==
               other.autoPlayRetellRecordingAfterCompletion &&
           listenAndRepeatRatingEnabled == other.listenAndRepeatRatingEnabled &&
           retellRatingEnabled == other.retellRatingEnabled &&
           retellAutoPlaybackPromptShown ==
               other.retellAutoPlaybackPromptShown &&
-          pdfExportReminderShown == other.pdfExportReminderShown;
+          pdfExportReminderShown == other.pdfExportReminderShown &&
+          showStudyRecommendation == other.showStudyRecommendation &&
+          autoSaveOnUnclear == other.autoSaveOnUnclear &&
+          unclearAutoSaveReminderShown == other.unclearAutoSaveReminderShown;
 
   @override
   int get hashCode => Object.hash(
     autoSkipRetell,
     autoExpandCachedAnnotation,
+    autoShowAiExplanation,
+    autoShowAiAnalysis,
+    autoShowAiTranslation,
+    autoShowAiSenseGroups,
     autoPlayRetellRecordingAfterCompletion,
     listenAndRepeatRatingEnabled,
     retellRatingEnabled,
     retellAutoPlaybackPromptShown,
     pdfExportReminderShown,
+    showStudyRecommendation,
+    autoSaveOnUnclear,
+    unclearAutoSaveReminderShown,
   );
 }
 
@@ -170,7 +255,15 @@ class LearningSettings {
 /// 反向 read progress notifier 避免双向耦合。
 class LearningSettingsNotifier extends Notifier<LearningSettings> {
   @override
-  LearningSettings build() => ref.read(initialLearningSettingsProvider);
+  LearningSettings build() {
+    try {
+      return LearningSettings.fromPrefsSync(
+        ref.read(sharedPreferencesProvider),
+      );
+    } on UnimplementedError {
+      return ref.read(initialLearningSettingsProvider);
+    }
+  }
 
   /// 从当前 [SharedPreferences] 重新读取全部学习设置并刷新 state。
   ///
@@ -193,11 +286,64 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
         LearningSettingsKeys.autoExpandCachedAnnotation,
         enabled,
       );
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log(
         'LearningSettings',
         'setAutoExpandCachedAnnotation 写 SP 失败: $e',
       );
+    }
+  }
+
+  /// 切换自动显示 AI 讲解总开关，写 SP + 更新 state。
+  Future<void> setAutoShowAiExplanation(bool enabled) async {
+    if (state.autoShowAiExplanation == enabled) return;
+    state = state.copyWith(autoShowAiExplanation: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.autoShowAiExplanation, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setAutoShowAiExplanation 写 SP 失败: $e');
+    }
+  }
+
+  /// 切换自动显示解析，写 SP + 更新 state。
+  Future<void> setAutoShowAiAnalysis(bool enabled) async {
+    if (state.autoShowAiAnalysis == enabled) return;
+    state = state.copyWith(autoShowAiAnalysis: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.autoShowAiAnalysis, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setAutoShowAiAnalysis 写 SP 失败: $e');
+    }
+  }
+
+  /// 切换自动显示翻译，写 SP + 更新 state。
+  Future<void> setAutoShowAiTranslation(bool enabled) async {
+    if (state.autoShowAiTranslation == enabled) return;
+    state = state.copyWith(autoShowAiTranslation: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.autoShowAiTranslation, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setAutoShowAiTranslation 写 SP 失败: $e');
+    }
+  }
+
+  /// 切换自动显示意群分割，写 SP + 更新 state。
+  Future<void> setAutoShowAiSenseGroups(bool enabled) async {
+    if (state.autoShowAiSenseGroups == enabled) return;
+    state = state.copyWith(autoShowAiSenseGroups: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.autoShowAiSenseGroups, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setAutoShowAiSenseGroups 写 SP 失败: $e');
     }
   }
 
@@ -211,6 +357,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
         LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion,
         enabled,
       );
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log(
         'LearningSettings',
@@ -229,6 +376,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
         LearningSettingsKeys.listenAndRepeatRatingEnabled,
         enabled,
       );
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log(
         'LearningSettings',
@@ -244,6 +392,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setBool(LearningSettingsKeys.retellRatingEnabled, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log('LearningSettings', 'setRetellRatingEnabled 写 SP 失败: $e');
     }
@@ -259,6 +408,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
         LearningSettingsKeys.retellAutoPlaybackPromptShown,
         true,
       );
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log(
         'LearningSettings',
@@ -274,11 +424,65 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setBool(LearningSettingsKeys.pdfExportReminderShown, true);
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log(
         'LearningSettings',
         'markPdfExportReminderShown 写 SP 失败: $e',
       );
+    }
+  }
+
+  /// 标记「听不太懂自动收藏」说明弹窗已展示。
+  ///
+  /// 参与跨设备同步，多设备上只提醒一次。
+  Future<void> markUnclearAutoSaveReminderShown() async {
+    if (state.unclearAutoSaveReminderShown) return;
+    state = state.copyWith(unclearAutoSaveReminderShown: true);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(
+        LearningSettingsKeys.unclearAutoSaveReminderShown,
+        true,
+      );
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log(
+        'LearningSettings',
+        'markUnclearAutoSaveReminderShown 写 SP 失败: $e',
+      );
+    }
+  }
+
+  /// 切换学习页「为你推荐」卡片显示，写 SP + 更新 state。
+  Future<void> setShowStudyRecommendation(bool enabled) async {
+    if (state.showStudyRecommendation == enabled) return;
+    state = state.copyWith(showStudyRecommendation: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(
+        LearningSettingsKeys.showStudyRecommendation,
+        enabled,
+      );
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log(
+        'LearningSettings',
+        'setShowStudyRecommendation 写 SP 失败: $e',
+      );
+    }
+  }
+
+  /// 切换精听「听不太懂」自动收藏，写 SP + 更新 state。
+  Future<void> setAutoSaveOnUnclear(bool enabled) async {
+    if (state.autoSaveOnUnclear == enabled) return;
+    state = state.copyWith(autoSaveOnUnclear: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.autoSaveOnUnclear, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setAutoSaveOnUnclear 写 SP 失败: $e');
     }
   }
 
@@ -291,6 +495,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
     try {
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setBool(LearningSettingsKeys.autoSkipRetell, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
     } catch (e) {
       AppLogger.log('LearningSettings', 'setAutoSkipRetell 写 SP 失败: $e');
     }

@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../database/providers.dart';
+import '../../database/app_database.dart' as db;
 import '../../models/audio_engine_state.dart';
-import '../../models/audio_item.dart';
+import '../../models/audio_item.dart' as model;
 import '../../models/sentence.dart';
+import '../../models/word_highlight_binding.dart';
 import '../../services/app_logger.dart';
-import '../../services/study_event_recorder.dart';
 import '../../services/subtitle_parser.dart';
+import '../../services/word_highlight_playback_status_tracker.dart';
 
 part 'foreground_audio_engine_provider.g.dart';
 
@@ -27,21 +29,32 @@ part 'foreground_audio_engine_provider.g.dart';
 /// `playToEnd`（媒体会话/整篇循环专属）。
 @Riverpod(keepAlive: true)
 class ForegroundAudioEngine extends _$ForegroundAudioEngine {
-  /// 学习事件记录器（由各前台任务进入时注入，退出时传 null）
-  StudyEventRecorder? _recorder;
-
-  /// 设置学习事件记录器。
-  void setRecorder(StudyEventRecorder? recorder) {
-    _recorder = recorder;
-  }
-
   /// 裸播放器——独立实例，从不注册到 `audio_service`。
   final ja.AudioPlayer _player = ja.AudioPlayer();
 
+  /// 同一材料并发请求只执行一次文件加载，避免重复 setFilePath 打断前一个请求。
+  final Map<String, Future<void>> _loadingAudioById = <String, Future<void>>{};
+  final WordHighlightPlaybackStatusTracker _wordHighlightPlaybackStatus =
+      WordHighlightPlaybackStatusTracker();
+  StreamSubscription<ja.PlayerState>? _wordHighlightPlaybackSubscription;
+  int? _wordHighlightCompletionSessionId;
+  int? _wordHighlightObservedPlayingSessionId;
+
   @override
   AudioEngineState build() {
+    _wordHighlightPlaybackSubscription = _player.playerStateStream.listen(
+      (_) => _observeWordHighlightPlaybackState(),
+      onError: (Object error, StackTrace stackTrace) {
+        AppLogger.log(
+          'ForegroundAudioEngine',
+          '逐词高亮播放状态流失败: $error\n$stackTrace',
+        );
+      },
+    );
     ref.onDispose(() {
-      _player.dispose();
+      unawaited(_wordHighlightPlaybackSubscription?.cancel());
+      unawaited(_wordHighlightPlaybackStatus.dispose());
+      unawaited(_player.dispose());
     });
     return const AudioEngineState();
   }
@@ -53,6 +66,61 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
       _player.positionStream.map((rel) => state.clipStart + rel);
 
   Stream<ja.PlayerState> get playerStateStream => _player.playerStateStream;
+
+  /// 当前逐词高亮播放生命周期状态。
+  WordHighlightPlaybackStatus get wordHighlightPlaybackStatus =>
+      _wordHighlightPlaybackStatus.status;
+
+  /// 逐词高亮播放生命周期状态流。
+  Stream<WordHighlightPlaybackStatus> get wordHighlightPlaybackStatusStream =>
+      _wordHighlightPlaybackStatus.stream;
+
+  void _observeWordHighlightPlaybackState() {
+    final sessionId = state.sessionId;
+    final isCurrentSessionPlaying =
+        _player.playing && _wordHighlightCompletionSessionId == sessionId;
+    if (isCurrentSessionPlaying) {
+      _wordHighlightObservedPlayingSessionId = sessionId;
+      _wordHighlightPlaybackStatus.observePlayerState(
+        isPlaying: true,
+        isCompleted: false,
+      );
+      return;
+    }
+
+    final isCurrentSessionCompleted =
+        _player.processingState == ja.ProcessingState.completed &&
+        _wordHighlightCompletionSessionId == sessionId &&
+        _wordHighlightObservedPlayingSessionId == sessionId;
+    if (isCurrentSessionCompleted) {
+      _wordHighlightCompletionSessionId = null;
+      _wordHighlightObservedPlayingSessionId = null;
+    }
+    _wordHighlightPlaybackStatus.observePlayerState(
+      isPlaying: false,
+      isCompleted: isCurrentSessionCompleted,
+    );
+  }
+
+  void _markWordHighlightPlaybackStarted(int sessionId) {
+    _wordHighlightCompletionSessionId = sessionId;
+    _wordHighlightObservedPlayingSessionId = null;
+    _wordHighlightPlaybackStatus.markPlaying();
+  }
+
+  Future<void> _playPlayerForWordHighlight(int sessionId) async {
+    _markWordHighlightPlaybackStarted(sessionId);
+    try {
+      await _player.play();
+    } catch (_) {
+      if (_wordHighlightCompletionSessionId == sessionId) {
+        _wordHighlightCompletionSessionId = null;
+        _wordHighlightObservedPlayingSessionId = null;
+        _wordHighlightPlaybackStatus.reset();
+      }
+      rethrow;
+    }
+  }
 
   bool get isPlaying => _player.playing;
   ja.ProcessingState get processingState => _player.processingState;
@@ -71,10 +139,13 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
   /// 与 [AudioEngine.loadAudio] 等价，但不经 handler、不设 MediaItem/封面
   /// （前台引擎不上锁屏）。[subtitle] 参数保留以对齐调用签名，本引擎忽略。
   Future<Duration?> loadAudio(
-    AudioItem item,
+    model.AudioItem item,
     double speed, {
     String? subtitle,
   }) async {
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
+    _wordHighlightPlaybackStatus.reset();
     try {
       state = state.copyWith(isLoading: true, errorMessage: null);
 
@@ -112,10 +183,86 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
     }
   }
 
+  /// 确保 [audioItemId] 已装载到此前台播放器，再播放指定区间。
+  ///
+  /// 播放入口不应依赖调用方预加载：正面自动播放、意群试听等都可安全直接调用。
+  /// 同一材料的并发加载会合并；加载完成后新建 session，旧播放自然失效。
+  /// [isRequestActive] 可在异步加载和调速后阻止已取消的旧请求起播；创建 session 后，
+  /// [onSessionStarted] 会同步收到该 sessionId，供调用方只取消自己启动的播放。
+  Future<void> playRangeForAudio(
+    String audioItemId,
+    Duration start,
+    Duration end, {
+    required double speed,
+    bool Function()? isRequestActive,
+    void Function(int sessionId)? onSessionStarted,
+  }) async {
+    if (state.currentAudioId != audioItemId) {
+      await _ensureAudioLoaded(audioItemId, speed);
+    }
+    if (state.currentAudioId != audioItemId) {
+      throw StateError('audio_not_loaded:$audioItemId');
+    }
+    if (isRequestActive != null && !isRequestActive()) {
+      AppLogger.log(
+        'ForegroundAudioEngine',
+        'event=range-play-skipped reason=request-cancelled-before-speed '
+            'audioId=$audioItemId',
+      );
+      return;
+    }
+    await setSpeed(speed);
+    if (isRequestActive != null && !isRequestActive()) {
+      AppLogger.log(
+        'ForegroundAudioEngine',
+        'event=range-play-skipped reason=request-cancelled-before-session '
+            'audioId=$audioItemId',
+      );
+      return;
+    }
+    final sessionId = newSession();
+    onSessionStarted?.call(sessionId);
+    await playRangeOnce(start, end, sessionId);
+  }
+
+  Future<void> _ensureAudioLoaded(String audioItemId, double speed) async {
+    final existing = _loadingAudioById[audioItemId];
+    if (existing != null) return existing;
+
+    late final Future<void> loading;
+    loading = () async {
+      try {
+        final row = await ref.read(audioItemDaoProvider).getById(audioItemId);
+        if (row == null) throw StateError('audio_not_found:$audioItemId');
+        await loadAudio(_toAudioItem(row), speed);
+      } finally {
+        _loadingAudioById.remove(audioItemId);
+      }
+    }();
+    _loadingAudioById[audioItemId] = loading;
+    return loading;
+  }
+
+  model.AudioItem _toAudioItem(db.AudioItem row) => model.AudioItem(
+    id: row.id,
+    name: row.name,
+    audioPath: row.audioPath,
+    transcriptPath: row.transcriptPath,
+    addedDate: row.addedDate,
+    totalDuration: row.totalDuration,
+    sentenceCount: row.sentenceCount,
+    wordCount: row.wordCount,
+    isPinned: row.isPinned,
+    transcriptSource: model.TranscriptSource.fromIndex(row.transcriptSource),
+    audioSha256: row.audioSha256,
+    originalAudioSha256: row.originalAudioSha256,
+    transcriptLanguage: row.transcriptLanguage,
+  );
+
   // --- 字幕加载 ---
   /// 字幕内容唯一真相源是 DB 的 transcript_srt 列；列空时读遗留文件并回填。
   /// 与 [AudioEngine.loadTranscript] 一致（纯 DB + 解析，与 player 无关）。
-  Future<List<Sentence>> loadTranscript(AudioItem audioItem) async {
+  Future<List<Sentence>> loadTranscript(model.AudioItem audioItem) async {
     if (!audioItem.hasTranscript) {
       return [];
     }
@@ -146,19 +293,35 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
   }
 
   // --- 基础控制 ---
-  Future<void> play() async => await _player.play();
+  Future<void> play() async {
+    await _playPlayerForWordHighlight(state.sessionId);
+  }
 
   Future<void> pause() async {
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
+    final oldId = state.sessionId;
     state = state.copyWith(sessionId: state.sessionId + 1);
+    AppLogger.log(
+      'ForegroundAudioEngine',
+      'event=pause-session-invalidated previousSessionId=$oldId '
+          'currentSessionId=${state.sessionId}',
+    );
     await _player.pause();
+    _wordHighlightPlaybackStatus.markPaused();
   }
 
   /// 暂停但不递增 sessionId（边界监听回卷、进度条拖动续播用）。
   Future<void> pauseKeepSession() async {
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
     await _player.pause();
+    _wordHighlightPlaybackStatus.markPaused();
   }
 
   Future<void> stop() async {
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
     final oldId = state.sessionId;
     state = state.copyWith(sessionId: state.sessionId + 1);
     AppLogger.log(
@@ -166,19 +329,47 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
       '⏹ stop(): sessionId $oldId → ${state.sessionId}',
     );
     await _player.stop();
+    _wordHighlightPlaybackStatus.reset();
   }
 
   /// 停止播放（不改变 sessionId）。
   Future<void> stopPlayback() async {
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
     await _player.stop();
+    _wordHighlightPlaybackStatus.markPaused();
   }
 
-  Future<void> seek(Duration pos) async => await _player.seek(pos);
+  Future<void> seek(Duration pos) async {
+    final wasCompleted =
+        _player.processingState == ja.ProcessingState.completed;
+    await _player.seek(pos);
+    if (_player.playing) {
+      _wordHighlightPlaybackStatus.markPlaying();
+    } else {
+      _wordHighlightCompletionSessionId = null;
+      _wordHighlightObservedPlayingSessionId = null;
+      _wordHighlightPlaybackStatus.markPositionSelected(
+        ignoreCurrentCompletion: wasCompleted,
+      );
+    }
+  }
 
   /// 按绝对音频时间跳转，自动转换为当前 clip 的相对位置（同 [AudioEngine.seekToAbsolute]）。
   Future<void> seekToAbsolute(Duration absolute) async {
+    final wasCompleted =
+        _player.processingState == ja.ProcessingState.completed;
     final relative = absolute - state.clipStart;
     await _player.seek(relative.isNegative ? Duration.zero : relative);
+    if (_player.playing) {
+      _wordHighlightPlaybackStatus.markPlaying();
+    } else {
+      _wordHighlightCompletionSessionId = null;
+      _wordHighlightObservedPlayingSessionId = null;
+      _wordHighlightPlaybackStatus.markPositionSelected(
+        ignoreCurrentCompletion: wasCompleted,
+      );
+    }
   }
 
   Future<void> setSpeed(double speed) async => await _player.setSpeed(speed);
@@ -196,16 +387,40 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
   }
 
   // --- 句子级播放基元 ---
-  Future<void> playClipOnce(Sentence sentence, int sessionId) async {
+  Future<void> playClipOnce(Sentence sentence, int sessionId) =>
+      _playClipFromPosition(sentence, sessionId, sentence.startTime);
+
+  /// 从句子内部的位置播放，供暂停恢复使用。
+  Future<void> playClipFromPosition(
+    Sentence sentence,
+    int sessionId,
+    Duration startAt,
+  ) => _playClipFromPosition(sentence, sessionId, startAt);
+
+  Future<void> _playClipFromPosition(
+    Sentence sentence,
+    int sessionId,
+    Duration requestedStart,
+  ) async {
     if (!isActiveSession(sessionId)) return;
+
+    final clipStart =
+        requestedStart >= sentence.startTime &&
+            requestedStart < sentence.endTime
+        ? requestedStart
+        : sentence.startTime;
+
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
+    _wordHighlightPlaybackStatus.prepareForPlayback();
 
     AppLogger.log(
       'ForegroundAudioEngine',
       '▶ playClip: loadedAudio=${state.currentAudioId}, '
-          'clip=${sentence.startTime.inMilliseconds}-${sentence.endTime.inMilliseconds}ms',
+          'clip=${clipStart.inMilliseconds}-${sentence.endTime.inMilliseconds}ms',
     );
-    state = state.copyWith(clipStart: sentence.startTime, isClipActive: true);
-    await _player.setClip(start: sentence.startTime, end: sentence.endTime);
+    state = state.copyWith(clipStart: clipStart, isClipActive: true);
+    await _player.setClip(start: clipStart, end: sentence.endTime);
 
     if (!isActiveSession(sessionId)) {
       AppLogger.log(
@@ -228,7 +443,7 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
       return;
     }
 
-    await _player.play();
+    await _playPlayerForWordHighlight(sessionId);
     if (!isActiveSession(sessionId)) {
       AppLogger.log(
         'ForegroundAudioEngine',
@@ -243,10 +458,6 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
           !isActiveSession(sessionId) ||
           s.processingState == ja.ProcessingState.completed,
     );
-
-    if (isActiveSession(sessionId)) {
-      _recorder?.onSentencePlayed(sentence);
-    }
   }
 
   /// 按句播放若干遍（同 [AudioEngine.playClipWithLoops]）。
@@ -294,6 +505,10 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
       return;
     }
 
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
+    _wordHighlightPlaybackStatus.prepareForPlayback();
+
     state = state.copyWith(clipStart: start, isClipActive: true);
     await _player.setClip(start: start, end: end);
 
@@ -321,7 +536,7 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
     // clip+seek(0) 已落定，位置流此刻起发出的是新位置——通知调用方安全订阅。
     onClipReady?.call();
 
-    await _player.play();
+    await _playPlayerForWordHighlight(sessionId);
     if (!isActiveSession(sessionId)) {
       AppLogger.log(
         'ForegroundAudioEngine',
@@ -347,6 +562,9 @@ class ForegroundAudioEngine extends _$ForegroundAudioEngine {
   int newSession() {
     final oldId = state.sessionId;
     state = state.copyWith(sessionId: state.sessionId + 1);
+    _wordHighlightCompletionSessionId = null;
+    _wordHighlightObservedPlayingSessionId = null;
+    _wordHighlightPlaybackStatus.prepareForPlayback();
     AppLogger.log(
       'ForegroundAudioEngine',
       '🔄 newSession(): sessionId $oldId → ${state.sessionId}',

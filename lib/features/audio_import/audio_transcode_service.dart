@@ -75,6 +75,128 @@ class AudioTranscodeService {
     }
   }
 
+  /// 把 [source] 压缩为云端转录上传用的低码率 m4a。
+  ///
+  /// 该临时产物只用于降低上传带宽和服务端存储，不替换用户的原始音频，也不复用
+  /// 转录成功后的 44.1kHz 本地转码参数。输出为 16kHz、48kbps、单声道 AAC。
+  Future<bool> transcodeForTranscriptionUpload({
+    required File source,
+    required File output,
+  }) async {
+    if (!await source.exists()) {
+      AppLogger.log(_logTag, 'skip transcription upload: source missing');
+      return false;
+    }
+    await output.parent.create(recursive: true);
+
+    try {
+      final session = await FFmpegKit.executeWithArguments([
+        '-nostdin',
+        '-y',
+        '-loglevel',
+        'error',
+        '-i',
+        source.path,
+        '-map',
+        '0:a:0',
+        '-map_metadata',
+        '-1',
+        '-map_chapters',
+        '-1',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '48k',
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        output.path,
+      ]);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode) || !await output.exists()) {
+        final logs = await session.getOutput();
+        AppLogger.log(
+          _logTag,
+          'transcription upload compression failed: returnCode=$returnCode '
+          'source=${p.basename(source.path)} logs=${logs ?? ''}',
+        );
+        await _deleteIfExists(output);
+        return false;
+      }
+      return true;
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        _logTag,
+        'transcription upload compression exception: '
+        'source=${p.basename(source.path)} error=$error stack=$stackTrace',
+      );
+      await _deleteIfExists(output);
+      return false;
+    }
+  }
+
+  /// 把短时语音压缩为复述 AI 评估的临时上传文件。
+  ///
+  /// 评估端硬限制为 2 MiB。手动复述最长可达 5 分钟，故使用 16kHz、单声道、
+  /// 24kbps AAC；该文件只供一次性云端转录，调用方负责在请求结束后删除。
+  Future<bool> transcodeForReviewEvaluation({
+    required File source,
+    required File output,
+  }) async {
+    if (!await source.exists()) {
+      AppLogger.log(_logTag, 'skip retell review: source missing');
+      return false;
+    }
+    await output.parent.create(recursive: true);
+
+    try {
+      final session = await FFmpegKit.executeWithArguments([
+        '-nostdin',
+        '-y',
+        '-loglevel',
+        'error',
+        '-i',
+        source.path,
+        '-map',
+        '0:a:0',
+        '-map_metadata',
+        '-1',
+        '-map_chapters',
+        '-1',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '24k',
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        output.path,
+      ]);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode) || !await output.exists()) {
+        final logs = await session.getOutput();
+        AppLogger.log(
+          _logTag,
+          'retell review compression failed: returnCode=$returnCode '
+          'source=${p.basename(source.path)} logs=${logs ?? ''}',
+        );
+        await _deleteIfExists(output);
+        return false;
+      }
+      return true;
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        _logTag,
+        'retell review compression exception: '
+        'source=${p.basename(source.path)} error=$error stack=$stackTrace',
+      );
+      await _deleteIfExists(output);
+      return false;
+    }
+  }
+
   /// 把 [source] 解码为 16kHz / 单声道 / PCM16 的 WAV 写入 [output]。
   ///
   /// 供离线 ASR 转录使用：sherpa-onnx Whisper 需要 16kHz 单声道 PCM，

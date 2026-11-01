@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ void main() {
 
         expect(state.themeMode, ThemeMode.system);
         expect(state.locale, isNull);
+        expect(state.wordHighlightEnabled, isTrue);
       });
     });
 
@@ -95,6 +98,31 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
+    test('加载设置时清理旧字幕校准偏好并保留正常设置', () async {
+      SharedPreferences.setMockInitialValues({
+        'developer_subtitle_auto_align_enabled': false,
+        'theme_mode': 'dark',
+        'word_highlight_enabled': false,
+      });
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final settingsReady = Completer<void>();
+      container.listen(appSettingsProvider, (_, next) {
+        if (next.themeMode == ThemeMode.dark && !settingsReady.isCompleted) {
+          settingsReady.complete();
+        }
+      });
+      await settingsReady.future;
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.containsKey('developer_subtitle_auto_align_enabled'),
+        isFalse,
+      );
+      expect(container.read(appSettingsProvider).themeMode, ThemeMode.dark);
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isFalse);
+    });
+
     test('加载已保存的未来时光机时间', () async {
       final expected = DateTime(2027, 3, 11, 21, 30);
       SharedPreferences.setMockInitialValues({
@@ -153,6 +181,56 @@ void main() {
       final state = container.read(appSettingsProvider);
       expect(state.isDemoMode, isFalse);
       expect(state.isDemoModeLoading, isFalse);
+    });
+
+    test('逐词高亮默认为开启并可持久化关闭选择', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(appSettingsProvider.notifier);
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isTrue);
+
+      await notifier.setWordHighlightEnabled(false);
+
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('word_highlight_enabled'), isFalse);
+    });
+
+    test('没有已保存值时，读取其他偏好后逐词高亮仍默认开启', () async {
+      SharedPreferences.setMockInitialValues({'theme_mode': 'dark'});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final loaded = Completer<void>();
+      final subscription = container.listen(appSettingsProvider, (_, next) {
+        if (next.themeMode == ThemeMode.dark && !loaded.isCompleted) {
+          loaded.complete();
+        }
+      });
+      addTearDown(subscription.close);
+
+      await loaded.future.timeout(const Duration(seconds: 5));
+
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isTrue);
+    });
+
+    test('保留用户已保存的逐词高亮关闭状态', () async {
+      SharedPreferences.setMockInitialValues({'word_highlight_enabled': false});
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final loaded = Completer<void>();
+      final subscription = container.listen(appSettingsProvider, (_, next) {
+        if (!next.wordHighlightEnabled && !loaded.isCompleted) {
+          loaded.complete();
+        }
+      });
+      addTearDown(subscription.close);
+
+      await loaded.future.timeout(const Duration(seconds: 5));
+
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isFalse);
     });
 
     test('setDemoMode(true) 更新状态并持久化到 SP', () async {

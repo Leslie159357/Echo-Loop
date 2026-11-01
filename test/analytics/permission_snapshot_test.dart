@@ -50,9 +50,6 @@ class _RecordingChannel implements AnalyticsChannel {
   final List<Map<String, Object>> superPropertiesCalls = [];
 
   @override
-  String get name => 'Recording';
-
-  @override
   Future<void> initialize() async {}
 
   @override
@@ -66,6 +63,13 @@ class _RecordingChannel implements AnalyticsChannel {
   @override
   Future<void> setUserProperty(String name, String? value) async {
     userProperties.add((name: name, value: value));
+  }
+
+  @override
+  Future<void> setUserProperties(Map<String, String?> properties) async {
+    for (final entry in properties.entries) {
+      await setUserProperty(entry.key, entry.value);
+    }
   }
 
   @override
@@ -258,7 +262,7 @@ void main() {
         network: PermissionSnapshot.statusNotApplicable,
       );
 
-      await service.reportPermissionSnapshot(snapshot);
+      await service.reportPermissionSnapshot(snapshot, prefs);
 
       // super properties 一次性写入 4 类
       expect(channel.superPropertiesCalls, hasLength(1));
@@ -287,11 +291,25 @@ void main() {
         notification: PermissionSnapshot.statusGranted,
         network: PermissionSnapshot.statusGranted,
       );
-      await service.reportPermissionSnapshot(snapshot);
+      await service.reportPermissionSnapshot(snapshot, prefs);
 
       expect(channel.superPropertiesCalls, isEmpty);
       expect(channel.userProperties, isEmpty);
       expect(channel.events, isEmpty);
+    });
+
+    test('权限未变化时不重复上报', () async {
+      const snapshot = PermissionSnapshot(
+        microphone: PermissionSnapshot.statusGranted,
+        speech: PermissionSnapshot.statusGranted,
+        notification: PermissionSnapshot.statusDenied,
+        network: PermissionSnapshot.statusNotApplicable,
+      );
+      await service.reportPermissionSnapshot(snapshot, prefs);
+      await service.reportPermissionSnapshot(snapshot, prefs);
+      expect(channel.events, hasLength(1));
+      expect(channel.superPropertiesCalls, hasLength(1));
+      expect(channel.userProperties, hasLength(4));
     });
   });
 

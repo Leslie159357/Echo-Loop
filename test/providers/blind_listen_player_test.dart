@@ -8,52 +8,87 @@ import 'package:echo_loop/models/blind_listen_settings.dart';
 import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
 import 'package:echo_loop/models/sentence.dart';
-import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/models/sentence_playback_result.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
+import 'package:echo_loop/providers/learning_session/paragraph_playback_driver.dart';
 import '../helpers/mock_providers.dart';
 
-/// 测试用 AudioEngine：支持 session 管理和模拟播放
-class _TestAudioEngine extends TestAudioEngine {
+/// 测试用段落驱动器：支持 session 管理和模拟播放。
+class _TestParagraphPlaybackDriver implements ParagraphPlaybackDriver {
   int _sessionId = 0;
+  final speeds = <double>[];
 
   @override
-  int newSession() {
-    _sessionId += 1;
-    return _sessionId;
-  }
+  Duration get currentPosition => Duration.zero;
+
+  @override
+  int newSession() => ++_sessionId;
 
   @override
   bool isActiveSession(int id) => id == _sessionId;
 
   @override
-  Future<void> playRangeOnce(
-    Duration start,
-    Duration end,
-    int sessionId, {
-    void Function()? onClipReady,
-  }) async {
-    if (!isActiveSession(sessionId)) return;
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+  Stream<Duration> get positionStream => const Stream.empty();
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> setSpeed(double speed) async {
+    speeds.add(speed);
   }
 
   @override
-  Future<void> stopPlayback() async {}
+  Future<void> seek(Duration position) async {}
 
   @override
-  Stream<Duration> get absolutePositionStream => const Stream.empty();
-}
-
-class _DelayedAudioEngine extends _TestAudioEngine {
-  @override
-  Future<void> playRangeOnce(
+  Future<SentencePlaybackResult> playRange(
     Duration start,
     Duration end,
     int sessionId, {
-    void Function()? onClipReady,
+    required double speed,
+    required void Function() onRangeReady,
   }) async {
-    if (!isActiveSession(sessionId)) return;
+    if (!isActiveSession(sessionId)) return SentencePlaybackResult.cancelled;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    return isActiveSession(sessionId)
+        ? SentencePlaybackResult.completed
+        : SentencePlaybackResult.cancelled;
+  }
+
+  @override
+  void bindLockScreen({
+    required Future<void> Function() onPlay,
+    required Future<void> Function() onPause,
+    required Future<void> Function() onNext,
+    required Future<void> Function() onPrevious,
+  }) {}
+
+  @override
+  void setSessionActive(bool active) {}
+
+  @override
+  void setProgressFrozen(bool frozen) {}
+
+  @override
+  void unbindLockScreen() {}
+}
+
+class _DelayedParagraphPlaybackDriver extends _TestParagraphPlaybackDriver {
+  @override
+  Future<SentencePlaybackResult> playRange(
+    Duration start,
+    Duration end,
+    int sessionId, {
+    required double speed,
+    required void Function() onRangeReady,
+  }) async {
+    if (!isActiveSession(sessionId)) return SentencePlaybackResult.cancelled;
     await Future<void>.delayed(const Duration(milliseconds: 20));
+    return isActiveSession(sessionId)
+        ? SentencePlaybackResult.completed
+        : SentencePlaybackResult.cancelled;
   }
 }
 
@@ -67,6 +102,7 @@ void main() {
   group('BlindListenPlayer 手动模式', () {
     late ProviderContainer container;
     late BlindListenPlayer notifier;
+    late _TestParagraphPlaybackDriver playbackDriver;
 
     final paragraphs = [
       [
@@ -93,23 +129,35 @@ void main() {
       ],
     ];
 
-    setUp(() {
+    setUp(() async {
       container = ProviderContainer(
         overrides: [
-          audioEngineProvider.overrideWith(() => _TestAudioEngine()),
           learningSessionProvider.overrideWith(() => TestLearningSession()),
           analyticsOverride(),
           ...studyTimeOverrides(),
         ],
       );
       notifier = container.read(blindListenPlayerProvider.notifier);
-      notifier.initializeParagraphs(
+      playbackDriver = _TestParagraphPlaybackDriver();
+      await notifier.initializeParagraphs(
         paragraphs,
         const BlindListenSettings(controlMode: ShadowingControlMode.manual),
+        playbackDriver: playbackDriver,
       );
     });
 
     tearDown(() => container.dispose());
+
+    test('更新播放速度时同步到段落播放驱动', () async {
+      notifier.updateSettings(
+        container
+            .read(blindListenPlayerProvider)
+            .settings
+            .copyWith(playbackSpeed: 1.25),
+      );
+
+      expect(playbackDriver.speeds, [1.25]);
+    });
 
     test('手动模式下播放段落完成后停止，不启动倒计时', () async {
       await notifier.startPlaying();
@@ -159,7 +207,6 @@ void main() {
     test('等待态挂起时，当前段播完后进入 waiting for user', () async {
       final delayedContainer = ProviderContainer(
         overrides: [
-          audioEngineProvider.overrideWith(() => _DelayedAudioEngine()),
           learningSessionProvider.overrideWith(() => TestLearningSession()),
           analyticsOverride(),
           ...studyTimeOverrides(),
@@ -170,9 +217,10 @@ void main() {
       final delayedNotifier = delayedContainer.read(
         blindListenPlayerProvider.notifier,
       );
-      delayedNotifier.initializeParagraphs(
+      await delayedNotifier.initializeParagraphs(
         paragraphs,
         const BlindListenSettings(controlMode: ShadowingControlMode.auto),
+        playbackDriver: _DelayedParagraphPlaybackDriver(),
       );
 
       final pending = delayedNotifier.startPlaying();

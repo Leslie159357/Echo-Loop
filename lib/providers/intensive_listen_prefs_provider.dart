@@ -58,6 +58,10 @@ class IntensiveListenPrefsNotifier
   Map<String, dynamic> encodePrefs(IntensiveListenPrefs prefs) =>
       prefs.toJson();
 
+  @override
+  SlotPrefs<IntensiveListenPrefs> readPrefs(SharedPreferences preferences) =>
+      intensiveListenPrefsFromPrefsSync(preferences);
+
   /// 按当前难度算出的 [smartSpeed]/[smartRepeatCount],叠加该槽位偏好得到完整设置。
   IntensiveListenSettings resolve(
     String slot, {
@@ -84,6 +88,23 @@ class IntensiveListenPrefsNotifier
 
   Future<void> setRepeatCount(String slot, int value) =>
       updateSlot(slot, prefsFor(slot).copyWith(repeatCount: value));
+
+  /// 记录讲解页是否按循环次数播放。
+  Future<void> setAnnotationReplayUsesRepeatCount(String slot, bool value) =>
+      updateSlot(
+        slot,
+        prefsFor(slot).copyWith(annotationReplayUsesRepeatCount: value),
+      );
+
+  /// 读取难句跟读入口范围；缺省时保持既有“仅难句”行为。
+  ListenAndRepeatScope listenAndRepeatScopeFor(String slot) =>
+      prefsFor(slot).listenAndRepeatScope ?? ListenAndRepeatScope.difficultOnly;
+
+  /// 记录难句跟读入口范围，不参与 [IntensiveListenSettings] 的解析。
+  Future<void> setListenAndRepeatScope(
+    String slot,
+    ListenAndRepeatScope value,
+  ) => updateSlot(slot, prefsFor(slot).copyWith(listenAndRepeatScope: value));
 }
 
 /// 把 [old]→[next] 的设置改动按槽位写入偏好(只写**真正变化**的字段)。
@@ -113,6 +134,13 @@ void persistIntensiveSettingsDiff(
   }
   if (next.repeatCount != old.repeatCount) {
     notifier.setRepeatCount(slot, next.repeatCount);
+  }
+  if (next.annotationReplayUsesRepeatCount !=
+      old.annotationReplayUsesRepeatCount) {
+    notifier.setAnnotationReplayUsesRepeatCount(
+      slot,
+      next.annotationReplayUsesRepeatCount,
+    );
   }
 }
 

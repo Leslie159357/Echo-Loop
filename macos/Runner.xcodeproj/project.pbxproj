@@ -22,6 +22,7 @@
 
 /* Begin PBXBuildFile section */
 		09BEB0D3BC4E0003C6E6A9D8 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EAA727F6D319B282A9EC69E1 /* Pods_RunnerTests.framework */; };
+		AD4A7E0C1B2D3E4F5A6B8003 /* AdaptiveVadThreshold.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4A7E0C1B2D3E4F5A6B8001 /* AdaptiveVadThreshold.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -32,7 +33,10 @@
 		B2E63C0C2FE985F600D83DA7 /* EchoLoop.storekit in Resources */ = {isa = PBXBuildFile; fileRef = B2E63C0B2FE985F600D83DA7 /* EchoLoop.storekit */; };
 		B3E06EA7562C42894B58B0B7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DB2852EF44C1F13072EFC52B /* GoogleService-Info.plist */; };
 		DF01A2B3C4D5E6F7A8B90002 /* NotificationPermissionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF01A2B3C4D5E6F7A8B90001 /* NotificationPermissionHandler.swift */; };
+		AD4A7E0C1B2D3E4F5A6B8002 /* AdaptiveVadThreshold.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD4A7E0C1B2D3E4F5A6B8001 /* AdaptiveVadThreshold.swift */; };
 		DF01A2B3C4D5E6F7A8B90004 /* MacosTtsSynthHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF01A2B3C4D5E6F7A8B90003 /* MacosTtsSynthHandler.swift */; };
+		DF01A2B3C4D5E6F7A8B90006 /* MacosWindowHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF01A2B3C4D5E6F7A8B90005 /* MacosWindowHandler.swift */; };
+		DF01A2B3C4D5E6F7A8B90008 /* MacOSSystemDownloadHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF01A2B3C4D5E6F7A8B90007 /* MacOSSystemDownloadHandler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,7 +104,10 @@
 		D707EE21A876AAC4587311EA /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		DB2852EF44C1F13072EFC52B /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Runner/GoogleService-Info.plist"; sourceTree = "<group>"; };
 		DF01A2B3C4D5E6F7A8B90001 /* NotificationPermissionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionHandler.swift; sourceTree = "<group>"; };
+		AD4A7E0C1B2D3E4F5A6B8001 /* AdaptiveVadThreshold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveVadThreshold.swift; sourceTree = "<group>"; };
 		DF01A2B3C4D5E6F7A8B90003 /* MacosTtsSynthHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacosTtsSynthHandler.swift; sourceTree = "<group>"; };
+		DF01A2B3C4D5E6F7A8B90005 /* MacosWindowHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacosWindowHandler.swift; sourceTree = "<group>"; };
+		DF01A2B3C4D5E6F7A8B90007 /* MacOSSystemDownloadHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSSystemDownloadHandler.swift; sourceTree = "<group>"; };
 		EAA727F6D319B282A9EC69E1 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED25F027E6097422867B03D5 /* Pods-RunnerTests.debug-dev.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug-dev.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug-dev.xcconfig"; sourceTree = "<group>"; };
 		FBAB2FA69C0BDE626D412E23 /* Pods-RunnerTests.release-dev.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release-dev.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release-dev.xcconfig"; sourceTree = "<group>"; };
@@ -196,7 +203,10 @@
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				DF01A2B3C4D5E6F7A8B90001 /* NotificationPermissionHandler.swift */,
+				AD4A7E0C1B2D3E4F5A6B8001 /* AdaptiveVadThreshold.swift */,
 				DF01A2B3C4D5E6F7A8B90003 /* MacosTtsSynthHandler.swift */,
+				DF01A2B3C4D5E6F7A8B90005 /* MacosWindowHandler.swift */,
+				DF01A2B3C4D5E6F7A8B90007 /* MacOSSystemDownloadHandler.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -477,6 +487,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */,
+				AD4A7E0C1B2D3E4F5A6B8003 /* AdaptiveVadThreshold.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,7 +497,10 @@
 			files = (
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				DF01A2B3C4D5E6F7A8B90002 /* NotificationPermissionHandler.swift in Sources */,
+				AD4A7E0C1B2D3E4F5A6B8002 /* AdaptiveVadThreshold.swift in Sources */,
 				DF01A2B3C4D5E6F7A8B90004 /* MacosTtsSynthHandler.swift in Sources */,
+				DF01A2B3C4D5E6F7A8B90006 /* MacosWindowHandler.swift in Sources */,
+				DF01A2B3C4D5E6F7A8B90008 /* MacOSSystemDownloadHandler.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);

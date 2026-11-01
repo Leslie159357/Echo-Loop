@@ -1,9 +1,67 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart'
+    show sharedPreferencesProvider;
 import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  group('引导开关与跳过', () {
+    test('setEnabled 只写本机，不做云同步', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(guideEnabledProvider.notifier).setEnabled(false);
+
+      expect(prefs.getBool(GuideRegistry.enabledKey), isFalse);
+      expect(container.read(guideEnabledProvider), isFalse);
+    });
+
+    test('skipAll 关闭引导开关，并同步内存状态', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          guideRegistryProvider.overrideWithValue(GuideRegistry(prefs: prefs)),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(guideControllerProvider.notifier).skipAll();
+
+      expect(prefs.getBool(GuideRegistry.enabledKey), isFalse);
+      expect(container.read(guideEnabledProvider), isFalse);
+    });
+
+    test('resetAll 重新开启引导并清空所有已看状态', () async {
+      final firstFlow = GuideFlowIds.active.first;
+      SharedPreferences.setMockInitialValues({
+        GuideRegistry.enabledKey: false,
+        'guide_v1_${firstFlow}_seen': true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final registry = GuideRegistry(prefs: prefs);
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          guideRegistryProvider.overrideWithValue(registry),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(guideControllerProvider.notifier).resetAll();
+
+      expect(prefs.getBool(GuideRegistry.enabledKey), isTrue);
+      expect(container.read(guideEnabledProvider), isTrue);
+      expect(await registry.isSeen(firstFlow), isFalse);
+    });
+  });
+
   group('GuideRegistry', () {
     test('每个 flow 独立保存 seen 状态', () async {
       SharedPreferences.setMockInitialValues({});
@@ -113,6 +171,43 @@ void main() {
         container.read(guideControllerProvider).resetGeneration,
         beforeGen + 1,
       );
+    });
+  });
+
+  group('GuideEnabledNotifier', () {
+    ProviderContainer buildContainer(SharedPreferences prefs) {
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('默认开启（SP 无值时为 true）', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = buildContainer(prefs);
+
+      expect(container.read(guideEnabledProvider), isTrue);
+    });
+
+    test('SP 存 false 时读为关闭', () async {
+      SharedPreferences.setMockInitialValues({GuideRegistry.enabledKey: false});
+      final prefs = await SharedPreferences.getInstance();
+      final container = buildContainer(prefs);
+
+      expect(container.read(guideEnabledProvider), isFalse);
+    });
+
+    test('setEnabled 翻转 state 并写入 SP', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = buildContainer(prefs);
+
+      await container.read(guideEnabledProvider.notifier).setEnabled(false);
+
+      expect(container.read(guideEnabledProvider), isFalse);
+      expect(prefs.getBool(GuideRegistry.enabledKey), isFalse);
     });
   });
 

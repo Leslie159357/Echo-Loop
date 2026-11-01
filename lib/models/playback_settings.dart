@@ -20,7 +20,7 @@ class PlaybackSettings {
   /// 整篇循环开关。
   final bool loopWhole;
 
-  /// 整篇循环的总播放遍数。`1-10`：播该遍数后停止；`0`：无限循环（∞）。
+  /// 整篇循环的总播放遍数。`1-10/20/30/40/50`：播该遍数后停止；`0`：无限循环（∞）。
   final int wholeLoopCount;
 
   /// 整篇每遍之间的间隔时间（0-10 秒）。
@@ -29,7 +29,7 @@ class PlaybackSettings {
   /// 单句循环开关。
   final bool loopSentence;
 
-  /// 单句循环时当前句的重复次数。`1-10`：重复该次数后进下一句；`0`：无限重复（∞）。
+  /// 单句循环时当前句的重复次数。`1-10/20/30/40/50`：重复该次数后进下一句；`0`：无限重复（∞）。
   final int sentenceLoopCount;
 
   /// 单句每次重复之间的间隔时间（0-10 秒）。
@@ -64,12 +64,12 @@ class PlaybackSettings {
 
   /// 序列化为 JSON。
   ///
-  /// **循环开关 [loopWhole]/[loopSentence] 不落盘**——它们是「现在想刷这条」的临时
-  /// 意图，加载任何音频都默认归为关，不应被全局记忆。循环参数（次数/间隔）作为全局
-  /// 偏好保留，使用户重新打开循环时沿用上次设置。
+  /// 循环开关、循环参数和其他播放偏好一起落盘；全文与收藏的设置分别保存。
   Map<String, dynamic> toJson() => {
+    'loopWhole': loopWhole,
     'wholeLoopCount': wholeLoopCount,
     'wholeInterval': wholeInterval.inMilliseconds,
+    'loopSentence': loopSentence,
     'sentenceLoopCount': sentenceLoopCount,
     'sentenceInterval': sentenceInterval.inMilliseconds,
     'playbackSpeed': playbackSpeed,
@@ -79,14 +79,8 @@ class PlaybackSettings {
 
   /// 从 JSON 还原设置，并兼容旧版持久化数据。
   ///
-  /// **循环开关 [loopWhole]/[loopSentence] 一律还原为 `false`**（不从落盘数据恢复，
-  /// 见 [toJson]）；仅恢复循环参数（次数/间隔）、速度、视图、字幕等偏好。
-  ///
-  /// 新旧 schema 以是否含循环参数键（`wholeLoopCount`/`sentenceLoopCount`/
-  /// `wholeInterval`/`sentenceInterval`）区分——新 [toJson] 一定写这些参数：
-  /// - 新 schema：读取循环参数（带范围校验）。
-  /// - 旧 schema：把旧 `loopCount`/`pauseInterval` 迁移为单句循环参数偏好；旧的
-  ///   `repeatMode`/`loopEnabled`/`loopAudioEnabled` 开关一律忽略（开关不再持久化）。
+  /// 缺少循环开关键的旧设置默认关闭循环；旧 `repeatMode`/`loopEnabled`/
+  /// `loopAudioEnabled` 字段仍忽略。旧 `loopCount`/`pauseInterval` 继续迁移为单句循环参数。
   factory PlaybackSettings.fromJson(Map<String, dynamic> json) {
     final speed = normalizeFreePlayerPlaybackSpeed(
       (json['playbackSpeed'] as num?)?.toDouble() ?? 1.0,
@@ -103,8 +97,10 @@ class PlaybackSettings {
         json.containsKey('loopSentence');
     if (hasNewParams) {
       return PlaybackSettings(
+        loopWhole: json['loopWhole'] == true,
         wholeLoopCount: _parseCount(json['wholeLoopCount'], 3),
         wholeInterval: _parseInterval(json['wholeInterval'], 3),
+        loopSentence: json['loopSentence'] == true,
         sentenceLoopCount: _parseCount(json['sentenceLoopCount'], 3),
         sentenceInterval: _parseInterval(json['sentenceInterval'], 2),
         playbackSpeed: speed,
@@ -130,12 +126,12 @@ class PlaybackSettings {
     );
   }
 
-  /// 解析循环次数：`0`=∞；`1-10` 合法；`>10` 截到 10；其余非法值回退 [def]。
+  /// 解析循环次数：`0`=∞；有限次数上限为 50；其余非法值回退 [def]。
   static int _parseCount(dynamic raw, int def) {
     if (raw is! int) return def;
     if (raw == 0) return 0; // ∞
     if (raw < 1) return def;
-    return raw > 10 ? 10 : raw;
+    return raw > 50 ? 50 : raw;
   }
 
   /// 解析间隔时间：范围 0-10 秒，越界截断；缺失则用 [defSecs]。

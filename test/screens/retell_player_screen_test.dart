@@ -16,10 +16,14 @@ import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/models/retell_settings.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/screens/retell_player_screen.dart';
+import 'package:echo_loop/screens/sentence_detail_screen.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
+import 'package:echo_loop/providers/audio_engine/foreground_audio_engine_provider.dart';
+import 'package:echo_loop/providers/media_engine/media_engine_provider.dart';
+import 'package:echo_loop/providers/media_engine/media_sense_group_range_playback.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
 import 'package:echo_loop/providers/learning_session/retell_player_provider.dart';
@@ -29,14 +33,19 @@ import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
 import 'package:echo_loop/database/app_database.dart' show Bookmark;
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/providers/retell_recording_controller_provider.dart';
+import 'package:echo_loop/providers/retell_review_evaluation_provider.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/services/notification_permission_service.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
 import 'package:echo_loop/services/audio_playback_service.dart';
+import 'package:echo_loop/services/audio_preview_controller.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+import 'package:echo_loop/features/subscription/providers/subscription_availability.dart';
+import 'package:echo_loop/features/subscription/models/ai_quota_rejection.dart';
 import 'package:echo_loop/widgets/common/playback_controls.dart';
 import 'package:echo_loop/widgets/common/recording_button.dart';
 import 'package:echo_loop/widgets/common/masked_sentence_tile.dart';
+import 'package:echo_loop/widgets/study/study_activity_detector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/mock_providers.dart';
@@ -162,6 +171,53 @@ class _RecordingResultRetellController extends TestRetellRecordingController {
   }
 }
 
+class _TrackingRetellRecordingController extends TestRetellRecordingController {
+  _TrackingRetellRecordingController(super.initialState);
+
+  int cancelCalls = 0;
+  int startCalls = 0;
+
+  @override
+  Future<void> cancelActiveRecording() async {
+    cancelCalls += 1;
+    await super.cancelActiveRecording();
+  }
+
+  @override
+  Future<void> startRecording({
+    required String promptId,
+    required String referenceText,
+    Duration? referenceDuration,
+  }) async {
+    startCalls += 1;
+    await super.startRecording(
+      promptId: promptId,
+      referenceText: referenceText,
+      referenceDuration: referenceDuration,
+    );
+  }
+}
+
+/// clearRecording 先置 idle、再等待原生清理（由 [releaseClear] 放行）。
+///
+/// 复现真实 controller 的时序：idle 先对外可见，清理完成前会跑过若干帧。
+class _SlowClearRetellRecordingController
+    extends _TrackingRetellRecordingController {
+  _SlowClearRetellRecordingController(super.initialState);
+
+  final Completer<void> _clearGate = Completer<void>();
+
+  void releaseClear() {
+    if (!_clearGate.isCompleted) _clearGate.complete();
+  }
+
+  @override
+  Future<void> clearRecording() async {
+    await super.clearRecording();
+    await _clearGate.future;
+  }
+}
+
 class _SeenGuideRegistry extends GuideRegistry {
   @override
   Future<bool> isSeen(String flowId) async => true;
@@ -171,6 +227,19 @@ class _SeenGuideRegistry extends GuideRegistry {
 
   @override
   Future<void> reset(String flowId) async {}
+}
+
+/// 可在页面已完成初始化后推送评估状态的测试 controller。
+class _ManualRetellReviewController extends RetellReviewEvaluationController {
+  @override
+  RetellReviewEvaluationState build() => const RetellReviewEvaluationState();
+
+  @override
+  void syncAttempt(String? attemptKey) {}
+
+  void emit(RetellReviewEvaluationState next) {
+    state = next;
+  }
 }
 
 void main() {
@@ -219,6 +288,17 @@ void main() {
               audioItemId: audioId,
             );
           },
+          routes: [
+            GoRoute(
+              path: 'sentence-detail',
+              builder: (context, state) =>
+                  const Scaffold(body: Text('Sentence Detail')),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/paywall',
+          builder: (context, state) => const Scaffold(body: Text('Paywall')),
         ),
       ],
     );
@@ -235,6 +315,10 @@ void main() {
           ),
         ),
         audioEngineProvider.overrideWith(() => TestAudioEngine()),
+        foregroundAudioEngineProvider.overrideWith(
+          () => TestForegroundAudioEngine(),
+        ),
+        mediaEngineProvider.overrideWith(MediaEngine.new),
         learningProgressNotifierProvider.overrideWith(
           () => TestLearningProgressNotifier(),
         ),
@@ -277,6 +361,71 @@ void main() {
   }
 
   group('RetellPlayerScreen — SegmentedButton 位置', () {
+    testWidgets('AI 复述评估额度用尽时先提示，确认升级后才进入订阅页', (tester) async {
+      final reviewController = _ManualRetellReviewController();
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        createTestWidget(
+          extraOverrides: [
+            retellReviewEvaluationProvider.overrideWith(() => reviewController),
+            subscriptionAvailabilityProvider.overrideWithValue(true),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      reviewController.emit(
+        const RetellReviewEvaluationState(
+          attemptKey: 'retell:a1:0:/tmp/retell-review.m4a',
+          phase: RetellReviewEvaluationPhase.failed,
+          errorCode: 'quota_exceeded',
+          quotaReason: AiQuotaRejectionReason.unsupportedForFreePlan,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text("The free plan doesn't support AI retell review"),
+        findsOneWidget,
+      );
+      expect(find.text('Paywall'), findsNothing);
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text("The free plan doesn't support AI retell review"),
+        findsNothing,
+      );
+
+      // 用户再次主动评估时仍应可看到提示，而不是被已展示记录静默抑制。
+      reviewController.emit(
+        const RetellReviewEvaluationState(
+          attemptKey: 'retell:a1:0:/tmp/retell-review.m4a',
+          phase: RetellReviewEvaluationPhase.loading,
+        ),
+      );
+      reviewController.emit(
+        const RetellReviewEvaluationState(
+          attemptKey: 'retell:a1:0:/tmp/retell-review.m4a',
+          phase: RetellReviewEvaluationPhase.failed,
+          errorCode: 'quota_exceeded',
+          quotaReason: AiQuotaRejectionReason.unsupportedForFreePlan,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text("The free plan doesn't support AI retell review"),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Upgrade Now'));
+      await tester.pumpAndSettle();
+      expect(find.text('Paywall'), findsOneWidget);
+    });
+
     testWidgets('SegmentedButton 存在且位于句子列表之后', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -296,17 +445,24 @@ void main() {
       );
     });
 
+    testWidgets('页面接入学习统计活动检测器', (tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(StudyActivityDetector), findsOneWidget);
+    });
+
     testWidgets('切换显示模式功能正常', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
       // 默认应选中 Visible Only
-      expect(find.text('Visible Only'), findsOneWidget);
-      expect(find.text('Show All'), findsOneWidget);
-      expect(find.text('Hide All'), findsOneWidget);
+      expect(find.text('Partial'), findsOneWidget);
+      expect(find.text('Visible'), findsOneWidget);
+      expect(find.text('Hidden'), findsOneWidget);
 
       // 点击 Show All
-      await tester.tap(find.text('Show All'));
+      await tester.tap(find.text('Visible'));
       await tester.pumpAndSettle();
 
       // 验证选中状态变化（通过 SegmentedButton 的 selected 属性）
@@ -355,7 +511,8 @@ void main() {
       trackingPlayer.emit(
         trackingPlayer.state.copyWith(stepFinished: true, isPlaying: false),
       );
-      await tester.pumpAndSettle();
+      // 完成态包含循环动画，固定推进即可观察状态更新。
+      await tester.pump(const Duration(milliseconds: 700));
 
       verifyNever(() => notificationService.canShowPrompt());
     });
@@ -438,7 +595,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Listen first, then retell'), findsOneWidget);
-      expect(find.text('Listening...'), findsNothing);
+      expect(find.text('Listen closely...'), findsNothing);
     });
 
     testWidgets('WaitingForUser 态即使 isPlaying 为 true 也显示播放图标', (tester) async {
@@ -480,8 +637,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Retell it in your own words'), findsNothing);
-      expect(find.text('Listening...'), findsNothing);
+      expect(find.text('Retell what you heard'), findsNothing);
+      expect(find.text('Listen closely...'), findsNothing);
     });
 
     testWidgets('录音中显示录音状态而不显示复述提示', (tester) async {
@@ -506,8 +663,150 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Retell it in your own words'), findsNothing);
+      expect(find.text('Retell what you heard'), findsNothing);
       expect(find.text('Recording...'), findsOneWidget);
+    });
+
+    testWidgets('录音状态下点击主播放按钮先取消录音再继续播放', (tester) async {
+      final recordingController = _TrackingRetellRecordingController(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.recording,
+          promptId: 'retell:a1:0',
+        ),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.listening,
+            isPlaying: false,
+            playingSentenceIndex: 0,
+            settings: const RetellSettings(
+              controlMode: ShadowingControlMode.manual,
+              keywordMethod: KeywordMethod.random,
+            ),
+          ),
+          playerFactory: _TrackingRetellPlayer.new,
+          extraOverrides: [
+            retellRecordingControllerProvider.overrideWith(
+              () => recordingController,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+      await tester.pump();
+      await tester.pump();
+
+      expect(recordingController.cancelCalls, 1);
+      expect(
+        recordingController.state.phase,
+        RetellRecordingPhase.idle,
+        reason: '点击主播放后录音状态应结束',
+      );
+      expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+    });
+
+    testWidgets('复述录音中点击主播放不会在取消后自动重启录音', (tester) async {
+      final recordingController = _TrackingRetellRecordingController(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.recording,
+          promptId: 'retell:a1:0',
+        ),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.retelling,
+            isPlaying: false,
+            settings: const RetellSettings(
+              controlMode: ShadowingControlMode.auto,
+              keywordMethod: KeywordMethod.random,
+            ),
+          ),
+          playerFactory: _TrackingRetellPlayer.new,
+          extraOverrides: [
+            retellRecordingControllerProvider.overrideWith(
+              () => recordingController,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+      await tester.pump();
+      await tester.pump();
+
+      expect(recordingController.cancelCalls, 1);
+      expect(recordingController.state.phase, RetellRecordingPhase.idle);
+      expect(recordingController.startCalls, 0);
+      expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+    });
+
+    // 回归：评估中点主播放重听本段，录音清理期间跑过一帧时，
+    // 自动录音抢在原文播放前启动，把原音录了进去。
+    testWidgets('评估中点击主播放重听本段，清理录音期间不会自动开始录音', (tester) async {
+      final recordingController = _SlowClearRetellRecordingController(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.processing,
+          promptId: 'retell:a1:0',
+        ),
+      );
+      late _TrackingRetellPlayer player;
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.retelling,
+            isPlaying: false,
+            settings: const RetellSettings(
+              controlMode: ShadowingControlMode.auto,
+              keywordMethod: KeywordMethod.random,
+            ),
+          ),
+          playerFactory: (state, paragraphs, keywords) =>
+              player = _TrackingRetellPlayer(state, paragraphs, keywords),
+          extraOverrides: [
+            retellRecordingControllerProvider.overrideWith(
+              () => recordingController,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+      // 清理尚未完成，先跑几帧，让 idle 触发的 post-frame 回调执行。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      recordingController.releaseClear();
+      await tester.pump();
+      await tester.pump();
+
+      expect(recordingController.startCalls, 0, reason: '重听原文期间不能开始录音');
+      expect(player.state.phase, RetellPhase.listening);
+
+      // 原文播完回到复述阶段，自动录音应恢复。
+      player.emit(
+        player.state.copyWith(phase: RetellPhase.retelling, isPlaying: false),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(recordingController.startCalls, 1);
     });
 
     testWidgets('首次评估完成先弹窗，选择保持关闭后才启动倒计时', (tester) async {
@@ -623,7 +922,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -700,7 +1001,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -773,7 +1076,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -850,7 +1155,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -924,7 +1231,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -947,6 +1256,85 @@ void main() {
 
       expect(player.postEvaluationPauseCalls, 1);
       expect(player.lastPostEvaluationScore, 0.83);
+    });
+
+    testWidgets('同一段再次录音完成后仍会自动回听最新录音', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        LearningSettingsKeys.retellAutoPlaybackPromptShown: true,
+        LearningSettingsKeys.autoPlayRetellRecordingAfterCompletion: true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final service = _BlockingAudioPlaybackService();
+      final testParagraphs = createTestParagraphs();
+      final player = _StaticRetellPlayer(
+        RetellPlayerState(
+          currentParagraphIndex: 0,
+          totalParagraphs: testParagraphs.length,
+          phase: RetellPhase.retelling,
+          settings: const RetellSettings(
+            keywordMethod: KeywordMethod.random,
+            controlMode: ShadowingControlMode.manual,
+            autoPlayRecordingAfterCompletion: true,
+          ),
+        ),
+        testParagraphs,
+        const {},
+      );
+      final recordingController = _RecordingResultRetellController(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.recording,
+          promptId: 'retell:a1:0',
+        ),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          paragraphs: testParagraphs,
+          playerFactory: (_, __, ___) => player,
+          recordingState: const RetellRecordingState(
+            phase: RetellRecordingPhase.recording,
+            promptId: 'retell:a1:0',
+          ),
+          extraOverrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            initialLearningSettingsProvider.overrideWithValue(
+              LearningSettings.fromPrefsSync(prefs),
+            ),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
+            retellRecordingControllerProvider.overrideWith(
+              () => recordingController,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      // 第一次录音完成并自动回听。
+      await tester.tap(find.byType(RecordingButton));
+      await tester.pump();
+      await tester.pump();
+      expect(service.playedFiles, ['/tmp/manual-stop-retell.m4a']);
+      service.playCompleter?.complete();
+      await tester.pumpAndSettle();
+
+      // 用户不点击主播放按钮，直接开始并停止同一段的第二次录音。
+      recordingController.setState(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.recording,
+          promptId: 'retell:a1:0',
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byType(RecordingButton));
+      await tester.pump();
+      await tester.pump();
+
+      expect(service.playedFiles, [
+        '/tmp/manual-stop-retell.m4a',
+        '/tmp/manual-stop-retell.m4a',
+      ]);
     });
 
     testWidgets('等待态下手动开始录音，完成后仍会自动回听并启动倒计时', (tester) async {
@@ -991,7 +1379,9 @@ void main() {
             initialLearningSettingsProvider.overrideWithValue(
               LearningSettings.fromPrefsSync(prefs),
             ),
-            retellAutoPlaybackServiceProvider.overrideWithValue(service),
+            retellRecordingPreviewProvider.overrideWithValue(
+              AudioPreviewController(service: service),
+            ),
             retellRecordingControllerProvider.overrideWith(
               () => recordingController,
             ),
@@ -1032,7 +1422,7 @@ void main() {
       expect(player.lastPostEvaluationScore, 0.77);
     });
 
-    testWidgets('点击句子进入详情前会进入 waiting for user', (tester) async {
+    testWidgets('点击左侧讲解按钮进入详情前会进入 waiting for user', (tester) async {
       final testParagraphs = createTestParagraphs();
       final initialState = RetellPlayerState(
         currentParagraphIndex: 0,
@@ -1058,18 +1448,71 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 点击第一个 MaskedSentenceTile 的 InkWell（中心 = 文本区 → 触发 onDetailTap）
-      final firstTile = find.byType(MaskedSentenceTile).first;
-      await tester.tap(firstTile);
+      await tester.tap(
+        find.byKey(
+          const ValueKey('$kMaskedSentenceExplanationHitAreaKeyPrefix-0'),
+        ),
+      );
       await tester.pump();
 
       expect(trackingPlayer.waitingCalls, 1);
       expect(trackingPlayer.lastStopImmediately, true);
-      // 点文本区不触发 seek
+      // 讲解入口不触发播放 seek
       expect(trackingPlayer.seekCalls, 0);
     });
 
-    testWidgets('点击句子编号区调用 seekToSentence（不进入讲解页）', (tester) async {
+    testWidgets('复述长按菜单进入讲解前停止录音并进入等待态', (tester) async {
+      final paragraphs = createTestParagraphs();
+      final initialState = RetellPlayerState(
+        currentParagraphIndex: 0,
+        totalParagraphs: paragraphs.length,
+        phase: RetellPhase.retelling,
+        playingSentenceIndex: 0,
+        displayMode: RetellDisplayMode.showAll,
+        settings: const RetellSettings(
+          controlMode: ShadowingControlMode.manual,
+          keywordMethod: KeywordMethod.random,
+        ),
+      );
+      final player = _TrackingRetellPlayer(initialState, paragraphs, const {});
+      final recording = _TrackingRetellRecordingController(
+        const RetellRecordingState(
+          phase: RetellRecordingPhase.recording,
+          promptId: 'retell:a1:0',
+        ),
+      );
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: initialState,
+          paragraphs: paragraphs,
+          playerFactory: (_, __, ___) => player,
+          extraOverrides: [
+            retellRecordingControllerProvider.overrideWith(() => recording),
+          ],
+        ),
+      );
+      // 录音指示器持续动画，按帧建立页面，不等待整页静止。
+      await tester.pump();
+      await tester.pump(kThemeAnimationDuration);
+      await tester.longPress(
+        find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-0')),
+      );
+      // 只推进菜单进入动画（300ms），不等待录音指示器停止。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(recording.cancelCalls, 0);
+      expect(player.waitingCalls, 0);
+      await tester.tap(find.byKey(const ValueKey('sentence-menu-explain')));
+      await tester.pumpAndSettle();
+      expect(player.waitingCalls, 1);
+      expect(player.lastStopImmediately, true);
+      expect(player.seekCalls, 0);
+      expect(recording.cancelCalls, 1);
+      expect(recording.startCalls, 0);
+      expect(find.text('Sentence Detail'), findsOneWidget);
+    });
+
+    testWidgets('纯音频复述详情的播放与高亮来源都使用媒体引擎', (tester) async {
       final testParagraphs = createTestParagraphs();
       final initialState = RetellPlayerState(
         currentParagraphIndex: 0,
@@ -1095,8 +1538,59 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 第 2 句（非播放句）的编号显示数字 "2"
-      await tester.tap(find.text('2'));
+      await tester.tap(
+        find.byKey(
+          const ValueKey('$kMaskedSentenceExplanationHitAreaKeyPrefix-0'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final detailContext = tester.element(find.text('Sentence Detail'));
+      final extra = GoRouterState.of(detailContext).extra;
+      expect(extra, isA<SentenceDetailArgs>());
+      if (extra case final SentenceDetailArgs args) {
+        final mediaEngine = ProviderScope.containerOf(
+          detailContext,
+        ).read(mediaEngineProvider.notifier);
+        expect(args.rangePlayback, isA<MediaSenseGroupRangePlayback>());
+        expect(args.wordHighlightSource.audioItemId, 'a1');
+        expect(
+          args.wordHighlightSource.currentPosition,
+          mediaEngine.wordHighlightPosition,
+        );
+      }
+    });
+
+    testWidgets('点击句子正文调用 seekToSentence（不进入讲解页）', (tester) async {
+      final testParagraphs = createTestParagraphs();
+      final initialState = RetellPlayerState(
+        currentParagraphIndex: 0,
+        totalParagraphs: testParagraphs.length,
+        phase: RetellPhase.listening,
+        isPlaying: true,
+        playingSentenceIndex: 0,
+        displayMode: RetellDisplayMode.showAll,
+        settings: const RetellSettings(keywordMethod: KeywordMethod.random),
+      );
+      final trackingPlayer = _TrackingRetellPlayer(
+        initialState,
+        testParagraphs,
+        const {},
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: initialState,
+          paragraphs: testParagraphs,
+          playerFactory: (_, __, ___) => trackingPlayer,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 点击第 2 句正文，从该句继续播放。
+      await tester.tap(
+        find.byKey(const ValueKey('$kMaskedSentenceBodyHitAreaKeyPrefix-1')),
+      );
       await tester.pump();
 
       expect(trackingPlayer.seekCalls, 1);

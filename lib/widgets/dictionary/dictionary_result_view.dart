@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/dictionary/dictionary_lookup_result.dart';
+import '../../providers/dictionary/dictionary_settings_provider.dart';
 import '../../providers/dictionary/lookup_controller.dart';
 import 'ai_dict_result_view.dart';
 import 'local_dict_result_view.dart';
@@ -57,17 +58,25 @@ class DictionaryResultView extends ConsumerWidget {
           onUpgrade: onUpgrade,
         );
       default:
+        final adFilteringEnabled = ref.watch(
+          dictionarySettingsNotifierProvider.select(
+            (settings) => settings.adFilteringEnabled,
+          ),
+        );
         // 其余源（含全部网页词典 cambridge/oxford/... ）走结果子类穷尽 switch
         // 兜底——新增结果子类需在此补分支。
         if (state case LookupLoaded(:final result)) {
-          return _loadedFallback(result);
+          return _loadedFallback(result, adFilteringEnabled);
         }
         return const _Loading();
     }
   }
 
   /// sealed 结果穷尽分发（新增源安全网）
-  Widget _loadedFallback(DictionaryLookupResult result) => switch (result) {
+  Widget _loadedFallback(
+    DictionaryLookupResult result,
+    bool adFilteringEnabled,
+  ) => switch (result) {
     LocalDictResult() => LocalDictResultView(state: state, word: word),
     AiDictResult() => AiDictResultView(
       state: state,
@@ -75,11 +84,12 @@ class DictionaryResultView extends ConsumerWidget {
       onSignIn: onSignIn,
       onUpgrade: onUpgrade,
     ),
-    // key by sourceId：切源时重建为全新 native view，杜绝旧页残留（标准做法）
+    // 切换词条或广告过滤设置时重建 WebView，使初始请求采用最新规则。
     WebDictResult(:final sourceId, :final url) => WebDictionaryView(
-      key: ValueKey('web_$sourceId'),
+      key: ValueKey('web_${sourceId}_${url}_$adFilteringEnabled'),
       sourceId: sourceId,
       url: url,
+      adFilteringEnabled: adFilteringEnabled,
     ),
   };
 }

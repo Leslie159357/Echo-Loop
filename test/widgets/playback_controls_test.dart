@@ -214,7 +214,7 @@ void main() {
         await tester.tap(find.byIcon(Icons.repeat));
         await tester.pumpAndSettle();
 
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
         expect(find.text('Single-sentence loop'), findsNothing);
         // 只剩整篇循环一个开关。
         expect(find.byType(Switch), findsOneWidget);
@@ -237,8 +237,15 @@ void main() {
         expect(forward.onPressed, isNotNull);
       });
 
-      testWidgets('有句子时上一句/下一句按钮启用', (tester) async {
-        await tester.pumpWidget(buildControls());
+      testWidgets('有句子且不在首末句时上一句/下一句按钮启用', (tester) async {
+        await tester.pumpWidget(
+          buildControls(
+            state: ListeningPracticeState(
+              sentences: createTestSentences(count: 3),
+              currentFullIndex: 1,
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
 
         final prevButton = tester.widget<IconButton>(
@@ -252,19 +259,63 @@ void main() {
         expect(nextButton.onPressed, isNotNull);
       });
 
+      testWidgets('第一句时上一句按钮禁用，下一句按钮启用', (tester) async {
+        await tester.pumpWidget(
+          buildControls(
+            state: ListeningPracticeState(
+              sentences: createTestSentences(count: 3),
+              currentFullIndex: 0,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final prevButton = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.skip_previous),
+        );
+        expect(prevButton.onPressed, isNull);
+
+        final nextButton = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.skip_next),
+        );
+        expect(nextButton.onPressed, isNotNull);
+      });
+
+      testWidgets('最后一句时下一句按钮禁用，上一句按钮启用', (tester) async {
+        await tester.pumpWidget(
+          buildControls(
+            state: ListeningPracticeState(
+              sentences: createTestSentences(count: 3),
+              currentFullIndex: 2,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final prevButton = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.skip_previous),
+        );
+        expect(prevButton.onPressed, isNotNull);
+
+        final nextButton = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.skip_next),
+        );
+        expect(nextButton.onPressed, isNull);
+      });
+
       testWidgets('点击循环按钮弹出悬浮循环设置浮层', (tester) async {
         await tester.pumpWidget(buildControls());
         await tester.pumpAndSettle();
 
         // 初始未弹出
-        expect(find.text('Whole-text loop'), findsNothing);
+        expect(find.text('loop entire media'), findsNothing);
 
         await tester.tap(find.byIcon(Icons.repeat));
         await tester.pumpAndSettle();
 
         // 浮层出现：两组循环开关（无标题）
         expect(find.text('Loop Settings'), findsNothing);
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
         expect(find.byType(Switch), findsNWidgets(2));
       });
 
@@ -274,12 +325,12 @@ void main() {
 
         await tester.tap(find.byIcon(Icons.repeat));
         await tester.pumpAndSettle();
-        expect(find.text('Whole-text loop'), findsOneWidget);
+        expect(find.text('loop entire media'), findsOneWidget);
 
         // 点击浮层外部（左上角遮罩区）关闭
         await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
-        expect(find.text('Whole-text loop'), findsNothing);
+        expect(find.text('loop entire media'), findsNothing);
       });
 
       testWidgets('点击速度按钮显示速度选择菜单', (tester) async {

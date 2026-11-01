@@ -1,24 +1,22 @@
-/// 跟读会话控制器单元测试
-///
-/// 覆盖核心状态流转：
-/// - 正常流程（3 遍循环 + 自动推进）
-/// - 手动暂停/恢复（保留剩余时间）
-/// - 外部打断/恢复（重置完整 T）
-/// - 切句原子重置
-/// - flowToken 防竞态
-/// - 快进倒计时
-/// - 手动模式
+// 跟读会话控制器单元测试：覆盖自动流程、暂停恢复、切句竞态及媒体进入。
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:drift/native.dart';
 
 import 'package:echo_loop/database/daos/bookmark_dao.dart';
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/database/app_database.dart';
 import 'package:echo_loop/models/audio_engine_state.dart';
+import 'package:echo_loop/models/audio_item.dart' as model;
+import 'package:echo_loop/models/media_engine_state.dart';
+import 'package:echo_loop/models/media_load_result.dart';
+import 'package:echo_loop/models/intensive_listen_prefs.dart';
 import 'package:echo_loop/models/sentence.dart';
+import 'package:echo_loop/models/sentence_playback_result.dart';
+import 'package:echo_loop/models/study_stage.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/audio_engine/foreground_audio_engine_provider.dart';
 import 'package:echo_loop/providers/speech/speech_recording_controller.dart';
@@ -26,10 +24,137 @@ import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_controll
 import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_phase.dart';
 import 'package:echo_loop/providers/listen_and_repeat/listen_and_repeat_session_state.dart';
 import 'package:echo_loop/providers/repeat_flow/repeat_flow_engine.dart';
+import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
+import 'package:echo_loop/providers/learned_vocabulary_tracker_provider.dart';
+import 'package:echo_loop/providers/media_engine/media_engine_provider.dart';
+import 'package:echo_loop/providers/study_stats_provider.dart';
+import 'package:echo_loop/services/learned_vocabulary_tracker.dart';
 
 import '../../helpers/mock_providers.dart';
 
 class _MockBookmarkDao extends Mock implements BookmarkDao {}
+
+class _RecordingStudyTimeService extends FakeStudyTimeService {
+  final List<({Duration duration, String text, StudyStage stage})>
+  sentencePlaybacks = [];
+  final List<({Duration duration, StudyStage stage})> speechRecognitions = [];
+  final List<
+    ({Duration studyDuration, Duration inputDuration, StudyStage stage})
+  >
+  sessionDurations = [];
+  int flushCalls = 0;
+
+  @override
+  void submitSentencePlayback({
+    required Duration duration,
+    required String text,
+    required StudyStage stage,
+    bool recordInputDuration = true,
+    DateTime? date,
+  }) {
+    sentencePlaybacks.add((duration: duration, text: text, stage: stage));
+  }
+
+  @override
+  void submitSpeechRecognition({
+    required Duration duration,
+    int producedWordCount = 0,
+    required StudyStage stage,
+    DateTime? date,
+  }) {
+    speechRecognitions.add((duration: duration, stage: stage));
+  }
+
+  @override
+  Future<void> recordSessionDurations({
+    required Duration studyDuration,
+    Duration inputDuration = Duration.zero,
+    required StudyStage stage,
+    DateTime? date,
+  }) async {
+    sessionDurations.add((
+      studyDuration: studyDuration,
+      inputDuration: inputDuration,
+      stage: stage,
+    ));
+  }
+
+  @override
+  Future<void> flush() async {
+    flushCalls += 1;
+  }
+}
+
+class _TestStudyStatsNotifier extends StudyStatsNotifier {
+  @override
+  Future<StudyStats> build() async => const StudyStats();
+
+  @override
+  Future<void> refresh() async {}
+}
+
+class _ControlledMediaEngine extends MediaEngine {
+  _ControlledMediaEngine({this.duration = const Duration(minutes: 1)});
+
+  final Duration? duration;
+  final Completer<void> loadStarted = Completer<void>();
+  Completer<Duration?>? blockingLoad;
+  int releaseCalls = 0;
+  int subtitleCalls = 0;
+  int pauseCalls = 0;
+  Completer<void>? rangePlayback;
+  bool _rangeCancelled = false;
+  final Completer<void> releaseStarted = Completer<void>();
+
+  @override
+  MediaEngineState build() => const MediaEngineState();
+
+  @override
+  Future<Duration?> loadMedia(
+    model.AudioItem item,
+    double speed, {
+    Duration initialPosition = Duration.zero,
+    bool publishToSystemMediaSession = true,
+  }) {
+    if (!loadStarted.isCompleted) loadStarted.complete();
+    return blockingLoad?.future ?? Future<Duration?>.value(duration);
+  }
+
+  @override
+  Future<void> setSubtitleTrackData(String? srt) async {
+    subtitleCalls += 1;
+  }
+
+  @override
+  Future<SentencePlaybackResult> playRange(
+    Duration start,
+    Duration end, {
+    required double speed,
+    void Function()? onRangeReady,
+    int? sessionId,
+  }) async {
+    _rangeCancelled = false;
+    onRangeReady?.call();
+    await (rangePlayback ??= Completer<void>()).future;
+    return _rangeCancelled
+        ? SentencePlaybackResult.cancelled
+        : SentencePlaybackResult.completed;
+  }
+
+  @override
+  Future<void> cancelActiveRange({String reason = 'caller-cancel'}) async {
+    pauseCalls += 1;
+    _rangeCancelled = true;
+    if (rangePlayback?.isCompleted == false) rangePlayback?.complete();
+  }
+
+  @override
+  Future<void> releaseFromScreen() async {
+    releaseCalls += 1;
+    if (!releaseStarted.isCompleted) releaseStarted.complete();
+  }
+}
 
 /// 测试用 AudioEngine — playClipOnce 即时完成
 class _InstantAudioEngine extends TestForegroundAudioEngine {
@@ -80,6 +205,53 @@ class _ControlledAudioEngine extends TestForegroundAudioEngine {
   }
 }
 
+class _PauseResumeAudioEngine extends TestForegroundAudioEngine {
+  _PauseResumeAudioEngine({bool holdNextPlayback = true})
+    : _holdNextPlayback = holdNextPlayback;
+
+  int _sessionId = 0;
+  Duration position = Duration.zero;
+  bool _holdNextPlayback;
+  Completer<void>? activePlayback;
+  final sentenceStarts = <Duration>[];
+  final resumeStarts = <Duration>[];
+
+  @override
+  int newSession() => ++_sessionId;
+
+  @override
+  bool isActiveSession(int id) => id == _sessionId;
+
+  @override
+  Duration get absoluteCurrentPosition => position;
+
+  @override
+  Future<void> playClipOnce(Sentence sentence, int sessionId) async {
+    sentenceStarts.add(sentence.startTime);
+    if (!_holdNextPlayback) return;
+    _holdNextPlayback = false;
+    final playback = Completer<void>();
+    activePlayback = playback;
+    await playback.future;
+  }
+
+  @override
+  Future<void> playClipFromPosition(
+    Sentence sentence,
+    int sessionId,
+    Duration startAt,
+  ) async {
+    resumeStarts.add(startAt);
+  }
+
+  @override
+  Future<void> pause() async {
+    final playback = activePlayback;
+    activePlayback = null;
+    if (playback != null && !playback.isCompleted) playback.complete();
+  }
+}
+
 /// 测试用默认配置
 RepeatFlowConfig _testConfig({
   int repeatCount = 3,
@@ -101,26 +273,322 @@ void main() {
 
   late ProviderContainer container;
   late ListenAndRepeatController controller;
+  late AppDatabase database;
+  late _RecordingStudyTimeService studyTimeService;
+
+  void listenToController(ProviderContainer value) {
+    value.listen<ListenAndRepeatSessionState>(
+      listenAndRepeatControllerProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+  }
 
   setUp(() {
+    database = AppDatabase(NativeDatabase.memory());
+    studyTimeService = _RecordingStudyTimeService();
     container = ProviderContainer(
       overrides: [
+        appDatabaseProvider.overrideWithValue(database),
         foregroundAudioEngineProvider.overrideWith(() => _InstantAudioEngine()),
         audioEngineProvider.overrideWith(TestAudioEngine.new),
+        studyTimeServiceProvider.overrideWithValue(studyTimeService),
         speechRecordingControllerProvider.overrideWith(
           TestSpeechRecordingController.new,
         ),
       ],
     );
+    listenToController(container);
     controller = container.read(listenAndRepeatControllerProvider.notifier);
   });
 
-  tearDown(() {
+  tearDown(() async {
     container.dispose();
+    await database.close();
   });
 
   ListenAndRepeatSessionState readState() =>
       container.read(listenAndRepeatControllerProvider);
+
+  test('视频页面先挂载时可读取占位 promptId，不要求流程已初始化', () {
+    expect(controller.currentPromptId, 'lar:pending:0');
+  });
+
+  group('视频进入竞态', () {
+    model.AudioItem mediaItem() => model.AudioItem(
+      id: 'video-1',
+      name: 'Video',
+      audioPath: 'video.mp4',
+      addedDate: DateTime(2026, 8, 3),
+    );
+
+    ProviderContainer createMediaContainer(_ControlledMediaEngine mediaEngine) {
+      final bookmarkDao = _MockBookmarkDao();
+      when(
+        () => bookmarkDao.getBookmarkedIndices('video-1'),
+      ).thenAnswer((_) async => {0});
+      final container = ProviderContainer(
+        overrides: [
+          foregroundAudioEngineProvider.overrideWith(
+            () => _InstantAudioEngine(),
+          ),
+          audioEngineProvider.overrideWith(TestAudioEngine.new),
+          mediaEngineProvider.overrideWith(() => mediaEngine),
+          bookmarkDaoProvider.overrideWithValue(bookmarkDao),
+          learningProgressNotifierProvider.overrideWith(
+            TestLearningProgressNotifier.new,
+          ),
+          listeningPracticeProvider.overrideWith(TestListeningPractice.new),
+          studyTimeServiceProvider.overrideWithValue(FakeStudyTimeService()),
+          learnedVocabularyTrackerProvider.overrideWithValue(
+            LearnedVocabularyTracker(
+              persistWordForms: (_) async {},
+              onStatsUpdated: () {},
+            ),
+          ),
+          studyStatsNotifierProvider.overrideWith(_TestStudyStatsNotifier.new),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+          analyticsOverride(),
+        ],
+      );
+      listenToController(container);
+      return container;
+    }
+
+    test('加载失败会释放媒体且不会准备跟读会话', () async {
+      final mediaEngine = _ControlledMediaEngine(duration: null);
+      final mediaContainer = createMediaContainer(mediaEngine);
+      addTearDown(mediaContainer.dispose);
+      final mediaController = mediaContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+
+      final result = await mediaController.initialize(
+        mediaItem: mediaItem(),
+        allSentences: createTestSentences(count: 2),
+        isFreePlay: false,
+      );
+
+      expect(result, MediaLoadResult.failure);
+      expect(mediaEngine.releaseCalls, 1);
+      expect(mediaController.isSessionPrepared, isFalse);
+    });
+
+    test('加载中取消会丢弃迟到成功并释放媒体', () async {
+      final mediaEngine = _ControlledMediaEngine()
+        ..blockingLoad = Completer<Duration?>();
+      final mediaContainer = createMediaContainer(mediaEngine);
+      addTearDown(mediaContainer.dispose);
+      final mediaController = mediaContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+
+      final entry = mediaController.initialize(
+        mediaItem: mediaItem(),
+        allSentences: createTestSentences(count: 2),
+        isFreePlay: false,
+      );
+      await mediaEngine.loadStarted.future;
+      await mediaController.cancelEntry();
+      mediaEngine.blockingLoad?.complete(const Duration(minutes: 1));
+
+      expect(await entry, MediaLoadResult.cancelled);
+      expect(mediaEngine.releaseCalls, 1);
+      expect(mediaController.isSessionPrepared, isFalse);
+    });
+
+    test('加载成功默认关闭字幕，退出后复位媒体状态', () async {
+      final mediaEngine = _ControlledMediaEngine();
+      final mediaContainer = createMediaContainer(mediaEngine);
+      addTearDown(mediaContainer.dispose);
+      final mediaController = mediaContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+
+      final result = await mediaController.initialize(
+        mediaItem: mediaItem(),
+        allSentences: createTestSentences(count: 2),
+        isFreePlay: false,
+      );
+      expect(result, MediaLoadResult.ready);
+      expect(mediaController.sentences, hasLength(1));
+      expect(mediaEngine.subtitleCalls, 1);
+      expect(
+        mediaContainer.read(listenAndRepeatControllerProvider).hasVideo,
+        isTrue,
+      );
+
+      await mediaController.exitLearningMode();
+
+      expect(
+        mediaContainer.read(listenAndRepeatControllerProvider).hasVideo,
+        isFalse,
+      );
+      expect(mediaEngine.releaseCalls, 1);
+    });
+
+    test('媒体跟读暂停当前 MediaEngine，不触碰旧前台音频驱动', () async {
+      final mediaEngine = _ControlledMediaEngine();
+      final mediaContainer = createMediaContainer(mediaEngine);
+      addTearDown(mediaContainer.dispose);
+      final mediaController = mediaContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+
+      expect(
+        await mediaController.initialize(
+          mediaItem: mediaItem(),
+          allSentences: createTestSentences(count: 2),
+          isFreePlay: false,
+        ),
+        MediaLoadResult.ready,
+      );
+
+      final playing = mediaController.startPlaying();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        mediaContainer.read(listenAndRepeatControllerProvider).phase,
+        isA<PlayingPrompt>(),
+      );
+
+      mediaController.enterWaitingForUser();
+      await Future<void>.delayed(Duration.zero);
+      await playing;
+
+      expect(mediaEngine.pauseCalls, 1);
+      expect(
+        mediaContainer.read(listenAndRepeatControllerProvider).phase,
+        isA<WaitingForUser>(),
+      );
+    });
+
+    test('Controller 非正常销毁时仍释放已占用媒体', () async {
+      final mediaEngine = _ControlledMediaEngine();
+      final mediaContainer = createMediaContainer(mediaEngine);
+      final mediaController = mediaContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+      expect(
+        await mediaController.initialize(
+          mediaItem: mediaItem(),
+          allSentences: createTestSentences(count: 2),
+          isFreePlay: false,
+        ),
+        MediaLoadResult.ready,
+      );
+
+      mediaContainer.dispose();
+      await mediaEngine.releaseStarted.future;
+
+      expect(mediaEngine.releaseCalls, 1);
+    });
+  });
+
+  group('新学习统计', () {
+    test('完整原句播放提交输入统计，且取消播放不提交', () async {
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 1),
+        config: _testConfig(),
+      );
+      await controller.startPlaying();
+
+      expect(studyTimeService.sentencePlaybacks, hasLength(1));
+      expect(studyTimeService.sentencePlaybacks.single, (
+        duration: const Duration(seconds: 5),
+        text: 'Test sentence number 1.',
+        stage: StudyStage.listenAndRepeat,
+      ));
+
+      final controlledEngine = _ControlledAudioEngine();
+      container.dispose();
+      studyTimeService = _RecordingStudyTimeService();
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          foregroundAudioEngineProvider.overrideWith(() => controlledEngine),
+          audioEngineProvider.overrideWith(TestAudioEngine.new),
+          studyTimeServiceProvider.overrideWithValue(studyTimeService),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+        ],
+      );
+      listenToController(container);
+      controller = container.read(listenAndRepeatControllerProvider.notifier);
+      await controller.prepareSession(
+        sentences: createTestSentences(count: 1),
+        config: _testConfig(),
+      );
+
+      final playing = controller.startPlaying();
+      await Future<void>.delayed(Duration.zero);
+      await controller.disposeSession();
+      controlledEngine.playCompleter?.complete();
+      await playing;
+
+      expect(studyTimeService.sentencePlaybacks, isEmpty);
+    });
+
+    test('页面计时在退出时写入总时长并刷写统计队列', () async {
+      final bookmarkDao = _MockBookmarkDao();
+      when(
+        () => bookmarkDao.getBookmarkedIndices('test-audio'),
+      ).thenAnswer((_) async => {0});
+      final statsContainer = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          foregroundAudioEngineProvider.overrideWith(
+            () => _InstantAudioEngine(),
+          ),
+          audioEngineProvider.overrideWith(TestAudioEngine.new),
+          mediaEngineProvider.overrideWith(() => _ControlledMediaEngine()),
+          bookmarkDaoProvider.overrideWithValue(bookmarkDao),
+          learningProgressNotifierProvider.overrideWith(
+            TestLearningProgressNotifier.new,
+          ),
+          listeningPracticeProvider.overrideWith(TestListeningPractice.new),
+          studyTimeServiceProvider.overrideWithValue(studyTimeService),
+          studyStatsNotifierProvider.overrideWith(_TestStudyStatsNotifier.new),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+          analyticsOverride(),
+        ],
+      );
+      addTearDown(statsContainer.dispose);
+      listenToController(statsContainer);
+      final statsController = statsContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+
+      await statsController.initialize(
+        mediaItem: model.AudioItem(
+          id: 'test-audio',
+          name: 'Test Audio',
+          audioPath: 'test-audio.mp3',
+          addedDate: DateTime(2026, 8, 3),
+        ),
+        allSentences: createTestSentences(count: 1),
+        isFreePlay: false,
+        scope: ListenAndRepeatScope.fullText,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await statsController.exitLearningMode();
+
+      expect(studyTimeService.sessionDurations, hasLength(1));
+      expect(
+        studyTimeService.sessionDurations.single.stage,
+        StudyStage.listenAndRepeat,
+      );
+      expect(
+        studyTimeService.sessionDurations.single.studyDuration,
+        greaterThan(Duration.zero),
+      );
+      expect(studyTimeService.flushCalls, 1);
+    });
+  });
 
   group('startSession', () {
     test('初始化后进入 PlayingPrompt', () async {
@@ -224,6 +692,7 @@ void main() {
       container.dispose();
       container = ProviderContainer(
         overrides: [
+          appDatabaseProvider.overrideWithValue(database),
           foregroundAudioEngineProvider.overrideWith(() => audioEngine),
           audioEngineProvider.overrideWith(TestAudioEngine.new),
           speechRecordingControllerProvider.overrideWith(
@@ -231,6 +700,7 @@ void main() {
           ),
         ],
       );
+      listenToController(container);
       controller = container.read(listenAndRepeatControllerProvider.notifier);
 
       await controller.prepareSession(
@@ -255,9 +725,11 @@ void main() {
 
     test('播放中修改设置不打断也不重播，播完后进入 WaitingForUser', () async {
       final audioEngine = _ControlledAudioEngine();
+      var repeatCount = 3;
       container.dispose();
       container = ProviderContainer(
         overrides: [
+          appDatabaseProvider.overrideWithValue(database),
           foregroundAudioEngineProvider.overrideWith(() => audioEngine),
           audioEngineProvider.overrideWith(TestAudioEngine.new),
           speechRecordingControllerProvider.overrideWith(
@@ -265,20 +737,30 @@ void main() {
           ),
         ],
       );
+      listenToController(container);
       controller = container.read(listenAndRepeatControllerProvider.notifier);
 
       await controller.prepareSession(
         sentences: createTestSentences(count: 1),
-        config: _testConfig(),
+        config: RepeatFlowConfig(
+          audioItemId: 'test-audio',
+          getRepeatCount: (_) => repeatCount,
+          getIntervalDuration: (_) => const Duration(milliseconds: 100),
+          isManualMode: () => false,
+        ),
       );
 
       unawaited(controller.startPlaying());
       await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(readState().totalRepeats, 3);
 
       controller.onUserInteraction();
+      repeatCount = 5;
       await controller.applySettingsChange();
 
       expect(readState().phase, isA<PlayingPrompt>());
+      expect(readState().repeatIndex, 0);
+      expect(readState().totalRepeats, 5);
 
       audioEngine.playCompleter?.complete();
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -345,6 +827,130 @@ void main() {
   });
 
   group('flowToken 防竞态', () {
+    test('初始化难句会保留已收藏状态，取消时走删除分支', () async {
+      final bookmarkDao = _MockBookmarkDao();
+      when(
+        () => bookmarkDao.getBookmarkedIndices('test-audio'),
+      ).thenAnswer((_) async => {0});
+      when(
+        () => bookmarkDao.removeBookmark(any(), any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bookmarkDao.removeBookmarks(any(), any()),
+      ).thenAnswer((_) async {});
+      when(() => bookmarkDao.addBookmark(any())).thenAnswer((_) async {});
+      when(() => bookmarkDao.getByAudioAndSentence(any(), any())).thenAnswer(
+        (_) async => Bookmark(
+          id: 1,
+          memorySubjectId: 'subject-1',
+          audioItemId: 'test-audio',
+          sentenceIndex: 0,
+          sentenceText: 'First sentence.',
+          startTime: 0,
+          endTime: 1,
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+          syncStatus: 0,
+        ),
+      );
+
+      final initializedContainer = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          foregroundAudioEngineProvider.overrideWith(
+            () => _InstantAudioEngine(),
+          ),
+          audioEngineProvider.overrideWith(TestAudioEngine.new),
+          mediaEngineProvider.overrideWith(() => _ControlledMediaEngine()),
+          bookmarkDaoProvider.overrideWithValue(bookmarkDao),
+          learningProgressNotifierProvider.overrideWith(
+            TestLearningProgressNotifier.new,
+          ),
+          listeningPracticeProvider.overrideWith(TestListeningPractice.new),
+          studyTimeServiceProvider.overrideWithValue(FakeStudyTimeService()),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+          analyticsOverride(),
+        ],
+      );
+      addTearDown(initializedContainer.dispose);
+      listenToController(initializedContainer);
+
+      final initializedController = initializedContainer.read(
+        listenAndRepeatControllerProvider.notifier,
+      );
+      await initializedController.initialize(
+        mediaItem: model.AudioItem(
+          id: 'test-audio',
+          name: 'Test Audio',
+          audioPath: 'test-audio.mp3',
+          addedDate: DateTime(2026, 8, 3),
+        ),
+        allSentences: createTestSentences(count: 2),
+        isFreePlay: false,
+      );
+
+      expect(
+        initializedContainer
+            .read(listenAndRepeatControllerProvider)
+            .currentSentenceBookmarked,
+        isTrue,
+      );
+
+      await initializedController.toggleCurrentBookmark();
+      verify(() => bookmarkDao.removeBookmarks('test-audio', {0})).called(1);
+      verifyNever(() => bookmarkDao.addBookmark(any()));
+    });
+
+    test('全文范围在无书签时仍使用全部字幕句子', () async {
+      final bookmarkDao = _MockBookmarkDao();
+      when(
+        () => bookmarkDao.getBookmarkedIndices('test-audio'),
+      ).thenAnswer((_) async => <int>{});
+      final fullTextContainer = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          foregroundAudioEngineProvider.overrideWith(
+            () => _InstantAudioEngine(),
+          ),
+          audioEngineProvider.overrideWith(TestAudioEngine.new),
+          mediaEngineProvider.overrideWith(() => _ControlledMediaEngine()),
+          bookmarkDaoProvider.overrideWithValue(bookmarkDao),
+          learningProgressNotifierProvider.overrideWith(
+            TestLearningProgressNotifier.new,
+          ),
+          listeningPracticeProvider.overrideWith(TestListeningPractice.new),
+          studyTimeServiceProvider.overrideWithValue(FakeStudyTimeService()),
+          speechRecordingControllerProvider.overrideWith(
+            TestSpeechRecordingController.new,
+          ),
+          analyticsOverride(),
+        ],
+      );
+      addTearDown(fullTextContainer.dispose);
+      listenToController(fullTextContainer);
+
+      await fullTextContainer
+          .read(listenAndRepeatControllerProvider.notifier)
+          .initialize(
+            mediaItem: model.AudioItem(
+              id: 'test-audio',
+              name: 'Test Audio',
+              audioPath: 'test-audio.mp3',
+              addedDate: DateTime(2026, 8, 3),
+            ),
+            allSentences: createTestSentences(count: 2),
+            isFreePlay: false,
+            scope: ListenAndRepeatScope.fullText,
+          );
+
+      final state = fullTextContainer.read(listenAndRepeatControllerProvider);
+      expect(state.totalSentences, 2);
+      expect(state.sentenceIndex, 0);
+      expect(state.hasVideo, isFalse);
+    });
+
     test('切句后旧回调被丢弃', () async {
       await controller.prepareSession(
         sentences: createTestSentences(count: 3),
@@ -365,22 +971,30 @@ void main() {
 
     test('播放中切换书签不应使当前播放回调失效', () async {
       final controlledEngine = _ControlledAudioEngine();
+      final bookmarkDao = _MockBookmarkDao();
+      when(
+        () => bookmarkDao.getByAudioAndSentence(any(), any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => bookmarkDao.removeBookmark(any(), any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bookmarkDao.removeBookmarks(any(), any()),
+      ).thenAnswer((_) async {});
+      when(() => bookmarkDao.addBookmark(any())).thenAnswer((_) async {});
       final controlledContainer = ProviderContainer(
         overrides: [
+          appDatabaseProvider.overrideWithValue(database),
           foregroundAudioEngineProvider.overrideWith(() => controlledEngine),
           audioEngineProvider.overrideWith(TestAudioEngine.new),
-          bookmarkDaoProvider.overrideWithValue(_MockBookmarkDao()),
+          bookmarkDaoProvider.overrideWithValue(bookmarkDao),
           speechRecordingControllerProvider.overrideWith(
             TestSpeechRecordingController.new,
           ),
         ],
       );
-      final bookmarkDao = controlledContainer.read(bookmarkDaoProvider);
-      when(
-        () => bookmarkDao.removeBookmark(any(), any()),
-      ).thenAnswer((_) async {});
-      when(() => bookmarkDao.addBookmark(any())).thenAnswer((_) async {});
       addTearDown(controlledContainer.dispose);
+      listenToController(controlledContainer);
 
       final controlledController = controlledContainer.read(
         listenAndRepeatControllerProvider.notifier,
@@ -413,6 +1027,8 @@ void main() {
       );
       expect(stateAfterToggle.flowToken, tokenBefore);
       expect(stateAfterToggle.currentSentenceBookmarked, isFalse);
+      verify(() => bookmarkDao.removeBookmarks('test-audio', {0})).called(1);
+      verifyNever(() => bookmarkDao.addBookmark(any()));
 
       controlledEngine.playCompleter?.complete();
       await startFuture;
@@ -492,6 +1108,68 @@ void main() {
       expect(readState().repeatIndex, 3);
       expect(readState().totalRepeats, 3);
     });
+  });
+
+  test('暂停跟读句子后重新播放从暂停位置继续', () async {
+    final audioEngine = _PauseResumeAudioEngine();
+    container.dispose();
+    container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        foregroundAudioEngineProvider.overrideWith(() => audioEngine),
+        audioEngineProvider.overrideWith(TestAudioEngine.new),
+        studyTimeServiceProvider.overrideWithValue(studyTimeService),
+        speechRecordingControllerProvider.overrideWith(
+          TestSpeechRecordingController.new,
+        ),
+      ],
+    );
+    listenToController(container);
+    controller = container.read(listenAndRepeatControllerProvider.notifier);
+    await controller.prepareSession(
+      sentences: createTestSentences(count: 2),
+      config: _testConfig(),
+    );
+
+    final playing = controller.startPlaying();
+    await Future<void>.delayed(Duration.zero);
+    audioEngine.position = const Duration(seconds: 2);
+    controller.pausePlayback();
+    await playing;
+
+    await controller.resumeOrReplayCurrentSentence();
+
+    expect(audioEngine.resumeStarts, [const Duration(seconds: 2)]);
+    expect(audioEngine.sentenceStarts, [Duration.zero]);
+    expect(readState().repeatIndex, 0);
+  });
+
+  test('句子自然播放完后再次播放仍从句首开始', () async {
+    final audioEngine = _PauseResumeAudioEngine(holdNextPlayback: false);
+    container.dispose();
+    container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        foregroundAudioEngineProvider.overrideWith(() => audioEngine),
+        audioEngineProvider.overrideWith(TestAudioEngine.new),
+        studyTimeServiceProvider.overrideWithValue(studyTimeService),
+        speechRecordingControllerProvider.overrideWith(
+          TestSpeechRecordingController.new,
+        ),
+      ],
+    );
+    listenToController(container);
+    controller = container.read(listenAndRepeatControllerProvider.notifier);
+    await controller.prepareSession(
+      sentences: createTestSentences(count: 2),
+      config: _testConfig(),
+    );
+
+    await controller.startPlaying();
+    await controller.resumeOrReplayCurrentSentence();
+
+    expect(audioEngine.sentenceStarts, [Duration.zero, Duration.zero]);
+    expect(audioEngine.resumeStarts, isEmpty);
   });
 
   group('便捷 getter', () {

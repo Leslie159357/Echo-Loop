@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../models/playback_settings.dart';
+import '../models/repeat_count_options.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -25,8 +26,6 @@ class LoopSettingsPopup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
     final settings = ref.watch(
       listeningPracticeProvider.select((s) => s.settings),
     );
@@ -36,7 +35,34 @@ class LoopSettingsPopup extends ConsumerWidget {
     );
     final controller = ref.read(listeningPracticeProvider.notifier);
 
-    void update(PlaybackSettings next) => controller.updateSettings(next);
+    return LoopSettingsContent(
+      settings: settings,
+      hasSentences: hasSentences,
+      onChanged: controller.updateSettings,
+    );
+  }
+}
+
+/// 可由不同播放控制器复用的循环设置内容。
+///
+/// 组件只负责整篇/单句循环的展示与交互，状态来源和持久化由调用方通过 [onChanged]
+/// 注入，确保音频与媒体随心听共用同一套次数、间隔和布局规则。
+class LoopSettingsContent extends StatelessWidget {
+  const LoopSettingsContent({
+    super.key,
+    required this.settings,
+    required this.hasSentences,
+    required this.onChanged,
+  });
+
+  final PlaybackSettings settings;
+  final bool hasSentences;
+  final ValueChanged<PlaybackSettings> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -54,10 +80,12 @@ class LoopSettingsPopup extends ConsumerWidget {
             enabled: settings.loopWhole,
             count: settings.wholeLoopCount,
             intervalSeconds: settings.wholeInterval.inSeconds,
-            onEnabledChanged: (v) => update(settings.copyWith(loopWhole: v)),
-            onCountChanged: (v) => update(settings.copyWith(wholeLoopCount: v)),
-            onIntervalChanged: (v) =>
-                update(settings.copyWith(wholeInterval: Duration(seconds: v))),
+            onEnabledChanged: (v) => onChanged(settings.copyWith(loopWhole: v)),
+            onCountChanged: (v) =>
+                onChanged(settings.copyWith(wholeLoopCount: v)),
+            onIntervalChanged: (v) => onChanged(
+              settings.copyWith(wholeInterval: Duration(seconds: v)),
+            ),
           ),
           // 单句循环（无字幕时隐藏，连同分隔线）
           if (hasSentences) ...[
@@ -76,10 +104,10 @@ class LoopSettingsPopup extends ConsumerWidget {
               count: settings.sentenceLoopCount,
               intervalSeconds: settings.sentenceInterval.inSeconds,
               onEnabledChanged: (v) =>
-                  update(settings.copyWith(loopSentence: v)),
+                  onChanged(settings.copyWith(loopSentence: v)),
               onCountChanged: (v) =>
-                  update(settings.copyWith(sentenceLoopCount: v)),
-              onIntervalChanged: (v) => update(
+                  onChanged(settings.copyWith(sentenceLoopCount: v)),
+              onIntervalChanged: (v) => onChanged(
                 settings.copyWith(sentenceInterval: Duration(seconds: v)),
               ),
             ),
@@ -112,7 +140,7 @@ class _LoopSection extends StatelessWidget {
   /// 该循环是否开启。
   final bool enabled;
 
-  /// 重复次数模型值：`0`=∞，`1-10`=有限。
+  /// 重复次数模型值：`0`=∞，`1-10/20/30/40/50`=有限。
   final int count;
 
   /// 间隔秒数（0-10）。
@@ -171,13 +199,13 @@ class _LoopSection extends StatelessWidget {
           child: enabled
               ? Column(
                   children: [
-                    // 重复次数：1-10 + ∞（末位）
+                    // 重复次数：1-10、20、30、40、50 + ∞（末位）
                     _LabeledSliderRow(
                       label: l10n.repeatCount,
                       sliderValue: _countToSlider(count),
-                      min: 1,
-                      max: 11,
-                      divisions: 10,
+                      min: 0,
+                      max: (kRepeatCountOptions.length - 1).toDouble(),
+                      divisions: kRepeatCountOptions.length - 1,
                       valueLabel: _countLabel(l10n, count),
                       onChanged: (pos) => onCountChanged(_sliderToCount(pos)),
                     ),
@@ -199,11 +227,17 @@ class _LoopSection extends StatelessWidget {
     );
   }
 
-  /// 次数模型值 → 滑块位置：∞(0) 放最右端 11。
-  static double _countToSlider(int count) => count == 0 ? 11 : count.toDouble();
+  /// 次数模型值 → 滑块位置；∞(0) 位于选项列表最右端。
+  static double _countToSlider(int count) {
+    final index = kRepeatCountOptions.indexOf(count);
+    return (index < 0 ? 0 : index).toDouble();
+  }
 
-  /// 滑块位置 → 次数模型值：11=∞(0)。
-  static int _sliderToCount(double pos) => pos >= 11 ? 0 : pos.round();
+  /// 滑块位置 → 次数模型值。
+  static int _sliderToCount(double pos) {
+    final index = pos.round().clamp(0, kRepeatCountOptions.length - 1);
+    return kRepeatCountOptions[index];
+  }
 
   /// 次数显示文案：∞ 或本地化「N 次 / Nx」。
   static String _countLabel(AppLocalizations l10n, int count) =>

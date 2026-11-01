@@ -1,13 +1,13 @@
 /// 合集来源。
 ///
-/// 决定 UI（官方 badge、菜单裁剪）与业务流程（enroll / remove / sync）。
-/// 字段值对齐 Drift `collections.source` 列的字符串：`local` / `official`。
+/// 决定 UI（社区 badge、菜单裁剪）与业务流程（enroll / remove / sync）。
+/// 字段值对齐 Drift `collections.source` 列的字符串：`local` / `community`。
 enum CollectionSource {
   /// 用户在本地自建的合集
   local,
 
-  /// 从后端加入的官方合集（需要 sync、按需下载音频、移除时彻底清空）
-  official,
+  /// 从后端加入的社区合集（需要 sync、按需下载媒体、移除时彻底清空）
+  community,
 
   /// 用户订阅的 Podcast RSS 合集（本机私有，不同步后端）
   podcast;
@@ -15,7 +15,8 @@ enum CollectionSource {
   /// 反序列化辅助；未知字符串回退到 [local] 避免炸。
   static CollectionSource fromString(String? raw) {
     return switch (raw) {
-      'official' => CollectionSource.official,
+      'community' => CollectionSource.community,
+      'official' => CollectionSource.community,
       'podcast' => CollectionSource.podcast,
       _ => CollectionSource.local,
     };
@@ -23,7 +24,7 @@ enum CollectionSource {
 
   String get storageValue => switch (this) {
     CollectionSource.local => 'local',
-    CollectionSource.official => 'official',
+    CollectionSource.community => 'community',
     CollectionSource.podcast => 'podcast',
   };
 }
@@ -32,9 +33,10 @@ enum CollectionSource {
 ///
 /// audioItemIds 已移至 Drift junction 表（`collection_audio_items`）。
 ///
-/// 官方合集字段（source=official 时有效）：
+/// 社区合集字段（source=community 时有效）：
 /// - [remoteId]：后端 collection.id（UUID）
 /// - [coverUrl] / [description]：后端 detail 返回的元信息
+/// - [coverUrlChina]：后端提供的中国 CDN 封面镜像地址
 /// - [deprecatedAt]：后端下架后的本地标记时间
 ///
 /// Podcast 合集字段（source=podcast 时有效）：
@@ -47,21 +49,31 @@ class Collection {
   final String id;
   final String name;
   final DateTime createdDate;
+  final DateTime updatedAt;
   final bool isPinned;
 
   /// 合集来源；默认 [CollectionSource.local] 兼容老数据
   final CollectionSource source;
 
-  /// 官方合集在后端的 UUID；source=local/podcast 时为 null
+  /// 社区合集在后端的 UUID；source=local/podcast 时为 null
   final String? remoteId;
 
-  /// 合集封面图；官方合集从后端获取；podcast 合集从 feed imageUrl 获取
+  /// 合集封面图；社区合集从后端获取；podcast 合集从 feed imageUrl 获取
   final String? coverUrl;
 
-  /// 合集描述；官方合集从后端获取；podcast 合集从 feed description 获取
+  /// 社区合集封面图的中国 CDN 镜像地址。
+  final String? coverUrlChina;
+
+  /// 合集描述；社区合集从后端获取；podcast 合集从 feed description 获取
   final String? description;
 
-  /// 官方合集被标记下架的时间；非 null 时 UI 置灰，sync 不再请求
+  /// 社区合集发布者昵称；旧数据中可能为空。
+  final String? authorNickname;
+
+  /// 社区合集发布日期；历史本地副本可能为空。
+  final DateTime? publishedAt;
+
+  /// 社区合集被标记下架的时间；非 null 时 UI 置灰，sync 不再请求
   final DateTime? deprecatedAt;
 
   // ── Podcast 字段 ──────────────────────────────────────────────────────
@@ -85,26 +97,30 @@ class Collection {
     required this.id,
     required this.name,
     required this.createdDate,
+    DateTime? updatedAt,
     this.isPinned = false,
     this.source = CollectionSource.local,
     this.remoteId,
     this.coverUrl,
+    this.coverUrlChina,
     this.description,
+    this.authorNickname,
+    this.publishedAt,
     this.deprecatedAt,
     this.podcastInputUrl,
     this.podcastFeedUrl,
     this.podcastMetaJson,
     this.podcastLastRefreshedAt,
     this.podcastLastRefreshError,
-  });
+  }) : updatedAt = updatedAt ?? createdDate;
 
-  /// 方便判断：是否为官方合集
-  bool get isOfficial => source == CollectionSource.official;
+  /// 方便判断：是否为社区合集。
+  bool get isCommunity => source == CollectionSource.community;
 
   /// 方便判断：是否为 podcast 合集
   bool get isPodcast => source == CollectionSource.podcast;
 
-  /// 方便判断：官方合集是否已下架
+  /// 方便判断：社区合集是否已下架
   bool get isDeprecated => deprecatedAt != null;
 
   /// 用于 SP → Drift 迁移时读取旧格式的 JSON
@@ -112,11 +128,26 @@ class Collection {
     id: json['id'],
     name: json['name'],
     createdDate: DateTime.parse(json['createdDate']),
+    updatedAt: json['updatedAt'] != null
+        ? DateTime.parse(json['updatedAt'] as String)
+        : DateTime.parse(json['createdDate']),
     isPinned: json['isPinned'] ?? json['isStarred'] ?? false,
     source: CollectionSource.fromString(json['source'] as String?),
     remoteId: json['remoteId'] as String?,
     coverUrl: json['coverUrl'] as String?,
+    coverUrlChina: switch (json['coverUrlChina']) {
+      final String url => url,
+      _ => null,
+    },
     description: json['description'] as String?,
+    authorNickname: switch (json['authorNickname']) {
+      final String nickname => nickname,
+      _ => null,
+    },
+    publishedAt: switch (json['publishedAt']) {
+      final String value => DateTime.tryParse(value),
+      _ => null,
+    },
     deprecatedAt: json['deprecatedAt'] != null
         ? DateTime.parse(json['deprecatedAt'] as String)
         : null,
@@ -138,11 +169,15 @@ class Collection {
     String? id,
     String? name,
     DateTime? createdDate,
+    DateTime? updatedAt,
     bool? isPinned,
     CollectionSource? source,
     String? remoteId,
     String? coverUrl,
+    String? coverUrlChina,
     String? description,
+    String? authorNickname,
+    DateTime? publishedAt,
     DateTime? deprecatedAt,
     String? podcastInputUrl,
     String? podcastFeedUrl,
@@ -155,11 +190,15 @@ class Collection {
       id: id ?? this.id,
       name: name ?? this.name,
       createdDate: createdDate ?? this.createdDate,
+      updatedAt: updatedAt ?? this.updatedAt,
       isPinned: isPinned ?? this.isPinned,
       source: source ?? this.source,
       remoteId: remoteId ?? this.remoteId,
       coverUrl: coverUrl ?? this.coverUrl,
+      coverUrlChina: coverUrlChina ?? this.coverUrlChina,
       description: description ?? this.description,
+      authorNickname: authorNickname ?? this.authorNickname,
+      publishedAt: publishedAt ?? this.publishedAt,
       deprecatedAt: deprecatedAt ?? this.deprecatedAt,
       podcastInputUrl: podcastInputUrl ?? this.podcastInputUrl,
       podcastFeedUrl: podcastFeedUrl ?? this.podcastFeedUrl,

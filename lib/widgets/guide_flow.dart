@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -156,6 +158,9 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
     if (!TickerMode.valuesOf(context).enabled) return;
     final showcase = _tryGetShowcase();
     if (showcase == null) return;
+    // 新手引导总开关关闭时，直接不启动任何 flow；纯 widget 测试若未注入
+    // SharedPreferences，也跳过引导，避免后台 tour 干扰与引导无关的断言。
+    if (!_canStartGuide()) return;
     if (ref.read(guideControllerProvider).isActive) return;
 
     final registry = ref.read(guideRegistryProvider);
@@ -185,6 +190,17 @@ class _GuideFlowSequenceHostState extends ConsumerState<GuideFlowSequenceHost> {
 
       showcase.startShowCase(keys);
       return;
+    }
+  }
+
+  bool _canStartGuide() {
+    try {
+      return ref.read(guideEnabledProvider);
+    } on UnimplementedError catch (error) {
+      if (error.toString().contains('sharedPreferencesProvider')) {
+        return false;
+      }
+      rethrow;
     }
   }
 
@@ -339,6 +355,7 @@ class GuideTarget extends StatelessWidget {
     final scheme = _GuideTooltipScheme.of(context);
     final isLastStep = _GuideFlowLastStepKeys.of(context).contains(step.key);
     final actionName = isLastStep ? l10n.guideDone : l10n.guideNext;
+    final skipName = l10n.guideSkip;
     // 两个 Showcase 分支共用同一份 padding，避免分支间漂移。
     final effectiveTargetPadding =
         targetPadding ?? _GuideTooltipStyle.targetPadding;
@@ -359,6 +376,8 @@ class GuideTarget extends StatelessWidget {
           title: step.hasTitle ? step.title : null,
           description: step.descriptionWidget!,
           actionName: actionName,
+          skipName: skipName,
+          onSkip: () => _skipAllGuides(context),
           scheme: scheme,
         ),
         child: Semantics(label: semanticsLabel, child: child),
@@ -401,6 +420,15 @@ class GuideTarget extends StatelessWidget {
       ),
       tooltipActions: [
         TooltipActionButton(
+          type: TooltipDefaultActionType.skip,
+          name: skipName,
+          onTap: () => _skipAllGuides(context),
+          backgroundColor: Colors.transparent,
+          textStyle: _GuideTooltipStyle.action(scheme.description),
+          borderRadius: _GuideTooltipStyle.actionRadius,
+          padding: _GuideTooltipStyle.actionPadding,
+        ),
+        TooltipActionButton(
           type: TooltipDefaultActionType.next,
           name: actionName,
           backgroundColor: scheme.actionBg,
@@ -414,6 +442,29 @@ class GuideTarget extends StatelessWidget {
   }
 }
 
+/// 用户点「跳过」：关闭之后所有页面的引导，并结束当前 tour。
+///
+/// 先写入开关（同步改内存状态），再 dismiss，保证 tour 结束时的状态回调
+/// 不会启动下一个 flow。无 ProviderScope / ShowcaseView 的环境（纯 widget
+/// 测试）时忽略，与 [_RichTooltipContainer] 的 next 处理保持一致。
+void _skipAllGuides(BuildContext context) {
+  try {
+    unawaited(
+      ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(guideControllerProvider.notifier).skipAll(),
+    );
+  } catch (_) {
+    // 无 ProviderScope（测试环境）时忽略
+  }
+  try {
+    ShowcaseView.get().dismiss();
+  } catch (_) {
+    // 无 ShowcaseView（测试环境）时忽略
+  }
+}
+
 /// 富文本 tooltip 容器，用于 [GuideStep.descriptionWidget] 场景。
 ///
 /// 完整复刻默认 tooltip 的视觉方案（surface + radius + padding + action button），
@@ -422,12 +473,16 @@ class _RichTooltipContainer extends StatelessWidget {
   final String? title;
   final Widget description;
   final String actionName;
+  final String skipName;
+  final VoidCallback onSkip;
   final _GuideTooltipScheme scheme;
 
   const _RichTooltipContainer({
     required this.title,
     required this.description,
     required this.actionName,
+    required this.skipName,
+    required this.onSkip,
     required this.scheme,
   });
 
@@ -461,26 +516,43 @@ class _RichTooltipContainer extends StatelessWidget {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: Material(
-                color: scheme.actionBg,
-                borderRadius: _GuideTooltipStyle.actionRadius,
-                child: InkWell(
-                  borderRadius: _GuideTooltipStyle.actionRadius,
-                  onTap: () {
-                    try {
-                      ShowcaseView.get().next();
-                    } catch (_) {
-                      // 无 ShowcaseView（测试环境）时忽略
-                    }
-                  },
-                  child: Padding(
-                    padding: _GuideTooltipStyle.actionPadding,
-                    child: Text(
-                      actionName,
-                      style: _GuideTooltipStyle.action(scheme.actionText),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    borderRadius: _GuideTooltipStyle.actionRadius,
+                    onTap: onSkip,
+                    child: Padding(
+                      padding: _GuideTooltipStyle.actionPadding,
+                      child: Text(
+                        skipName,
+                        style: _GuideTooltipStyle.action(scheme.description),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Material(
+                    color: scheme.actionBg,
+                    borderRadius: _GuideTooltipStyle.actionRadius,
+                    child: InkWell(
+                      borderRadius: _GuideTooltipStyle.actionRadius,
+                      onTap: () {
+                        try {
+                          ShowcaseView.get().next();
+                        } catch (_) {
+                          // 无 ShowcaseView（测试环境）时忽略
+                        }
+                      },
+                      child: Padding(
+                        padding: _GuideTooltipStyle.actionPadding,
+                        child: Text(
+                          actionName,
+                          style: _GuideTooltipStyle.action(scheme.actionText),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

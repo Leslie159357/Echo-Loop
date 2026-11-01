@@ -10,21 +10,22 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_io/io.dart';
 
-import '../analytics/geo_interceptor.dart';
 import '../config/api_config.dart';
-import '../features/custom_api/custom_api_config.dart';
+import '../features/auth/providers/auth_providers.dart';
 import '../providers/package_info_provider.dart';
 import 'ai_http_client_adapter.dart';
 import 'app_logger.dart';
 import 'backend_dio.dart';
-import 'custom_ai_service.dart';
 import 'dictionary/dictionary_source.dart';
 import 'ndjson_object_stream.dart';
 import 'ndjson_stream.dart';
+import 'supabase_token_coordinator.dart';
+import 'runtime_endpoint_router.dart';
 import '../models/sentence_ai_result.dart';
 import '../models/sense_group_result.dart';
+import '../models/retell_review_evaluation.dart';
 import '../models/dictionary/dictionary_entry.dart';
 
 part 'sentence_ai_api_client.g.dart';
@@ -104,13 +105,8 @@ class SenseGroupsStreamException implements Exception {
 }
 
 /// AI 句子翻译/解析 API 客户端
-///
-/// 当 [useCustomApi] 为 true 时，所有 AI 操作委托给 [CustomAiService]，
-/// 无需 accessToken，直接调用用户配置的 OpenAI 兼容 API。
 class SentenceAiApiClient {
   final Dio _dio;
-  final CustomApiConfig? _customConfig;
-  final CustomAiService? _customAiService;
   final void Function(String message) _streamLogPrint;
 
   /// [appVersion] 随请求以 `x-app-version` 上报（版本灰度预留），可为 null。
@@ -118,11 +114,14 @@ class SentenceAiApiClient {
   SentenceAiApiClient({
     required String baseUrl,
     String? appVersion,
+    SupabaseTokenCoordinator? tokenCoordinator,
+    RuntimeEndpointRouter? endpointRouter,
     bool http2Enabled = aiHttp2EnabledByDefault,
     void Function(String message)? streamLogPrint,
-    CustomApiConfig? customConfig,
-  }) : _dio = createBackendDio(
+  }) : _dio = createAuthenticatedBackendDio(
+         tokenCoordinator: tokenCoordinator,
          baseUrl: baseUrl,
+         endpointRouter: endpointRouter,
          appVersion: appVersion,
          connectTimeout: const Duration(seconds: 15),
          // h2 下只约束「到首个响应头」（后端 NDJSON 响应头立即 flush，30s 极充裕）；
@@ -131,19 +130,11 @@ class SentenceAiApiClient {
          apiLogTag: 'AI-API',
        ),
        _streamLogPrint =
-           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = customConfig,
-       _customAiService = (customConfig != null && customConfig.enabled)
-           ? CustomAiService(customConfig)
-           : null {
+           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)) {
     configureAiHttpClientAdapter(
       _dio,
       baseUrl: baseUrl,
       http2Enabled: http2Enabled,
-    );
-    // 异步添加 GeoInterceptor（SharedPreferences 在 main() 中已初始化，几乎同步返回）
-    SharedPreferences.getInstance().then(
-      (prefs) => _dio.interceptors.add(GeoInterceptor(prefs)),
     );
   }
 
@@ -152,9 +143,7 @@ class SentenceAiApiClient {
     this._dio, {
     void Function(String message)? streamLogPrint,
   }) : _streamLogPrint =
-           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message)),
-       _customConfig = null,
-       _customAiService = null;
+           streamLogPrint ?? ((message) => AppLogger.log('AI-API', message));
 
   /// 请求公共 headers（仅测试用，验证平台/版本标识已随请求携带）。
   @visibleForTesting
@@ -178,17 +167,6 @@ class SentenceAiApiClient {
     String? targetLanguage,
     CancelToken? cancelToken,
   }) async* {
-    // 自定义 API 启用时委托给 CustomAiService
-    if (useCustomApi && _customAiService != null) {
-      yield* _customAiService!.translateStream(
-        text,
-        previousText: previousText,
-        nextText: nextText,
-        targetLanguage: targetLanguage,
-        cancelToken: cancelToken,
-      );
-      return;
-    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/translate',
       data: {
@@ -265,15 +243,6 @@ class SentenceAiApiClient {
     String? targetLanguage,
     CancelToken? cancelToken,
   }) async* {
-    // 自定义 API 启用时委托给 CustomAiService
-    if (useCustomApi && _customAiService != null) {
-      yield* _customAiService!.analyzeStream(
-        text,
-        targetLanguage: targetLanguage,
-        cancelToken: cancelToken,
-      );
-      return;
-    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/analyze',
       data: {
@@ -359,25 +328,14 @@ class SentenceAiApiClient {
     required String accessToken,
     String? targetLanguage,
     CancelToken? cancelToken,
-  }) async* {
-    // 自定义 API 启用时委托给 CustomAiService
-    if (useCustomApi && _customAiService != null) {
-      yield* _customAiService!.lookupWordStream(
-        word,
-        targetLanguage: targetLanguage,
-        cancelToken: cancelToken,
-      );
-      return;
-    }
-    yield* _streamDictionaryFrames(
-      '/api/v1/stream/lookup-word',
-      word,
-      fromJson: DictionaryEntry.fromJson,
-      accessToken: accessToken,
-      targetLanguage: targetLanguage,
-      cancelToken: cancelToken,
-    );
-  }
+  }) => _streamDictionaryFrames(
+    '/api/v1/stream/lookup-word',
+    word,
+    fromJson: DictionaryEntry.fromJson,
+    accessToken: accessToken,
+    targetLanguage: targetLanguage,
+    cancelToken: cancelToken,
+  );
 
   /// AI 词典释义（多词/短语，流式）
   ///
@@ -402,25 +360,14 @@ class SentenceAiApiClient {
     required String accessToken,
     String? targetLanguage,
     CancelToken? cancelToken,
-  }) async* {
-    // 自定义 API 启用时委托给 CustomAiService
-    if (useCustomApi && _customAiService != null) {
-      yield* _customAiService!.lookupPhraseStream(
-        phrase,
-        targetLanguage: targetLanguage,
-        cancelToken: cancelToken,
-      );
-      return;
-    }
-    yield* _streamDictionaryFrames(
-      '/api/v1/stream/lookup-phrase',
-      phrase,
-      fromJson: MultiWordDictionaryEntry.fromJson,
-      accessToken: accessToken,
-      targetLanguage: targetLanguage,
-      cancelToken: cancelToken,
-    );
-  }
+  }) => _streamDictionaryFrames(
+    '/api/v1/stream/lookup-phrase',
+    phrase,
+    fromJson: MultiWordDictionaryEntry.fromJson,
+    accessToken: accessToken,
+    targetLanguage: targetLanguage,
+    cancelToken: cancelToken,
+  );
 
   /// 流式查词通用实现：发起 `ResponseType.stream` 请求，逐帧解析 NDJSON。
   ///
@@ -537,14 +484,6 @@ class SentenceAiApiClient {
     required String accessToken,
     CancelToken? cancelToken,
   }) async* {
-    // 自定义 API 启用时委托给 CustomAiService
-    if (useCustomApi && _customAiService != null) {
-      yield* _customAiService!.senseGroupsStream(
-        text,
-        cancelToken: cancelToken,
-      );
-      return;
-    }
     final response = await _dio.post<ResponseBody>(
       '/api/v1/stream/sense-groups',
       data: {'text': text},
@@ -600,24 +539,97 @@ class SentenceAiApiClient {
     }
   }
 
-  /// 释放资源
-  bool get useCustomApi => _customConfig != null && _customConfig!.enabled;
-
-  Future<String> _customTranslate(String text, String targetLanguage) async {
-    final response = await Dio().post(
-      _customConfig!.baseUrl,
-      data: {'text': text, 'targetLanguage': targetLanguage},
-      options: Options(headers: {'Content-Type': 'application/json'}, receiveTimeout: const Duration(seconds: 30)),
+  /// 复述效果 AI 评估（流式）。
+  ///
+  /// 调用后端 `POST /api/v1/stream/evaluate-review`（需登录态，按后端
+  /// `retell_review` 口径计量）。错误处理同 [senseGroupsStream]：401/402 等
+  /// 非 200 抛带状态码的 [DioException]，由 controller 映射成登录 / 额度态。
+  Stream<RetellReviewStreamFrame> evaluateReviewStream({
+    required File audioFile,
+    required String originalText,
+    required String targetLanguage,
+    required String accessToken,
+    CancelToken? cancelToken,
+  }) async* {
+    final response = await _dio.post<ResponseBody>(
+      '/api/v1/stream/evaluate-review',
+      data: FormData.fromMap({
+        'file': await MultipartFile.fromFile(
+          audioFile.path,
+          filename: 'retell-review.m4a',
+        ),
+        'originalText': originalText,
+        'language': 'en',
+        'targetLanguage': targetLanguage,
+      }),
+      options: Options(
+        responseType: ResponseType.stream,
+        validateStatus: (_) => true,
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ),
+      cancelToken: cancelToken,
     );
-    if (response.statusCode == 200 && response.data != null) {
-      if (response.data is Map && response.data['translation'] != null) {
-        return response.data['translation'] as String;
-      }
-      if (response.data is String) return response.data as String;
+
+    final body = response.data;
+    final status = response.statusCode ?? 0;
+    if (body == null) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        type: DioExceptionType.badResponse,
+      );
     }
-    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
+    if (status != 200) {
+      final errorMap = await _decodeErrorBody(body);
+      _logStreamHttpError(
+        response.requestOptions,
+        status: status,
+        errorMap: errorMap,
+      );
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: Response(
+          requestOptions: response.requestOptions,
+          statusCode: status,
+          data: errorMap,
+        ),
+        type: DioExceptionType.badResponse,
+      );
+    }
+
+    try {
+      // `meta` 首帧（转录文本）在转录完成、AI 尚未产出任何文本时就到达。把它改写成
+      // 一个 `transcript` 叶子的 ops 帧，让通用累积层照常 yield 一帧：UI 因此能在
+      // 等 AI 输出期间先显示转录，而不是一直停在骨架态。
+      final frames = accumulateNdjsonObject<RetellReviewEvaluation>(
+        _decodeLoggedNdjson(body, response.requestOptions).map((event) {
+          final meta = event['meta'];
+          if (meta is! Map) return event;
+          final transcript = meta['transcript'];
+          if (transcript is! String) return event;
+          return <String, dynamic>{
+            'ops': [
+              {
+                'p': ['transcript'],
+                'v': transcript,
+              },
+            ],
+          };
+        }),
+        fromJson: RetellReviewEvaluation.fromJson,
+      );
+      await for (final frame in frames) {
+        yield RetellReviewStreamFrame(
+          evaluation: frame.value,
+          isFinal: frame.isFinal,
+        );
+      }
+    } on NdjsonStreamException {
+      throw const RetellReviewStreamException();
+    }
   }
 
+  /// 释放资源
   void dispose() => _dio.close();
 
   /// 流式响应体只能被消费一次；这里在 NDJSON 解码入口旁路打印原始帧，
@@ -649,11 +661,11 @@ class SentenceAiApiClient {
 /// AI API 客户端单例 Provider
 @Riverpod(keepAlive: true)
 SentenceAiApiClient sentenceAiApiClient(Ref ref) {
-  final customCfg = ref.watch(customApiConfigNotifierProvider);
   final client = SentenceAiApiClient(
     baseUrl: apiBaseUrl,
+    endpointRouter: runtimeEndpointRouter,
     appVersion: readAppVersion(ref),
-    customConfig: customCfg.enabled ? customCfg : null,
+    tokenCoordinator: ref.read(supabaseTokenCoordinatorProvider),
   );
   ref.onDispose(client.dispose);
   return client;

@@ -3,7 +3,7 @@
 /// 根据学习进度显示不同状态：
 /// - 未学习：音频图标 + 灰色背景
 /// - 进行中：环形进度 + 蓝色音频图标
-/// - 已完成：满环 + 绿色对勾
+/// - 已完成：绿色满环 + 对应的音频或视频图标
 library;
 
 import 'package:flutter/material.dart';
@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/learning_progress.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import 'media_type_icon.dart';
 
 /// 环形学习进度图标组件
 ///
@@ -29,16 +30,25 @@ class LearningProgressIcon extends ConsumerWidget {
   /// 环形进度条宽度
   final double strokeWidth;
 
+  /// 是否为视频条目：为 true 时中心媒体图标用视频图标（而非音频波形）。
+  final bool isVideo;
+
   const LearningProgressIcon({
     super.key,
     this.progress,
     this.size = 40.0,
     this.iconSize = 20.0,
     this.strokeWidth = 3.0,
+    this.isVideo = false,
   });
 
-  /// 已完成状态的绿色
+  /// 已完成状态的绿色。
   static const completedColor = Color(0xFF4CAF50);
+
+  /// 构建中心媒体图标：视频使用视频图标，音频使用波形图标。
+  Widget _mediaGlyph(Color color) {
+    return MediaTypeIcon(isVideo: isVideo, size: iconSize, color: color);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -62,11 +72,8 @@ class LearningProgressIcon extends ConsumerWidget {
           shape: BoxShape.circle,
           color: theme.colorScheme.surfaceContainerHighest,
         ),
-        child: Icon(
-          Icons.graphic_eq,
-          size: iconSize,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
+        alignment: Alignment.center,
+        child: _mediaGlyph(theme.colorScheme.onSurfaceVariant),
       );
     }
 
@@ -88,7 +95,8 @@ class LearningProgressIcon extends ConsumerWidget {
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
               ),
             ),
-            Icon(Icons.check, size: iconSize, color: completedColor),
+            // 外圈表达完成状态；中心媒体图标沿用普通任务的主色，保持媒体类型清晰。
+            _mediaGlyph(theme.colorScheme.primary),
           ],
         ),
       );
@@ -136,11 +144,7 @@ class LearningProgressIcon extends ConsumerWidget {
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
             ),
           ),
-          Icon(
-            Icons.graphic_eq,
-            size: iconSize,
-            color: theme.colorScheme.primary,
-          ),
+          _mediaGlyph(theme.colorScheme.primary),
         ],
       ),
     );

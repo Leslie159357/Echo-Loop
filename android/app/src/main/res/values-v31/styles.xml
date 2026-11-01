@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 使用与 Flutter 启动页相同视觉尺寸的 density-independent 图标。 -->
+    <style name="LaunchTheme" parent="@style/Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/startup_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/startup_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/NormalTheme</item>
+    </style>
+</resources>

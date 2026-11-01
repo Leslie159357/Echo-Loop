@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.25
+version: 1.0.45
 
 environment:
   sdk: ^3.9.2
@@ -39,11 +39,15 @@ dependencies:
   collection: ^1.19.0
   font_awesome_flutter: ^11.0.0
   just_audio: ^0.10.5
+  media_kit: 1.2.6
+  media_kit_video: 2.0.1
+  # 全 App 统一 video 版 libs，禁止与 media_kit_libs_audio 混用。
+  media_kit_libs_video: 1.0.7
   flutter_riverpod: ^2.6.1
   riverpod_annotation: ^2.6.1
   audio_session: ^0.2.2
   audio_service: ^0.18.18
-  subtitle: ^0.1.4
+  subtitle: ^0.2.0
   file_picker: ^10.3.3
   audio_video_progress_bar: ^2.0.3
   path_provider: ^2.1.1
@@ -54,10 +58,12 @@ dependencies:
   ffi: ^2.1.0
   intl: ^0.20.2
   clock: ^1.1.1
+  fsrs: 2.0.1
   drift: ^2.25.0
   sqlite3_flutter_libs: ^0.5.31
   scrollable_positioned_list: ^0.3.8
   package_info_plus: ^9.0.0
+  in_app_review: ^2.0.12
   universal_io: ^2.2.2
   go_router: ^17.1.0
   flutter_local_notifications: ^19.4.2
@@ -65,6 +71,7 @@ dependencies:
   flutter_timezone: ^4.1.1
   crypto: ^3.0.7
   dio: ^5.9.0
+  background_downloader: ^9.5.8
   dio_http2_adapter: ^2.7.1
   # 网络图片磁盘缓存：官方合集封面冷启动后无需重下，离线浏览有图。
   # 用 JsonCacheInfoRepository 替代默认 sqflite 仓库，避免 sqflite 全局 factory 警告
@@ -74,6 +81,9 @@ dependencies:
   flutter_tts: ^4.2.0
   wakelock_plus: ^1.4.0
   url_launcher: ^6.3.1
+  app_links: ^7.0.0
+  # LLM 流式 markdown 渲染（专为未闭合/流式 markdown 设计；纯 Dart）。
+  gpt_markdown: ^1.1.8
   flutter_inappwebview: ^6.1.5
   permission_handler: ^12.0.1
   uuid: ^4.5.3
@@ -86,7 +96,7 @@ dependencies:
   share_plus: ^10.1.4
   table_calendar: ^3.2.0
   timeago: ^3.7.1
-  sherpa_onnx: ^1.12.36
+  sherpa_onnx: ^1.13.4
   showcaseview: ^5.0.1
   # 认证：复用 fluency-frontend 的 Supabase 项目（auth.users 共享），
   # mobile 端走 native ID Token 流（Apple/Google）+ 邮箱密码。详见 docs / plan。
@@ -107,6 +117,13 @@ dependencies:
   printing: ^5.14.2
   purchases_flutter: ^10.3.0
   in_app_purchase: ^3.3.0
+  charset_converter: ^2.4.0
+  flutter_svg: ^2.3.0
+  fl_chart: ^1.2.0
+  lottie: ^3.3.3
+  # 持久化文件日志：使用成熟的大小轮转输出，避免手写截断逻辑。
+  logger: ^2.7.0
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:
@@ -131,7 +148,13 @@ dev_dependencies:
   wakelock_plus_platform_interface: ^1.3.0
   # 供 app_update_launcher_test 注入假 url_launcher 平台实现
   url_launcher_platform_interface: ^2.3.2
+  # 供日志页测试注入假 path_provider 平台实现
+  path_provider_platform_interface: ^2.1.2
   plugin_platform_interface: ^2.1.8
+
+dependency_overrides:
+  charset_converter:
+    path: third_party/charset_converter
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -152,8 +175,47 @@ flutter:
     # ic_stat_logo 仅作 Android 通知图标源文件）不进包；订阅页透明底品牌图单独显式打包。
     - assets/icon/app-icon-1024.png
     - assets/icon/app-icon-1024-alpha.png
+    - assets/icon/app-icon.svg
+    - assets/icon/apple-podcasts.svg
+    - assets/icon/artist-palette.svg
+    - assets/icon/baidu-netdisk.svg
+    - assets/icon/bar-chart.svg
+    - assets/icon/bell.svg
+    - assets/icon/book.svg
+    - assets/icon/book-shelf.svg
+    - assets/icon/reading.svg
+    - assets/icon/refresh.svg
+    - assets/icon/check-circle-3.svg
+    - assets/icon/calendar-2.svg
+    - assets/icon/china_flag.svg
+    - assets/icon/diamond.svg
+    - assets/icon/diskette.svg
+    - assets/icon/documents.svg
+    - assets/icon/eye.svg
+    - assets/icon/feedback.svg
+    - assets/icon/help.svg
+    - assets/icon/group.svg
+    - assets/icon/locale-1.svg
+    - assets/icon/locale.svg
+    - assets/icon/lock.svg
+    - assets/icon/microphone.svg
+    - assets/icon/account-1.svg
+    - assets/icon/play-pause.svg
+    - assets/icon/speak.svg
+    - assets/icon/speaker.svg
+    - assets/icon/text-decrease.svg
+    - assets/icon/text-increase.svg
+    - assets/icon/text-size.svg
+    - assets/icon/trash-bin.svg
+    - assets/icon/unlock.svg
+    # 视频条目左侧媒体图标（资源库卡片区分音/视频）
+    - assets/icon/video-2.svg
     # PDF 导出品牌角标（96px 小图，1024 原图 190KB 直接嵌会撑大每份 PDF）
     - assets/icon/app-icon-96.png
+    # chatbot 气泡操作栏图标（复刻 ChatGPT 线条风格，currentColor 随主题着色）
+    - assets/icon/chat/
+    - assets/animation/confetti.lottie
+    - assets/animation/done-check.lottie
     # 后台静音保活轨：停顿期间循环播放以保持 iOS 音频会话活跃（见 background_audio_handler）
     - assets/audio/silence_2s.m4a
     # PDF 导出内嵌字体（TrueType 轮廓；pdf 包不支持 CFF/OTF，也无法读系统 CJK 字体）。

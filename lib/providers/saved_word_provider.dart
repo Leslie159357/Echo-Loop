@@ -13,6 +13,7 @@ import '../models/dict_entry.dart';
 import '../services/dictionary_service.dart';
 import '../utils/saved_text_index.dart';
 import 'notification_permission_provider.dart';
+import 'favorite_vocabulary_lifecycle_provider.dart';
 import 'saved_sense_group_provider.dart';
 
 part 'saved_word_provider.g.dart';
@@ -32,8 +33,7 @@ class SavedWordList extends _$SavedWordList {
   ///
   /// [word] 为归一化后的**表面词形**（用户实际选中/查询的词），非词干/原形——
   /// 正文收藏下划线按表面词形匹配（见 [SavedTextIndex]），保存原形会导致
-  /// 正文无法标记。词形还原仅是本地词典检索时的回退，不影响收藏内容；
-  /// 收藏列表展示释义时经 [DictionaryService.lookupAll] 的原形回退仍能命中。
+  /// 正文无法标记。本地词典也仅按该词形精确匹配，避免释义和发音错位。
   /// 可选提供来源音频和句子信息。
   Future<void> saveWord({
     required String word,
@@ -43,15 +43,16 @@ class SavedWordList extends _$SavedWordList {
     int? sentenceStartMs,
     int? sentenceEndMs,
   }) async {
-    final dao = ref.read(savedWordDaoProvider);
-    await dao.saveWord(
-      word: word,
-      audioItemId: audioItemId,
-      sentenceIndex: sentenceIndex,
-      sentenceText: sentenceText,
-      sentenceStartMs: sentenceStartMs,
-      sentenceEndMs: sentenceEndMs,
-    );
+    await ref
+        .read(favoriteVocabularyLifecycleProvider)
+        .saveWord(
+          word: word,
+          audioItemId: audioItemId,
+          sentenceIndex: sentenceIndex,
+          sentenceText: sentenceText,
+          sentenceStartMs: sentenceStartMs,
+          sentenceEndMs: sentenceEndMs,
+        );
 
     // 埋点：收藏单词
     ref
@@ -71,10 +72,8 @@ class SavedWordList extends _$SavedWordList {
   }
 
   /// 取消收藏单词
-  Future<void> removeWord(String word) async {
-    final dao = ref.read(savedWordDaoProvider);
-    await dao.removeWord(word);
-  }
+  Future<void> removeWord(String word) =>
+      ref.read(favoriteVocabularyLifecycleProvider).removeWord(word);
 }
 
 /// 监听已收藏单词的 key 集合（用于正文收藏词下划线标记）
@@ -122,11 +121,4 @@ Future<Map<String, DictEntry>> savedWordDictEntries(ref) async {
   if (wordsAsync.isEmpty) return {};
   final wordStrings = wordsAsync.map((w) => w.word).toList();
   return DictionaryService.instance.lookupAll(wordStrings);
-}
-
-/// 监听单个单词是否已收藏
-@riverpod
-Stream<bool> isWordSaved(ref, String word) {
-  final dao = ref.watch(savedWordDaoProvider);
-  return dao.watchIsWordSaved(word);
 }

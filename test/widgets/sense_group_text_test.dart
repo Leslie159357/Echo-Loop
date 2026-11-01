@@ -35,6 +35,46 @@ void main() {
       SpeechTranscriptSegment(text: text, isMatched: matched);
 
   group('SenseGroupText — 意群模式单词高亮', () {
+    testWidgets('句尾数字时间格式的词也能显示播放高亮', (tester) async {
+      final cases = [
+        (chunk: 'when school finishes at 02:30,', wordIndex: 4, word: '02:30'),
+        (chunk: 'and will go until 03:30.', wordIndex: 4, word: '03:30'),
+      ];
+
+      for (final testCase in cases) {
+        await tester.pumpWidget(
+          createTestApp(
+            SenseGroupText(
+              chunks: [testCase.chunk],
+              timings: const [],
+              onTapGroup: (_) {},
+              activeWordIndex: testCase.wordIndex,
+            ),
+          ),
+        );
+
+        final highlightedSpans = <String>[];
+        for (final richText in tester.widgetList<RichText>(
+          find.byType(RichText),
+        )) {
+          richText.text.visitChildren((child) {
+            if (child is TextSpan &&
+                child.style?.backgroundColor != null &&
+                (child.text ?? '').contains(testCase.word)) {
+              highlightedSpans.add(child.text!.trim());
+            }
+            return true;
+          });
+        }
+
+        expect(
+          highlightedSpans.any((span) => span.startsWith(testCase.word)),
+          isTrue,
+          reason: '${testCase.word} should be highlighted as the active token',
+        );
+      }
+    });
+
     testWidgets('匹配单词染绿，未匹配单词不染绿', (tester) async {
       // 原文 "Hello brave world" → 意群拆为 ["Hello brave", "world"]
       // 比对结果：Hello 匹配、brave 未匹配、world 匹配

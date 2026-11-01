@@ -243,6 +243,39 @@ class $AudioItemsTable extends AudioItems
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _communityUnavailableAtMeta =
+      const VerificationMeta('communityUnavailableAt');
+  @override
+  late final GeneratedColumn<DateTime> communityUnavailableAt =
+      GeneratedColumn<DateTime>(
+        'community_unavailable_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _difficultyMeta = const VerificationMeta(
+    'difficulty',
+  );
+  @override
+  late final GeneratedColumn<String> difficulty = GeneratedColumn<String>(
+    'difficulty',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _importSourceTypeMeta = const VerificationMeta(
     'importSourceType',
   );
@@ -298,17 +331,6 @@ class $AudioItemsTable extends AudioItems
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _podcastDescriptionMeta =
-      const VerificationMeta('podcastDescription');
-  @override
-  late final GeneratedColumn<String> podcastDescription =
-      GeneratedColumn<String>(
-        'podcast_description',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
   static const VerificationMeta _podcastImageUrlMeta = const VerificationMeta(
     'podcastImageUrl',
   );
@@ -331,6 +353,28 @@ class $AudioItemsTable extends AudioItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _podcastTranscriptUrlMeta =
+      const VerificationMeta('podcastTranscriptUrl');
+  @override
+  late final GeneratedColumn<String> podcastTranscriptUrl =
+      GeneratedColumn<String>(
+        'podcast_transcript_url',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _podcastTranscriptFormatMeta =
+      const VerificationMeta('podcastTranscriptFormat');
+  @override
+  late final GeneratedColumn<String> podcastTranscriptFormat =
+      GeneratedColumn<String>(
+        'podcast_transcript_format',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -354,14 +398,18 @@ class $AudioItemsTable extends AudioItems
     syncStatus,
     remoteAudioId,
     originalDate,
+    communityUnavailableAt,
+    difficulty,
+    description,
     importSourceType,
     importSourceUrl,
     podcastEpisodeGuid,
     podcastEnclosureUrl,
     podcastEnclosureType,
-    podcastDescription,
     podcastImageUrl,
     podcastLink,
+    podcastTranscriptUrl,
+    podcastTranscriptFormat,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -542,6 +590,30 @@ class $AudioItemsTable extends AudioItems
         ),
       );
     }
+    if (data.containsKey('community_unavailable_at')) {
+      context.handle(
+        _communityUnavailableAtMeta,
+        communityUnavailableAt.isAcceptableOrUnknown(
+          data['community_unavailable_at']!,
+          _communityUnavailableAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('difficulty')) {
+      context.handle(
+        _difficultyMeta,
+        difficulty.isAcceptableOrUnknown(data['difficulty']!, _difficultyMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
     if (data.containsKey('import_source_type')) {
       context.handle(
         _importSourceTypeMeta,
@@ -587,15 +659,6 @@ class $AudioItemsTable extends AudioItems
         ),
       );
     }
-    if (data.containsKey('podcast_description')) {
-      context.handle(
-        _podcastDescriptionMeta,
-        podcastDescription.isAcceptableOrUnknown(
-          data['podcast_description']!,
-          _podcastDescriptionMeta,
-        ),
-      );
-    }
     if (data.containsKey('podcast_image_url')) {
       context.handle(
         _podcastImageUrlMeta,
@@ -611,6 +674,24 @@ class $AudioItemsTable extends AudioItems
         podcastLink.isAcceptableOrUnknown(
           data['podcast_link']!,
           _podcastLinkMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_transcript_url')) {
+      context.handle(
+        _podcastTranscriptUrlMeta,
+        podcastTranscriptUrl.isAcceptableOrUnknown(
+          data['podcast_transcript_url']!,
+          _podcastTranscriptUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('podcast_transcript_format')) {
+      context.handle(
+        _podcastTranscriptFormatMeta,
+        podcastTranscriptFormat.isAcceptableOrUnknown(
+          data['podcast_transcript_format']!,
+          _podcastTranscriptFormatMeta,
         ),
       );
     }
@@ -707,6 +788,18 @@ class $AudioItemsTable extends AudioItems
         DriftSqlType.dateTime,
         data['${effectivePrefix}original_date'],
       ),
+      communityUnavailableAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}community_unavailable_at'],
+      ),
+      difficulty: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}difficulty'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
       importSourceType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}import_source_type'],
@@ -727,10 +820,6 @@ class $AudioItemsTable extends AudioItems
         DriftSqlType.string,
         data['${effectivePrefix}podcast_enclosure_type'],
       ),
-      podcastDescription: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}podcast_description'],
-      ),
       podcastImageUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}podcast_image_url'],
@@ -738,6 +827,14 @@ class $AudioItemsTable extends AudioItems
       podcastLink: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}podcast_link'],
+      ),
+      podcastTranscriptUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_transcript_url'],
+      ),
+      podcastTranscriptFormat: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}podcast_transcript_format'],
       ),
     );
   }
@@ -755,10 +852,10 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
   /// 音频名称
   final String name;
 
-  /// 音频文件相对路径。
+  /// 主媒体文件相对路径（音频或视频，音频落 `audios/`、视频落 `videos/`）。
   ///
-  /// NULL 表示音频尚未就绪（官方合集加入后、下载完成前）；非 NULL 表示文件已在本地。
-  /// 是「音频是否可用」的单一真实来源。
+  /// NULL 表示媒体尚未就绪（社区合集加入后、下载完成前）；非 NULL 表示文件已在本地。
+  /// 是「媒体是否可用」的单一真实来源，同时是媒体类型判定依据（按扩展名派生 video/audio）。
   final String? audioPath;
 
   /// 字幕文件相对路径。
@@ -784,19 +881,21 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
   /// 字幕来源：0=local, 1=ai, null=无字幕
   final int? transcriptSource;
 
-  /// 音频文件 SHA256 指纹（缓存，避免重复计算）
+  /// 媒体文件 SHA256 指纹（缓存，避免重复计算）。纯文件哈希，音视频通用。
   final String? audioSha256;
 
-  /// 转码前原始音频 SHA256 指纹。
+  /// 转码前原始媒体 SHA256 指纹。
   ///
   /// AI 转录优先用该值作为后端字幕缓存 key；为空时回退 [audioSha256]。
+  /// 视频不转码（保留原始文件），此值等同原始文件指纹，音视频通用。
   final String? originalAudioSha256;
 
   /// AI 转录使用的语言（'en' / 'multi'）
   final String? transcriptLanguage;
 
-  /// 音频内容有效性状态：0=ok, 1=suspectEmpty, null=未检测。
-  /// 新下载时检测一次（解码失败或全程静音判 suspectEmpty）。
+  /// 媒体内容有效性状态：0=ok, 1=damaged, 2=silent, null=未检测。
+  /// 新下载时检测一次（短解码失败判 damaged，可解码但静音判 silent）。
+  /// 视频条目跳过检测，恒为 null（见 `audio_library_provider.checkAudioContent`）。
   final int? audioContentStatus;
 
   /// 最后修改时间
@@ -818,17 +917,30 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
   /// 同步状态：0=synced, 1=pendingUpload, 2=pendingDelete
   final int syncStatus;
 
-  /// 官方合集中该音频在后端的 UUID；仅官方合集音频有值。
+  /// 社区合集中该音频在后端的 UUID；仅社区合集音频有值。
   /// 用于同步比对（通过 remoteAudioId 反查本地行）。
   final String? remoteAudioId;
 
-  /// 原始发布/播出日期。官方合集音频从后端 catalog 同步（如 VOA 某期的播出日期）；
-  /// 用户自建音频保持 NULL。用于官方合集详情页「最早/最新发布」排序。
+  /// 原始发布/播出日期。社区合集音频从后端 catalog 同步（如 VOA 某期的播出日期）；
+  /// 用户自建音频保持 NULL。用于社区合集详情页「最早/最新发布」排序。
   final DateTime? originalDate;
+
+  /// 社区合集文件从服务端消失的时间。
+  ///
+  /// 非 NULL 时表示该条目仍保留本地学习记录，但远端文件已不可用；
+  /// 文件重新出现在 v2 列表后由同步清空。
+  final DateTime? communityUnavailableAt;
+
+  /// 社区合集文件由服务端维护的 CEFR 难度（A1–C2）；普通媒体保持 NULL。
+  final String? difficulty;
+
+  /// 文件描述。社区合集文件来自 v2 合集接口，播客单集来自 RSS item description；
+  /// 用户导入音频保持 NULL。
+  final String? description;
 
   /// 用户导入来源类型：local / direct_url / cloud_drive。
   ///
-  /// 官方/精选合集不使用该字段，继续由 remoteAudioId 和 collections.source 标识。
+  /// 社区合集不使用该字段，继续由 remoteAudioId 和 collections.source 标识。
   final String? importSourceType;
 
   /// 用户导入来源 URL。直链导入记录原始 URL；本地文件导入保持 NULL。
@@ -844,14 +956,17 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
   /// Enclosure MIME type，如 audio/mpeg
   final String? podcastEnclosureType;
 
-  /// Episode 简介文本，来自 RSS item description。
-  final String? podcastDescription;
-
   /// Episode 封面图 URL，来自 RSS item itunes:image。
   final String? podcastImageUrl;
 
   /// Episode 网页链接，来自 RSS item link。
   final String? podcastLink;
+
+  /// Episode 字幕地址，来自 RSS `<podcast:transcript>`；点击下载音频时一并获取。
+  final String? podcastTranscriptUrl;
+
+  /// 字幕格式，规范化为 `srt` / `vtt`，与 [podcastTranscriptUrl] 同时有值。
+  final String? podcastTranscriptFormat;
   const AudioItem({
     required this.id,
     required this.name,
@@ -874,14 +989,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     required this.syncStatus,
     this.remoteAudioId,
     this.originalDate,
+    this.communityUnavailableAt,
+    this.difficulty,
+    this.description,
     this.importSourceType,
     this.importSourceUrl,
     this.podcastEpisodeGuid,
     this.podcastEnclosureUrl,
     this.podcastEnclosureType,
-    this.podcastDescription,
     this.podcastImageUrl,
     this.podcastLink,
+    this.podcastTranscriptUrl,
+    this.podcastTranscriptFormat,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -931,6 +1050,17 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     if (!nullToAbsent || originalDate != null) {
       map['original_date'] = Variable<DateTime>(originalDate);
     }
+    if (!nullToAbsent || communityUnavailableAt != null) {
+      map['community_unavailable_at'] = Variable<DateTime>(
+        communityUnavailableAt,
+      );
+    }
+    if (!nullToAbsent || difficulty != null) {
+      map['difficulty'] = Variable<String>(difficulty);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
     if (!nullToAbsent || importSourceType != null) {
       map['import_source_type'] = Variable<String>(importSourceType);
     }
@@ -946,14 +1076,19 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     if (!nullToAbsent || podcastEnclosureType != null) {
       map['podcast_enclosure_type'] = Variable<String>(podcastEnclosureType);
     }
-    if (!nullToAbsent || podcastDescription != null) {
-      map['podcast_description'] = Variable<String>(podcastDescription);
-    }
     if (!nullToAbsent || podcastImageUrl != null) {
       map['podcast_image_url'] = Variable<String>(podcastImageUrl);
     }
     if (!nullToAbsent || podcastLink != null) {
       map['podcast_link'] = Variable<String>(podcastLink);
+    }
+    if (!nullToAbsent || podcastTranscriptUrl != null) {
+      map['podcast_transcript_url'] = Variable<String>(podcastTranscriptUrl);
+    }
+    if (!nullToAbsent || podcastTranscriptFormat != null) {
+      map['podcast_transcript_format'] = Variable<String>(
+        podcastTranscriptFormat,
+      );
     }
     return map;
   }
@@ -1005,6 +1140,15 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       originalDate: originalDate == null && nullToAbsent
           ? const Value.absent()
           : Value(originalDate),
+      communityUnavailableAt: communityUnavailableAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(communityUnavailableAt),
+      difficulty: difficulty == null && nullToAbsent
+          ? const Value.absent()
+          : Value(difficulty),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
       importSourceType: importSourceType == null && nullToAbsent
           ? const Value.absent()
           : Value(importSourceType),
@@ -1020,15 +1164,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       podcastEnclosureType: podcastEnclosureType == null && nullToAbsent
           ? const Value.absent()
           : Value(podcastEnclosureType),
-      podcastDescription: podcastDescription == null && nullToAbsent
-          ? const Value.absent()
-          : Value(podcastDescription),
       podcastImageUrl: podcastImageUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(podcastImageUrl),
       podcastLink: podcastLink == null && nullToAbsent
           ? const Value.absent()
           : Value(podcastLink),
+      podcastTranscriptUrl: podcastTranscriptUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastTranscriptUrl),
+      podcastTranscriptFormat: podcastTranscriptFormat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(podcastTranscriptFormat),
     );
   }
 
@@ -1065,6 +1212,11 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       syncStatus: serializer.fromJson<int>(json['syncStatus']),
       remoteAudioId: serializer.fromJson<String?>(json['remoteAudioId']),
       originalDate: serializer.fromJson<DateTime?>(json['originalDate']),
+      communityUnavailableAt: serializer.fromJson<DateTime?>(
+        json['communityUnavailableAt'],
+      ),
+      difficulty: serializer.fromJson<String?>(json['difficulty']),
+      description: serializer.fromJson<String?>(json['description']),
       importSourceType: serializer.fromJson<String?>(json['importSourceType']),
       importSourceUrl: serializer.fromJson<String?>(json['importSourceUrl']),
       podcastEpisodeGuid: serializer.fromJson<String?>(
@@ -1076,11 +1228,14 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       podcastEnclosureType: serializer.fromJson<String?>(
         json['podcastEnclosureType'],
       ),
-      podcastDescription: serializer.fromJson<String?>(
-        json['podcastDescription'],
-      ),
       podcastImageUrl: serializer.fromJson<String?>(json['podcastImageUrl']),
       podcastLink: serializer.fromJson<String?>(json['podcastLink']),
+      podcastTranscriptUrl: serializer.fromJson<String?>(
+        json['podcastTranscriptUrl'],
+      ),
+      podcastTranscriptFormat: serializer.fromJson<String?>(
+        json['podcastTranscriptFormat'],
+      ),
     );
   }
   @override
@@ -1108,14 +1263,22 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       'syncStatus': serializer.toJson<int>(syncStatus),
       'remoteAudioId': serializer.toJson<String?>(remoteAudioId),
       'originalDate': serializer.toJson<DateTime?>(originalDate),
+      'communityUnavailableAt': serializer.toJson<DateTime?>(
+        communityUnavailableAt,
+      ),
+      'difficulty': serializer.toJson<String?>(difficulty),
+      'description': serializer.toJson<String?>(description),
       'importSourceType': serializer.toJson<String?>(importSourceType),
       'importSourceUrl': serializer.toJson<String?>(importSourceUrl),
       'podcastEpisodeGuid': serializer.toJson<String?>(podcastEpisodeGuid),
       'podcastEnclosureUrl': serializer.toJson<String?>(podcastEnclosureUrl),
       'podcastEnclosureType': serializer.toJson<String?>(podcastEnclosureType),
-      'podcastDescription': serializer.toJson<String?>(podcastDescription),
       'podcastImageUrl': serializer.toJson<String?>(podcastImageUrl),
       'podcastLink': serializer.toJson<String?>(podcastLink),
+      'podcastTranscriptUrl': serializer.toJson<String?>(podcastTranscriptUrl),
+      'podcastTranscriptFormat': serializer.toJson<String?>(
+        podcastTranscriptFormat,
+      ),
     };
   }
 
@@ -1141,14 +1304,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     int? syncStatus,
     Value<String?> remoteAudioId = const Value.absent(),
     Value<DateTime?> originalDate = const Value.absent(),
+    Value<DateTime?> communityUnavailableAt = const Value.absent(),
+    Value<String?> difficulty = const Value.absent(),
+    Value<String?> description = const Value.absent(),
     Value<String?> importSourceType = const Value.absent(),
     Value<String?> importSourceUrl = const Value.absent(),
     Value<String?> podcastEpisodeGuid = const Value.absent(),
     Value<String?> podcastEnclosureUrl = const Value.absent(),
     Value<String?> podcastEnclosureType = const Value.absent(),
-    Value<String?> podcastDescription = const Value.absent(),
     Value<String?> podcastImageUrl = const Value.absent(),
     Value<String?> podcastLink = const Value.absent(),
+    Value<String?> podcastTranscriptUrl = const Value.absent(),
+    Value<String?> podcastTranscriptFormat = const Value.absent(),
   }) => AudioItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -1187,6 +1354,11 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
         ? remoteAudioId.value
         : this.remoteAudioId,
     originalDate: originalDate.present ? originalDate.value : this.originalDate,
+    communityUnavailableAt: communityUnavailableAt.present
+        ? communityUnavailableAt.value
+        : this.communityUnavailableAt,
+    difficulty: difficulty.present ? difficulty.value : this.difficulty,
+    description: description.present ? description.value : this.description,
     importSourceType: importSourceType.present
         ? importSourceType.value
         : this.importSourceType,
@@ -1202,13 +1374,16 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     podcastEnclosureType: podcastEnclosureType.present
         ? podcastEnclosureType.value
         : this.podcastEnclosureType,
-    podcastDescription: podcastDescription.present
-        ? podcastDescription.value
-        : this.podcastDescription,
     podcastImageUrl: podcastImageUrl.present
         ? podcastImageUrl.value
         : this.podcastImageUrl,
     podcastLink: podcastLink.present ? podcastLink.value : this.podcastLink,
+    podcastTranscriptUrl: podcastTranscriptUrl.present
+        ? podcastTranscriptUrl.value
+        : this.podcastTranscriptUrl,
+    podcastTranscriptFormat: podcastTranscriptFormat.present
+        ? podcastTranscriptFormat.value
+        : this.podcastTranscriptFormat,
   );
   AudioItem copyWithCompanion(AudioItemsCompanion data) {
     return AudioItem(
@@ -1259,6 +1434,15 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       originalDate: data.originalDate.present
           ? data.originalDate.value
           : this.originalDate,
+      communityUnavailableAt: data.communityUnavailableAt.present
+          ? data.communityUnavailableAt.value
+          : this.communityUnavailableAt,
+      difficulty: data.difficulty.present
+          ? data.difficulty.value
+          : this.difficulty,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
       importSourceType: data.importSourceType.present
           ? data.importSourceType.value
           : this.importSourceType,
@@ -1274,15 +1458,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
       podcastEnclosureType: data.podcastEnclosureType.present
           ? data.podcastEnclosureType.value
           : this.podcastEnclosureType,
-      podcastDescription: data.podcastDescription.present
-          ? data.podcastDescription.value
-          : this.podcastDescription,
       podcastImageUrl: data.podcastImageUrl.present
           ? data.podcastImageUrl.value
           : this.podcastImageUrl,
       podcastLink: data.podcastLink.present
           ? data.podcastLink.value
           : this.podcastLink,
+      podcastTranscriptUrl: data.podcastTranscriptUrl.present
+          ? data.podcastTranscriptUrl.value
+          : this.podcastTranscriptUrl,
+      podcastTranscriptFormat: data.podcastTranscriptFormat.present
+          ? data.podcastTranscriptFormat.value
+          : this.podcastTranscriptFormat,
     );
   }
 
@@ -1310,14 +1497,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           ..write('syncStatus: $syncStatus, ')
           ..write('remoteAudioId: $remoteAudioId, ')
           ..write('originalDate: $originalDate, ')
+          ..write('communityUnavailableAt: $communityUnavailableAt, ')
+          ..write('difficulty: $difficulty, ')
+          ..write('description: $description, ')
           ..write('importSourceType: $importSourceType, ')
           ..write('importSourceUrl: $importSourceUrl, ')
           ..write('podcastEpisodeGuid: $podcastEpisodeGuid, ')
           ..write('podcastEnclosureUrl: $podcastEnclosureUrl, ')
           ..write('podcastEnclosureType: $podcastEnclosureType, ')
-          ..write('podcastDescription: $podcastDescription, ')
           ..write('podcastImageUrl: $podcastImageUrl, ')
-          ..write('podcastLink: $podcastLink')
+          ..write('podcastLink: $podcastLink, ')
+          ..write('podcastTranscriptUrl: $podcastTranscriptUrl, ')
+          ..write('podcastTranscriptFormat: $podcastTranscriptFormat')
           ..write(')'))
         .toString();
   }
@@ -1345,14 +1536,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
     syncStatus,
     remoteAudioId,
     originalDate,
+    communityUnavailableAt,
+    difficulty,
+    description,
     importSourceType,
     importSourceUrl,
     podcastEpisodeGuid,
     podcastEnclosureUrl,
     podcastEnclosureType,
-    podcastDescription,
     podcastImageUrl,
     podcastLink,
+    podcastTranscriptUrl,
+    podcastTranscriptFormat,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -1379,14 +1574,18 @@ class AudioItem extends DataClass implements Insertable<AudioItem> {
           other.syncStatus == this.syncStatus &&
           other.remoteAudioId == this.remoteAudioId &&
           other.originalDate == this.originalDate &&
+          other.communityUnavailableAt == this.communityUnavailableAt &&
+          other.difficulty == this.difficulty &&
+          other.description == this.description &&
           other.importSourceType == this.importSourceType &&
           other.importSourceUrl == this.importSourceUrl &&
           other.podcastEpisodeGuid == this.podcastEpisodeGuid &&
           other.podcastEnclosureUrl == this.podcastEnclosureUrl &&
           other.podcastEnclosureType == this.podcastEnclosureType &&
-          other.podcastDescription == this.podcastDescription &&
           other.podcastImageUrl == this.podcastImageUrl &&
-          other.podcastLink == this.podcastLink);
+          other.podcastLink == this.podcastLink &&
+          other.podcastTranscriptUrl == this.podcastTranscriptUrl &&
+          other.podcastTranscriptFormat == this.podcastTranscriptFormat);
 }
 
 class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
@@ -1411,14 +1610,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
   final Value<int> syncStatus;
   final Value<String?> remoteAudioId;
   final Value<DateTime?> originalDate;
+  final Value<DateTime?> communityUnavailableAt;
+  final Value<String?> difficulty;
+  final Value<String?> description;
   final Value<String?> importSourceType;
   final Value<String?> importSourceUrl;
   final Value<String?> podcastEpisodeGuid;
   final Value<String?> podcastEnclosureUrl;
   final Value<String?> podcastEnclosureType;
-  final Value<String?> podcastDescription;
   final Value<String?> podcastImageUrl;
   final Value<String?> podcastLink;
+  final Value<String?> podcastTranscriptUrl;
+  final Value<String?> podcastTranscriptFormat;
   final Value<int> rowid;
   const AudioItemsCompanion({
     this.id = const Value.absent(),
@@ -1442,14 +1645,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.syncStatus = const Value.absent(),
     this.remoteAudioId = const Value.absent(),
     this.originalDate = const Value.absent(),
+    this.communityUnavailableAt = const Value.absent(),
+    this.difficulty = const Value.absent(),
+    this.description = const Value.absent(),
     this.importSourceType = const Value.absent(),
     this.importSourceUrl = const Value.absent(),
     this.podcastEpisodeGuid = const Value.absent(),
     this.podcastEnclosureUrl = const Value.absent(),
     this.podcastEnclosureType = const Value.absent(),
-    this.podcastDescription = const Value.absent(),
     this.podcastImageUrl = const Value.absent(),
     this.podcastLink = const Value.absent(),
+    this.podcastTranscriptUrl = const Value.absent(),
+    this.podcastTranscriptFormat = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   AudioItemsCompanion.insert({
@@ -1474,14 +1681,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     this.syncStatus = const Value.absent(),
     this.remoteAudioId = const Value.absent(),
     this.originalDate = const Value.absent(),
+    this.communityUnavailableAt = const Value.absent(),
+    this.difficulty = const Value.absent(),
+    this.description = const Value.absent(),
     this.importSourceType = const Value.absent(),
     this.importSourceUrl = const Value.absent(),
     this.podcastEpisodeGuid = const Value.absent(),
     this.podcastEnclosureUrl = const Value.absent(),
     this.podcastEnclosureType = const Value.absent(),
-    this.podcastDescription = const Value.absent(),
     this.podcastImageUrl = const Value.absent(),
     this.podcastLink = const Value.absent(),
+    this.podcastTranscriptUrl = const Value.absent(),
+    this.podcastTranscriptFormat = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1509,14 +1720,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Expression<int>? syncStatus,
     Expression<String>? remoteAudioId,
     Expression<DateTime>? originalDate,
+    Expression<DateTime>? communityUnavailableAt,
+    Expression<String>? difficulty,
+    Expression<String>? description,
     Expression<String>? importSourceType,
     Expression<String>? importSourceUrl,
     Expression<String>? podcastEpisodeGuid,
     Expression<String>? podcastEnclosureUrl,
     Expression<String>? podcastEnclosureType,
-    Expression<String>? podcastDescription,
     Expression<String>? podcastImageUrl,
     Expression<String>? podcastLink,
+    Expression<String>? podcastTranscriptUrl,
+    Expression<String>? podcastTranscriptFormat,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1544,6 +1759,10 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       if (syncStatus != null) 'sync_status': syncStatus,
       if (remoteAudioId != null) 'remote_audio_id': remoteAudioId,
       if (originalDate != null) 'original_date': originalDate,
+      if (communityUnavailableAt != null)
+        'community_unavailable_at': communityUnavailableAt,
+      if (difficulty != null) 'difficulty': difficulty,
+      if (description != null) 'description': description,
       if (importSourceType != null) 'import_source_type': importSourceType,
       if (importSourceUrl != null) 'import_source_url': importSourceUrl,
       if (podcastEpisodeGuid != null)
@@ -1552,9 +1771,12 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
         'podcast_enclosure_url': podcastEnclosureUrl,
       if (podcastEnclosureType != null)
         'podcast_enclosure_type': podcastEnclosureType,
-      if (podcastDescription != null) 'podcast_description': podcastDescription,
       if (podcastImageUrl != null) 'podcast_image_url': podcastImageUrl,
       if (podcastLink != null) 'podcast_link': podcastLink,
+      if (podcastTranscriptUrl != null)
+        'podcast_transcript_url': podcastTranscriptUrl,
+      if (podcastTranscriptFormat != null)
+        'podcast_transcript_format': podcastTranscriptFormat,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1581,14 +1803,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     Value<int>? syncStatus,
     Value<String?>? remoteAudioId,
     Value<DateTime?>? originalDate,
+    Value<DateTime?>? communityUnavailableAt,
+    Value<String?>? difficulty,
+    Value<String?>? description,
     Value<String?>? importSourceType,
     Value<String?>? importSourceUrl,
     Value<String?>? podcastEpisodeGuid,
     Value<String?>? podcastEnclosureUrl,
     Value<String?>? podcastEnclosureType,
-    Value<String?>? podcastDescription,
     Value<String?>? podcastImageUrl,
     Value<String?>? podcastLink,
+    Value<String?>? podcastTranscriptUrl,
+    Value<String?>? podcastTranscriptFormat,
     Value<int>? rowid,
   }) {
     return AudioItemsCompanion(
@@ -1613,14 +1839,20 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
       syncStatus: syncStatus ?? this.syncStatus,
       remoteAudioId: remoteAudioId ?? this.remoteAudioId,
       originalDate: originalDate ?? this.originalDate,
+      communityUnavailableAt:
+          communityUnavailableAt ?? this.communityUnavailableAt,
+      difficulty: difficulty ?? this.difficulty,
+      description: description ?? this.description,
       importSourceType: importSourceType ?? this.importSourceType,
       importSourceUrl: importSourceUrl ?? this.importSourceUrl,
       podcastEpisodeGuid: podcastEpisodeGuid ?? this.podcastEpisodeGuid,
       podcastEnclosureUrl: podcastEnclosureUrl ?? this.podcastEnclosureUrl,
       podcastEnclosureType: podcastEnclosureType ?? this.podcastEnclosureType,
-      podcastDescription: podcastDescription ?? this.podcastDescription,
       podcastImageUrl: podcastImageUrl ?? this.podcastImageUrl,
       podcastLink: podcastLink ?? this.podcastLink,
+      podcastTranscriptUrl: podcastTranscriptUrl ?? this.podcastTranscriptUrl,
+      podcastTranscriptFormat:
+          podcastTranscriptFormat ?? this.podcastTranscriptFormat,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1693,6 +1925,17 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
     if (originalDate.present) {
       map['original_date'] = Variable<DateTime>(originalDate.value);
     }
+    if (communityUnavailableAt.present) {
+      map['community_unavailable_at'] = Variable<DateTime>(
+        communityUnavailableAt.value,
+      );
+    }
+    if (difficulty.present) {
+      map['difficulty'] = Variable<String>(difficulty.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
     if (importSourceType.present) {
       map['import_source_type'] = Variable<String>(importSourceType.value);
     }
@@ -1712,14 +1955,21 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
         podcastEnclosureType.value,
       );
     }
-    if (podcastDescription.present) {
-      map['podcast_description'] = Variable<String>(podcastDescription.value);
-    }
     if (podcastImageUrl.present) {
       map['podcast_image_url'] = Variable<String>(podcastImageUrl.value);
     }
     if (podcastLink.present) {
       map['podcast_link'] = Variable<String>(podcastLink.value);
+    }
+    if (podcastTranscriptUrl.present) {
+      map['podcast_transcript_url'] = Variable<String>(
+        podcastTranscriptUrl.value,
+      );
+    }
+    if (podcastTranscriptFormat.present) {
+      map['podcast_transcript_format'] = Variable<String>(
+        podcastTranscriptFormat.value,
+      );
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -1751,14 +2001,18 @@ class AudioItemsCompanion extends UpdateCompanion<AudioItem> {
           ..write('syncStatus: $syncStatus, ')
           ..write('remoteAudioId: $remoteAudioId, ')
           ..write('originalDate: $originalDate, ')
+          ..write('communityUnavailableAt: $communityUnavailableAt, ')
+          ..write('difficulty: $difficulty, ')
+          ..write('description: $description, ')
           ..write('importSourceType: $importSourceType, ')
           ..write('importSourceUrl: $importSourceUrl, ')
           ..write('podcastEpisodeGuid: $podcastEpisodeGuid, ')
           ..write('podcastEnclosureUrl: $podcastEnclosureUrl, ')
           ..write('podcastEnclosureType: $podcastEnclosureType, ')
-          ..write('podcastDescription: $podcastDescription, ')
           ..write('podcastImageUrl: $podcastImageUrl, ')
           ..write('podcastLink: $podcastLink, ')
+          ..write('podcastTranscriptUrl: $podcastTranscriptUrl, ')
+          ..write('podcastTranscriptFormat: $podcastTranscriptFormat, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1881,6 +2135,17 @@ class $CollectionsTable extends Collections
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _coverUrlChinaMeta = const VerificationMeta(
+    'coverUrlChina',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrlChina = GeneratedColumn<String>(
+    'cover_url_china',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _descriptionMeta = const VerificationMeta(
     'description',
   );
@@ -1890,6 +2155,28 @@ class $CollectionsTable extends Collections
     aliasedName,
     true,
     type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _authorNicknameMeta = const VerificationMeta(
+    'authorNickname',
+  );
+  @override
+  late final GeneratedColumn<String> authorNickname = GeneratedColumn<String>(
+    'author_nickname',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _publishedAtMeta = const VerificationMeta(
+    'publishedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> publishedAt = GeneratedColumn<DateTime>(
+    'published_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _deprecatedAtMeta = const VerificationMeta(
@@ -1970,7 +2257,10 @@ class $CollectionsTable extends Collections
     source,
     remoteId,
     coverUrl,
+    coverUrlChina,
     description,
+    authorNickname,
+    publishedAt,
     deprecatedAt,
     podcastInputUrl,
     podcastFeedUrl,
@@ -2058,12 +2348,39 @@ class $CollectionsTable extends Collections
         coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
       );
     }
+    if (data.containsKey('cover_url_china')) {
+      context.handle(
+        _coverUrlChinaMeta,
+        coverUrlChina.isAcceptableOrUnknown(
+          data['cover_url_china']!,
+          _coverUrlChinaMeta,
+        ),
+      );
+    }
     if (data.containsKey('description')) {
       context.handle(
         _descriptionMeta,
         description.isAcceptableOrUnknown(
           data['description']!,
           _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('author_nickname')) {
+      context.handle(
+        _authorNicknameMeta,
+        authorNickname.isAcceptableOrUnknown(
+          data['author_nickname']!,
+          _authorNicknameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('published_at')) {
+      context.handle(
+        _publishedAtMeta,
+        publishedAt.isAcceptableOrUnknown(
+          data['published_at']!,
+          _publishedAtMeta,
         ),
       );
     }
@@ -2170,9 +2487,21 @@ class $CollectionsTable extends Collections
         DriftSqlType.string,
         data['${effectivePrefix}cover_url'],
       ),
+      coverUrlChina: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url_china'],
+      ),
       description: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}description'],
+      ),
+      authorNickname: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author_nickname'],
+      ),
+      publishedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}published_at'],
       ),
       deprecatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -2229,23 +2558,32 @@ class Collection extends DataClass implements Insertable<Collection> {
   /// 同步状态
   final int syncStatus;
 
-  /// 合集来源：`local`（用户自建）| `official`（从后端加入的官方合集）
+  /// 合集来源：`local`（用户自建）| `community`（从后端加入的社区合集）
   ///
-  /// 老数据默认 `local`。不可变 —— 决定了 UI 是否显示官方 badge、
+  /// 老数据默认 `local`。不可变 —— 决定了 UI 是否显示社区 badge、
   /// 长按菜单是否允许重命名/删除音频、移除流程是否彻底清空等。
   final String source;
 
-  /// 官方合集在后端的 UUID；仅 source='official' 时有值。
-  /// 与 [source]=official 联合唯一（见 v29 迁移里的唯一索引）。
+  /// 社区合集在后端的 UUID；仅 source='community' 时有值。
+  /// 与 [source]=community 联合唯一。
   final String? remoteId;
 
-  /// 合集封面图 URL；用户自建合集目前为 null。
+  /// 社区合集封面图 URL；用户自建合集目前为 null。
   final String? coverUrl;
 
-  /// 合集描述；用户自建合集目前为 null。
+  /// 已同步到中国 CDN 的社区合集封面图 URL。
+  final String? coverUrlChina;
+
+  /// 社区合集描述；用户自建合集目前为 null。
   final String? description;
 
-  /// 官方合集被后端标记下架的时间；非 null 时 UI 置灰、sync 不再请求。
+  /// 社区合集发布者昵称；老数据及匿名发布者保持 null。
+  final String? authorNickname;
+
+  /// 社区合集发布日期；老数据保持 null。
+  final DateTime? publishedAt;
+
+  /// 社区合集被后端标记下架的时间；非 null 时 UI 置灰、sync 不再请求。
   /// source='local' 永远为 null。
   final DateTime? deprecatedAt;
 
@@ -2274,7 +2612,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     required this.source,
     this.remoteId,
     this.coverUrl,
+    this.coverUrlChina,
     this.description,
+    this.authorNickname,
+    this.publishedAt,
     this.deprecatedAt,
     this.podcastInputUrl,
     this.podcastFeedUrl,
@@ -2301,8 +2642,17 @@ class Collection extends DataClass implements Insertable<Collection> {
     if (!nullToAbsent || coverUrl != null) {
       map['cover_url'] = Variable<String>(coverUrl);
     }
+    if (!nullToAbsent || coverUrlChina != null) {
+      map['cover_url_china'] = Variable<String>(coverUrlChina);
+    }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || authorNickname != null) {
+      map['author_nickname'] = Variable<String>(authorNickname);
+    }
+    if (!nullToAbsent || publishedAt != null) {
+      map['published_at'] = Variable<DateTime>(publishedAt);
     }
     if (!nullToAbsent || deprecatedAt != null) {
       map['deprecated_at'] = Variable<DateTime>(deprecatedAt);
@@ -2347,9 +2697,18 @@ class Collection extends DataClass implements Insertable<Collection> {
       coverUrl: coverUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(coverUrl),
+      coverUrlChina: coverUrlChina == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverUrlChina),
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
+      authorNickname: authorNickname == null && nullToAbsent
+          ? const Value.absent()
+          : Value(authorNickname),
+      publishedAt: publishedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publishedAt),
       deprecatedAt: deprecatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(deprecatedAt),
@@ -2387,7 +2746,10 @@ class Collection extends DataClass implements Insertable<Collection> {
       source: serializer.fromJson<String>(json['source']),
       remoteId: serializer.fromJson<String?>(json['remoteId']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      coverUrlChina: serializer.fromJson<String?>(json['coverUrlChina']),
       description: serializer.fromJson<String?>(json['description']),
+      authorNickname: serializer.fromJson<String?>(json['authorNickname']),
+      publishedAt: serializer.fromJson<DateTime?>(json['publishedAt']),
       deprecatedAt: serializer.fromJson<DateTime?>(json['deprecatedAt']),
       podcastInputUrl: serializer.fromJson<String?>(json['podcastInputUrl']),
       podcastFeedUrl: serializer.fromJson<String?>(json['podcastFeedUrl']),
@@ -2414,7 +2776,10 @@ class Collection extends DataClass implements Insertable<Collection> {
       'source': serializer.toJson<String>(source),
       'remoteId': serializer.toJson<String?>(remoteId),
       'coverUrl': serializer.toJson<String?>(coverUrl),
+      'coverUrlChina': serializer.toJson<String?>(coverUrlChina),
       'description': serializer.toJson<String?>(description),
+      'authorNickname': serializer.toJson<String?>(authorNickname),
+      'publishedAt': serializer.toJson<DateTime?>(publishedAt),
       'deprecatedAt': serializer.toJson<DateTime?>(deprecatedAt),
       'podcastInputUrl': serializer.toJson<String?>(podcastInputUrl),
       'podcastFeedUrl': serializer.toJson<String?>(podcastFeedUrl),
@@ -2439,7 +2804,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     String? source,
     Value<String?> remoteId = const Value.absent(),
     Value<String?> coverUrl = const Value.absent(),
+    Value<String?> coverUrlChina = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    Value<String?> authorNickname = const Value.absent(),
+    Value<DateTime?> publishedAt = const Value.absent(),
     Value<DateTime?> deprecatedAt = const Value.absent(),
     Value<String?> podcastInputUrl = const Value.absent(),
     Value<String?> podcastFeedUrl = const Value.absent(),
@@ -2457,7 +2825,14 @@ class Collection extends DataClass implements Insertable<Collection> {
     source: source ?? this.source,
     remoteId: remoteId.present ? remoteId.value : this.remoteId,
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    coverUrlChina: coverUrlChina.present
+        ? coverUrlChina.value
+        : this.coverUrlChina,
     description: description.present ? description.value : this.description,
+    authorNickname: authorNickname.present
+        ? authorNickname.value
+        : this.authorNickname,
+    publishedAt: publishedAt.present ? publishedAt.value : this.publishedAt,
     deprecatedAt: deprecatedAt.present ? deprecatedAt.value : this.deprecatedAt,
     podcastInputUrl: podcastInputUrl.present
         ? podcastInputUrl.value
@@ -2491,9 +2866,18 @@ class Collection extends DataClass implements Insertable<Collection> {
       source: data.source.present ? data.source.value : this.source,
       remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      coverUrlChina: data.coverUrlChina.present
+          ? data.coverUrlChina.value
+          : this.coverUrlChina,
       description: data.description.present
           ? data.description.value
           : this.description,
+      authorNickname: data.authorNickname.present
+          ? data.authorNickname.value
+          : this.authorNickname,
+      publishedAt: data.publishedAt.present
+          ? data.publishedAt.value
+          : this.publishedAt,
       deprecatedAt: data.deprecatedAt.present
           ? data.deprecatedAt.value
           : this.deprecatedAt,
@@ -2528,7 +2912,10 @@ class Collection extends DataClass implements Insertable<Collection> {
           ..write('source: $source, ')
           ..write('remoteId: $remoteId, ')
           ..write('coverUrl: $coverUrl, ')
+          ..write('coverUrlChina: $coverUrlChina, ')
           ..write('description: $description, ')
+          ..write('authorNickname: $authorNickname, ')
+          ..write('publishedAt: $publishedAt, ')
           ..write('deprecatedAt: $deprecatedAt, ')
           ..write('podcastInputUrl: $podcastInputUrl, ')
           ..write('podcastFeedUrl: $podcastFeedUrl, ')
@@ -2551,7 +2938,10 @@ class Collection extends DataClass implements Insertable<Collection> {
     source,
     remoteId,
     coverUrl,
+    coverUrlChina,
     description,
+    authorNickname,
+    publishedAt,
     deprecatedAt,
     podcastInputUrl,
     podcastFeedUrl,
@@ -2573,7 +2963,10 @@ class Collection extends DataClass implements Insertable<Collection> {
           other.source == this.source &&
           other.remoteId == this.remoteId &&
           other.coverUrl == this.coverUrl &&
+          other.coverUrlChina == this.coverUrlChina &&
           other.description == this.description &&
+          other.authorNickname == this.authorNickname &&
+          other.publishedAt == this.publishedAt &&
           other.deprecatedAt == this.deprecatedAt &&
           other.podcastInputUrl == this.podcastInputUrl &&
           other.podcastFeedUrl == this.podcastFeedUrl &&
@@ -2593,7 +2986,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
   final Value<String> source;
   final Value<String?> remoteId;
   final Value<String?> coverUrl;
+  final Value<String?> coverUrlChina;
   final Value<String?> description;
+  final Value<String?> authorNickname;
+  final Value<DateTime?> publishedAt;
   final Value<DateTime?> deprecatedAt;
   final Value<String?> podcastInputUrl;
   final Value<String?> podcastFeedUrl;
@@ -2612,7 +3008,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.source = const Value.absent(),
     this.remoteId = const Value.absent(),
     this.coverUrl = const Value.absent(),
+    this.coverUrlChina = const Value.absent(),
     this.description = const Value.absent(),
+    this.authorNickname = const Value.absent(),
+    this.publishedAt = const Value.absent(),
     this.deprecatedAt = const Value.absent(),
     this.podcastInputUrl = const Value.absent(),
     this.podcastFeedUrl = const Value.absent(),
@@ -2632,7 +3031,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.source = const Value.absent(),
     this.remoteId = const Value.absent(),
     this.coverUrl = const Value.absent(),
+    this.coverUrlChina = const Value.absent(),
     this.description = const Value.absent(),
+    this.authorNickname = const Value.absent(),
+    this.publishedAt = const Value.absent(),
     this.deprecatedAt = const Value.absent(),
     this.podcastInputUrl = const Value.absent(),
     this.podcastFeedUrl = const Value.absent(),
@@ -2655,7 +3057,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Expression<String>? source,
     Expression<String>? remoteId,
     Expression<String>? coverUrl,
+    Expression<String>? coverUrlChina,
     Expression<String>? description,
+    Expression<String>? authorNickname,
+    Expression<DateTime>? publishedAt,
     Expression<DateTime>? deprecatedAt,
     Expression<String>? podcastInputUrl,
     Expression<String>? podcastFeedUrl,
@@ -2675,7 +3080,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       if (source != null) 'source': source,
       if (remoteId != null) 'remote_id': remoteId,
       if (coverUrl != null) 'cover_url': coverUrl,
+      if (coverUrlChina != null) 'cover_url_china': coverUrlChina,
       if (description != null) 'description': description,
+      if (authorNickname != null) 'author_nickname': authorNickname,
+      if (publishedAt != null) 'published_at': publishedAt,
       if (deprecatedAt != null) 'deprecated_at': deprecatedAt,
       if (podcastInputUrl != null) 'podcast_input_url': podcastInputUrl,
       if (podcastFeedUrl != null) 'podcast_feed_url': podcastFeedUrl,
@@ -2699,7 +3107,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Value<String>? source,
     Value<String?>? remoteId,
     Value<String?>? coverUrl,
+    Value<String?>? coverUrlChina,
     Value<String?>? description,
+    Value<String?>? authorNickname,
+    Value<DateTime?>? publishedAt,
     Value<DateTime?>? deprecatedAt,
     Value<String?>? podcastInputUrl,
     Value<String?>? podcastFeedUrl,
@@ -2719,7 +3130,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       source: source ?? this.source,
       remoteId: remoteId ?? this.remoteId,
       coverUrl: coverUrl ?? this.coverUrl,
+      coverUrlChina: coverUrlChina ?? this.coverUrlChina,
       description: description ?? this.description,
+      authorNickname: authorNickname ?? this.authorNickname,
+      publishedAt: publishedAt ?? this.publishedAt,
       deprecatedAt: deprecatedAt ?? this.deprecatedAt,
       podcastInputUrl: podcastInputUrl ?? this.podcastInputUrl,
       podcastFeedUrl: podcastFeedUrl ?? this.podcastFeedUrl,
@@ -2765,8 +3179,17 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     if (coverUrl.present) {
       map['cover_url'] = Variable<String>(coverUrl.value);
     }
+    if (coverUrlChina.present) {
+      map['cover_url_china'] = Variable<String>(coverUrlChina.value);
+    }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (authorNickname.present) {
+      map['author_nickname'] = Variable<String>(authorNickname.value);
+    }
+    if (publishedAt.present) {
+      map['published_at'] = Variable<DateTime>(publishedAt.value);
     }
     if (deprecatedAt.present) {
       map['deprecated_at'] = Variable<DateTime>(deprecatedAt.value);
@@ -2809,7 +3232,10 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
           ..write('source: $source, ')
           ..write('remoteId: $remoteId, ')
           ..write('coverUrl: $coverUrl, ')
+          ..write('coverUrlChina: $coverUrlChina, ')
           ..write('description: $description, ')
+          ..write('authorNickname: $authorNickname, ')
+          ..write('publishedAt: $publishedAt, ')
           ..write('deprecatedAt: $deprecatedAt, ')
           ..write('podcastInputUrl: $podcastInputUrl, ')
           ..write('podcastFeedUrl: $podcastFeedUrl, ')
@@ -3185,6 +3611,17 @@ class $BookmarksTable extends Bookmarks
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _memorySubjectIdMeta = const VerificationMeta(
+    'memorySubjectId',
+  );
+  @override
+  late final GeneratedColumn<String> memorySubjectId = GeneratedColumn<String>(
+    'memory_subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _audioItemIdMeta = const VerificationMeta(
     'audioItemId',
   );
@@ -3291,6 +3728,7 @@ class $BookmarksTable extends Bookmarks
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    memorySubjectId,
     audioItemId,
     sentenceIndex,
     sentenceText,
@@ -3315,6 +3753,15 @@ class $BookmarksTable extends Bookmarks
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('memory_subject_id')) {
+      context.handle(
+        _memorySubjectIdMeta,
+        memorySubjectId.isAcceptableOrUnknown(
+          data['memory_subject_id']!,
+          _memorySubjectIdMeta,
+        ),
+      );
     }
     if (data.containsKey('audio_item_id')) {
       context.handle(
@@ -3410,6 +3857,10 @@ class $BookmarksTable extends Bookmarks
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      memorySubjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}memory_subject_id'],
+      ),
       audioItemId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}audio_item_id'],
@@ -3459,6 +3910,9 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   /// 自增主键
   final int id;
 
+  /// 跨数据库迁移和字幕重解析仍保持稳定的记忆主体 ID。
+  final String? memorySubjectId;
+
   /// 音频 ID，外键关联 audio_items.id
   final String audioItemId;
 
@@ -3487,6 +3941,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   final int syncStatus;
   const Bookmark({
     required this.id,
+    this.memorySubjectId,
     required this.audioItemId,
     required this.sentenceIndex,
     required this.sentenceText,
@@ -3501,6 +3956,9 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || memorySubjectId != null) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId);
+    }
     map['audio_item_id'] = Variable<String>(audioItemId);
     map['sentence_index'] = Variable<int>(sentenceIndex);
     map['sentence_text'] = Variable<String>(sentenceText);
@@ -3518,6 +3976,9 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   BookmarksCompanion toCompanion(bool nullToAbsent) {
     return BookmarksCompanion(
       id: Value(id),
+      memorySubjectId: memorySubjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(memorySubjectId),
       audioItemId: Value(audioItemId),
       sentenceIndex: Value(sentenceIndex),
       sentenceText: Value(sentenceText),
@@ -3539,6 +4000,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Bookmark(
       id: serializer.fromJson<int>(json['id']),
+      memorySubjectId: serializer.fromJson<String?>(json['memorySubjectId']),
       audioItemId: serializer.fromJson<String>(json['audioItemId']),
       sentenceIndex: serializer.fromJson<int>(json['sentenceIndex']),
       sentenceText: serializer.fromJson<String>(json['sentenceText']),
@@ -3555,6 +4017,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'memorySubjectId': serializer.toJson<String?>(memorySubjectId),
       'audioItemId': serializer.toJson<String>(audioItemId),
       'sentenceIndex': serializer.toJson<int>(sentenceIndex),
       'sentenceText': serializer.toJson<String>(sentenceText),
@@ -3569,6 +4032,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
 
   Bookmark copyWith({
     int? id,
+    Value<String?> memorySubjectId = const Value.absent(),
     String? audioItemId,
     int? sentenceIndex,
     String? sentenceText,
@@ -3580,6 +4044,9 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     int? syncStatus,
   }) => Bookmark(
     id: id ?? this.id,
+    memorySubjectId: memorySubjectId.present
+        ? memorySubjectId.value
+        : this.memorySubjectId,
     audioItemId: audioItemId ?? this.audioItemId,
     sentenceIndex: sentenceIndex ?? this.sentenceIndex,
     sentenceText: sentenceText ?? this.sentenceText,
@@ -3593,6 +4060,9 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   Bookmark copyWithCompanion(BookmarksCompanion data) {
     return Bookmark(
       id: data.id.present ? data.id.value : this.id,
+      memorySubjectId: data.memorySubjectId.present
+          ? data.memorySubjectId.value
+          : this.memorySubjectId,
       audioItemId: data.audioItemId.present
           ? data.audioItemId.value
           : this.audioItemId,
@@ -3617,6 +4087,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   String toString() {
     return (StringBuffer('Bookmark(')
           ..write('id: $id, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
           ..write('sentenceText: $sentenceText, ')
@@ -3633,6 +4104,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   @override
   int get hashCode => Object.hash(
     id,
+    memorySubjectId,
     audioItemId,
     sentenceIndex,
     sentenceText,
@@ -3648,6 +4120,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
       identical(this, other) ||
       (other is Bookmark &&
           other.id == this.id &&
+          other.memorySubjectId == this.memorySubjectId &&
           other.audioItemId == this.audioItemId &&
           other.sentenceIndex == this.sentenceIndex &&
           other.sentenceText == this.sentenceText &&
@@ -3661,6 +4134,7 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
 
 class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   final Value<int> id;
+  final Value<String?> memorySubjectId;
   final Value<String> audioItemId;
   final Value<int> sentenceIndex;
   final Value<String> sentenceText;
@@ -3672,6 +4146,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   final Value<int> syncStatus;
   const BookmarksCompanion({
     this.id = const Value.absent(),
+    this.memorySubjectId = const Value.absent(),
     this.audioItemId = const Value.absent(),
     this.sentenceIndex = const Value.absent(),
     this.sentenceText = const Value.absent(),
@@ -3684,6 +4159,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   });
   BookmarksCompanion.insert({
     this.id = const Value.absent(),
+    this.memorySubjectId = const Value.absent(),
     required String audioItemId,
     required int sentenceIndex,
     required String sentenceText,
@@ -3702,6 +4178,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
        updatedAt = Value(updatedAt);
   static Insertable<Bookmark> custom({
     Expression<int>? id,
+    Expression<String>? memorySubjectId,
     Expression<String>? audioItemId,
     Expression<int>? sentenceIndex,
     Expression<String>? sentenceText,
@@ -3714,6 +4191,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (memorySubjectId != null) 'memory_subject_id': memorySubjectId,
       if (audioItemId != null) 'audio_item_id': audioItemId,
       if (sentenceIndex != null) 'sentence_index': sentenceIndex,
       if (sentenceText != null) 'sentence_text': sentenceText,
@@ -3728,6 +4206,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
 
   BookmarksCompanion copyWith({
     Value<int>? id,
+    Value<String?>? memorySubjectId,
     Value<String>? audioItemId,
     Value<int>? sentenceIndex,
     Value<String>? sentenceText,
@@ -3740,6 +4219,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   }) {
     return BookmarksCompanion(
       id: id ?? this.id,
+      memorySubjectId: memorySubjectId ?? this.memorySubjectId,
       audioItemId: audioItemId ?? this.audioItemId,
       sentenceIndex: sentenceIndex ?? this.sentenceIndex,
       sentenceText: sentenceText ?? this.sentenceText,
@@ -3757,6 +4237,9 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (memorySubjectId.present) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId.value);
     }
     if (audioItemId.present) {
       map['audio_item_id'] = Variable<String>(audioItemId.value);
@@ -3792,6 +4275,7 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   String toString() {
     return (StringBuffer('BookmarksCompanion(')
           ..write('id: $id, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
           ..write('sentenceText: $sentenceText, ')
@@ -4469,6 +4953,18 @@ class $LearningProgressesTable extends LearningProgresses
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _manualUnlockAtMeta = const VerificationMeta(
+    'manualUnlockAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> manualUnlockAt =
+      GeneratedColumn<DateTime>(
+        'manual_unlock_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _planVersionsJsonMeta = const VerificationMeta(
     'planVersionsJson',
   );
@@ -4511,6 +5007,7 @@ class $LearningProgressesTable extends LearningProgresses
     updatedAt,
     skippedSubStages,
     isPaused,
+    manualUnlockAt,
     planVersionsJson,
   ];
   @override
@@ -4772,6 +5269,15 @@ class $LearningProgressesTable extends LearningProgresses
         isPaused.isAcceptableOrUnknown(data['is_paused']!, _isPausedMeta),
       );
     }
+    if (data.containsKey('manual_unlock_at')) {
+      context.handle(
+        _manualUnlockAtMeta,
+        manualUnlockAt.isAcceptableOrUnknown(
+          data['manual_unlock_at']!,
+          _manualUnlockAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('plan_versions_json')) {
       context.handle(
         _planVersionsJsonMeta,
@@ -4902,6 +5408,10 @@ class $LearningProgressesTable extends LearningProgresses
         DriftSqlType.bool,
         data['${effectivePrefix}is_paused'],
       )!,
+      manualUnlockAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}manual_unlock_at'],
+      ),
       planVersionsJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}plan_versions_json'],
@@ -5014,6 +5524,13 @@ class LearningProgressesData extends DataClass
   /// 是否暂停学习（true 表示该音频不参与复习调度，可由用户随时恢复）
   final bool isPaused;
 
+  /// 手动解锁当前复习轮的时刻（null = 未手动解锁）
+  ///
+  /// 用户点击「立即解锁」时写入，使当前复习轮跳过时间锁提前可学。
+  /// 不篡改 [lastStageCompletedAt]，后续轮次仍按实际完成时间顺延。
+  /// 跨 stage 推进时必须清除。
+  final DateTime? manualUnlockAt;
+
   /// 每个 [LearningStage] 的 plan 版本快照（dense map，JSON 存储）。
   ///
   /// 格式：JSON object，key = `LearningStage.key`，value = 整数版本号。例：
@@ -5063,6 +5580,7 @@ class LearningProgressesData extends DataClass
     required this.updatedAt,
     required this.skippedSubStages,
     required this.isPaused,
+    this.manualUnlockAt,
     required this.planVersionsJson,
   });
   @override
@@ -5162,6 +5680,9 @@ class LearningProgressesData extends DataClass
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['skipped_sub_stages'] = Variable<String>(skippedSubStages);
     map['is_paused'] = Variable<bool>(isPaused);
+    if (!nullToAbsent || manualUnlockAt != null) {
+      map['manual_unlock_at'] = Variable<DateTime>(manualUnlockAt);
+    }
     map['plan_versions_json'] = Variable<String>(planVersionsJson);
     return map;
   }
@@ -5244,6 +5765,9 @@ class LearningProgressesData extends DataClass
       updatedAt: Value(updatedAt),
       skippedSubStages: Value(skippedSubStages),
       isPaused: Value(isPaused),
+      manualUnlockAt: manualUnlockAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manualUnlockAt),
       planVersionsJson: Value(planVersionsJson),
     );
   }
@@ -5320,6 +5844,7 @@ class LearningProgressesData extends DataClass
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       skippedSubStages: serializer.fromJson<String>(json['skippedSubStages']),
       isPaused: serializer.fromJson<bool>(json['isPaused']),
+      manualUnlockAt: serializer.fromJson<DateTime?>(json['manualUnlockAt']),
       planVersionsJson: serializer.fromJson<String>(json['planVersionsJson']),
     );
   }
@@ -5385,6 +5910,7 @@ class LearningProgressesData extends DataClass
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'skippedSubStages': serializer.toJson<String>(skippedSubStages),
       'isPaused': serializer.toJson<bool>(isPaused),
+      'manualUnlockAt': serializer.toJson<DateTime?>(manualUnlockAt),
       'planVersionsJson': serializer.toJson<String>(planVersionsJson),
     };
   }
@@ -5418,6 +5944,7 @@ class LearningProgressesData extends DataClass
     DateTime? updatedAt,
     String? skippedSubStages,
     bool? isPaused,
+    Value<DateTime?> manualUnlockAt = const Value.absent(),
     String? planVersionsJson,
   }) => LearningProgressesData(
     audioItemId: audioItemId ?? this.audioItemId,
@@ -5488,6 +6015,9 @@ class LearningProgressesData extends DataClass
     updatedAt: updatedAt ?? this.updatedAt,
     skippedSubStages: skippedSubStages ?? this.skippedSubStages,
     isPaused: isPaused ?? this.isPaused,
+    manualUnlockAt: manualUnlockAt.present
+        ? manualUnlockAt.value
+        : this.manualUnlockAt,
     planVersionsJson: planVersionsJson ?? this.planVersionsJson,
   );
   LearningProgressesData copyWithCompanion(LearningProgressesCompanion data) {
@@ -5577,6 +6107,9 @@ class LearningProgressesData extends DataClass
           ? data.skippedSubStages.value
           : this.skippedSubStages,
       isPaused: data.isPaused.present ? data.isPaused.value : this.isPaused,
+      manualUnlockAt: data.manualUnlockAt.present
+          ? data.manualUnlockAt.value
+          : this.manualUnlockAt,
       planVersionsJson: data.planVersionsJson.present
           ? data.planVersionsJson.value
           : this.planVersionsJson,
@@ -5630,6 +6163,7 @@ class LearningProgressesData extends DataClass
           ..write('updatedAt: $updatedAt, ')
           ..write('skippedSubStages: $skippedSubStages, ')
           ..write('isPaused: $isPaused, ')
+          ..write('manualUnlockAt: $manualUnlockAt, ')
           ..write('planVersionsJson: $planVersionsJson')
           ..write(')'))
         .toString();
@@ -5665,6 +6199,7 @@ class LearningProgressesData extends DataClass
     updatedAt,
     skippedSubStages,
     isPaused,
+    manualUnlockAt,
     planVersionsJson,
   ]);
   @override
@@ -5708,6 +6243,7 @@ class LearningProgressesData extends DataClass
           other.updatedAt == this.updatedAt &&
           other.skippedSubStages == this.skippedSubStages &&
           other.isPaused == this.isPaused &&
+          other.manualUnlockAt == this.manualUnlockAt &&
           other.planVersionsJson == this.planVersionsJson);
 }
 
@@ -5741,6 +6277,7 @@ class LearningProgressesCompanion
   final Value<DateTime> updatedAt;
   final Value<String> skippedSubStages;
   final Value<bool> isPaused;
+  final Value<DateTime?> manualUnlockAt;
   final Value<String> planVersionsJson;
   final Value<int> rowid;
   const LearningProgressesCompanion({
@@ -5772,6 +6309,7 @@ class LearningProgressesCompanion
     this.updatedAt = const Value.absent(),
     this.skippedSubStages = const Value.absent(),
     this.isPaused = const Value.absent(),
+    this.manualUnlockAt = const Value.absent(),
     this.planVersionsJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -5804,6 +6342,7 @@ class LearningProgressesCompanion
     required DateTime updatedAt,
     this.skippedSubStages = const Value.absent(),
     this.isPaused = const Value.absent(),
+    this.manualUnlockAt = const Value.absent(),
     this.planVersionsJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : audioItemId = Value(audioItemId),
@@ -5837,6 +6376,7 @@ class LearningProgressesCompanion
     Expression<DateTime>? updatedAt,
     Expression<String>? skippedSubStages,
     Expression<bool>? isPaused,
+    Expression<DateTime>? manualUnlockAt,
     Expression<String>? planVersionsJson,
     Expression<int>? rowid,
   }) {
@@ -5892,6 +6432,7 @@ class LearningProgressesCompanion
       if (updatedAt != null) 'updated_at': updatedAt,
       if (skippedSubStages != null) 'skipped_sub_stages': skippedSubStages,
       if (isPaused != null) 'is_paused': isPaused,
+      if (manualUnlockAt != null) 'manual_unlock_at': manualUnlockAt,
       if (planVersionsJson != null) 'plan_versions_json': planVersionsJson,
       if (rowid != null) 'rowid': rowid,
     });
@@ -5926,6 +6467,7 @@ class LearningProgressesCompanion
     Value<DateTime>? updatedAt,
     Value<String>? skippedSubStages,
     Value<bool>? isPaused,
+    Value<DateTime?>? manualUnlockAt,
     Value<String>? planVersionsJson,
     Value<int>? rowid,
   }) {
@@ -5976,6 +6518,7 @@ class LearningProgressesCompanion
       updatedAt: updatedAt ?? this.updatedAt,
       skippedSubStages: skippedSubStages ?? this.skippedSubStages,
       isPaused: isPaused ?? this.isPaused,
+      manualUnlockAt: manualUnlockAt ?? this.manualUnlockAt,
       planVersionsJson: planVersionsJson ?? this.planVersionsJson,
       rowid: rowid ?? this.rowid,
     );
@@ -6104,6 +6647,9 @@ class LearningProgressesCompanion
     if (isPaused.present) {
       map['is_paused'] = Variable<bool>(isPaused.value);
     }
+    if (manualUnlockAt.present) {
+      map['manual_unlock_at'] = Variable<DateTime>(manualUnlockAt.value);
+    }
     if (planVersionsJson.present) {
       map['plan_versions_json'] = Variable<String>(planVersionsJson.value);
     }
@@ -6160,6 +6706,7 @@ class LearningProgressesCompanion
           ..write('updatedAt: $updatedAt, ')
           ..write('skippedSubStages: $skippedSubStages, ')
           ..write('isPaused: $isPaused, ')
+          ..write('manualUnlockAt: $manualUnlockAt, ')
           ..write('planVersionsJson: $planVersionsJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -7799,6 +8346,17 @@ class $SavedWordsTable extends SavedWords
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
+  static const VerificationMeta _memorySubjectIdMeta = const VerificationMeta(
+    'memorySubjectId',
+  );
+  @override
+  late final GeneratedColumn<String> memorySubjectId = GeneratedColumn<String>(
+    'memory_subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _audioItemIdMeta = const VerificationMeta(
     'audioItemId',
   );
@@ -7957,6 +8515,7 @@ class $SavedWordsTable extends SavedWords
   List<GeneratedColumn> get $columns => [
     id,
     word,
+    memorySubjectId,
     audioItemId,
     sentenceIndex,
     sentenceText,
@@ -7993,6 +8552,15 @@ class $SavedWordsTable extends SavedWords
       );
     } else if (isInserting) {
       context.missing(_wordMeta);
+    }
+    if (data.containsKey('memory_subject_id')) {
+      context.handle(
+        _memorySubjectIdMeta,
+        memorySubjectId.isAcceptableOrUnknown(
+          data['memory_subject_id']!,
+          _memorySubjectIdMeta,
+        ),
+      );
     }
     if (data.containsKey('audio_item_id')) {
       context.handle(
@@ -8117,6 +8685,10 @@ class $SavedWordsTable extends SavedWords
         DriftSqlType.string,
         data['${effectivePrefix}word'],
       )!,
+      memorySubjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}memory_subject_id'],
+      ),
       audioItemId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}audio_item_id'],
@@ -8185,6 +8757,11 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   /// 单词原形（小写，lemmatized），全局唯一
   final String word;
 
+  /// 稳定关联 FSRS 调度快照的业务主体 ID（不可变 UUID）。
+  ///
+  /// 与 [word] 解耦：调度身份不依赖可编辑/可合并的展示文本。
+  final String? memorySubjectId;
+
   /// 来源音频 ID，FK → audio_items，音频删除时置空
   final String? audioItemId;
 
@@ -8226,6 +8803,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   const SavedWord({
     required this.id,
     required this.word,
+    this.memorySubjectId,
     this.audioItemId,
     this.sentenceIndex,
     this.sentenceText,
@@ -8245,6 +8823,9 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['word'] = Variable<String>(word);
+    if (!nullToAbsent || memorySubjectId != null) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId);
+    }
     if (!nullToAbsent || audioItemId != null) {
       map['audio_item_id'] = Variable<String>(audioItemId);
     }
@@ -8279,6 +8860,9 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     return SavedWordsCompanion(
       id: Value(id),
       word: Value(word),
+      memorySubjectId: memorySubjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(memorySubjectId),
       audioItemId: audioItemId == null && nullToAbsent
           ? const Value.absent()
           : Value(audioItemId),
@@ -8317,6 +8901,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     return SavedWord(
       id: serializer.fromJson<int>(json['id']),
       word: serializer.fromJson<String>(json['word']),
+      memorySubjectId: serializer.fromJson<String?>(json['memorySubjectId']),
       audioItemId: serializer.fromJson<String?>(json['audioItemId']),
       sentenceIndex: serializer.fromJson<int?>(json['sentenceIndex']),
       sentenceText: serializer.fromJson<String?>(json['sentenceText']),
@@ -8338,6 +8923,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'word': serializer.toJson<String>(word),
+      'memorySubjectId': serializer.toJson<String?>(memorySubjectId),
       'audioItemId': serializer.toJson<String?>(audioItemId),
       'sentenceIndex': serializer.toJson<int?>(sentenceIndex),
       'sentenceText': serializer.toJson<String?>(sentenceText),
@@ -8357,6 +8943,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   SavedWord copyWith({
     int? id,
     String? word,
+    Value<String?> memorySubjectId = const Value.absent(),
     Value<String?> audioItemId = const Value.absent(),
     Value<int?> sentenceIndex = const Value.absent(),
     Value<String?> sentenceText = const Value.absent(),
@@ -8373,6 +8960,9 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   }) => SavedWord(
     id: id ?? this.id,
     word: word ?? this.word,
+    memorySubjectId: memorySubjectId.present
+        ? memorySubjectId.value
+        : this.memorySubjectId,
     audioItemId: audioItemId.present ? audioItemId.value : this.audioItemId,
     sentenceIndex: sentenceIndex.present
         ? sentenceIndex.value
@@ -8399,6 +8989,9 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     return SavedWord(
       id: data.id.present ? data.id.value : this.id,
       word: data.word.present ? data.word.value : this.word,
+      memorySubjectId: data.memorySubjectId.present
+          ? data.memorySubjectId.value
+          : this.memorySubjectId,
       audioItemId: data.audioItemId.present
           ? data.audioItemId.value
           : this.audioItemId,
@@ -8440,6 +9033,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
     return (StringBuffer('SavedWord(')
           ..write('id: $id, ')
           ..write('word: $word, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
           ..write('sentenceText: $sentenceText, ')
@@ -8461,6 +9055,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
   int get hashCode => Object.hash(
     id,
     word,
+    memorySubjectId,
     audioItemId,
     sentenceIndex,
     sentenceText,
@@ -8481,6 +9076,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
       (other is SavedWord &&
           other.id == this.id &&
           other.word == this.word &&
+          other.memorySubjectId == this.memorySubjectId &&
           other.audioItemId == this.audioItemId &&
           other.sentenceIndex == this.sentenceIndex &&
           other.sentenceText == this.sentenceText &&
@@ -8499,6 +9095,7 @@ class SavedWord extends DataClass implements Insertable<SavedWord> {
 class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   final Value<int> id;
   final Value<String> word;
+  final Value<String?> memorySubjectId;
   final Value<String?> audioItemId;
   final Value<int?> sentenceIndex;
   final Value<String?> sentenceText;
@@ -8515,6 +9112,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   const SavedWordsCompanion({
     this.id = const Value.absent(),
     this.word = const Value.absent(),
+    this.memorySubjectId = const Value.absent(),
     this.audioItemId = const Value.absent(),
     this.sentenceIndex = const Value.absent(),
     this.sentenceText = const Value.absent(),
@@ -8532,6 +9130,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   SavedWordsCompanion.insert({
     this.id = const Value.absent(),
     required String word,
+    this.memorySubjectId = const Value.absent(),
     this.audioItemId = const Value.absent(),
     this.sentenceIndex = const Value.absent(),
     this.sentenceText = const Value.absent(),
@@ -8551,6 +9150,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   static Insertable<SavedWord> custom({
     Expression<int>? id,
     Expression<String>? word,
+    Expression<String>? memorySubjectId,
     Expression<String>? audioItemId,
     Expression<int>? sentenceIndex,
     Expression<String>? sentenceText,
@@ -8568,6 +9168,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (word != null) 'word': word,
+      if (memorySubjectId != null) 'memory_subject_id': memorySubjectId,
       if (audioItemId != null) 'audio_item_id': audioItemId,
       if (sentenceIndex != null) 'sentence_index': sentenceIndex,
       if (sentenceText != null) 'sentence_text': sentenceText,
@@ -8587,6 +9188,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
   SavedWordsCompanion copyWith({
     Value<int>? id,
     Value<String>? word,
+    Value<String?>? memorySubjectId,
     Value<String?>? audioItemId,
     Value<int?>? sentenceIndex,
     Value<String?>? sentenceText,
@@ -8604,6 +9206,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     return SavedWordsCompanion(
       id: id ?? this.id,
       word: word ?? this.word,
+      memorySubjectId: memorySubjectId ?? this.memorySubjectId,
       audioItemId: audioItemId ?? this.audioItemId,
       sentenceIndex: sentenceIndex ?? this.sentenceIndex,
       sentenceText: sentenceText ?? this.sentenceText,
@@ -8628,6 +9231,9 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     }
     if (word.present) {
       map['word'] = Variable<String>(word.value);
+    }
+    if (memorySubjectId.present) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId.value);
     }
     if (audioItemId.present) {
       map['audio_item_id'] = Variable<String>(audioItemId.value);
@@ -8676,6 +9282,7 @@ class SavedWordsCompanion extends UpdateCompanion<SavedWord> {
     return (StringBuffer('SavedWordsCompanion(')
           ..write('id: $id, ')
           ..write('word: $word, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
           ..write('sentenceText: $sentenceText, ')
@@ -8724,6 +9331,17 @@ class $SavedSenseGroupsTable extends SavedSenseGroups
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _memorySubjectIdMeta = const VerificationMeta(
+    'memorySubjectId',
+  );
+  @override
+  late final GeneratedColumn<String> memorySubjectId = GeneratedColumn<String>(
+    'memory_subject_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _displayTextMeta = const VerificationMeta(
     'displayText',
@@ -8916,6 +9534,7 @@ class $SavedSenseGroupsTable extends SavedSenseGroups
   List<GeneratedColumn> get $columns => [
     id,
     phraseText,
+    memorySubjectId,
     displayText,
     audioItemId,
     sentenceIndex,
@@ -8955,6 +9574,15 @@ class $SavedSenseGroupsTable extends SavedSenseGroups
       );
     } else if (isInserting) {
       context.missing(_phraseTextMeta);
+    }
+    if (data.containsKey('memory_subject_id')) {
+      context.handle(
+        _memorySubjectIdMeta,
+        memorySubjectId.isAcceptableOrUnknown(
+          data['memory_subject_id']!,
+          _memorySubjectIdMeta,
+        ),
+      );
     }
     if (data.containsKey('display_text')) {
       context.handle(
@@ -9108,6 +9736,10 @@ class $SavedSenseGroupsTable extends SavedSenseGroups
         DriftSqlType.string,
         data['${effectivePrefix}phrase_text'],
       )!,
+      memorySubjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}memory_subject_id'],
+      ),
       displayText: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}display_text'],
@@ -9188,6 +9820,11 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
   /// 意群文本（归一化：小写 + trim + 去句末标点，保留撇号），全局唯一
   final String phraseText;
 
+  /// 稳定关联 FSRS 调度快照的业务主体 ID（不可变 UUID）。
+  ///
+  /// 与 [phraseText] 解耦：调度身份不依赖可编辑/可合并的展示文本。
+  final String? memorySubjectId;
+
   /// 意群原始文本（保留大小写，用于展示）
   final String displayText;
 
@@ -9238,6 +9875,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
   const SavedSenseGroup({
     required this.id,
     required this.phraseText,
+    this.memorySubjectId,
     required this.displayText,
     this.audioItemId,
     this.sentenceIndex,
@@ -9260,6 +9898,9 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['phrase_text'] = Variable<String>(phraseText);
+    if (!nullToAbsent || memorySubjectId != null) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId);
+    }
     map['display_text'] = Variable<String>(displayText);
     if (!nullToAbsent || audioItemId != null) {
       map['audio_item_id'] = Variable<String>(audioItemId);
@@ -9301,6 +9942,9 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
     return SavedSenseGroupsCompanion(
       id: Value(id),
       phraseText: Value(phraseText),
+      memorySubjectId: memorySubjectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(memorySubjectId),
       displayText: Value(displayText),
       audioItemId: audioItemId == null && nullToAbsent
           ? const Value.absent()
@@ -9346,6 +9990,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
     return SavedSenseGroup(
       id: serializer.fromJson<int>(json['id']),
       phraseText: serializer.fromJson<String>(json['phraseText']),
+      memorySubjectId: serializer.fromJson<String?>(json['memorySubjectId']),
       displayText: serializer.fromJson<String>(json['displayText']),
       audioItemId: serializer.fromJson<String?>(json['audioItemId']),
       sentenceIndex: serializer.fromJson<int?>(json['sentenceIndex']),
@@ -9370,6 +10015,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'phraseText': serializer.toJson<String>(phraseText),
+      'memorySubjectId': serializer.toJson<String?>(memorySubjectId),
       'displayText': serializer.toJson<String>(displayText),
       'audioItemId': serializer.toJson<String?>(audioItemId),
       'sentenceIndex': serializer.toJson<int?>(sentenceIndex),
@@ -9392,6 +10038,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
   SavedSenseGroup copyWith({
     int? id,
     String? phraseText,
+    Value<String?> memorySubjectId = const Value.absent(),
     String? displayText,
     Value<String?> audioItemId = const Value.absent(),
     Value<int?> sentenceIndex = const Value.absent(),
@@ -9411,6 +10058,9 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
   }) => SavedSenseGroup(
     id: id ?? this.id,
     phraseText: phraseText ?? this.phraseText,
+    memorySubjectId: memorySubjectId.present
+        ? memorySubjectId.value
+        : this.memorySubjectId,
     displayText: displayText ?? this.displayText,
     audioItemId: audioItemId.present ? audioItemId.value : this.audioItemId,
     sentenceIndex: sentenceIndex.present
@@ -9442,6 +10092,9 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
       phraseText: data.phraseText.present
           ? data.phraseText.value
           : this.phraseText,
+      memorySubjectId: data.memorySubjectId.present
+          ? data.memorySubjectId.value
+          : this.memorySubjectId,
       displayText: data.displayText.present
           ? data.displayText.value
           : this.displayText,
@@ -9492,6 +10145,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
     return (StringBuffer('SavedSenseGroup(')
           ..write('id: $id, ')
           ..write('phraseText: $phraseText, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('displayText: $displayText, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
@@ -9516,6 +10170,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
   int get hashCode => Object.hash(
     id,
     phraseText,
+    memorySubjectId,
     displayText,
     audioItemId,
     sentenceIndex,
@@ -9539,6 +10194,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
       (other is SavedSenseGroup &&
           other.id == this.id &&
           other.phraseText == this.phraseText &&
+          other.memorySubjectId == this.memorySubjectId &&
           other.displayText == this.displayText &&
           other.audioItemId == this.audioItemId &&
           other.sentenceIndex == this.sentenceIndex &&
@@ -9560,6 +10216,7 @@ class SavedSenseGroup extends DataClass implements Insertable<SavedSenseGroup> {
 class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
   final Value<int> id;
   final Value<String> phraseText;
+  final Value<String?> memorySubjectId;
   final Value<String> displayText;
   final Value<String?> audioItemId;
   final Value<int?> sentenceIndex;
@@ -9579,6 +10236,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
   const SavedSenseGroupsCompanion({
     this.id = const Value.absent(),
     this.phraseText = const Value.absent(),
+    this.memorySubjectId = const Value.absent(),
     this.displayText = const Value.absent(),
     this.audioItemId = const Value.absent(),
     this.sentenceIndex = const Value.absent(),
@@ -9599,6 +10257,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
   SavedSenseGroupsCompanion.insert({
     this.id = const Value.absent(),
     required String phraseText,
+    this.memorySubjectId = const Value.absent(),
     required String displayText,
     this.audioItemId = const Value.absent(),
     this.sentenceIndex = const Value.absent(),
@@ -9622,6 +10281,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
   static Insertable<SavedSenseGroup> custom({
     Expression<int>? id,
     Expression<String>? phraseText,
+    Expression<String>? memorySubjectId,
     Expression<String>? displayText,
     Expression<String>? audioItemId,
     Expression<int>? sentenceIndex,
@@ -9642,6 +10302,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (phraseText != null) 'phrase_text': phraseText,
+      if (memorySubjectId != null) 'memory_subject_id': memorySubjectId,
       if (displayText != null) 'display_text': displayText,
       if (audioItemId != null) 'audio_item_id': audioItemId,
       if (sentenceIndex != null) 'sentence_index': sentenceIndex,
@@ -9664,6 +10325,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
   SavedSenseGroupsCompanion copyWith({
     Value<int>? id,
     Value<String>? phraseText,
+    Value<String?>? memorySubjectId,
     Value<String>? displayText,
     Value<String?>? audioItemId,
     Value<int?>? sentenceIndex,
@@ -9684,6 +10346,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
     return SavedSenseGroupsCompanion(
       id: id ?? this.id,
       phraseText: phraseText ?? this.phraseText,
+      memorySubjectId: memorySubjectId ?? this.memorySubjectId,
       displayText: displayText ?? this.displayText,
       audioItemId: audioItemId ?? this.audioItemId,
       sentenceIndex: sentenceIndex ?? this.sentenceIndex,
@@ -9711,6 +10374,9 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
     }
     if (phraseText.present) {
       map['phrase_text'] = Variable<String>(phraseText.value);
+    }
+    if (memorySubjectId.present) {
+      map['memory_subject_id'] = Variable<String>(memorySubjectId.value);
     }
     if (displayText.present) {
       map['display_text'] = Variable<String>(displayText.value);
@@ -9768,6 +10434,7 @@ class SavedSenseGroupsCompanion extends UpdateCompanion<SavedSenseGroup> {
     return (StringBuffer('SavedSenseGroupsCompanion(')
           ..write('id: $id, ')
           ..write('phraseText: $phraseText, ')
+          ..write('memorySubjectId: $memorySubjectId, ')
           ..write('displayText: $displayText, ')
           ..write('audioItemId: $audioItemId, ')
           ..write('sentenceIndex: $sentenceIndex, ')
@@ -10096,6 +10763,17 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _studyTimeMillisecondsMeta =
+      const VerificationMeta('studyTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> studyTimeMilliseconds = GeneratedColumn<int>(
+    'study_time_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _inputWordsMeta = const VerificationMeta(
     'inputWords',
   );
@@ -10132,6 +10810,17 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _inputTimeMillisecondsMeta =
+      const VerificationMeta('inputTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> inputTimeMilliseconds = GeneratedColumn<int>(
+    'input_time_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _outputTimeSecondsMeta = const VerificationMeta(
     'outputTimeSeconds',
   );
@@ -10144,15 +10833,29 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _outputTimeMillisecondsMeta =
+      const VerificationMeta('outputTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> outputTimeMilliseconds = GeneratedColumn<int>(
+    'output_time_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     date,
     studyTimeSeconds,
+    studyTimeMilliseconds,
     inputWords,
     outputWords,
     inputTimeSeconds,
+    inputTimeMilliseconds,
     outputTimeSeconds,
+    outputTimeMilliseconds,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -10186,6 +10889,15 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
         ),
       );
     }
+    if (data.containsKey('study_time_milliseconds')) {
+      context.handle(
+        _studyTimeMillisecondsMeta,
+        studyTimeMilliseconds.isAcceptableOrUnknown(
+          data['study_time_milliseconds']!,
+          _studyTimeMillisecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('input_words')) {
       context.handle(
         _inputWordsMeta,
@@ -10210,12 +10922,30 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
         ),
       );
     }
+    if (data.containsKey('input_time_milliseconds')) {
+      context.handle(
+        _inputTimeMillisecondsMeta,
+        inputTimeMilliseconds.isAcceptableOrUnknown(
+          data['input_time_milliseconds']!,
+          _inputTimeMillisecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('output_time_seconds')) {
       context.handle(
         _outputTimeSecondsMeta,
         outputTimeSeconds.isAcceptableOrUnknown(
           data['output_time_seconds']!,
           _outputTimeSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('output_time_milliseconds')) {
+      context.handle(
+        _outputTimeMillisecondsMeta,
+        outputTimeMilliseconds.isAcceptableOrUnknown(
+          data['output_time_milliseconds']!,
+          _outputTimeMillisecondsMeta,
         ),
       );
     }
@@ -10240,6 +10970,10 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
         DriftSqlType.int,
         data['${effectivePrefix}study_time_seconds'],
       )!,
+      studyTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}study_time_milliseconds'],
+      )!,
       inputWords: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}input_words'],
@@ -10252,9 +10986,17 @@ class $DailyStudyRecordsTable extends DailyStudyRecords
         DriftSqlType.int,
         data['${effectivePrefix}input_time_seconds'],
       )!,
+      inputTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}input_time_milliseconds'],
+      )!,
       outputTimeSeconds: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}output_time_seconds'],
+      )!,
+      outputTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}output_time_milliseconds'],
       )!,
     );
   }
@@ -10273,8 +11015,11 @@ class DailyStudyRecord extends DataClass
   /// 日期（唯一），只保留年月日
   final DateTime date;
 
-  /// 当日累计学习时长（秒）
+  /// 旧版当日累计学习时长（秒）。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int studyTimeSeconds;
+
+  /// 当日累计学习时长（毫秒）；新统计写入的真实精度来源。
+  final int studyTimeMilliseconds;
 
   /// 当日输入词数（听了多少词）
   final int inputWords;
@@ -10282,19 +11027,28 @@ class DailyStudyRecord extends DataClass
   /// 当日输出词数（跟读/复述了多少词）
   final int outputWords;
 
-  /// 当日输入时间（秒）— 音频播放时间
+  /// 旧版当日输入时间（秒）。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int inputTimeSeconds;
 
-  /// 当日输出时间（秒）— 跟读/复述暂停时间
+  /// 当日累计输入时间（毫秒）。
+  final int inputTimeMilliseconds;
+
+  /// 旧版当日输出时间（秒）。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int outputTimeSeconds;
+
+  /// 当日累计输出时间（毫秒）。
+  final int outputTimeMilliseconds;
   const DailyStudyRecord({
     required this.id,
     required this.date,
     required this.studyTimeSeconds,
+    required this.studyTimeMilliseconds,
     required this.inputWords,
     required this.outputWords,
     required this.inputTimeSeconds,
+    required this.inputTimeMilliseconds,
     required this.outputTimeSeconds,
+    required this.outputTimeMilliseconds,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -10302,10 +11056,13 @@ class DailyStudyRecord extends DataClass
     map['id'] = Variable<int>(id);
     map['date'] = Variable<DateTime>(date);
     map['study_time_seconds'] = Variable<int>(studyTimeSeconds);
+    map['study_time_milliseconds'] = Variable<int>(studyTimeMilliseconds);
     map['input_words'] = Variable<int>(inputWords);
     map['output_words'] = Variable<int>(outputWords);
     map['input_time_seconds'] = Variable<int>(inputTimeSeconds);
+    map['input_time_milliseconds'] = Variable<int>(inputTimeMilliseconds);
     map['output_time_seconds'] = Variable<int>(outputTimeSeconds);
+    map['output_time_milliseconds'] = Variable<int>(outputTimeMilliseconds);
     return map;
   }
 
@@ -10314,10 +11071,13 @@ class DailyStudyRecord extends DataClass
       id: Value(id),
       date: Value(date),
       studyTimeSeconds: Value(studyTimeSeconds),
+      studyTimeMilliseconds: Value(studyTimeMilliseconds),
       inputWords: Value(inputWords),
       outputWords: Value(outputWords),
       inputTimeSeconds: Value(inputTimeSeconds),
+      inputTimeMilliseconds: Value(inputTimeMilliseconds),
       outputTimeSeconds: Value(outputTimeSeconds),
+      outputTimeMilliseconds: Value(outputTimeMilliseconds),
     );
   }
 
@@ -10330,10 +11090,19 @@ class DailyStudyRecord extends DataClass
       id: serializer.fromJson<int>(json['id']),
       date: serializer.fromJson<DateTime>(json['date']),
       studyTimeSeconds: serializer.fromJson<int>(json['studyTimeSeconds']),
+      studyTimeMilliseconds: serializer.fromJson<int>(
+        json['studyTimeMilliseconds'],
+      ),
       inputWords: serializer.fromJson<int>(json['inputWords']),
       outputWords: serializer.fromJson<int>(json['outputWords']),
       inputTimeSeconds: serializer.fromJson<int>(json['inputTimeSeconds']),
+      inputTimeMilliseconds: serializer.fromJson<int>(
+        json['inputTimeMilliseconds'],
+      ),
       outputTimeSeconds: serializer.fromJson<int>(json['outputTimeSeconds']),
+      outputTimeMilliseconds: serializer.fromJson<int>(
+        json['outputTimeMilliseconds'],
+      ),
     );
   }
   @override
@@ -10343,10 +11112,13 @@ class DailyStudyRecord extends DataClass
       'id': serializer.toJson<int>(id),
       'date': serializer.toJson<DateTime>(date),
       'studyTimeSeconds': serializer.toJson<int>(studyTimeSeconds),
+      'studyTimeMilliseconds': serializer.toJson<int>(studyTimeMilliseconds),
       'inputWords': serializer.toJson<int>(inputWords),
       'outputWords': serializer.toJson<int>(outputWords),
       'inputTimeSeconds': serializer.toJson<int>(inputTimeSeconds),
+      'inputTimeMilliseconds': serializer.toJson<int>(inputTimeMilliseconds),
       'outputTimeSeconds': serializer.toJson<int>(outputTimeSeconds),
+      'outputTimeMilliseconds': serializer.toJson<int>(outputTimeMilliseconds),
     };
   }
 
@@ -10354,18 +11126,25 @@ class DailyStudyRecord extends DataClass
     int? id,
     DateTime? date,
     int? studyTimeSeconds,
+    int? studyTimeMilliseconds,
     int? inputWords,
     int? outputWords,
     int? inputTimeSeconds,
+    int? inputTimeMilliseconds,
     int? outputTimeSeconds,
+    int? outputTimeMilliseconds,
   }) => DailyStudyRecord(
     id: id ?? this.id,
     date: date ?? this.date,
     studyTimeSeconds: studyTimeSeconds ?? this.studyTimeSeconds,
+    studyTimeMilliseconds: studyTimeMilliseconds ?? this.studyTimeMilliseconds,
     inputWords: inputWords ?? this.inputWords,
     outputWords: outputWords ?? this.outputWords,
     inputTimeSeconds: inputTimeSeconds ?? this.inputTimeSeconds,
+    inputTimeMilliseconds: inputTimeMilliseconds ?? this.inputTimeMilliseconds,
     outputTimeSeconds: outputTimeSeconds ?? this.outputTimeSeconds,
+    outputTimeMilliseconds:
+        outputTimeMilliseconds ?? this.outputTimeMilliseconds,
   );
   DailyStudyRecord copyWithCompanion(DailyStudyRecordsCompanion data) {
     return DailyStudyRecord(
@@ -10374,6 +11153,9 @@ class DailyStudyRecord extends DataClass
       studyTimeSeconds: data.studyTimeSeconds.present
           ? data.studyTimeSeconds.value
           : this.studyTimeSeconds,
+      studyTimeMilliseconds: data.studyTimeMilliseconds.present
+          ? data.studyTimeMilliseconds.value
+          : this.studyTimeMilliseconds,
       inputWords: data.inputWords.present
           ? data.inputWords.value
           : this.inputWords,
@@ -10383,9 +11165,15 @@ class DailyStudyRecord extends DataClass
       inputTimeSeconds: data.inputTimeSeconds.present
           ? data.inputTimeSeconds.value
           : this.inputTimeSeconds,
+      inputTimeMilliseconds: data.inputTimeMilliseconds.present
+          ? data.inputTimeMilliseconds.value
+          : this.inputTimeMilliseconds,
       outputTimeSeconds: data.outputTimeSeconds.present
           ? data.outputTimeSeconds.value
           : this.outputTimeSeconds,
+      outputTimeMilliseconds: data.outputTimeMilliseconds.present
+          ? data.outputTimeMilliseconds.value
+          : this.outputTimeMilliseconds,
     );
   }
 
@@ -10395,10 +11183,13 @@ class DailyStudyRecord extends DataClass
           ..write('id: $id, ')
           ..write('date: $date, ')
           ..write('studyTimeSeconds: $studyTimeSeconds, ')
+          ..write('studyTimeMilliseconds: $studyTimeMilliseconds, ')
           ..write('inputWords: $inputWords, ')
           ..write('outputWords: $outputWords, ')
           ..write('inputTimeSeconds: $inputTimeSeconds, ')
-          ..write('outputTimeSeconds: $outputTimeSeconds')
+          ..write('inputTimeMilliseconds: $inputTimeMilliseconds, ')
+          ..write('outputTimeSeconds: $outputTimeSeconds, ')
+          ..write('outputTimeMilliseconds: $outputTimeMilliseconds')
           ..write(')'))
         .toString();
   }
@@ -10408,10 +11199,13 @@ class DailyStudyRecord extends DataClass
     id,
     date,
     studyTimeSeconds,
+    studyTimeMilliseconds,
     inputWords,
     outputWords,
     inputTimeSeconds,
+    inputTimeMilliseconds,
     outputTimeSeconds,
+    outputTimeMilliseconds,
   );
   @override
   bool operator ==(Object other) =>
@@ -10420,55 +11214,76 @@ class DailyStudyRecord extends DataClass
           other.id == this.id &&
           other.date == this.date &&
           other.studyTimeSeconds == this.studyTimeSeconds &&
+          other.studyTimeMilliseconds == this.studyTimeMilliseconds &&
           other.inputWords == this.inputWords &&
           other.outputWords == this.outputWords &&
           other.inputTimeSeconds == this.inputTimeSeconds &&
-          other.outputTimeSeconds == this.outputTimeSeconds);
+          other.inputTimeMilliseconds == this.inputTimeMilliseconds &&
+          other.outputTimeSeconds == this.outputTimeSeconds &&
+          other.outputTimeMilliseconds == this.outputTimeMilliseconds);
 }
 
 class DailyStudyRecordsCompanion extends UpdateCompanion<DailyStudyRecord> {
   final Value<int> id;
   final Value<DateTime> date;
   final Value<int> studyTimeSeconds;
+  final Value<int> studyTimeMilliseconds;
   final Value<int> inputWords;
   final Value<int> outputWords;
   final Value<int> inputTimeSeconds;
+  final Value<int> inputTimeMilliseconds;
   final Value<int> outputTimeSeconds;
+  final Value<int> outputTimeMilliseconds;
   const DailyStudyRecordsCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
     this.studyTimeSeconds = const Value.absent(),
+    this.studyTimeMilliseconds = const Value.absent(),
     this.inputWords = const Value.absent(),
     this.outputWords = const Value.absent(),
     this.inputTimeSeconds = const Value.absent(),
+    this.inputTimeMilliseconds = const Value.absent(),
     this.outputTimeSeconds = const Value.absent(),
+    this.outputTimeMilliseconds = const Value.absent(),
   });
   DailyStudyRecordsCompanion.insert({
     this.id = const Value.absent(),
     required DateTime date,
     this.studyTimeSeconds = const Value.absent(),
+    this.studyTimeMilliseconds = const Value.absent(),
     this.inputWords = const Value.absent(),
     this.outputWords = const Value.absent(),
     this.inputTimeSeconds = const Value.absent(),
+    this.inputTimeMilliseconds = const Value.absent(),
     this.outputTimeSeconds = const Value.absent(),
+    this.outputTimeMilliseconds = const Value.absent(),
   }) : date = Value(date);
   static Insertable<DailyStudyRecord> custom({
     Expression<int>? id,
     Expression<DateTime>? date,
     Expression<int>? studyTimeSeconds,
+    Expression<int>? studyTimeMilliseconds,
     Expression<int>? inputWords,
     Expression<int>? outputWords,
     Expression<int>? inputTimeSeconds,
+    Expression<int>? inputTimeMilliseconds,
     Expression<int>? outputTimeSeconds,
+    Expression<int>? outputTimeMilliseconds,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (date != null) 'date': date,
       if (studyTimeSeconds != null) 'study_time_seconds': studyTimeSeconds,
+      if (studyTimeMilliseconds != null)
+        'study_time_milliseconds': studyTimeMilliseconds,
       if (inputWords != null) 'input_words': inputWords,
       if (outputWords != null) 'output_words': outputWords,
       if (inputTimeSeconds != null) 'input_time_seconds': inputTimeSeconds,
+      if (inputTimeMilliseconds != null)
+        'input_time_milliseconds': inputTimeMilliseconds,
       if (outputTimeSeconds != null) 'output_time_seconds': outputTimeSeconds,
+      if (outputTimeMilliseconds != null)
+        'output_time_milliseconds': outputTimeMilliseconds,
     });
   }
 
@@ -10476,19 +11291,28 @@ class DailyStudyRecordsCompanion extends UpdateCompanion<DailyStudyRecord> {
     Value<int>? id,
     Value<DateTime>? date,
     Value<int>? studyTimeSeconds,
+    Value<int>? studyTimeMilliseconds,
     Value<int>? inputWords,
     Value<int>? outputWords,
     Value<int>? inputTimeSeconds,
+    Value<int>? inputTimeMilliseconds,
     Value<int>? outputTimeSeconds,
+    Value<int>? outputTimeMilliseconds,
   }) {
     return DailyStudyRecordsCompanion(
       id: id ?? this.id,
       date: date ?? this.date,
       studyTimeSeconds: studyTimeSeconds ?? this.studyTimeSeconds,
+      studyTimeMilliseconds:
+          studyTimeMilliseconds ?? this.studyTimeMilliseconds,
       inputWords: inputWords ?? this.inputWords,
       outputWords: outputWords ?? this.outputWords,
       inputTimeSeconds: inputTimeSeconds ?? this.inputTimeSeconds,
+      inputTimeMilliseconds:
+          inputTimeMilliseconds ?? this.inputTimeMilliseconds,
       outputTimeSeconds: outputTimeSeconds ?? this.outputTimeSeconds,
+      outputTimeMilliseconds:
+          outputTimeMilliseconds ?? this.outputTimeMilliseconds,
     );
   }
 
@@ -10504,6 +11328,11 @@ class DailyStudyRecordsCompanion extends UpdateCompanion<DailyStudyRecord> {
     if (studyTimeSeconds.present) {
       map['study_time_seconds'] = Variable<int>(studyTimeSeconds.value);
     }
+    if (studyTimeMilliseconds.present) {
+      map['study_time_milliseconds'] = Variable<int>(
+        studyTimeMilliseconds.value,
+      );
+    }
     if (inputWords.present) {
       map['input_words'] = Variable<int>(inputWords.value);
     }
@@ -10513,8 +11342,18 @@ class DailyStudyRecordsCompanion extends UpdateCompanion<DailyStudyRecord> {
     if (inputTimeSeconds.present) {
       map['input_time_seconds'] = Variable<int>(inputTimeSeconds.value);
     }
+    if (inputTimeMilliseconds.present) {
+      map['input_time_milliseconds'] = Variable<int>(
+        inputTimeMilliseconds.value,
+      );
+    }
     if (outputTimeSeconds.present) {
       map['output_time_seconds'] = Variable<int>(outputTimeSeconds.value);
+    }
+    if (outputTimeMilliseconds.present) {
+      map['output_time_milliseconds'] = Variable<int>(
+        outputTimeMilliseconds.value,
+      );
     }
     return map;
   }
@@ -10525,10 +11364,13 @@ class DailyStudyRecordsCompanion extends UpdateCompanion<DailyStudyRecord> {
           ..write('id: $id, ')
           ..write('date: $date, ')
           ..write('studyTimeSeconds: $studyTimeSeconds, ')
+          ..write('studyTimeMilliseconds: $studyTimeMilliseconds, ')
           ..write('inputWords: $inputWords, ')
           ..write('outputWords: $outputWords, ')
           ..write('inputTimeSeconds: $inputTimeSeconds, ')
-          ..write('outputTimeSeconds: $outputTimeSeconds')
+          ..write('inputTimeMilliseconds: $inputTimeMilliseconds, ')
+          ..write('outputTimeSeconds: $outputTimeSeconds, ')
+          ..write('outputTimeMilliseconds: $outputTimeMilliseconds')
           ..write(')'))
         .toString();
   }
@@ -10583,12 +11425,34 @@ class $DailyStageStudyRecordsTable extends DailyStageStudyRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _studyTimeMillisecondsMeta =
+      const VerificationMeta('studyTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> studyTimeMilliseconds = GeneratedColumn<int>(
+    'study_time_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _inputTimeSecondsMeta = const VerificationMeta(
     'inputTimeSeconds',
   );
   @override
   late final GeneratedColumn<int> inputTimeSeconds = GeneratedColumn<int>(
     'input_time_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _inputTimeMillisecondsMeta =
+      const VerificationMeta('inputTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> inputTimeMilliseconds = GeneratedColumn<int>(
+    'input_time_milliseconds',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -10607,14 +11471,28 @@ class $DailyStageStudyRecordsTable extends DailyStageStudyRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _outputTimeMillisecondsMeta =
+      const VerificationMeta('outputTimeMilliseconds');
+  @override
+  late final GeneratedColumn<int> outputTimeMilliseconds = GeneratedColumn<int>(
+    'output_time_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     date,
     stage,
     studyTimeSeconds,
+    studyTimeMilliseconds,
     inputTimeSeconds,
+    inputTimeMilliseconds,
     outputTimeSeconds,
+    outputTimeMilliseconds,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -10648,6 +11526,15 @@ class $DailyStageStudyRecordsTable extends DailyStageStudyRecords
         ),
       );
     }
+    if (data.containsKey('study_time_milliseconds')) {
+      context.handle(
+        _studyTimeMillisecondsMeta,
+        studyTimeMilliseconds.isAcceptableOrUnknown(
+          data['study_time_milliseconds']!,
+          _studyTimeMillisecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('input_time_seconds')) {
       context.handle(
         _inputTimeSecondsMeta,
@@ -10657,12 +11544,30 @@ class $DailyStageStudyRecordsTable extends DailyStageStudyRecords
         ),
       );
     }
+    if (data.containsKey('input_time_milliseconds')) {
+      context.handle(
+        _inputTimeMillisecondsMeta,
+        inputTimeMilliseconds.isAcceptableOrUnknown(
+          data['input_time_milliseconds']!,
+          _inputTimeMillisecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('output_time_seconds')) {
       context.handle(
         _outputTimeSecondsMeta,
         outputTimeSeconds.isAcceptableOrUnknown(
           data['output_time_seconds']!,
           _outputTimeSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('output_time_milliseconds')) {
+      context.handle(
+        _outputTimeMillisecondsMeta,
+        outputTimeMilliseconds.isAcceptableOrUnknown(
+          data['output_time_milliseconds']!,
+          _outputTimeMillisecondsMeta,
         ),
       );
     }
@@ -10697,13 +11602,25 @@ class $DailyStageStudyRecordsTable extends DailyStageStudyRecords
         DriftSqlType.int,
         data['${effectivePrefix}study_time_seconds'],
       )!,
+      studyTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}study_time_milliseconds'],
+      )!,
       inputTimeSeconds: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}input_time_seconds'],
       )!,
+      inputTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}input_time_milliseconds'],
+      )!,
       outputTimeSeconds: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}output_time_seconds'],
+      )!,
+      outputTimeMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}output_time_milliseconds'],
       )!,
     );
   }
@@ -10728,21 +11645,33 @@ class DailyStageStudyRecord extends DataClass
   /// 学习阶段（intEnum，按 StudyStage.index 存储）
   final StudyStage stage;
 
-  /// 当日该阶段累计学习时长（秒）
+  /// 旧版当日该阶段累计学习时长（秒）。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int studyTimeSeconds;
 
-  /// 当日该阶段输入时间（秒）— 音频播放时间
+  /// 当日该阶段累计学习时长（毫秒）。
+  final int studyTimeMilliseconds;
+
+  /// 旧版当日该阶段输入时间（秒）— 音频播放时间。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int inputTimeSeconds;
 
-  /// 当日该阶段输出时间（秒）— 跟读/复述时间
+  /// 当日该阶段累计输入时间（毫秒）。
+  final int inputTimeMilliseconds;
+
+  /// 旧版当日该阶段输出时间（秒）— 跟读/复述时间。仅保留用于旧备份/历史迁移兼容，业务不读取。
   final int outputTimeSeconds;
+
+  /// 当日该阶段累计输出时间（毫秒）。
+  final int outputTimeMilliseconds;
   const DailyStageStudyRecord({
     required this.id,
     required this.date,
     required this.stage,
     required this.studyTimeSeconds,
+    required this.studyTimeMilliseconds,
     required this.inputTimeSeconds,
+    required this.inputTimeMilliseconds,
     required this.outputTimeSeconds,
+    required this.outputTimeMilliseconds,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -10755,8 +11684,11 @@ class DailyStageStudyRecord extends DataClass
       );
     }
     map['study_time_seconds'] = Variable<int>(studyTimeSeconds);
+    map['study_time_milliseconds'] = Variable<int>(studyTimeMilliseconds);
     map['input_time_seconds'] = Variable<int>(inputTimeSeconds);
+    map['input_time_milliseconds'] = Variable<int>(inputTimeMilliseconds);
     map['output_time_seconds'] = Variable<int>(outputTimeSeconds);
+    map['output_time_milliseconds'] = Variable<int>(outputTimeMilliseconds);
     return map;
   }
 
@@ -10766,8 +11698,11 @@ class DailyStageStudyRecord extends DataClass
       date: Value(date),
       stage: Value(stage),
       studyTimeSeconds: Value(studyTimeSeconds),
+      studyTimeMilliseconds: Value(studyTimeMilliseconds),
       inputTimeSeconds: Value(inputTimeSeconds),
+      inputTimeMilliseconds: Value(inputTimeMilliseconds),
       outputTimeSeconds: Value(outputTimeSeconds),
+      outputTimeMilliseconds: Value(outputTimeMilliseconds),
     );
   }
 
@@ -10783,8 +11718,17 @@ class DailyStageStudyRecord extends DataClass
         serializer.fromJson<int>(json['stage']),
       ),
       studyTimeSeconds: serializer.fromJson<int>(json['studyTimeSeconds']),
+      studyTimeMilliseconds: serializer.fromJson<int>(
+        json['studyTimeMilliseconds'],
+      ),
       inputTimeSeconds: serializer.fromJson<int>(json['inputTimeSeconds']),
+      inputTimeMilliseconds: serializer.fromJson<int>(
+        json['inputTimeMilliseconds'],
+      ),
       outputTimeSeconds: serializer.fromJson<int>(json['outputTimeSeconds']),
+      outputTimeMilliseconds: serializer.fromJson<int>(
+        json['outputTimeMilliseconds'],
+      ),
     );
   }
   @override
@@ -10797,8 +11741,11 @@ class DailyStageStudyRecord extends DataClass
         $DailyStageStudyRecordsTable.$converterstage.toJson(stage),
       ),
       'studyTimeSeconds': serializer.toJson<int>(studyTimeSeconds),
+      'studyTimeMilliseconds': serializer.toJson<int>(studyTimeMilliseconds),
       'inputTimeSeconds': serializer.toJson<int>(inputTimeSeconds),
+      'inputTimeMilliseconds': serializer.toJson<int>(inputTimeMilliseconds),
       'outputTimeSeconds': serializer.toJson<int>(outputTimeSeconds),
+      'outputTimeMilliseconds': serializer.toJson<int>(outputTimeMilliseconds),
     };
   }
 
@@ -10807,15 +11754,22 @@ class DailyStageStudyRecord extends DataClass
     DateTime? date,
     StudyStage? stage,
     int? studyTimeSeconds,
+    int? studyTimeMilliseconds,
     int? inputTimeSeconds,
+    int? inputTimeMilliseconds,
     int? outputTimeSeconds,
+    int? outputTimeMilliseconds,
   }) => DailyStageStudyRecord(
     id: id ?? this.id,
     date: date ?? this.date,
     stage: stage ?? this.stage,
     studyTimeSeconds: studyTimeSeconds ?? this.studyTimeSeconds,
+    studyTimeMilliseconds: studyTimeMilliseconds ?? this.studyTimeMilliseconds,
     inputTimeSeconds: inputTimeSeconds ?? this.inputTimeSeconds,
+    inputTimeMilliseconds: inputTimeMilliseconds ?? this.inputTimeMilliseconds,
     outputTimeSeconds: outputTimeSeconds ?? this.outputTimeSeconds,
+    outputTimeMilliseconds:
+        outputTimeMilliseconds ?? this.outputTimeMilliseconds,
   );
   DailyStageStudyRecord copyWithCompanion(
     DailyStageStudyRecordsCompanion data,
@@ -10827,12 +11781,21 @@ class DailyStageStudyRecord extends DataClass
       studyTimeSeconds: data.studyTimeSeconds.present
           ? data.studyTimeSeconds.value
           : this.studyTimeSeconds,
+      studyTimeMilliseconds: data.studyTimeMilliseconds.present
+          ? data.studyTimeMilliseconds.value
+          : this.studyTimeMilliseconds,
       inputTimeSeconds: data.inputTimeSeconds.present
           ? data.inputTimeSeconds.value
           : this.inputTimeSeconds,
+      inputTimeMilliseconds: data.inputTimeMilliseconds.present
+          ? data.inputTimeMilliseconds.value
+          : this.inputTimeMilliseconds,
       outputTimeSeconds: data.outputTimeSeconds.present
           ? data.outputTimeSeconds.value
           : this.outputTimeSeconds,
+      outputTimeMilliseconds: data.outputTimeMilliseconds.present
+          ? data.outputTimeMilliseconds.value
+          : this.outputTimeMilliseconds,
     );
   }
 
@@ -10843,8 +11806,11 @@ class DailyStageStudyRecord extends DataClass
           ..write('date: $date, ')
           ..write('stage: $stage, ')
           ..write('studyTimeSeconds: $studyTimeSeconds, ')
+          ..write('studyTimeMilliseconds: $studyTimeMilliseconds, ')
           ..write('inputTimeSeconds: $inputTimeSeconds, ')
-          ..write('outputTimeSeconds: $outputTimeSeconds')
+          ..write('inputTimeMilliseconds: $inputTimeMilliseconds, ')
+          ..write('outputTimeSeconds: $outputTimeSeconds, ')
+          ..write('outputTimeMilliseconds: $outputTimeMilliseconds')
           ..write(')'))
         .toString();
   }
@@ -10855,8 +11821,11 @@ class DailyStageStudyRecord extends DataClass
     date,
     stage,
     studyTimeSeconds,
+    studyTimeMilliseconds,
     inputTimeSeconds,
+    inputTimeMilliseconds,
     outputTimeSeconds,
+    outputTimeMilliseconds,
   );
   @override
   bool operator ==(Object other) =>
@@ -10866,8 +11835,11 @@ class DailyStageStudyRecord extends DataClass
           other.date == this.date &&
           other.stage == this.stage &&
           other.studyTimeSeconds == this.studyTimeSeconds &&
+          other.studyTimeMilliseconds == this.studyTimeMilliseconds &&
           other.inputTimeSeconds == this.inputTimeSeconds &&
-          other.outputTimeSeconds == this.outputTimeSeconds);
+          other.inputTimeMilliseconds == this.inputTimeMilliseconds &&
+          other.outputTimeSeconds == this.outputTimeSeconds &&
+          other.outputTimeMilliseconds == this.outputTimeMilliseconds);
 }
 
 class DailyStageStudyRecordsCompanion
@@ -10876,23 +11848,32 @@ class DailyStageStudyRecordsCompanion
   final Value<DateTime> date;
   final Value<StudyStage> stage;
   final Value<int> studyTimeSeconds;
+  final Value<int> studyTimeMilliseconds;
   final Value<int> inputTimeSeconds;
+  final Value<int> inputTimeMilliseconds;
   final Value<int> outputTimeSeconds;
+  final Value<int> outputTimeMilliseconds;
   const DailyStageStudyRecordsCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
     this.stage = const Value.absent(),
     this.studyTimeSeconds = const Value.absent(),
+    this.studyTimeMilliseconds = const Value.absent(),
     this.inputTimeSeconds = const Value.absent(),
+    this.inputTimeMilliseconds = const Value.absent(),
     this.outputTimeSeconds = const Value.absent(),
+    this.outputTimeMilliseconds = const Value.absent(),
   });
   DailyStageStudyRecordsCompanion.insert({
     this.id = const Value.absent(),
     required DateTime date,
     required StudyStage stage,
     this.studyTimeSeconds = const Value.absent(),
+    this.studyTimeMilliseconds = const Value.absent(),
     this.inputTimeSeconds = const Value.absent(),
+    this.inputTimeMilliseconds = const Value.absent(),
     this.outputTimeSeconds = const Value.absent(),
+    this.outputTimeMilliseconds = const Value.absent(),
   }) : date = Value(date),
        stage = Value(stage);
   static Insertable<DailyStageStudyRecord> custom({
@@ -10900,16 +11881,25 @@ class DailyStageStudyRecordsCompanion
     Expression<DateTime>? date,
     Expression<int>? stage,
     Expression<int>? studyTimeSeconds,
+    Expression<int>? studyTimeMilliseconds,
     Expression<int>? inputTimeSeconds,
+    Expression<int>? inputTimeMilliseconds,
     Expression<int>? outputTimeSeconds,
+    Expression<int>? outputTimeMilliseconds,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (date != null) 'date': date,
       if (stage != null) 'stage': stage,
       if (studyTimeSeconds != null) 'study_time_seconds': studyTimeSeconds,
+      if (studyTimeMilliseconds != null)
+        'study_time_milliseconds': studyTimeMilliseconds,
       if (inputTimeSeconds != null) 'input_time_seconds': inputTimeSeconds,
+      if (inputTimeMilliseconds != null)
+        'input_time_milliseconds': inputTimeMilliseconds,
       if (outputTimeSeconds != null) 'output_time_seconds': outputTimeSeconds,
+      if (outputTimeMilliseconds != null)
+        'output_time_milliseconds': outputTimeMilliseconds,
     });
   }
 
@@ -10918,16 +11908,25 @@ class DailyStageStudyRecordsCompanion
     Value<DateTime>? date,
     Value<StudyStage>? stage,
     Value<int>? studyTimeSeconds,
+    Value<int>? studyTimeMilliseconds,
     Value<int>? inputTimeSeconds,
+    Value<int>? inputTimeMilliseconds,
     Value<int>? outputTimeSeconds,
+    Value<int>? outputTimeMilliseconds,
   }) {
     return DailyStageStudyRecordsCompanion(
       id: id ?? this.id,
       date: date ?? this.date,
       stage: stage ?? this.stage,
       studyTimeSeconds: studyTimeSeconds ?? this.studyTimeSeconds,
+      studyTimeMilliseconds:
+          studyTimeMilliseconds ?? this.studyTimeMilliseconds,
       inputTimeSeconds: inputTimeSeconds ?? this.inputTimeSeconds,
+      inputTimeMilliseconds:
+          inputTimeMilliseconds ?? this.inputTimeMilliseconds,
       outputTimeSeconds: outputTimeSeconds ?? this.outputTimeSeconds,
+      outputTimeMilliseconds:
+          outputTimeMilliseconds ?? this.outputTimeMilliseconds,
     );
   }
 
@@ -10948,11 +11947,26 @@ class DailyStageStudyRecordsCompanion
     if (studyTimeSeconds.present) {
       map['study_time_seconds'] = Variable<int>(studyTimeSeconds.value);
     }
+    if (studyTimeMilliseconds.present) {
+      map['study_time_milliseconds'] = Variable<int>(
+        studyTimeMilliseconds.value,
+      );
+    }
     if (inputTimeSeconds.present) {
       map['input_time_seconds'] = Variable<int>(inputTimeSeconds.value);
     }
+    if (inputTimeMilliseconds.present) {
+      map['input_time_milliseconds'] = Variable<int>(
+        inputTimeMilliseconds.value,
+      );
+    }
     if (outputTimeSeconds.present) {
       map['output_time_seconds'] = Variable<int>(outputTimeSeconds.value);
+    }
+    if (outputTimeMilliseconds.present) {
+      map['output_time_milliseconds'] = Variable<int>(
+        outputTimeMilliseconds.value,
+      );
     }
     return map;
   }
@@ -10964,8 +11978,11 @@ class DailyStageStudyRecordsCompanion
           ..write('date: $date, ')
           ..write('stage: $stage, ')
           ..write('studyTimeSeconds: $studyTimeSeconds, ')
+          ..write('studyTimeMilliseconds: $studyTimeMilliseconds, ')
           ..write('inputTimeSeconds: $inputTimeSeconds, ')
-          ..write('outputTimeSeconds: $outputTimeSeconds')
+          ..write('inputTimeMilliseconds: $inputTimeMilliseconds, ')
+          ..write('outputTimeSeconds: $outputTimeSeconds, ')
+          ..write('outputTimeMilliseconds: $outputTimeMilliseconds')
           ..write(')'))
         .toString();
   }
@@ -11851,6 +12868,2328 @@ class TtsCacheCompanion extends UpdateCompanion<TtsCacheData> {
   }
 }
 
+class $MemorySchedulesTable extends MemorySchedules
+    with TableInfo<$MemorySchedulesTable, MemorySchedule> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MemorySchedulesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _namespaceMeta = const VerificationMeta(
+    'namespace',
+  );
+  @override
+  late final GeneratedColumn<String> namespace = GeneratedColumn<String>(
+    'namespace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _subjectIdMeta = const VerificationMeta(
+    'subjectId',
+  );
+  @override
+  late final GeneratedColumn<String> subjectId = GeneratedColumn<String>(
+    'subject_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileVersionMeta = const VerificationMeta(
+    'profileVersion',
+  );
+  @override
+  late final GeneratedColumn<int> profileVersion = GeneratedColumn<int>(
+    'profile_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modelIdMeta = const VerificationMeta(
+    'modelId',
+  );
+  @override
+  late final GeneratedColumn<String> modelId = GeneratedColumn<String>(
+    'model_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modelStateVersionMeta = const VerificationMeta(
+    'modelStateVersion',
+  );
+  @override
+  late final GeneratedColumn<int> modelStateVersion = GeneratedColumn<int>(
+    'model_state_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modelStateJsonMeta = const VerificationMeta(
+    'modelStateJson',
+  );
+  @override
+  late final GeneratedColumn<String> modelStateJson = GeneratedColumn<String>(
+    'model_state_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _phaseMeta = const VerificationMeta('phase');
+  @override
+  late final GeneratedColumn<String> phase = GeneratedColumn<String>(
+    'phase',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dueAtMeta = const VerificationMeta('dueAt');
+  @override
+  late final GeneratedColumn<DateTime> dueAt = GeneratedColumn<DateTime>(
+    'due_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastReviewedAtMeta = const VerificationMeta(
+    'lastReviewedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastReviewedAt =
+      GeneratedColumn<DateTime>(
+        'last_reviewed_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _reviewCountMeta = const VerificationMeta(
+    'reviewCount',
+  );
+  @override
+  late final GeneratedColumn<int> reviewCount = GeneratedColumn<int>(
+    'review_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lapseCountMeta = const VerificationMeta(
+    'lapseCount',
+  );
+  @override
+  late final GeneratedColumn<int> lapseCount = GeneratedColumn<int>(
+    'lapse_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> archivedAt = GeneratedColumn<DateTime>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    namespace,
+    subjectId,
+    profileId,
+    profileVersion,
+    modelId,
+    modelStateVersion,
+    modelStateJson,
+    phase,
+    status,
+    dueAt,
+    lastReviewedAt,
+    reviewCount,
+    lapseCount,
+    revision,
+    createdAt,
+    updatedAt,
+    archivedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'memory_schedules';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MemorySchedule> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('namespace')) {
+      context.handle(
+        _namespaceMeta,
+        namespace.isAcceptableOrUnknown(data['namespace']!, _namespaceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_namespaceMeta);
+    }
+    if (data.containsKey('subject_id')) {
+      context.handle(
+        _subjectIdMeta,
+        subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_subjectIdMeta);
+    }
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('profile_version')) {
+      context.handle(
+        _profileVersionMeta,
+        profileVersion.isAcceptableOrUnknown(
+          data['profile_version']!,
+          _profileVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_profileVersionMeta);
+    }
+    if (data.containsKey('model_id')) {
+      context.handle(
+        _modelIdMeta,
+        modelId.isAcceptableOrUnknown(data['model_id']!, _modelIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modelIdMeta);
+    }
+    if (data.containsKey('model_state_version')) {
+      context.handle(
+        _modelStateVersionMeta,
+        modelStateVersion.isAcceptableOrUnknown(
+          data['model_state_version']!,
+          _modelStateVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_modelStateVersionMeta);
+    }
+    if (data.containsKey('model_state_json')) {
+      context.handle(
+        _modelStateJsonMeta,
+        modelStateJson.isAcceptableOrUnknown(
+          data['model_state_json']!,
+          _modelStateJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('phase')) {
+      context.handle(
+        _phaseMeta,
+        phase.isAcceptableOrUnknown(data['phase']!, _phaseMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_phaseMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('due_at')) {
+      context.handle(
+        _dueAtMeta,
+        dueAt.isAcceptableOrUnknown(data['due_at']!, _dueAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dueAtMeta);
+    }
+    if (data.containsKey('last_reviewed_at')) {
+      context.handle(
+        _lastReviewedAtMeta,
+        lastReviewedAt.isAcceptableOrUnknown(
+          data['last_reviewed_at']!,
+          _lastReviewedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('review_count')) {
+      context.handle(
+        _reviewCountMeta,
+        reviewCount.isAcceptableOrUnknown(
+          data['review_count']!,
+          _reviewCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('lapse_count')) {
+      context.handle(
+        _lapseCountMeta,
+        lapseCount.isAcceptableOrUnknown(data['lapse_count']!, _lapseCountMeta),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {namespace, subjectId},
+  ];
+  @override
+  MemorySchedule map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MemorySchedule(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      namespace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}namespace'],
+      )!,
+      subjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subject_id'],
+      )!,
+      profileId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}profile_id'],
+      )!,
+      profileVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}profile_version'],
+      )!,
+      modelId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model_id'],
+      )!,
+      modelStateVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}model_state_version'],
+      )!,
+      modelStateJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model_state_json'],
+      )!,
+      phase: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}phase'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      dueAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}due_at'],
+      )!,
+      lastReviewedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_reviewed_at'],
+      ),
+      reviewCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}review_count'],
+      )!,
+      lapseCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lapse_count'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}archived_at'],
+      ),
+    );
+  }
+
+  @override
+  $MemorySchedulesTable createAlias(String alias) {
+    return $MemorySchedulesTable(attachedDatabase, alias);
+  }
+}
+
+class MemorySchedule extends DataClass implements Insertable<MemorySchedule> {
+  final String id;
+  final String namespace;
+  final String subjectId;
+  final String profileId;
+  final int profileVersion;
+  final String modelId;
+  final int modelStateVersion;
+  final String modelStateJson;
+  final String phase;
+  final String status;
+  final DateTime dueAt;
+  final DateTime? lastReviewedAt;
+  final int reviewCount;
+  final int lapseCount;
+  final int revision;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? archivedAt;
+  const MemorySchedule({
+    required this.id,
+    required this.namespace,
+    required this.subjectId,
+    required this.profileId,
+    required this.profileVersion,
+    required this.modelId,
+    required this.modelStateVersion,
+    required this.modelStateJson,
+    required this.phase,
+    required this.status,
+    required this.dueAt,
+    this.lastReviewedAt,
+    required this.reviewCount,
+    required this.lapseCount,
+    required this.revision,
+    required this.createdAt,
+    required this.updatedAt,
+    this.archivedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['namespace'] = Variable<String>(namespace);
+    map['subject_id'] = Variable<String>(subjectId);
+    map['profile_id'] = Variable<String>(profileId);
+    map['profile_version'] = Variable<int>(profileVersion);
+    map['model_id'] = Variable<String>(modelId);
+    map['model_state_version'] = Variable<int>(modelStateVersion);
+    map['model_state_json'] = Variable<String>(modelStateJson);
+    map['phase'] = Variable<String>(phase);
+    map['status'] = Variable<String>(status);
+    map['due_at'] = Variable<DateTime>(dueAt);
+    if (!nullToAbsent || lastReviewedAt != null) {
+      map['last_reviewed_at'] = Variable<DateTime>(lastReviewedAt);
+    }
+    map['review_count'] = Variable<int>(reviewCount);
+    map['lapse_count'] = Variable<int>(lapseCount);
+    map['revision'] = Variable<int>(revision);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<DateTime>(archivedAt);
+    }
+    return map;
+  }
+
+  MemorySchedulesCompanion toCompanion(bool nullToAbsent) {
+    return MemorySchedulesCompanion(
+      id: Value(id),
+      namespace: Value(namespace),
+      subjectId: Value(subjectId),
+      profileId: Value(profileId),
+      profileVersion: Value(profileVersion),
+      modelId: Value(modelId),
+      modelStateVersion: Value(modelStateVersion),
+      modelStateJson: Value(modelStateJson),
+      phase: Value(phase),
+      status: Value(status),
+      dueAt: Value(dueAt),
+      lastReviewedAt: lastReviewedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastReviewedAt),
+      reviewCount: Value(reviewCount),
+      lapseCount: Value(lapseCount),
+      revision: Value(revision),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      archivedAt: archivedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAt),
+    );
+  }
+
+  factory MemorySchedule.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MemorySchedule(
+      id: serializer.fromJson<String>(json['id']),
+      namespace: serializer.fromJson<String>(json['namespace']),
+      subjectId: serializer.fromJson<String>(json['subjectId']),
+      profileId: serializer.fromJson<String>(json['profileId']),
+      profileVersion: serializer.fromJson<int>(json['profileVersion']),
+      modelId: serializer.fromJson<String>(json['modelId']),
+      modelStateVersion: serializer.fromJson<int>(json['modelStateVersion']),
+      modelStateJson: serializer.fromJson<String>(json['modelStateJson']),
+      phase: serializer.fromJson<String>(json['phase']),
+      status: serializer.fromJson<String>(json['status']),
+      dueAt: serializer.fromJson<DateTime>(json['dueAt']),
+      lastReviewedAt: serializer.fromJson<DateTime?>(json['lastReviewedAt']),
+      reviewCount: serializer.fromJson<int>(json['reviewCount']),
+      lapseCount: serializer.fromJson<int>(json['lapseCount']),
+      revision: serializer.fromJson<int>(json['revision']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'namespace': serializer.toJson<String>(namespace),
+      'subjectId': serializer.toJson<String>(subjectId),
+      'profileId': serializer.toJson<String>(profileId),
+      'profileVersion': serializer.toJson<int>(profileVersion),
+      'modelId': serializer.toJson<String>(modelId),
+      'modelStateVersion': serializer.toJson<int>(modelStateVersion),
+      'modelStateJson': serializer.toJson<String>(modelStateJson),
+      'phase': serializer.toJson<String>(phase),
+      'status': serializer.toJson<String>(status),
+      'dueAt': serializer.toJson<DateTime>(dueAt),
+      'lastReviewedAt': serializer.toJson<DateTime?>(lastReviewedAt),
+      'reviewCount': serializer.toJson<int>(reviewCount),
+      'lapseCount': serializer.toJson<int>(lapseCount),
+      'revision': serializer.toJson<int>(revision),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'archivedAt': serializer.toJson<DateTime?>(archivedAt),
+    };
+  }
+
+  MemorySchedule copyWith({
+    String? id,
+    String? namespace,
+    String? subjectId,
+    String? profileId,
+    int? profileVersion,
+    String? modelId,
+    int? modelStateVersion,
+    String? modelStateJson,
+    String? phase,
+    String? status,
+    DateTime? dueAt,
+    Value<DateTime?> lastReviewedAt = const Value.absent(),
+    int? reviewCount,
+    int? lapseCount,
+    int? revision,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> archivedAt = const Value.absent(),
+  }) => MemorySchedule(
+    id: id ?? this.id,
+    namespace: namespace ?? this.namespace,
+    subjectId: subjectId ?? this.subjectId,
+    profileId: profileId ?? this.profileId,
+    profileVersion: profileVersion ?? this.profileVersion,
+    modelId: modelId ?? this.modelId,
+    modelStateVersion: modelStateVersion ?? this.modelStateVersion,
+    modelStateJson: modelStateJson ?? this.modelStateJson,
+    phase: phase ?? this.phase,
+    status: status ?? this.status,
+    dueAt: dueAt ?? this.dueAt,
+    lastReviewedAt: lastReviewedAt.present
+        ? lastReviewedAt.value
+        : this.lastReviewedAt,
+    reviewCount: reviewCount ?? this.reviewCount,
+    lapseCount: lapseCount ?? this.lapseCount,
+    revision: revision ?? this.revision,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
+  );
+  MemorySchedule copyWithCompanion(MemorySchedulesCompanion data) {
+    return MemorySchedule(
+      id: data.id.present ? data.id.value : this.id,
+      namespace: data.namespace.present ? data.namespace.value : this.namespace,
+      subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      profileVersion: data.profileVersion.present
+          ? data.profileVersion.value
+          : this.profileVersion,
+      modelId: data.modelId.present ? data.modelId.value : this.modelId,
+      modelStateVersion: data.modelStateVersion.present
+          ? data.modelStateVersion.value
+          : this.modelStateVersion,
+      modelStateJson: data.modelStateJson.present
+          ? data.modelStateJson.value
+          : this.modelStateJson,
+      phase: data.phase.present ? data.phase.value : this.phase,
+      status: data.status.present ? data.status.value : this.status,
+      dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
+      lastReviewedAt: data.lastReviewedAt.present
+          ? data.lastReviewedAt.value
+          : this.lastReviewedAt,
+      reviewCount: data.reviewCount.present
+          ? data.reviewCount.value
+          : this.reviewCount,
+      lapseCount: data.lapseCount.present
+          ? data.lapseCount.value
+          : this.lapseCount,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      archivedAt: data.archivedAt.present
+          ? data.archivedAt.value
+          : this.archivedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemorySchedule(')
+          ..write('id: $id, ')
+          ..write('namespace: $namespace, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('profileId: $profileId, ')
+          ..write('profileVersion: $profileVersion, ')
+          ..write('modelId: $modelId, ')
+          ..write('modelStateVersion: $modelStateVersion, ')
+          ..write('modelStateJson: $modelStateJson, ')
+          ..write('phase: $phase, ')
+          ..write('status: $status, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('lastReviewedAt: $lastReviewedAt, ')
+          ..write('reviewCount: $reviewCount, ')
+          ..write('lapseCount: $lapseCount, ')
+          ..write('revision: $revision, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('archivedAt: $archivedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    namespace,
+    subjectId,
+    profileId,
+    profileVersion,
+    modelId,
+    modelStateVersion,
+    modelStateJson,
+    phase,
+    status,
+    dueAt,
+    lastReviewedAt,
+    reviewCount,
+    lapseCount,
+    revision,
+    createdAt,
+    updatedAt,
+    archivedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MemorySchedule &&
+          other.id == this.id &&
+          other.namespace == this.namespace &&
+          other.subjectId == this.subjectId &&
+          other.profileId == this.profileId &&
+          other.profileVersion == this.profileVersion &&
+          other.modelId == this.modelId &&
+          other.modelStateVersion == this.modelStateVersion &&
+          other.modelStateJson == this.modelStateJson &&
+          other.phase == this.phase &&
+          other.status == this.status &&
+          other.dueAt == this.dueAt &&
+          other.lastReviewedAt == this.lastReviewedAt &&
+          other.reviewCount == this.reviewCount &&
+          other.lapseCount == this.lapseCount &&
+          other.revision == this.revision &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.archivedAt == this.archivedAt);
+}
+
+class MemorySchedulesCompanion extends UpdateCompanion<MemorySchedule> {
+  final Value<String> id;
+  final Value<String> namespace;
+  final Value<String> subjectId;
+  final Value<String> profileId;
+  final Value<int> profileVersion;
+  final Value<String> modelId;
+  final Value<int> modelStateVersion;
+  final Value<String> modelStateJson;
+  final Value<String> phase;
+  final Value<String> status;
+  final Value<DateTime> dueAt;
+  final Value<DateTime?> lastReviewedAt;
+  final Value<int> reviewCount;
+  final Value<int> lapseCount;
+  final Value<int> revision;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> archivedAt;
+  final Value<int> rowid;
+  const MemorySchedulesCompanion({
+    this.id = const Value.absent(),
+    this.namespace = const Value.absent(),
+    this.subjectId = const Value.absent(),
+    this.profileId = const Value.absent(),
+    this.profileVersion = const Value.absent(),
+    this.modelId = const Value.absent(),
+    this.modelStateVersion = const Value.absent(),
+    this.modelStateJson = const Value.absent(),
+    this.phase = const Value.absent(),
+    this.status = const Value.absent(),
+    this.dueAt = const Value.absent(),
+    this.lastReviewedAt = const Value.absent(),
+    this.reviewCount = const Value.absent(),
+    this.lapseCount = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MemorySchedulesCompanion.insert({
+    required String id,
+    required String namespace,
+    required String subjectId,
+    required String profileId,
+    required int profileVersion,
+    required String modelId,
+    required int modelStateVersion,
+    this.modelStateJson = const Value.absent(),
+    required String phase,
+    required String status,
+    required DateTime dueAt,
+    this.lastReviewedAt = const Value.absent(),
+    this.reviewCount = const Value.absent(),
+    this.lapseCount = const Value.absent(),
+    this.revision = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.archivedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       namespace = Value(namespace),
+       subjectId = Value(subjectId),
+       profileId = Value(profileId),
+       profileVersion = Value(profileVersion),
+       modelId = Value(modelId),
+       modelStateVersion = Value(modelStateVersion),
+       phase = Value(phase),
+       status = Value(status),
+       dueAt = Value(dueAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<MemorySchedule> custom({
+    Expression<String>? id,
+    Expression<String>? namespace,
+    Expression<String>? subjectId,
+    Expression<String>? profileId,
+    Expression<int>? profileVersion,
+    Expression<String>? modelId,
+    Expression<int>? modelStateVersion,
+    Expression<String>? modelStateJson,
+    Expression<String>? phase,
+    Expression<String>? status,
+    Expression<DateTime>? dueAt,
+    Expression<DateTime>? lastReviewedAt,
+    Expression<int>? reviewCount,
+    Expression<int>? lapseCount,
+    Expression<int>? revision,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? archivedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
+      if (subjectId != null) 'subject_id': subjectId,
+      if (profileId != null) 'profile_id': profileId,
+      if (profileVersion != null) 'profile_version': profileVersion,
+      if (modelId != null) 'model_id': modelId,
+      if (modelStateVersion != null) 'model_state_version': modelStateVersion,
+      if (modelStateJson != null) 'model_state_json': modelStateJson,
+      if (phase != null) 'phase': phase,
+      if (status != null) 'status': status,
+      if (dueAt != null) 'due_at': dueAt,
+      if (lastReviewedAt != null) 'last_reviewed_at': lastReviewedAt,
+      if (reviewCount != null) 'review_count': reviewCount,
+      if (lapseCount != null) 'lapse_count': lapseCount,
+      if (revision != null) 'revision': revision,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (archivedAt != null) 'archived_at': archivedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MemorySchedulesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? namespace,
+    Value<String>? subjectId,
+    Value<String>? profileId,
+    Value<int>? profileVersion,
+    Value<String>? modelId,
+    Value<int>? modelStateVersion,
+    Value<String>? modelStateJson,
+    Value<String>? phase,
+    Value<String>? status,
+    Value<DateTime>? dueAt,
+    Value<DateTime?>? lastReviewedAt,
+    Value<int>? reviewCount,
+    Value<int>? lapseCount,
+    Value<int>? revision,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? archivedAt,
+    Value<int>? rowid,
+  }) {
+    return MemorySchedulesCompanion(
+      id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
+      subjectId: subjectId ?? this.subjectId,
+      profileId: profileId ?? this.profileId,
+      profileVersion: profileVersion ?? this.profileVersion,
+      modelId: modelId ?? this.modelId,
+      modelStateVersion: modelStateVersion ?? this.modelStateVersion,
+      modelStateJson: modelStateJson ?? this.modelStateJson,
+      phase: phase ?? this.phase,
+      status: status ?? this.status,
+      dueAt: dueAt ?? this.dueAt,
+      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
+      reviewCount: reviewCount ?? this.reviewCount,
+      lapseCount: lapseCount ?? this.lapseCount,
+      revision: revision ?? this.revision,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      archivedAt: archivedAt ?? this.archivedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (namespace.present) {
+      map['namespace'] = Variable<String>(namespace.value);
+    }
+    if (subjectId.present) {
+      map['subject_id'] = Variable<String>(subjectId.value);
+    }
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (profileVersion.present) {
+      map['profile_version'] = Variable<int>(profileVersion.value);
+    }
+    if (modelId.present) {
+      map['model_id'] = Variable<String>(modelId.value);
+    }
+    if (modelStateVersion.present) {
+      map['model_state_version'] = Variable<int>(modelStateVersion.value);
+    }
+    if (modelStateJson.present) {
+      map['model_state_json'] = Variable<String>(modelStateJson.value);
+    }
+    if (phase.present) {
+      map['phase'] = Variable<String>(phase.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (dueAt.present) {
+      map['due_at'] = Variable<DateTime>(dueAt.value);
+    }
+    if (lastReviewedAt.present) {
+      map['last_reviewed_at'] = Variable<DateTime>(lastReviewedAt.value);
+    }
+    if (reviewCount.present) {
+      map['review_count'] = Variable<int>(reviewCount.value);
+    }
+    if (lapseCount.present) {
+      map['lapse_count'] = Variable<int>(lapseCount.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<DateTime>(archivedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemorySchedulesCompanion(')
+          ..write('id: $id, ')
+          ..write('namespace: $namespace, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('profileId: $profileId, ')
+          ..write('profileVersion: $profileVersion, ')
+          ..write('modelId: $modelId, ')
+          ..write('modelStateVersion: $modelStateVersion, ')
+          ..write('modelStateJson: $modelStateJson, ')
+          ..write('phase: $phase, ')
+          ..write('status: $status, ')
+          ..write('dueAt: $dueAt, ')
+          ..write('lastReviewedAt: $lastReviewedAt, ')
+          ..write('reviewCount: $reviewCount, ')
+          ..write('lapseCount: $lapseCount, ')
+          ..write('revision: $revision, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MemoryReviewEventsTable extends MemoryReviewEvents
+    with TableInfo<$MemoryReviewEventsTable, MemoryReviewEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MemoryReviewEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scheduleIdMeta = const VerificationMeta(
+    'scheduleId',
+  );
+  @override
+  late final GeneratedColumn<String> scheduleId = GeneratedColumn<String>(
+    'schedule_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES memory_schedules (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _sequenceMeta = const VerificationMeta(
+    'sequence',
+  );
+  @override
+  late final GeneratedColumn<int> sequence = GeneratedColumn<int>(
+    'sequence',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationIdMeta = const VerificationMeta(
+    'operationId',
+  );
+  @override
+  late final GeneratedColumn<String> operationId = GeneratedColumn<String>(
+    'operation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ratingMeta = const VerificationMeta('rating');
+  @override
+  late final GeneratedColumn<String> rating = GeneratedColumn<String>(
+    'rating',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isLapseMeta = const VerificationMeta(
+    'isLapse',
+  );
+  @override
+  late final GeneratedColumn<bool> isLapse = GeneratedColumn<bool>(
+    'is_lapse',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_lapse" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _reviewedAtMeta = const VerificationMeta(
+    'reviewedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> reviewedAt = GeneratedColumn<DateTime>(
+    'reviewed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responseTimeMsMeta = const VerificationMeta(
+    'responseTimeMs',
+  );
+  @override
+  late final GeneratedColumn<int> responseTimeMs = GeneratedColumn<int>(
+    'response_time_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<String> profileId = GeneratedColumn<String>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileVersionMeta = const VerificationMeta(
+    'profileVersion',
+  );
+  @override
+  late final GeneratedColumn<int> profileVersion = GeneratedColumn<int>(
+    'profile_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modelIdMeta = const VerificationMeta(
+    'modelId',
+  );
+  @override
+  late final GeneratedColumn<String> modelId = GeneratedColumn<String>(
+    'model_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modelStateVersionMeta = const VerificationMeta(
+    'modelStateVersion',
+  );
+  @override
+  late final GeneratedColumn<int> modelStateVersion = GeneratedColumn<int>(
+    'model_state_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dueBeforeMeta = const VerificationMeta(
+    'dueBefore',
+  );
+  @override
+  late final GeneratedColumn<DateTime> dueBefore = GeneratedColumn<DateTime>(
+    'due_before',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dueAfterMeta = const VerificationMeta(
+    'dueAfter',
+  );
+  @override
+  late final GeneratedColumn<DateTime> dueAfter = GeneratedColumn<DateTime>(
+    'due_after',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scheduleRevisionAfterMeta =
+      const VerificationMeta('scheduleRevisionAfter');
+  @override
+  late final GeneratedColumn<int> scheduleRevisionAfter = GeneratedColumn<int>(
+    'schedule_revision_after',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    scheduleId,
+    sequence,
+    operationId,
+    rating,
+    isLapse,
+    reviewedAt,
+    responseTimeMs,
+    profileId,
+    profileVersion,
+    modelId,
+    modelStateVersion,
+    dueBefore,
+    dueAfter,
+    scheduleRevisionAfter,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'memory_review_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MemoryReviewEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+        _scheduleIdMeta,
+        scheduleId.isAcceptableOrUnknown(data['schedule_id']!, _scheduleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('sequence')) {
+      context.handle(
+        _sequenceMeta,
+        sequence.isAcceptableOrUnknown(data['sequence']!, _sequenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceMeta);
+    }
+    if (data.containsKey('operation_id')) {
+      context.handle(
+        _operationIdMeta,
+        operationId.isAcceptableOrUnknown(
+          data['operation_id']!,
+          _operationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_operationIdMeta);
+    }
+    if (data.containsKey('rating')) {
+      context.handle(
+        _ratingMeta,
+        rating.isAcceptableOrUnknown(data['rating']!, _ratingMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ratingMeta);
+    }
+    if (data.containsKey('is_lapse')) {
+      context.handle(
+        _isLapseMeta,
+        isLapse.isAcceptableOrUnknown(data['is_lapse']!, _isLapseMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isLapseMeta);
+    }
+    if (data.containsKey('reviewed_at')) {
+      context.handle(
+        _reviewedAtMeta,
+        reviewedAt.isAcceptableOrUnknown(data['reviewed_at']!, _reviewedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reviewedAtMeta);
+    }
+    if (data.containsKey('response_time_ms')) {
+      context.handle(
+        _responseTimeMsMeta,
+        responseTimeMs.isAcceptableOrUnknown(
+          data['response_time_ms']!,
+          _responseTimeMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_profileIdMeta);
+    }
+    if (data.containsKey('profile_version')) {
+      context.handle(
+        _profileVersionMeta,
+        profileVersion.isAcceptableOrUnknown(
+          data['profile_version']!,
+          _profileVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_profileVersionMeta);
+    }
+    if (data.containsKey('model_id')) {
+      context.handle(
+        _modelIdMeta,
+        modelId.isAcceptableOrUnknown(data['model_id']!, _modelIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modelIdMeta);
+    }
+    if (data.containsKey('model_state_version')) {
+      context.handle(
+        _modelStateVersionMeta,
+        modelStateVersion.isAcceptableOrUnknown(
+          data['model_state_version']!,
+          _modelStateVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_modelStateVersionMeta);
+    }
+    if (data.containsKey('due_before')) {
+      context.handle(
+        _dueBeforeMeta,
+        dueBefore.isAcceptableOrUnknown(data['due_before']!, _dueBeforeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dueBeforeMeta);
+    }
+    if (data.containsKey('due_after')) {
+      context.handle(
+        _dueAfterMeta,
+        dueAfter.isAcceptableOrUnknown(data['due_after']!, _dueAfterMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dueAfterMeta);
+    }
+    if (data.containsKey('schedule_revision_after')) {
+      context.handle(
+        _scheduleRevisionAfterMeta,
+        scheduleRevisionAfter.isAcceptableOrUnknown(
+          data['schedule_revision_after']!,
+          _scheduleRevisionAfterMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleRevisionAfterMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {scheduleId, sequence},
+    {scheduleId, operationId},
+  ];
+  @override
+  MemoryReviewEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MemoryReviewEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      scheduleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_id'],
+      )!,
+      sequence: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence'],
+      )!,
+      operationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_id'],
+      )!,
+      rating: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rating'],
+      )!,
+      isLapse: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_lapse'],
+      )!,
+      reviewedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}reviewed_at'],
+      )!,
+      responseTimeMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}response_time_ms'],
+      ),
+      profileId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}profile_id'],
+      )!,
+      profileVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}profile_version'],
+      )!,
+      modelId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model_id'],
+      )!,
+      modelStateVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}model_state_version'],
+      )!,
+      dueBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}due_before'],
+      )!,
+      dueAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}due_after'],
+      )!,
+      scheduleRevisionAfter: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}schedule_revision_after'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MemoryReviewEventsTable createAlias(String alias) {
+    return $MemoryReviewEventsTable(attachedDatabase, alias);
+  }
+}
+
+class MemoryReviewEvent extends DataClass
+    implements Insertable<MemoryReviewEvent> {
+  final String id;
+  final String scheduleId;
+  final int sequence;
+  final String operationId;
+  final String rating;
+  final bool isLapse;
+  final DateTime reviewedAt;
+  final int? responseTimeMs;
+  final String profileId;
+  final int profileVersion;
+  final String modelId;
+  final int modelStateVersion;
+  final DateTime dueBefore;
+  final DateTime dueAfter;
+  final int scheduleRevisionAfter;
+  final DateTime createdAt;
+  const MemoryReviewEvent({
+    required this.id,
+    required this.scheduleId,
+    required this.sequence,
+    required this.operationId,
+    required this.rating,
+    required this.isLapse,
+    required this.reviewedAt,
+    this.responseTimeMs,
+    required this.profileId,
+    required this.profileVersion,
+    required this.modelId,
+    required this.modelStateVersion,
+    required this.dueBefore,
+    required this.dueAfter,
+    required this.scheduleRevisionAfter,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['schedule_id'] = Variable<String>(scheduleId);
+    map['sequence'] = Variable<int>(sequence);
+    map['operation_id'] = Variable<String>(operationId);
+    map['rating'] = Variable<String>(rating);
+    map['is_lapse'] = Variable<bool>(isLapse);
+    map['reviewed_at'] = Variable<DateTime>(reviewedAt);
+    if (!nullToAbsent || responseTimeMs != null) {
+      map['response_time_ms'] = Variable<int>(responseTimeMs);
+    }
+    map['profile_id'] = Variable<String>(profileId);
+    map['profile_version'] = Variable<int>(profileVersion);
+    map['model_id'] = Variable<String>(modelId);
+    map['model_state_version'] = Variable<int>(modelStateVersion);
+    map['due_before'] = Variable<DateTime>(dueBefore);
+    map['due_after'] = Variable<DateTime>(dueAfter);
+    map['schedule_revision_after'] = Variable<int>(scheduleRevisionAfter);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  MemoryReviewEventsCompanion toCompanion(bool nullToAbsent) {
+    return MemoryReviewEventsCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      sequence: Value(sequence),
+      operationId: Value(operationId),
+      rating: Value(rating),
+      isLapse: Value(isLapse),
+      reviewedAt: Value(reviewedAt),
+      responseTimeMs: responseTimeMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(responseTimeMs),
+      profileId: Value(profileId),
+      profileVersion: Value(profileVersion),
+      modelId: Value(modelId),
+      modelStateVersion: Value(modelStateVersion),
+      dueBefore: Value(dueBefore),
+      dueAfter: Value(dueAfter),
+      scheduleRevisionAfter: Value(scheduleRevisionAfter),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MemoryReviewEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MemoryReviewEvent(
+      id: serializer.fromJson<String>(json['id']),
+      scheduleId: serializer.fromJson<String>(json['scheduleId']),
+      sequence: serializer.fromJson<int>(json['sequence']),
+      operationId: serializer.fromJson<String>(json['operationId']),
+      rating: serializer.fromJson<String>(json['rating']),
+      isLapse: serializer.fromJson<bool>(json['isLapse']),
+      reviewedAt: serializer.fromJson<DateTime>(json['reviewedAt']),
+      responseTimeMs: serializer.fromJson<int?>(json['responseTimeMs']),
+      profileId: serializer.fromJson<String>(json['profileId']),
+      profileVersion: serializer.fromJson<int>(json['profileVersion']),
+      modelId: serializer.fromJson<String>(json['modelId']),
+      modelStateVersion: serializer.fromJson<int>(json['modelStateVersion']),
+      dueBefore: serializer.fromJson<DateTime>(json['dueBefore']),
+      dueAfter: serializer.fromJson<DateTime>(json['dueAfter']),
+      scheduleRevisionAfter: serializer.fromJson<int>(
+        json['scheduleRevisionAfter'],
+      ),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'scheduleId': serializer.toJson<String>(scheduleId),
+      'sequence': serializer.toJson<int>(sequence),
+      'operationId': serializer.toJson<String>(operationId),
+      'rating': serializer.toJson<String>(rating),
+      'isLapse': serializer.toJson<bool>(isLapse),
+      'reviewedAt': serializer.toJson<DateTime>(reviewedAt),
+      'responseTimeMs': serializer.toJson<int?>(responseTimeMs),
+      'profileId': serializer.toJson<String>(profileId),
+      'profileVersion': serializer.toJson<int>(profileVersion),
+      'modelId': serializer.toJson<String>(modelId),
+      'modelStateVersion': serializer.toJson<int>(modelStateVersion),
+      'dueBefore': serializer.toJson<DateTime>(dueBefore),
+      'dueAfter': serializer.toJson<DateTime>(dueAfter),
+      'scheduleRevisionAfter': serializer.toJson<int>(scheduleRevisionAfter),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  MemoryReviewEvent copyWith({
+    String? id,
+    String? scheduleId,
+    int? sequence,
+    String? operationId,
+    String? rating,
+    bool? isLapse,
+    DateTime? reviewedAt,
+    Value<int?> responseTimeMs = const Value.absent(),
+    String? profileId,
+    int? profileVersion,
+    String? modelId,
+    int? modelStateVersion,
+    DateTime? dueBefore,
+    DateTime? dueAfter,
+    int? scheduleRevisionAfter,
+    DateTime? createdAt,
+  }) => MemoryReviewEvent(
+    id: id ?? this.id,
+    scheduleId: scheduleId ?? this.scheduleId,
+    sequence: sequence ?? this.sequence,
+    operationId: operationId ?? this.operationId,
+    rating: rating ?? this.rating,
+    isLapse: isLapse ?? this.isLapse,
+    reviewedAt: reviewedAt ?? this.reviewedAt,
+    responseTimeMs: responseTimeMs.present
+        ? responseTimeMs.value
+        : this.responseTimeMs,
+    profileId: profileId ?? this.profileId,
+    profileVersion: profileVersion ?? this.profileVersion,
+    modelId: modelId ?? this.modelId,
+    modelStateVersion: modelStateVersion ?? this.modelStateVersion,
+    dueBefore: dueBefore ?? this.dueBefore,
+    dueAfter: dueAfter ?? this.dueAfter,
+    scheduleRevisionAfter: scheduleRevisionAfter ?? this.scheduleRevisionAfter,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MemoryReviewEvent copyWithCompanion(MemoryReviewEventsCompanion data) {
+    return MemoryReviewEvent(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId: data.scheduleId.present
+          ? data.scheduleId.value
+          : this.scheduleId,
+      sequence: data.sequence.present ? data.sequence.value : this.sequence,
+      operationId: data.operationId.present
+          ? data.operationId.value
+          : this.operationId,
+      rating: data.rating.present ? data.rating.value : this.rating,
+      isLapse: data.isLapse.present ? data.isLapse.value : this.isLapse,
+      reviewedAt: data.reviewedAt.present
+          ? data.reviewedAt.value
+          : this.reviewedAt,
+      responseTimeMs: data.responseTimeMs.present
+          ? data.responseTimeMs.value
+          : this.responseTimeMs,
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      profileVersion: data.profileVersion.present
+          ? data.profileVersion.value
+          : this.profileVersion,
+      modelId: data.modelId.present ? data.modelId.value : this.modelId,
+      modelStateVersion: data.modelStateVersion.present
+          ? data.modelStateVersion.value
+          : this.modelStateVersion,
+      dueBefore: data.dueBefore.present ? data.dueBefore.value : this.dueBefore,
+      dueAfter: data.dueAfter.present ? data.dueAfter.value : this.dueAfter,
+      scheduleRevisionAfter: data.scheduleRevisionAfter.present
+          ? data.scheduleRevisionAfter.value
+          : this.scheduleRevisionAfter,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryReviewEvent(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('sequence: $sequence, ')
+          ..write('operationId: $operationId, ')
+          ..write('rating: $rating, ')
+          ..write('isLapse: $isLapse, ')
+          ..write('reviewedAt: $reviewedAt, ')
+          ..write('responseTimeMs: $responseTimeMs, ')
+          ..write('profileId: $profileId, ')
+          ..write('profileVersion: $profileVersion, ')
+          ..write('modelId: $modelId, ')
+          ..write('modelStateVersion: $modelStateVersion, ')
+          ..write('dueBefore: $dueBefore, ')
+          ..write('dueAfter: $dueAfter, ')
+          ..write('scheduleRevisionAfter: $scheduleRevisionAfter, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    scheduleId,
+    sequence,
+    operationId,
+    rating,
+    isLapse,
+    reviewedAt,
+    responseTimeMs,
+    profileId,
+    profileVersion,
+    modelId,
+    modelStateVersion,
+    dueBefore,
+    dueAfter,
+    scheduleRevisionAfter,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MemoryReviewEvent &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.sequence == this.sequence &&
+          other.operationId == this.operationId &&
+          other.rating == this.rating &&
+          other.isLapse == this.isLapse &&
+          other.reviewedAt == this.reviewedAt &&
+          other.responseTimeMs == this.responseTimeMs &&
+          other.profileId == this.profileId &&
+          other.profileVersion == this.profileVersion &&
+          other.modelId == this.modelId &&
+          other.modelStateVersion == this.modelStateVersion &&
+          other.dueBefore == this.dueBefore &&
+          other.dueAfter == this.dueAfter &&
+          other.scheduleRevisionAfter == this.scheduleRevisionAfter &&
+          other.createdAt == this.createdAt);
+}
+
+class MemoryReviewEventsCompanion extends UpdateCompanion<MemoryReviewEvent> {
+  final Value<String> id;
+  final Value<String> scheduleId;
+  final Value<int> sequence;
+  final Value<String> operationId;
+  final Value<String> rating;
+  final Value<bool> isLapse;
+  final Value<DateTime> reviewedAt;
+  final Value<int?> responseTimeMs;
+  final Value<String> profileId;
+  final Value<int> profileVersion;
+  final Value<String> modelId;
+  final Value<int> modelStateVersion;
+  final Value<DateTime> dueBefore;
+  final Value<DateTime> dueAfter;
+  final Value<int> scheduleRevisionAfter;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const MemoryReviewEventsCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.sequence = const Value.absent(),
+    this.operationId = const Value.absent(),
+    this.rating = const Value.absent(),
+    this.isLapse = const Value.absent(),
+    this.reviewedAt = const Value.absent(),
+    this.responseTimeMs = const Value.absent(),
+    this.profileId = const Value.absent(),
+    this.profileVersion = const Value.absent(),
+    this.modelId = const Value.absent(),
+    this.modelStateVersion = const Value.absent(),
+    this.dueBefore = const Value.absent(),
+    this.dueAfter = const Value.absent(),
+    this.scheduleRevisionAfter = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MemoryReviewEventsCompanion.insert({
+    required String id,
+    required String scheduleId,
+    required int sequence,
+    required String operationId,
+    required String rating,
+    required bool isLapse,
+    required DateTime reviewedAt,
+    this.responseTimeMs = const Value.absent(),
+    required String profileId,
+    required int profileVersion,
+    required String modelId,
+    required int modelStateVersion,
+    required DateTime dueBefore,
+    required DateTime dueAfter,
+    required int scheduleRevisionAfter,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       scheduleId = Value(scheduleId),
+       sequence = Value(sequence),
+       operationId = Value(operationId),
+       rating = Value(rating),
+       isLapse = Value(isLapse),
+       reviewedAt = Value(reviewedAt),
+       profileId = Value(profileId),
+       profileVersion = Value(profileVersion),
+       modelId = Value(modelId),
+       modelStateVersion = Value(modelStateVersion),
+       dueBefore = Value(dueBefore),
+       dueAfter = Value(dueAfter),
+       scheduleRevisionAfter = Value(scheduleRevisionAfter),
+       createdAt = Value(createdAt);
+  static Insertable<MemoryReviewEvent> custom({
+    Expression<String>? id,
+    Expression<String>? scheduleId,
+    Expression<int>? sequence,
+    Expression<String>? operationId,
+    Expression<String>? rating,
+    Expression<bool>? isLapse,
+    Expression<DateTime>? reviewedAt,
+    Expression<int>? responseTimeMs,
+    Expression<String>? profileId,
+    Expression<int>? profileVersion,
+    Expression<String>? modelId,
+    Expression<int>? modelStateVersion,
+    Expression<DateTime>? dueBefore,
+    Expression<DateTime>? dueAfter,
+    Expression<int>? scheduleRevisionAfter,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (sequence != null) 'sequence': sequence,
+      if (operationId != null) 'operation_id': operationId,
+      if (rating != null) 'rating': rating,
+      if (isLapse != null) 'is_lapse': isLapse,
+      if (reviewedAt != null) 'reviewed_at': reviewedAt,
+      if (responseTimeMs != null) 'response_time_ms': responseTimeMs,
+      if (profileId != null) 'profile_id': profileId,
+      if (profileVersion != null) 'profile_version': profileVersion,
+      if (modelId != null) 'model_id': modelId,
+      if (modelStateVersion != null) 'model_state_version': modelStateVersion,
+      if (dueBefore != null) 'due_before': dueBefore,
+      if (dueAfter != null) 'due_after': dueAfter,
+      if (scheduleRevisionAfter != null)
+        'schedule_revision_after': scheduleRevisionAfter,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MemoryReviewEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? scheduleId,
+    Value<int>? sequence,
+    Value<String>? operationId,
+    Value<String>? rating,
+    Value<bool>? isLapse,
+    Value<DateTime>? reviewedAt,
+    Value<int?>? responseTimeMs,
+    Value<String>? profileId,
+    Value<int>? profileVersion,
+    Value<String>? modelId,
+    Value<int>? modelStateVersion,
+    Value<DateTime>? dueBefore,
+    Value<DateTime>? dueAfter,
+    Value<int>? scheduleRevisionAfter,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return MemoryReviewEventsCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      sequence: sequence ?? this.sequence,
+      operationId: operationId ?? this.operationId,
+      rating: rating ?? this.rating,
+      isLapse: isLapse ?? this.isLapse,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
+      responseTimeMs: responseTimeMs ?? this.responseTimeMs,
+      profileId: profileId ?? this.profileId,
+      profileVersion: profileVersion ?? this.profileVersion,
+      modelId: modelId ?? this.modelId,
+      modelStateVersion: modelStateVersion ?? this.modelStateVersion,
+      dueBefore: dueBefore ?? this.dueBefore,
+      dueAfter: dueAfter ?? this.dueAfter,
+      scheduleRevisionAfter:
+          scheduleRevisionAfter ?? this.scheduleRevisionAfter,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<String>(scheduleId.value);
+    }
+    if (sequence.present) {
+      map['sequence'] = Variable<int>(sequence.value);
+    }
+    if (operationId.present) {
+      map['operation_id'] = Variable<String>(operationId.value);
+    }
+    if (rating.present) {
+      map['rating'] = Variable<String>(rating.value);
+    }
+    if (isLapse.present) {
+      map['is_lapse'] = Variable<bool>(isLapse.value);
+    }
+    if (reviewedAt.present) {
+      map['reviewed_at'] = Variable<DateTime>(reviewedAt.value);
+    }
+    if (responseTimeMs.present) {
+      map['response_time_ms'] = Variable<int>(responseTimeMs.value);
+    }
+    if (profileId.present) {
+      map['profile_id'] = Variable<String>(profileId.value);
+    }
+    if (profileVersion.present) {
+      map['profile_version'] = Variable<int>(profileVersion.value);
+    }
+    if (modelId.present) {
+      map['model_id'] = Variable<String>(modelId.value);
+    }
+    if (modelStateVersion.present) {
+      map['model_state_version'] = Variable<int>(modelStateVersion.value);
+    }
+    if (dueBefore.present) {
+      map['due_before'] = Variable<DateTime>(dueBefore.value);
+    }
+    if (dueAfter.present) {
+      map['due_after'] = Variable<DateTime>(dueAfter.value);
+    }
+    if (scheduleRevisionAfter.present) {
+      map['schedule_revision_after'] = Variable<int>(
+        scheduleRevisionAfter.value,
+      );
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryReviewEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('sequence: $sequence, ')
+          ..write('operationId: $operationId, ')
+          ..write('rating: $rating, ')
+          ..write('isLapse: $isLapse, ')
+          ..write('reviewedAt: $reviewedAt, ')
+          ..write('responseTimeMs: $responseTimeMs, ')
+          ..write('profileId: $profileId, ')
+          ..write('profileVersion: $profileVersion, ')
+          ..write('modelId: $modelId, ')
+          ..write('modelStateVersion: $modelStateVersion, ')
+          ..write('dueBefore: $dueBefore, ')
+          ..write('dueAfter: $dueAfter, ')
+          ..write('scheduleRevisionAfter: $scheduleRevisionAfter, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MemoryReviewQueueEntriesTable extends MemoryReviewQueueEntries
+    with TableInfo<$MemoryReviewQueueEntriesTable, MemoryReviewQueueEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MemoryReviewQueueEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _namespaceMeta = const VerificationMeta(
+    'namespace',
+  );
+  @override
+  late final GeneratedColumn<String> namespace = GeneratedColumn<String>(
+    'namespace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _subjectIdMeta = const VerificationMeta(
+    'subjectId',
+  );
+  @override
+  late final GeneratedColumn<String> subjectId = GeneratedColumn<String>(
+    'subject_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localDateMeta = const VerificationMeta(
+    'localDate',
+  );
+  @override
+  late final GeneratedColumn<String> localDate = GeneratedColumn<String>(
+    'local_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enqueuedAtMeta = const VerificationMeta(
+    'enqueuedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> enqueuedAt = GeneratedColumn<DateTime>(
+    'enqueued_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    namespace,
+    subjectId,
+    localDate,
+    enqueuedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'memory_review_queue_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MemoryReviewQueueEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('namespace')) {
+      context.handle(
+        _namespaceMeta,
+        namespace.isAcceptableOrUnknown(data['namespace']!, _namespaceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_namespaceMeta);
+    }
+    if (data.containsKey('subject_id')) {
+      context.handle(
+        _subjectIdMeta,
+        subjectId.isAcceptableOrUnknown(data['subject_id']!, _subjectIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_subjectIdMeta);
+    }
+    if (data.containsKey('local_date')) {
+      context.handle(
+        _localDateMeta,
+        localDate.isAcceptableOrUnknown(data['local_date']!, _localDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localDateMeta);
+    }
+    if (data.containsKey('enqueued_at')) {
+      context.handle(
+        _enqueuedAtMeta,
+        enqueuedAt.isAcceptableOrUnknown(data['enqueued_at']!, _enqueuedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_enqueuedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {namespace, subjectId, localDate},
+  ];
+  @override
+  MemoryReviewQueueEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MemoryReviewQueueEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      namespace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}namespace'],
+      )!,
+      subjectId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subject_id'],
+      )!,
+      localDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_date'],
+      )!,
+      enqueuedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}enqueued_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MemoryReviewQueueEntriesTable createAlias(String alias) {
+    return $MemoryReviewQueueEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class MemoryReviewQueueEntry extends DataClass
+    implements Insertable<MemoryReviewQueueEntry> {
+  final int id;
+  final String namespace;
+  final String subjectId;
+  final String localDate;
+  final DateTime enqueuedAt;
+  const MemoryReviewQueueEntry({
+    required this.id,
+    required this.namespace,
+    required this.subjectId,
+    required this.localDate,
+    required this.enqueuedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['namespace'] = Variable<String>(namespace);
+    map['subject_id'] = Variable<String>(subjectId);
+    map['local_date'] = Variable<String>(localDate);
+    map['enqueued_at'] = Variable<DateTime>(enqueuedAt);
+    return map;
+  }
+
+  MemoryReviewQueueEntriesCompanion toCompanion(bool nullToAbsent) {
+    return MemoryReviewQueueEntriesCompanion(
+      id: Value(id),
+      namespace: Value(namespace),
+      subjectId: Value(subjectId),
+      localDate: Value(localDate),
+      enqueuedAt: Value(enqueuedAt),
+    );
+  }
+
+  factory MemoryReviewQueueEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MemoryReviewQueueEntry(
+      id: serializer.fromJson<int>(json['id']),
+      namespace: serializer.fromJson<String>(json['namespace']),
+      subjectId: serializer.fromJson<String>(json['subjectId']),
+      localDate: serializer.fromJson<String>(json['localDate']),
+      enqueuedAt: serializer.fromJson<DateTime>(json['enqueuedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'namespace': serializer.toJson<String>(namespace),
+      'subjectId': serializer.toJson<String>(subjectId),
+      'localDate': serializer.toJson<String>(localDate),
+      'enqueuedAt': serializer.toJson<DateTime>(enqueuedAt),
+    };
+  }
+
+  MemoryReviewQueueEntry copyWith({
+    int? id,
+    String? namespace,
+    String? subjectId,
+    String? localDate,
+    DateTime? enqueuedAt,
+  }) => MemoryReviewQueueEntry(
+    id: id ?? this.id,
+    namespace: namespace ?? this.namespace,
+    subjectId: subjectId ?? this.subjectId,
+    localDate: localDate ?? this.localDate,
+    enqueuedAt: enqueuedAt ?? this.enqueuedAt,
+  );
+  MemoryReviewQueueEntry copyWithCompanion(
+    MemoryReviewQueueEntriesCompanion data,
+  ) {
+    return MemoryReviewQueueEntry(
+      id: data.id.present ? data.id.value : this.id,
+      namespace: data.namespace.present ? data.namespace.value : this.namespace,
+      subjectId: data.subjectId.present ? data.subjectId.value : this.subjectId,
+      localDate: data.localDate.present ? data.localDate.value : this.localDate,
+      enqueuedAt: data.enqueuedAt.present
+          ? data.enqueuedAt.value
+          : this.enqueuedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryReviewQueueEntry(')
+          ..write('id: $id, ')
+          ..write('namespace: $namespace, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('localDate: $localDate, ')
+          ..write('enqueuedAt: $enqueuedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, namespace, subjectId, localDate, enqueuedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MemoryReviewQueueEntry &&
+          other.id == this.id &&
+          other.namespace == this.namespace &&
+          other.subjectId == this.subjectId &&
+          other.localDate == this.localDate &&
+          other.enqueuedAt == this.enqueuedAt);
+}
+
+class MemoryReviewQueueEntriesCompanion
+    extends UpdateCompanion<MemoryReviewQueueEntry> {
+  final Value<int> id;
+  final Value<String> namespace;
+  final Value<String> subjectId;
+  final Value<String> localDate;
+  final Value<DateTime> enqueuedAt;
+  const MemoryReviewQueueEntriesCompanion({
+    this.id = const Value.absent(),
+    this.namespace = const Value.absent(),
+    this.subjectId = const Value.absent(),
+    this.localDate = const Value.absent(),
+    this.enqueuedAt = const Value.absent(),
+  });
+  MemoryReviewQueueEntriesCompanion.insert({
+    this.id = const Value.absent(),
+    required String namespace,
+    required String subjectId,
+    required String localDate,
+    required DateTime enqueuedAt,
+  }) : namespace = Value(namespace),
+       subjectId = Value(subjectId),
+       localDate = Value(localDate),
+       enqueuedAt = Value(enqueuedAt);
+  static Insertable<MemoryReviewQueueEntry> custom({
+    Expression<int>? id,
+    Expression<String>? namespace,
+    Expression<String>? subjectId,
+    Expression<String>? localDate,
+    Expression<DateTime>? enqueuedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
+      if (subjectId != null) 'subject_id': subjectId,
+      if (localDate != null) 'local_date': localDate,
+      if (enqueuedAt != null) 'enqueued_at': enqueuedAt,
+    });
+  }
+
+  MemoryReviewQueueEntriesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? namespace,
+    Value<String>? subjectId,
+    Value<String>? localDate,
+    Value<DateTime>? enqueuedAt,
+  }) {
+    return MemoryReviewQueueEntriesCompanion(
+      id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
+      subjectId: subjectId ?? this.subjectId,
+      localDate: localDate ?? this.localDate,
+      enqueuedAt: enqueuedAt ?? this.enqueuedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (namespace.present) {
+      map['namespace'] = Variable<String>(namespace.value);
+    }
+    if (subjectId.present) {
+      map['subject_id'] = Variable<String>(subjectId.value);
+    }
+    if (localDate.present) {
+      map['local_date'] = Variable<String>(localDate.value);
+    }
+    if (enqueuedAt.present) {
+      map['enqueued_at'] = Variable<DateTime>(enqueuedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MemoryReviewQueueEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('namespace: $namespace, ')
+          ..write('subjectId: $subjectId, ')
+          ..write('localDate: $localDate, ')
+          ..write('enqueuedAt: $enqueuedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -11882,6 +15221,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DailyStageStudyRecordsTable dailyStageStudyRecords =
       $DailyStageStudyRecordsTable(this);
   late final $TtsCacheTable ttsCache = $TtsCacheTable(this);
+  late final $MemorySchedulesTable memorySchedules = $MemorySchedulesTable(
+    this,
+  );
+  late final $MemoryReviewEventsTable memoryReviewEvents =
+      $MemoryReviewEventsTable(this);
+  late final $MemoryReviewQueueEntriesTable memoryReviewQueueEntries =
+      $MemoryReviewQueueEntriesTable(this);
   late final AudioItemDao audioItemDao = AudioItemDao(this as AppDatabase);
   late final CollectionDao collectionDao = CollectionDao(this as AppDatabase);
   late final BookmarkDao bookmarkDao = BookmarkDao(this as AppDatabase);
@@ -11910,7 +15256,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final DailyStageStudyRecordDao dailyStageStudyRecordDao =
       DailyStageStudyRecordDao(this as AppDatabase);
+  late final StudyStatisticsDao studyStatisticsDao = StudyStatisticsDao(
+    this as AppDatabase,
+  );
   late final TtsCacheDao ttsCacheDao = TtsCacheDao(this as AppDatabase);
+  late final MemoryScheduleDao memoryScheduleDao = MemoryScheduleDao(
+    this as AppDatabase,
+  );
+  late final FavoriteReviewDao favoriteReviewDao = FavoriteReviewDao(
+    this as AppDatabase,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -11932,6 +15287,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dailyStudyRecords,
     dailyStageStudyRecords,
     ttsCache,
+    memorySchedules,
+    memoryReviewEvents,
+    memoryReviewQueueEntries,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -12005,6 +15363,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ),
       result: [TableUpdate('saved_sense_groups', kind: UpdateKind.update)],
     ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'memory_schedules',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('memory_review_events', kind: UpdateKind.delete)],
+    ),
   ]);
 }
 
@@ -12031,14 +15396,18 @@ typedef $$AudioItemsTableCreateCompanionBuilder =
       Value<int> syncStatus,
       Value<String?> remoteAudioId,
       Value<DateTime?> originalDate,
+      Value<DateTime?> communityUnavailableAt,
+      Value<String?> difficulty,
+      Value<String?> description,
       Value<String?> importSourceType,
       Value<String?> importSourceUrl,
       Value<String?> podcastEpisodeGuid,
       Value<String?> podcastEnclosureUrl,
       Value<String?> podcastEnclosureType,
-      Value<String?> podcastDescription,
       Value<String?> podcastImageUrl,
       Value<String?> podcastLink,
+      Value<String?> podcastTranscriptUrl,
+      Value<String?> podcastTranscriptFormat,
       Value<int> rowid,
     });
 typedef $$AudioItemsTableUpdateCompanionBuilder =
@@ -12064,14 +15433,18 @@ typedef $$AudioItemsTableUpdateCompanionBuilder =
       Value<int> syncStatus,
       Value<String?> remoteAudioId,
       Value<DateTime?> originalDate,
+      Value<DateTime?> communityUnavailableAt,
+      Value<String?> difficulty,
+      Value<String?> description,
       Value<String?> importSourceType,
       Value<String?> importSourceUrl,
       Value<String?> podcastEpisodeGuid,
       Value<String?> podcastEnclosureUrl,
       Value<String?> podcastEnclosureType,
-      Value<String?> podcastDescription,
       Value<String?> podcastImageUrl,
       Value<String?> podcastLink,
+      Value<String?> podcastTranscriptUrl,
+      Value<String?> podcastTranscriptFormat,
       Value<int> rowid,
     });
 
@@ -12376,6 +15749,21 @@ class $$AudioItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get communityUnavailableAt => $composableBuilder(
+    column: $table.communityUnavailableAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get importSourceType => $composableBuilder(
     column: $table.importSourceType,
     builder: (column) => ColumnFilters(column),
@@ -12401,11 +15789,6 @@ class $$AudioItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get podcastDescription => $composableBuilder(
-    column: $table.podcastDescription,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get podcastImageUrl => $composableBuilder(
     column: $table.podcastImageUrl,
     builder: (column) => ColumnFilters(column),
@@ -12413,6 +15796,16 @@ class $$AudioItemsTableFilterComposer
 
   ColumnFilters<String> get podcastLink => $composableBuilder(
     column: $table.podcastLink,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastTranscriptUrl => $composableBuilder(
+    column: $table.podcastTranscriptUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get podcastTranscriptFormat => $composableBuilder(
+    column: $table.podcastTranscriptFormat,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12731,6 +16124,21 @@ class $$AudioItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get communityUnavailableAt => $composableBuilder(
+    column: $table.communityUnavailableAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get importSourceType => $composableBuilder(
     column: $table.importSourceType,
     builder: (column) => ColumnOrderings(column),
@@ -12756,11 +16164,6 @@ class $$AudioItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get podcastDescription => $composableBuilder(
-    column: $table.podcastDescription,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get podcastImageUrl => $composableBuilder(
     column: $table.podcastImageUrl,
     builder: (column) => ColumnOrderings(column),
@@ -12768,6 +16171,16 @@ class $$AudioItemsTableOrderingComposer
 
   ColumnOrderings<String> get podcastLink => $composableBuilder(
     column: $table.podcastLink,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastTranscriptUrl => $composableBuilder(
+    column: $table.podcastTranscriptUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get podcastTranscriptFormat => $composableBuilder(
+    column: $table.podcastTranscriptFormat,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -12870,6 +16283,21 @@ class $$AudioItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get communityUnavailableAt => $composableBuilder(
+    column: $table.communityUnavailableAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get difficulty => $composableBuilder(
+    column: $table.difficulty,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get importSourceType => $composableBuilder(
     column: $table.importSourceType,
     builder: (column) => column,
@@ -12895,11 +16323,6 @@ class $$AudioItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get podcastDescription => $composableBuilder(
-    column: $table.podcastDescription,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<String> get podcastImageUrl => $composableBuilder(
     column: $table.podcastImageUrl,
     builder: (column) => column,
@@ -12907,6 +16330,16 @@ class $$AudioItemsTableAnnotationComposer
 
   GeneratedColumn<String> get podcastLink => $composableBuilder(
     column: $table.podcastLink,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastTranscriptUrl => $composableBuilder(
+    column: $table.podcastTranscriptUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get podcastTranscriptFormat => $composableBuilder(
+    column: $table.podcastTranscriptFormat,
     builder: (column) => column,
   );
 
@@ -13171,14 +16604,18 @@ class $$AudioItemsTableTableManager
                 Value<int> syncStatus = const Value.absent(),
                 Value<String?> remoteAudioId = const Value.absent(),
                 Value<DateTime?> originalDate = const Value.absent(),
+                Value<DateTime?> communityUnavailableAt = const Value.absent(),
+                Value<String?> difficulty = const Value.absent(),
+                Value<String?> description = const Value.absent(),
                 Value<String?> importSourceType = const Value.absent(),
                 Value<String?> importSourceUrl = const Value.absent(),
                 Value<String?> podcastEpisodeGuid = const Value.absent(),
                 Value<String?> podcastEnclosureUrl = const Value.absent(),
                 Value<String?> podcastEnclosureType = const Value.absent(),
-                Value<String?> podcastDescription = const Value.absent(),
                 Value<String?> podcastImageUrl = const Value.absent(),
                 Value<String?> podcastLink = const Value.absent(),
+                Value<String?> podcastTranscriptUrl = const Value.absent(),
+                Value<String?> podcastTranscriptFormat = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AudioItemsCompanion(
                 id: id,
@@ -13202,14 +16639,18 @@ class $$AudioItemsTableTableManager
                 syncStatus: syncStatus,
                 remoteAudioId: remoteAudioId,
                 originalDate: originalDate,
+                communityUnavailableAt: communityUnavailableAt,
+                difficulty: difficulty,
+                description: description,
                 importSourceType: importSourceType,
                 importSourceUrl: importSourceUrl,
                 podcastEpisodeGuid: podcastEpisodeGuid,
                 podcastEnclosureUrl: podcastEnclosureUrl,
                 podcastEnclosureType: podcastEnclosureType,
-                podcastDescription: podcastDescription,
                 podcastImageUrl: podcastImageUrl,
                 podcastLink: podcastLink,
+                podcastTranscriptUrl: podcastTranscriptUrl,
+                podcastTranscriptFormat: podcastTranscriptFormat,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13235,14 +16676,18 @@ class $$AudioItemsTableTableManager
                 Value<int> syncStatus = const Value.absent(),
                 Value<String?> remoteAudioId = const Value.absent(),
                 Value<DateTime?> originalDate = const Value.absent(),
+                Value<DateTime?> communityUnavailableAt = const Value.absent(),
+                Value<String?> difficulty = const Value.absent(),
+                Value<String?> description = const Value.absent(),
                 Value<String?> importSourceType = const Value.absent(),
                 Value<String?> importSourceUrl = const Value.absent(),
                 Value<String?> podcastEpisodeGuid = const Value.absent(),
                 Value<String?> podcastEnclosureUrl = const Value.absent(),
                 Value<String?> podcastEnclosureType = const Value.absent(),
-                Value<String?> podcastDescription = const Value.absent(),
                 Value<String?> podcastImageUrl = const Value.absent(),
                 Value<String?> podcastLink = const Value.absent(),
+                Value<String?> podcastTranscriptUrl = const Value.absent(),
+                Value<String?> podcastTranscriptFormat = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AudioItemsCompanion.insert(
                 id: id,
@@ -13266,14 +16711,18 @@ class $$AudioItemsTableTableManager
                 syncStatus: syncStatus,
                 remoteAudioId: remoteAudioId,
                 originalDate: originalDate,
+                communityUnavailableAt: communityUnavailableAt,
+                difficulty: difficulty,
+                description: description,
                 importSourceType: importSourceType,
                 importSourceUrl: importSourceUrl,
                 podcastEpisodeGuid: podcastEpisodeGuid,
                 podcastEnclosureUrl: podcastEnclosureUrl,
                 podcastEnclosureType: podcastEnclosureType,
-                podcastDescription: podcastDescription,
                 podcastImageUrl: podcastImageUrl,
                 podcastLink: podcastLink,
+                podcastTranscriptUrl: podcastTranscriptUrl,
+                podcastTranscriptFormat: podcastTranscriptFormat,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -13521,7 +16970,10 @@ typedef $$CollectionsTableCreateCompanionBuilder =
       Value<String> source,
       Value<String?> remoteId,
       Value<String?> coverUrl,
+      Value<String?> coverUrlChina,
       Value<String?> description,
+      Value<String?> authorNickname,
+      Value<DateTime?> publishedAt,
       Value<DateTime?> deprecatedAt,
       Value<String?> podcastInputUrl,
       Value<String?> podcastFeedUrl,
@@ -13542,7 +16994,10 @@ typedef $$CollectionsTableUpdateCompanionBuilder =
       Value<String> source,
       Value<String?> remoteId,
       Value<String?> coverUrl,
+      Value<String?> coverUrlChina,
       Value<String?> description,
+      Value<String?> authorNickname,
+      Value<DateTime?> publishedAt,
       Value<DateTime?> deprecatedAt,
       Value<String?> podcastInputUrl,
       Value<String?> podcastFeedUrl,
@@ -13644,8 +17099,23 @@ class $$CollectionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get coverUrlChina => $composableBuilder(
+    column: $table.coverUrlChina,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authorNickname => $composableBuilder(
+    column: $table.authorNickname,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get publishedAt => $composableBuilder(
+    column: $table.publishedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13764,8 +17234,23 @@ class $$CollectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get coverUrlChina => $composableBuilder(
+    column: $table.coverUrlChina,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authorNickname => $composableBuilder(
+    column: $table.authorNickname,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get publishedAt => $composableBuilder(
+    column: $table.publishedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13843,8 +17328,23 @@ class $$CollectionsTableAnnotationComposer
   GeneratedColumn<String> get coverUrl =>
       $composableBuilder(column: $table.coverUrl, builder: (column) => column);
 
+  GeneratedColumn<String> get coverUrlChina => $composableBuilder(
+    column: $table.coverUrlChina,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get authorNickname => $composableBuilder(
+    column: $table.authorNickname,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get publishedAt => $composableBuilder(
+    column: $table.publishedAt,
     builder: (column) => column,
   );
 
@@ -13943,7 +17443,10 @@ class $$CollectionsTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String?> remoteId = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
+                Value<String?> coverUrlChina = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> authorNickname = const Value.absent(),
+                Value<DateTime?> publishedAt = const Value.absent(),
                 Value<DateTime?> deprecatedAt = const Value.absent(),
                 Value<String?> podcastInputUrl = const Value.absent(),
                 Value<String?> podcastFeedUrl = const Value.absent(),
@@ -13962,7 +17465,10 @@ class $$CollectionsTableTableManager
                 source: source,
                 remoteId: remoteId,
                 coverUrl: coverUrl,
+                coverUrlChina: coverUrlChina,
                 description: description,
+                authorNickname: authorNickname,
+                publishedAt: publishedAt,
                 deprecatedAt: deprecatedAt,
                 podcastInputUrl: podcastInputUrl,
                 podcastFeedUrl: podcastFeedUrl,
@@ -13983,7 +17489,10 @@ class $$CollectionsTableTableManager
                 Value<String> source = const Value.absent(),
                 Value<String?> remoteId = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
+                Value<String?> coverUrlChina = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> authorNickname = const Value.absent(),
+                Value<DateTime?> publishedAt = const Value.absent(),
                 Value<DateTime?> deprecatedAt = const Value.absent(),
                 Value<String?> podcastInputUrl = const Value.absent(),
                 Value<String?> podcastFeedUrl = const Value.absent(),
@@ -14002,7 +17511,10 @@ class $$CollectionsTableTableManager
                 source: source,
                 remoteId: remoteId,
                 coverUrl: coverUrl,
+                coverUrlChina: coverUrlChina,
                 description: description,
+                authorNickname: authorNickname,
+                publishedAt: publishedAt,
                 deprecatedAt: deprecatedAt,
                 podcastInputUrl: podcastInputUrl,
                 podcastFeedUrl: podcastFeedUrl,
@@ -14489,6 +18001,7 @@ typedef $$CollectionAudioItemsTableProcessedTableManager =
 typedef $$BookmarksTableCreateCompanionBuilder =
     BookmarksCompanion Function({
       Value<int> id,
+      Value<String?> memorySubjectId,
       required String audioItemId,
       required int sentenceIndex,
       required String sentenceText,
@@ -14502,6 +18015,7 @@ typedef $$BookmarksTableCreateCompanionBuilder =
 typedef $$BookmarksTableUpdateCompanionBuilder =
     BookmarksCompanion Function({
       Value<int> id,
+      Value<String?> memorySubjectId,
       Value<String> audioItemId,
       Value<int> sentenceIndex,
       Value<String> sentenceText,
@@ -14548,6 +18062,11 @@ class $$BookmarksTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14629,6 +18148,11 @@ class $$BookmarksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sentenceIndex => $composableBuilder(
     column: $table.sentenceIndex,
     builder: (column) => ColumnOrderings(column),
@@ -14704,6 +18228,11 @@ class $$BookmarksTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get sentenceIndex => $composableBuilder(
     column: $table.sentenceIndex,
@@ -14788,6 +18317,7 @@ class $$BookmarksTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> memorySubjectId = const Value.absent(),
                 Value<String> audioItemId = const Value.absent(),
                 Value<int> sentenceIndex = const Value.absent(),
                 Value<String> sentenceText = const Value.absent(),
@@ -14799,6 +18329,7 @@ class $$BookmarksTableTableManager
                 Value<int> syncStatus = const Value.absent(),
               }) => BookmarksCompanion(
                 id: id,
+                memorySubjectId: memorySubjectId,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
                 sentenceText: sentenceText,
@@ -14812,6 +18343,7 @@ class $$BookmarksTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> memorySubjectId = const Value.absent(),
                 required String audioItemId,
                 required int sentenceIndex,
                 required String sentenceText,
@@ -14823,6 +18355,7 @@ class $$BookmarksTableTableManager
                 Value<int> syncStatus = const Value.absent(),
               }) => BookmarksCompanion.insert(
                 id: id,
+                memorySubjectId: memorySubjectId,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
                 sentenceText: sentenceText,
@@ -15241,6 +18774,7 @@ typedef $$LearningProgressesTableCreateCompanionBuilder =
       required DateTime updatedAt,
       Value<String> skippedSubStages,
       Value<bool> isPaused,
+      Value<DateTime?> manualUnlockAt,
       Value<String> planVersionsJson,
       Value<int> rowid,
     });
@@ -15274,6 +18808,7 @@ typedef $$LearningProgressesTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<String> skippedSubStages,
       Value<bool> isPaused,
+      Value<DateTime?> manualUnlockAt,
       Value<String> planVersionsJson,
       Value<int> rowid,
     });
@@ -15461,6 +18996,11 @@ class $$LearningProgressesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get manualUnlockAt => $composableBuilder(
+    column: $table.manualUnlockAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get planVersionsJson => $composableBuilder(
     column: $table.planVersionsJson,
     builder: (column) => ColumnFilters(column),
@@ -15638,6 +19178,11 @@ class $$LearningProgressesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get manualUnlockAt => $composableBuilder(
+    column: $table.manualUnlockAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get planVersionsJson => $composableBuilder(
     column: $table.planVersionsJson,
     builder: (column) => ColumnOrderings(column),
@@ -15811,6 +19356,11 @@ class $$LearningProgressesTableAnnotationComposer
   GeneratedColumn<bool> get isPaused =>
       $composableBuilder(column: $table.isPaused, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get manualUnlockAt => $composableBuilder(
+    column: $table.manualUnlockAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get planVersionsJson => $composableBuilder(
     column: $table.planVersionsJson,
     builder: (column) => column,
@@ -15909,6 +19459,7 @@ class $$LearningProgressesTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String> skippedSubStages = const Value.absent(),
                 Value<bool> isPaused = const Value.absent(),
+                Value<DateTime?> manualUnlockAt = const Value.absent(),
                 Value<String> planVersionsJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LearningProgressesCompanion(
@@ -15943,6 +19494,7 @@ class $$LearningProgressesTableTableManager
                 updatedAt: updatedAt,
                 skippedSubStages: skippedSubStages,
                 isPaused: isPaused,
+                manualUnlockAt: manualUnlockAt,
                 planVersionsJson: planVersionsJson,
                 rowid: rowid,
               ),
@@ -15984,6 +19536,7 @@ class $$LearningProgressesTableTableManager
                 required DateTime updatedAt,
                 Value<String> skippedSubStages = const Value.absent(),
                 Value<bool> isPaused = const Value.absent(),
+                Value<DateTime?> manualUnlockAt = const Value.absent(),
                 Value<String> planVersionsJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LearningProgressesCompanion.insert(
@@ -16018,6 +19571,7 @@ class $$LearningProgressesTableTableManager
                 updatedAt: updatedAt,
                 skippedSubStages: skippedSubStages,
                 isPaused: isPaused,
+                manualUnlockAt: manualUnlockAt,
                 planVersionsJson: planVersionsJson,
                 rowid: rowid,
               ),
@@ -17372,6 +20926,7 @@ typedef $$SavedWordsTableCreateCompanionBuilder =
     SavedWordsCompanion Function({
       Value<int> id,
       required String word,
+      Value<String?> memorySubjectId,
       Value<String?> audioItemId,
       Value<int?> sentenceIndex,
       Value<String?> sentenceText,
@@ -17390,6 +20945,7 @@ typedef $$SavedWordsTableUpdateCompanionBuilder =
     SavedWordsCompanion Function({
       Value<int> id,
       Value<String> word,
+      Value<String?> memorySubjectId,
       Value<String?> audioItemId,
       Value<int?> sentenceIndex,
       Value<String?> sentenceText,
@@ -17445,6 +21001,11 @@ class $$SavedWordsTableFilterComposer
 
   ColumnFilters<String> get word => $composableBuilder(
     column: $table.word,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17551,6 +21112,11 @@ class $$SavedWordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sentenceIndex => $composableBuilder(
     column: $table.sentenceIndex,
     builder: (column) => ColumnOrderings(column),
@@ -17649,6 +21215,11 @@ class $$SavedWordsTableAnnotationComposer
 
   GeneratedColumn<String> get word =>
       $composableBuilder(column: $table.word, builder: (column) => column);
+
+  GeneratedColumn<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get sentenceIndex => $composableBuilder(
     column: $table.sentenceIndex,
@@ -17758,6 +21329,7 @@ class $$SavedWordsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> word = const Value.absent(),
+                Value<String?> memorySubjectId = const Value.absent(),
                 Value<String?> audioItemId = const Value.absent(),
                 Value<int?> sentenceIndex = const Value.absent(),
                 Value<String?> sentenceText = const Value.absent(),
@@ -17774,6 +21346,7 @@ class $$SavedWordsTableTableManager
               }) => SavedWordsCompanion(
                 id: id,
                 word: word,
+                memorySubjectId: memorySubjectId,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
                 sentenceText: sentenceText,
@@ -17792,6 +21365,7 @@ class $$SavedWordsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String word,
+                Value<String?> memorySubjectId = const Value.absent(),
                 Value<String?> audioItemId = const Value.absent(),
                 Value<int?> sentenceIndex = const Value.absent(),
                 Value<String?> sentenceText = const Value.absent(),
@@ -17808,6 +21382,7 @@ class $$SavedWordsTableTableManager
               }) => SavedWordsCompanion.insert(
                 id: id,
                 word: word,
+                memorySubjectId: memorySubjectId,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
                 sentenceText: sentenceText,
@@ -17893,6 +21468,7 @@ typedef $$SavedSenseGroupsTableCreateCompanionBuilder =
     SavedSenseGroupsCompanion Function({
       Value<int> id,
       required String phraseText,
+      Value<String?> memorySubjectId,
       required String displayText,
       Value<String?> audioItemId,
       Value<int?> sentenceIndex,
@@ -17914,6 +21490,7 @@ typedef $$SavedSenseGroupsTableUpdateCompanionBuilder =
     SavedSenseGroupsCompanion Function({
       Value<int> id,
       Value<String> phraseText,
+      Value<String?> memorySubjectId,
       Value<String> displayText,
       Value<String?> audioItemId,
       Value<int?> sentenceIndex,
@@ -17977,6 +21554,11 @@ class $$SavedSenseGroupsTableFilterComposer
 
   ColumnFilters<String> get phraseText => $composableBuilder(
     column: $table.phraseText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18098,6 +21680,11 @@ class $$SavedSenseGroupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get displayText => $composableBuilder(
     column: $table.displayText,
     builder: (column) => ColumnOrderings(column),
@@ -18211,6 +21798,11 @@ class $$SavedSenseGroupsTableAnnotationComposer
 
   GeneratedColumn<String> get phraseText => $composableBuilder(
     column: $table.phraseText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get memorySubjectId => $composableBuilder(
+    column: $table.memorySubjectId,
     builder: (column) => column,
   );
 
@@ -18339,6 +21931,7 @@ class $$SavedSenseGroupsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> phraseText = const Value.absent(),
+                Value<String?> memorySubjectId = const Value.absent(),
                 Value<String> displayText = const Value.absent(),
                 Value<String?> audioItemId = const Value.absent(),
                 Value<int?> sentenceIndex = const Value.absent(),
@@ -18358,6 +21951,7 @@ class $$SavedSenseGroupsTableTableManager
               }) => SavedSenseGroupsCompanion(
                 id: id,
                 phraseText: phraseText,
+                memorySubjectId: memorySubjectId,
                 displayText: displayText,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
@@ -18379,6 +21973,7 @@ class $$SavedSenseGroupsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String phraseText,
+                Value<String?> memorySubjectId = const Value.absent(),
                 required String displayText,
                 Value<String?> audioItemId = const Value.absent(),
                 Value<int?> sentenceIndex = const Value.absent(),
@@ -18398,6 +21993,7 @@ class $$SavedSenseGroupsTableTableManager
               }) => SavedSenseGroupsCompanion.insert(
                 id: id,
                 phraseText: phraseText,
+                memorySubjectId: memorySubjectId,
                 displayText: displayText,
                 audioItemId: audioItemId,
                 sentenceIndex: sentenceIndex,
@@ -18653,20 +22249,26 @@ typedef $$DailyStudyRecordsTableCreateCompanionBuilder =
       Value<int> id,
       required DateTime date,
       Value<int> studyTimeSeconds,
+      Value<int> studyTimeMilliseconds,
       Value<int> inputWords,
       Value<int> outputWords,
       Value<int> inputTimeSeconds,
+      Value<int> inputTimeMilliseconds,
       Value<int> outputTimeSeconds,
+      Value<int> outputTimeMilliseconds,
     });
 typedef $$DailyStudyRecordsTableUpdateCompanionBuilder =
     DailyStudyRecordsCompanion Function({
       Value<int> id,
       Value<DateTime> date,
       Value<int> studyTimeSeconds,
+      Value<int> studyTimeMilliseconds,
       Value<int> inputWords,
       Value<int> outputWords,
       Value<int> inputTimeSeconds,
+      Value<int> inputTimeMilliseconds,
       Value<int> outputTimeSeconds,
+      Value<int> outputTimeMilliseconds,
     });
 
 class $$DailyStudyRecordsTableFilterComposer
@@ -18693,6 +22295,11 @@ class $$DailyStudyRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get inputWords => $composableBuilder(
     column: $table.inputWords,
     builder: (column) => ColumnFilters(column),
@@ -18708,8 +22315,18 @@ class $$DailyStudyRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -18738,6 +22355,11 @@ class $$DailyStudyRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get inputWords => $composableBuilder(
     column: $table.inputWords,
     builder: (column) => ColumnOrderings(column),
@@ -18753,8 +22375,18 @@ class $$DailyStudyRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -18779,6 +22411,11 @@ class $$DailyStudyRecordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get inputWords => $composableBuilder(
     column: $table.inputWords,
     builder: (column) => column,
@@ -18794,8 +22431,18 @@ class $$DailyStudyRecordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => column,
   );
 }
@@ -18843,36 +22490,48 @@ class $$DailyStudyRecordsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<int> studyTimeSeconds = const Value.absent(),
+                Value<int> studyTimeMilliseconds = const Value.absent(),
                 Value<int> inputWords = const Value.absent(),
                 Value<int> outputWords = const Value.absent(),
                 Value<int> inputTimeSeconds = const Value.absent(),
+                Value<int> inputTimeMilliseconds = const Value.absent(),
                 Value<int> outputTimeSeconds = const Value.absent(),
+                Value<int> outputTimeMilliseconds = const Value.absent(),
               }) => DailyStudyRecordsCompanion(
                 id: id,
                 date: date,
                 studyTimeSeconds: studyTimeSeconds,
+                studyTimeMilliseconds: studyTimeMilliseconds,
                 inputWords: inputWords,
                 outputWords: outputWords,
                 inputTimeSeconds: inputTimeSeconds,
+                inputTimeMilliseconds: inputTimeMilliseconds,
                 outputTimeSeconds: outputTimeSeconds,
+                outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required DateTime date,
                 Value<int> studyTimeSeconds = const Value.absent(),
+                Value<int> studyTimeMilliseconds = const Value.absent(),
                 Value<int> inputWords = const Value.absent(),
                 Value<int> outputWords = const Value.absent(),
                 Value<int> inputTimeSeconds = const Value.absent(),
+                Value<int> inputTimeMilliseconds = const Value.absent(),
                 Value<int> outputTimeSeconds = const Value.absent(),
+                Value<int> outputTimeMilliseconds = const Value.absent(),
               }) => DailyStudyRecordsCompanion.insert(
                 id: id,
                 date: date,
                 studyTimeSeconds: studyTimeSeconds,
+                studyTimeMilliseconds: studyTimeMilliseconds,
                 inputWords: inputWords,
                 outputWords: outputWords,
                 inputTimeSeconds: inputTimeSeconds,
+                inputTimeMilliseconds: inputTimeMilliseconds,
                 outputTimeSeconds: outputTimeSeconds,
+                outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -18909,8 +22568,11 @@ typedef $$DailyStageStudyRecordsTableCreateCompanionBuilder =
       required DateTime date,
       required StudyStage stage,
       Value<int> studyTimeSeconds,
+      Value<int> studyTimeMilliseconds,
       Value<int> inputTimeSeconds,
+      Value<int> inputTimeMilliseconds,
       Value<int> outputTimeSeconds,
+      Value<int> outputTimeMilliseconds,
     });
 typedef $$DailyStageStudyRecordsTableUpdateCompanionBuilder =
     DailyStageStudyRecordsCompanion Function({
@@ -18918,8 +22580,11 @@ typedef $$DailyStageStudyRecordsTableUpdateCompanionBuilder =
       Value<DateTime> date,
       Value<StudyStage> stage,
       Value<int> studyTimeSeconds,
+      Value<int> studyTimeMilliseconds,
       Value<int> inputTimeSeconds,
+      Value<int> inputTimeMilliseconds,
       Value<int> outputTimeSeconds,
+      Value<int> outputTimeMilliseconds,
     });
 
 class $$DailyStageStudyRecordsTableFilterComposer
@@ -18952,13 +22617,28 @@ class $$DailyStageStudyRecordsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get inputTimeSeconds => $composableBuilder(
     column: $table.inputTimeSeconds,
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -18992,13 +22672,28 @@ class $$DailyStageStudyRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get inputTimeSeconds => $composableBuilder(
     column: $table.inputTimeSeconds,
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -19026,13 +22721,28 @@ class $$DailyStageStudyRecordsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get studyTimeMilliseconds => $composableBuilder(
+    column: $table.studyTimeMilliseconds,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get inputTimeSeconds => $composableBuilder(
     column: $table.inputTimeSeconds,
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get inputTimeMilliseconds => $composableBuilder(
+    column: $table.inputTimeMilliseconds,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get outputTimeSeconds => $composableBuilder(
     column: $table.outputTimeSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get outputTimeMilliseconds => $composableBuilder(
+    column: $table.outputTimeMilliseconds,
     builder: (column) => column,
   );
 }
@@ -19087,15 +22797,21 @@ class $$DailyStageStudyRecordsTableTableManager
                 Value<DateTime> date = const Value.absent(),
                 Value<StudyStage> stage = const Value.absent(),
                 Value<int> studyTimeSeconds = const Value.absent(),
+                Value<int> studyTimeMilliseconds = const Value.absent(),
                 Value<int> inputTimeSeconds = const Value.absent(),
+                Value<int> inputTimeMilliseconds = const Value.absent(),
                 Value<int> outputTimeSeconds = const Value.absent(),
+                Value<int> outputTimeMilliseconds = const Value.absent(),
               }) => DailyStageStudyRecordsCompanion(
                 id: id,
                 date: date,
                 stage: stage,
                 studyTimeSeconds: studyTimeSeconds,
+                studyTimeMilliseconds: studyTimeMilliseconds,
                 inputTimeSeconds: inputTimeSeconds,
+                inputTimeMilliseconds: inputTimeMilliseconds,
                 outputTimeSeconds: outputTimeSeconds,
+                outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           createCompanionCallback:
               ({
@@ -19103,15 +22819,21 @@ class $$DailyStageStudyRecordsTableTableManager
                 required DateTime date,
                 required StudyStage stage,
                 Value<int> studyTimeSeconds = const Value.absent(),
+                Value<int> studyTimeMilliseconds = const Value.absent(),
                 Value<int> inputTimeSeconds = const Value.absent(),
+                Value<int> inputTimeMilliseconds = const Value.absent(),
                 Value<int> outputTimeSeconds = const Value.absent(),
+                Value<int> outputTimeMilliseconds = const Value.absent(),
               }) => DailyStageStudyRecordsCompanion.insert(
                 id: id,
                 date: date,
                 stage: stage,
                 studyTimeSeconds: studyTimeSeconds,
+                studyTimeMilliseconds: studyTimeMilliseconds,
                 inputTimeSeconds: inputTimeSeconds,
+                inputTimeMilliseconds: inputTimeMilliseconds,
                 outputTimeSeconds: outputTimeSeconds,
+                outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -19532,6 +23254,1358 @@ typedef $$TtsCacheTableProcessedTableManager =
       TtsCacheData,
       PrefetchHooks Function()
     >;
+typedef $$MemorySchedulesTableCreateCompanionBuilder =
+    MemorySchedulesCompanion Function({
+      required String id,
+      required String namespace,
+      required String subjectId,
+      required String profileId,
+      required int profileVersion,
+      required String modelId,
+      required int modelStateVersion,
+      Value<String> modelStateJson,
+      required String phase,
+      required String status,
+      required DateTime dueAt,
+      Value<DateTime?> lastReviewedAt,
+      Value<int> reviewCount,
+      Value<int> lapseCount,
+      Value<int> revision,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> archivedAt,
+      Value<int> rowid,
+    });
+typedef $$MemorySchedulesTableUpdateCompanionBuilder =
+    MemorySchedulesCompanion Function({
+      Value<String> id,
+      Value<String> namespace,
+      Value<String> subjectId,
+      Value<String> profileId,
+      Value<int> profileVersion,
+      Value<String> modelId,
+      Value<int> modelStateVersion,
+      Value<String> modelStateJson,
+      Value<String> phase,
+      Value<String> status,
+      Value<DateTime> dueAt,
+      Value<DateTime?> lastReviewedAt,
+      Value<int> reviewCount,
+      Value<int> lapseCount,
+      Value<int> revision,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> archivedAt,
+      Value<int> rowid,
+    });
+
+final class $$MemorySchedulesTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $MemorySchedulesTable, MemorySchedule> {
+  $$MemorySchedulesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<$MemoryReviewEventsTable, List<MemoryReviewEvent>>
+  _memoryReviewEventsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.memoryReviewEvents,
+        aliasName: $_aliasNameGenerator(
+          db.memorySchedules.id,
+          db.memoryReviewEvents.scheduleId,
+        ),
+      );
+
+  $$MemoryReviewEventsTableProcessedTableManager get memoryReviewEventsRefs {
+    final manager = $$MemoryReviewEventsTableTableManager(
+      $_db,
+      $_db.memoryReviewEvents,
+    ).filter((f) => f.scheduleId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _memoryReviewEventsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$MemorySchedulesTableFilterComposer
+    extends Composer<_$AppDatabase, $MemorySchedulesTable> {
+  $$MemorySchedulesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modelId => $composableBuilder(
+    column: $table.modelId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modelStateJson => $composableBuilder(
+    column: $table.modelStateJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get phase => $composableBuilder(
+    column: $table.phase,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reviewCount => $composableBuilder(
+    column: $table.reviewCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> memoryReviewEventsRefs(
+    Expression<bool> Function($$MemoryReviewEventsTableFilterComposer f) f,
+  ) {
+    final $$MemoryReviewEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.memoryReviewEvents,
+      getReferencedColumn: (t) => t.scheduleId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MemoryReviewEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.memoryReviewEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$MemorySchedulesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MemorySchedulesTable> {
+  $$MemorySchedulesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get modelId => $composableBuilder(
+    column: $table.modelId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get modelStateJson => $composableBuilder(
+    column: $table.modelStateJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get phase => $composableBuilder(
+    column: $table.phase,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dueAt => $composableBuilder(
+    column: $table.dueAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reviewCount => $composableBuilder(
+    column: $table.reviewCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MemorySchedulesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MemorySchedulesTable> {
+  $$MemorySchedulesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get namespace =>
+      $composableBuilder(column: $table.namespace, builder: (column) => column);
+
+  GeneratedColumn<String> get subjectId =>
+      $composableBuilder(column: $table.subjectId, builder: (column) => column);
+
+  GeneratedColumn<String> get profileId =>
+      $composableBuilder(column: $table.profileId, builder: (column) => column);
+
+  GeneratedColumn<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get modelId =>
+      $composableBuilder(column: $table.modelId, builder: (column) => column);
+
+  GeneratedColumn<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get modelStateJson => $composableBuilder(
+    column: $table.modelStateJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get phase =>
+      $composableBuilder(column: $table.phase, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get dueAt =>
+      $composableBuilder(column: $table.dueAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reviewCount => $composableBuilder(
+    column: $table.reviewCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lapseCount => $composableBuilder(
+    column: $table.lapseCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
+
+  Expression<T> memoryReviewEventsRefs<T extends Object>(
+    Expression<T> Function($$MemoryReviewEventsTableAnnotationComposer a) f,
+  ) {
+    final $$MemoryReviewEventsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.memoryReviewEvents,
+          getReferencedColumn: (t) => t.scheduleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$MemoryReviewEventsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.memoryReviewEvents,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$MemorySchedulesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MemorySchedulesTable,
+          MemorySchedule,
+          $$MemorySchedulesTableFilterComposer,
+          $$MemorySchedulesTableOrderingComposer,
+          $$MemorySchedulesTableAnnotationComposer,
+          $$MemorySchedulesTableCreateCompanionBuilder,
+          $$MemorySchedulesTableUpdateCompanionBuilder,
+          (MemorySchedule, $$MemorySchedulesTableReferences),
+          MemorySchedule,
+          PrefetchHooks Function({bool memoryReviewEventsRefs})
+        > {
+  $$MemorySchedulesTableTableManager(
+    _$AppDatabase db,
+    $MemorySchedulesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MemorySchedulesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MemorySchedulesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MemorySchedulesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> namespace = const Value.absent(),
+                Value<String> subjectId = const Value.absent(),
+                Value<String> profileId = const Value.absent(),
+                Value<int> profileVersion = const Value.absent(),
+                Value<String> modelId = const Value.absent(),
+                Value<int> modelStateVersion = const Value.absent(),
+                Value<String> modelStateJson = const Value.absent(),
+                Value<String> phase = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<DateTime> dueAt = const Value.absent(),
+                Value<DateTime?> lastReviewedAt = const Value.absent(),
+                Value<int> reviewCount = const Value.absent(),
+                Value<int> lapseCount = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MemorySchedulesCompanion(
+                id: id,
+                namespace: namespace,
+                subjectId: subjectId,
+                profileId: profileId,
+                profileVersion: profileVersion,
+                modelId: modelId,
+                modelStateVersion: modelStateVersion,
+                modelStateJson: modelStateJson,
+                phase: phase,
+                status: status,
+                dueAt: dueAt,
+                lastReviewedAt: lastReviewedAt,
+                reviewCount: reviewCount,
+                lapseCount: lapseCount,
+                revision: revision,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                archivedAt: archivedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String namespace,
+                required String subjectId,
+                required String profileId,
+                required int profileVersion,
+                required String modelId,
+                required int modelStateVersion,
+                Value<String> modelStateJson = const Value.absent(),
+                required String phase,
+                required String status,
+                required DateTime dueAt,
+                Value<DateTime?> lastReviewedAt = const Value.absent(),
+                Value<int> reviewCount = const Value.absent(),
+                Value<int> lapseCount = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MemorySchedulesCompanion.insert(
+                id: id,
+                namespace: namespace,
+                subjectId: subjectId,
+                profileId: profileId,
+                profileVersion: profileVersion,
+                modelId: modelId,
+                modelStateVersion: modelStateVersion,
+                modelStateJson: modelStateJson,
+                phase: phase,
+                status: status,
+                dueAt: dueAt,
+                lastReviewedAt: lastReviewedAt,
+                reviewCount: reviewCount,
+                lapseCount: lapseCount,
+                revision: revision,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                archivedAt: archivedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MemorySchedulesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({memoryReviewEventsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (memoryReviewEventsRefs) db.memoryReviewEvents,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (memoryReviewEventsRefs)
+                    await $_getPrefetchedData<
+                      MemorySchedule,
+                      $MemorySchedulesTable,
+                      MemoryReviewEvent
+                    >(
+                      currentTable: table,
+                      referencedTable: $$MemorySchedulesTableReferences
+                          ._memoryReviewEventsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$MemorySchedulesTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).memoryReviewEventsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.scheduleId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$MemorySchedulesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MemorySchedulesTable,
+      MemorySchedule,
+      $$MemorySchedulesTableFilterComposer,
+      $$MemorySchedulesTableOrderingComposer,
+      $$MemorySchedulesTableAnnotationComposer,
+      $$MemorySchedulesTableCreateCompanionBuilder,
+      $$MemorySchedulesTableUpdateCompanionBuilder,
+      (MemorySchedule, $$MemorySchedulesTableReferences),
+      MemorySchedule,
+      PrefetchHooks Function({bool memoryReviewEventsRefs})
+    >;
+typedef $$MemoryReviewEventsTableCreateCompanionBuilder =
+    MemoryReviewEventsCompanion Function({
+      required String id,
+      required String scheduleId,
+      required int sequence,
+      required String operationId,
+      required String rating,
+      required bool isLapse,
+      required DateTime reviewedAt,
+      Value<int?> responseTimeMs,
+      required String profileId,
+      required int profileVersion,
+      required String modelId,
+      required int modelStateVersion,
+      required DateTime dueBefore,
+      required DateTime dueAfter,
+      required int scheduleRevisionAfter,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$MemoryReviewEventsTableUpdateCompanionBuilder =
+    MemoryReviewEventsCompanion Function({
+      Value<String> id,
+      Value<String> scheduleId,
+      Value<int> sequence,
+      Value<String> operationId,
+      Value<String> rating,
+      Value<bool> isLapse,
+      Value<DateTime> reviewedAt,
+      Value<int?> responseTimeMs,
+      Value<String> profileId,
+      Value<int> profileVersion,
+      Value<String> modelId,
+      Value<int> modelStateVersion,
+      Value<DateTime> dueBefore,
+      Value<DateTime> dueAfter,
+      Value<int> scheduleRevisionAfter,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$MemoryReviewEventsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $MemoryReviewEventsTable,
+          MemoryReviewEvent
+        > {
+  $$MemoryReviewEventsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $MemorySchedulesTable _scheduleIdTable(_$AppDatabase db) =>
+      db.memorySchedules.createAlias(
+        $_aliasNameGenerator(
+          db.memoryReviewEvents.scheduleId,
+          db.memorySchedules.id,
+        ),
+      );
+
+  $$MemorySchedulesTableProcessedTableManager get scheduleId {
+    final $_column = $_itemColumn<String>('schedule_id')!;
+
+    final manager = $$MemorySchedulesTableTableManager(
+      $_db,
+      $_db.memorySchedules,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_scheduleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$MemoryReviewEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $MemoryReviewEventsTable> {
+  $$MemoryReviewEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isLapse => $composableBuilder(
+    column: $table.isLapse,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get reviewedAt => $composableBuilder(
+    column: $table.reviewedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get responseTimeMs => $composableBuilder(
+    column: $table.responseTimeMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modelId => $composableBuilder(
+    column: $table.modelId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dueBefore => $composableBuilder(
+    column: $table.dueBefore,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dueAfter => $composableBuilder(
+    column: $table.dueAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get scheduleRevisionAfter => $composableBuilder(
+    column: $table.scheduleRevisionAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MemorySchedulesTableFilterComposer get scheduleId {
+    final $$MemorySchedulesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.memorySchedules,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MemorySchedulesTableFilterComposer(
+            $db: $db,
+            $table: $db.memorySchedules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MemoryReviewEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $MemoryReviewEventsTable> {
+  $$MemoryReviewEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequence => $composableBuilder(
+    column: $table.sequence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isLapse => $composableBuilder(
+    column: $table.isLapse,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get reviewedAt => $composableBuilder(
+    column: $table.reviewedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get responseTimeMs => $composableBuilder(
+    column: $table.responseTimeMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get profileId => $composableBuilder(
+    column: $table.profileId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get modelId => $composableBuilder(
+    column: $table.modelId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dueBefore => $composableBuilder(
+    column: $table.dueBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dueAfter => $composableBuilder(
+    column: $table.dueAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get scheduleRevisionAfter => $composableBuilder(
+    column: $table.scheduleRevisionAfter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MemorySchedulesTableOrderingComposer get scheduleId {
+    final $$MemorySchedulesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.memorySchedules,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MemorySchedulesTableOrderingComposer(
+            $db: $db,
+            $table: $db.memorySchedules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MemoryReviewEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MemoryReviewEventsTable> {
+  $$MemoryReviewEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get sequence =>
+      $composableBuilder(column: $table.sequence, builder: (column) => column);
+
+  GeneratedColumn<String> get operationId => $composableBuilder(
+    column: $table.operationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get rating =>
+      $composableBuilder(column: $table.rating, builder: (column) => column);
+
+  GeneratedColumn<bool> get isLapse =>
+      $composableBuilder(column: $table.isLapse, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get reviewedAt => $composableBuilder(
+    column: $table.reviewedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get responseTimeMs => $composableBuilder(
+    column: $table.responseTimeMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get profileId =>
+      $composableBuilder(column: $table.profileId, builder: (column) => column);
+
+  GeneratedColumn<int> get profileVersion => $composableBuilder(
+    column: $table.profileVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get modelId =>
+      $composableBuilder(column: $table.modelId, builder: (column) => column);
+
+  GeneratedColumn<int> get modelStateVersion => $composableBuilder(
+    column: $table.modelStateVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get dueBefore =>
+      $composableBuilder(column: $table.dueBefore, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get dueAfter =>
+      $composableBuilder(column: $table.dueAfter, builder: (column) => column);
+
+  GeneratedColumn<int> get scheduleRevisionAfter => $composableBuilder(
+    column: $table.scheduleRevisionAfter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$MemorySchedulesTableAnnotationComposer get scheduleId {
+    final $$MemorySchedulesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.memorySchedules,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MemorySchedulesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.memorySchedules,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MemoryReviewEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MemoryReviewEventsTable,
+          MemoryReviewEvent,
+          $$MemoryReviewEventsTableFilterComposer,
+          $$MemoryReviewEventsTableOrderingComposer,
+          $$MemoryReviewEventsTableAnnotationComposer,
+          $$MemoryReviewEventsTableCreateCompanionBuilder,
+          $$MemoryReviewEventsTableUpdateCompanionBuilder,
+          (MemoryReviewEvent, $$MemoryReviewEventsTableReferences),
+          MemoryReviewEvent,
+          PrefetchHooks Function({bool scheduleId})
+        > {
+  $$MemoryReviewEventsTableTableManager(
+    _$AppDatabase db,
+    $MemoryReviewEventsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MemoryReviewEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MemoryReviewEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MemoryReviewEventsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> scheduleId = const Value.absent(),
+                Value<int> sequence = const Value.absent(),
+                Value<String> operationId = const Value.absent(),
+                Value<String> rating = const Value.absent(),
+                Value<bool> isLapse = const Value.absent(),
+                Value<DateTime> reviewedAt = const Value.absent(),
+                Value<int?> responseTimeMs = const Value.absent(),
+                Value<String> profileId = const Value.absent(),
+                Value<int> profileVersion = const Value.absent(),
+                Value<String> modelId = const Value.absent(),
+                Value<int> modelStateVersion = const Value.absent(),
+                Value<DateTime> dueBefore = const Value.absent(),
+                Value<DateTime> dueAfter = const Value.absent(),
+                Value<int> scheduleRevisionAfter = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MemoryReviewEventsCompanion(
+                id: id,
+                scheduleId: scheduleId,
+                sequence: sequence,
+                operationId: operationId,
+                rating: rating,
+                isLapse: isLapse,
+                reviewedAt: reviewedAt,
+                responseTimeMs: responseTimeMs,
+                profileId: profileId,
+                profileVersion: profileVersion,
+                modelId: modelId,
+                modelStateVersion: modelStateVersion,
+                dueBefore: dueBefore,
+                dueAfter: dueAfter,
+                scheduleRevisionAfter: scheduleRevisionAfter,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String scheduleId,
+                required int sequence,
+                required String operationId,
+                required String rating,
+                required bool isLapse,
+                required DateTime reviewedAt,
+                Value<int?> responseTimeMs = const Value.absent(),
+                required String profileId,
+                required int profileVersion,
+                required String modelId,
+                required int modelStateVersion,
+                required DateTime dueBefore,
+                required DateTime dueAfter,
+                required int scheduleRevisionAfter,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => MemoryReviewEventsCompanion.insert(
+                id: id,
+                scheduleId: scheduleId,
+                sequence: sequence,
+                operationId: operationId,
+                rating: rating,
+                isLapse: isLapse,
+                reviewedAt: reviewedAt,
+                responseTimeMs: responseTimeMs,
+                profileId: profileId,
+                profileVersion: profileVersion,
+                modelId: modelId,
+                modelStateVersion: modelStateVersion,
+                dueBefore: dueBefore,
+                dueAfter: dueAfter,
+                scheduleRevisionAfter: scheduleRevisionAfter,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MemoryReviewEventsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({scheduleId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (scheduleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.scheduleId,
+                                referencedTable:
+                                    $$MemoryReviewEventsTableReferences
+                                        ._scheduleIdTable(db),
+                                referencedColumn:
+                                    $$MemoryReviewEventsTableReferences
+                                        ._scheduleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$MemoryReviewEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MemoryReviewEventsTable,
+      MemoryReviewEvent,
+      $$MemoryReviewEventsTableFilterComposer,
+      $$MemoryReviewEventsTableOrderingComposer,
+      $$MemoryReviewEventsTableAnnotationComposer,
+      $$MemoryReviewEventsTableCreateCompanionBuilder,
+      $$MemoryReviewEventsTableUpdateCompanionBuilder,
+      (MemoryReviewEvent, $$MemoryReviewEventsTableReferences),
+      MemoryReviewEvent,
+      PrefetchHooks Function({bool scheduleId})
+    >;
+typedef $$MemoryReviewQueueEntriesTableCreateCompanionBuilder =
+    MemoryReviewQueueEntriesCompanion Function({
+      Value<int> id,
+      required String namespace,
+      required String subjectId,
+      required String localDate,
+      required DateTime enqueuedAt,
+    });
+typedef $$MemoryReviewQueueEntriesTableUpdateCompanionBuilder =
+    MemoryReviewQueueEntriesCompanion Function({
+      Value<int> id,
+      Value<String> namespace,
+      Value<String> subjectId,
+      Value<String> localDate,
+      Value<DateTime> enqueuedAt,
+    });
+
+class $$MemoryReviewQueueEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $MemoryReviewQueueEntriesTable> {
+  $$MemoryReviewQueueEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get enqueuedAt => $composableBuilder(
+    column: $table.enqueuedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MemoryReviewQueueEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MemoryReviewQueueEntriesTable> {
+  $$MemoryReviewQueueEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get namespace => $composableBuilder(
+    column: $table.namespace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subjectId => $composableBuilder(
+    column: $table.subjectId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localDate => $composableBuilder(
+    column: $table.localDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get enqueuedAt => $composableBuilder(
+    column: $table.enqueuedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MemoryReviewQueueEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MemoryReviewQueueEntriesTable> {
+  $$MemoryReviewQueueEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get namespace =>
+      $composableBuilder(column: $table.namespace, builder: (column) => column);
+
+  GeneratedColumn<String> get subjectId =>
+      $composableBuilder(column: $table.subjectId, builder: (column) => column);
+
+  GeneratedColumn<String> get localDate =>
+      $composableBuilder(column: $table.localDate, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get enqueuedAt => $composableBuilder(
+    column: $table.enqueuedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$MemoryReviewQueueEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MemoryReviewQueueEntriesTable,
+          MemoryReviewQueueEntry,
+          $$MemoryReviewQueueEntriesTableFilterComposer,
+          $$MemoryReviewQueueEntriesTableOrderingComposer,
+          $$MemoryReviewQueueEntriesTableAnnotationComposer,
+          $$MemoryReviewQueueEntriesTableCreateCompanionBuilder,
+          $$MemoryReviewQueueEntriesTableUpdateCompanionBuilder,
+          (
+            MemoryReviewQueueEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $MemoryReviewQueueEntriesTable,
+              MemoryReviewQueueEntry
+            >,
+          ),
+          MemoryReviewQueueEntry,
+          PrefetchHooks Function()
+        > {
+  $$MemoryReviewQueueEntriesTableTableManager(
+    _$AppDatabase db,
+    $MemoryReviewQueueEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MemoryReviewQueueEntriesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$MemoryReviewQueueEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$MemoryReviewQueueEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> namespace = const Value.absent(),
+                Value<String> subjectId = const Value.absent(),
+                Value<String> localDate = const Value.absent(),
+                Value<DateTime> enqueuedAt = const Value.absent(),
+              }) => MemoryReviewQueueEntriesCompanion(
+                id: id,
+                namespace: namespace,
+                subjectId: subjectId,
+                localDate: localDate,
+                enqueuedAt: enqueuedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String namespace,
+                required String subjectId,
+                required String localDate,
+                required DateTime enqueuedAt,
+              }) => MemoryReviewQueueEntriesCompanion.insert(
+                id: id,
+                namespace: namespace,
+                subjectId: subjectId,
+                localDate: localDate,
+                enqueuedAt: enqueuedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MemoryReviewQueueEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MemoryReviewQueueEntriesTable,
+      MemoryReviewQueueEntry,
+      $$MemoryReviewQueueEntriesTableFilterComposer,
+      $$MemoryReviewQueueEntriesTableOrderingComposer,
+      $$MemoryReviewQueueEntriesTableAnnotationComposer,
+      $$MemoryReviewQueueEntriesTableCreateCompanionBuilder,
+      $$MemoryReviewQueueEntriesTableUpdateCompanionBuilder,
+      (
+        MemoryReviewQueueEntry,
+        BaseReferences<
+          _$AppDatabase,
+          $MemoryReviewQueueEntriesTable,
+          MemoryReviewQueueEntry
+        >,
+      ),
+      MemoryReviewQueueEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -19570,4 +24644,13 @@ class $AppDatabaseManager {
       );
   $$TtsCacheTableTableManager get ttsCache =>
       $$TtsCacheTableTableManager(_db, _db.ttsCache);
+  $$MemorySchedulesTableTableManager get memorySchedules =>
+      $$MemorySchedulesTableTableManager(_db, _db.memorySchedules);
+  $$MemoryReviewEventsTableTableManager get memoryReviewEvents =>
+      $$MemoryReviewEventsTableTableManager(_db, _db.memoryReviewEvents);
+  $$MemoryReviewQueueEntriesTableTableManager get memoryReviewQueueEntries =>
+      $$MemoryReviewQueueEntriesTableTableManager(
+        _db,
+        _db.memoryReviewQueueEntries,
+      );
 }

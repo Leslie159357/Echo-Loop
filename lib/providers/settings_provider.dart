@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../features/user_preferences/domain/user_preferences_sync_events.dart';
+
 part 'settings_provider.g.dart';
 
 const _themeModeKey = 'theme_mode';
@@ -12,11 +14,13 @@ const _nativeLanguageKey = 'native_language';
 const _timeMachineDateTimeKey = 'developer_time_machine_at_ms';
 const _legacyUnlockAllReviewsKey = 'unlock_all_reviews';
 const _demoModeKey = 'demo_mode';
-const _subtitleAutoAlignEnabledKey = 'developer_subtitle_auto_align_enabled';
+const _legacySubtitleAutoAlignEnabledKey =
+    'developer_subtitle_auto_align_enabled';
 const _skipSilenceEnabledKey = 'skip_silence_enabled';
 const _silenceThresholdSecondsKey = 'silence_threshold_seconds';
 const _aiTranscriptionAutoMergeEnabledKey =
     'ai_transcription_auto_merge_enabled';
+const _wordHighlightEnabledKey = 'word_highlight_enabled';
 
 /// 静音阈值合法范围（秒）
 const silenceThresholdMinSeconds = 1;
@@ -109,12 +113,6 @@ class AppSettingsState {
   /// 演示模式切换中的加载状态。
   final bool isDemoModeLoading;
 
-  /// 开发者选项：字幕自动校准开关。
-  ///
-  /// 默认开启。关闭后 AI 转录完成不再调用 `SubtitleAutoAlignService`，
-  /// 直接使用后端返回的句边界。仅开发者选项可见，不暴露给普通用户。
-  final bool subtitleAutoAlignEnabled;
-
   /// 自动跳过静音段开关（默认开启）。
   ///
   /// 开启后，盲听 / 复述等段落级播放会按字幕时间戳自动跳过较长的静音段，
@@ -132,6 +130,9 @@ class AppSettingsState {
   /// 原生未合并分句（句子更短）。作为转录弹窗开关的默认值，记住用户上次选择。
   final bool aiTranscriptionAutoMergeEnabled;
 
+  /// 播放原音时高亮当前字幕词语（默认开启）。
+  final bool wordHighlightEnabled;
+
   const AppSettingsState({
     this.themeMode = ThemeMode.system,
     this.locale,
@@ -139,10 +140,10 @@ class AppSettingsState {
     this.timeMachineDateTime,
     this.isDemoMode = false,
     this.isDemoModeLoading = false,
-    this.subtitleAutoAlignEnabled = true,
     this.skipSilenceEnabled = true,
     this.silenceThresholdSeconds = silenceThresholdDefaultSeconds,
     this.aiTranscriptionAutoMergeEnabled = true,
+    this.wordHighlightEnabled = true,
   });
 
   AppSettingsState copyWith({
@@ -154,10 +155,10 @@ class AppSettingsState {
     bool clearTimeMachineDateTime = false,
     bool? isDemoMode,
     bool? isDemoModeLoading,
-    bool? subtitleAutoAlignEnabled,
     bool? skipSilenceEnabled,
     int? silenceThresholdSeconds,
     bool? aiTranscriptionAutoMergeEnabled,
+    bool? wordHighlightEnabled,
   }) {
     return AppSettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -168,14 +169,13 @@ class AppSettingsState {
           : timeMachineDateTime ?? this.timeMachineDateTime,
       isDemoMode: isDemoMode ?? this.isDemoMode,
       isDemoModeLoading: isDemoModeLoading ?? this.isDemoModeLoading,
-      subtitleAutoAlignEnabled:
-          subtitleAutoAlignEnabled ?? this.subtitleAutoAlignEnabled,
       skipSilenceEnabled: skipSilenceEnabled ?? this.skipSilenceEnabled,
       silenceThresholdSeconds:
           silenceThresholdSeconds ?? this.silenceThresholdSeconds,
       aiTranscriptionAutoMergeEnabled:
           aiTranscriptionAutoMergeEnabled ??
           this.aiTranscriptionAutoMergeEnabled,
+      wordHighlightEnabled: wordHighlightEnabled ?? this.wordHighlightEnabled,
     );
   }
 }
@@ -220,6 +220,9 @@ bool readInitialAiTranscriptionAutoMergeEnabledSync(SharedPreferences prefs) {
 
 @Riverpod(keepAlive: true)
 class AppSettings extends _$AppSettings {
+  bool _wordHighlightChangedByUser = false;
+  int _settingsLoadGeneration = 0;
+
   @override
   AppSettingsState build() {
     // 用 main() 同步预读的首帧值，避免 locale 闪烁，以及转录弹窗在 hydrate 前
@@ -236,7 +239,13 @@ class AppSettings extends _$AppSettings {
   }
 
   Future<void> _loadSettings() async {
+    final generation = ++_settingsLoadGeneration;
     final prefs = await SharedPreferences.getInstance();
+
+    // 字幕校准已统一开启，移除旧调试偏好，避免升级后保留失效的关闭状态。
+    if (prefs.containsKey(_legacySubtitleAutoAlignEnabledKey)) {
+      await prefs.remove(_legacySubtitleAutoAlignEnabledKey);
+    }
 
     final themeModeString = prefs.getString(_themeModeKey) ?? 'system';
     final themeMode = switch (themeModeString) {
@@ -251,12 +260,10 @@ class AppSettings extends _$AppSettings {
     final locale = readInitialUiLocaleSync(prefs);
 
     // 母语：首次启动时根据系统语言匹配并持久化
-    final nativeLanguage = await _loadNativeLanguage(prefs);
+    final nativeLanguage = await _loadNativeLanguage(prefs, generation);
 
     final timeMachineDateTime = await _loadTimeMachineDateTime(prefs);
     final isDemoMode = prefs.getBool(_demoModeKey) ?? false;
-    final subtitleAutoAlignEnabled =
-        prefs.getBool(_subtitleAutoAlignEnabledKey) ?? true;
     final skipSilenceEnabled = prefs.getBool(_skipSilenceEnabledKey) ?? true;
     final storedThreshold = prefs.getInt(_silenceThresholdSecondsKey);
     final silenceThresholdSeconds =
@@ -266,7 +273,10 @@ class AppSettings extends _$AppSettings {
         );
     final aiTranscriptionAutoMergeEnabled =
         prefs.getBool(_aiTranscriptionAutoMergeEnabledKey) ?? true;
+    final wordHighlightEnabled =
+        prefs.getBool(_wordHighlightEnabledKey) ?? true;
 
+    if (generation != _settingsLoadGeneration) return;
     state = state.copyWith(
       themeMode: themeMode,
       locale: locale,
@@ -274,22 +284,34 @@ class AppSettings extends _$AppSettings {
       nativeLanguage: nativeLanguage,
       timeMachineDateTime: timeMachineDateTime,
       isDemoMode: isDemoMode,
-      subtitleAutoAlignEnabled: subtitleAutoAlignEnabled,
       skipSilenceEnabled: skipSilenceEnabled,
       silenceThresholdSeconds: silenceThresholdSeconds,
       aiTranscriptionAutoMergeEnabled: aiTranscriptionAutoMergeEnabled,
+      // 用户在异步设置加载期间操作开关时，保留其即时选择。
+      wordHighlightEnabled: _wordHighlightChangedByUser
+          ? null
+          : wordHighlightEnabled,
     );
   }
 
+  /// 云端写回 SharedPreferences 后重新加载设置。较早启动的异步加载会因
+  /// generation 变化而被丢弃，避免覆盖云端快照。
+  Future<void> reloadFromPrefs() => _loadSettings();
+
   /// 加载母语设置，首次启动时自动匹配系统语言并持久化。
-  Future<String> _loadNativeLanguage(SharedPreferences prefs) async {
+  Future<String> _loadNativeLanguage(
+    SharedPreferences prefs,
+    int generation,
+  ) async {
     final stored = prefs.getString(_nativeLanguageKey);
     if (stored != null) return stored;
 
     // 首次启动：根据系统 locale 匹配
     final systemLocale = PlatformDispatcher.instance.locale;
     final matched = matchNativeLanguage(systemLocale);
-    await prefs.setString(_nativeLanguageKey, matched);
+    if (generation == _settingsLoadGeneration) {
+      await prefs.setString(_nativeLanguageKey, matched);
+    }
     return matched;
   }
 
@@ -321,6 +343,7 @@ class AppSettings extends _$AppSettings {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    _settingsLoadGeneration++;
     state = state.copyWith(themeMode: mode);
 
     final prefs = await SharedPreferences.getInstance();
@@ -330,12 +353,14 @@ class AppSettings extends _$AppSettings {
       ThemeMode.system => 'system',
     };
     await prefs.setString(_themeModeKey, modeString);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 
   /// 设置界面语言（BCP 47）。
   ///
   /// 传入 null 时跟随系统语言。
   Future<void> setLocale(Locale? locale) async {
+    _settingsLoadGeneration++;
     state = locale == null
         ? state.copyWith(clearLocale: true)
         : state.copyWith(locale: locale);
@@ -347,20 +372,24 @@ class AppSettings extends _$AppSettings {
         ? '${locale.languageCode}-${locale.countryCode}'
         : locale.languageCode;
     await prefs.setString(_localeKey, tag);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 
   /// 设置母语（BCP 47 代码）。
   Future<void> setNativeLanguage(String lang) async {
+    _settingsLoadGeneration++;
     state = state.copyWith(nativeLanguage: lang);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_nativeLanguageKey, lang);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 
   /// 设置开发者时光机时间。
   ///
   /// 传入 null 时恢复系统真实时间。
   Future<void> setTimeMachineDateTime(DateTime? value) async {
+    _settingsLoadGeneration++;
     final normalizedValue = value == null
         ? null
         : normalizedFutureTimeMachineDateTime(value, DateTime.now());
@@ -391,30 +420,37 @@ class AppSettings extends _$AppSettings {
   /// 数据库切换由调用方（settings_screen）负责，
   /// 此方法只更新 UI 状态和 SharedPreferences。
   Future<void> setDemoMode(bool enabled) async {
+    _settingsLoadGeneration++;
     state = state.copyWith(isDemoMode: enabled, isDemoModeLoading: false);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_demoModeKey, enabled);
   }
 
-  /// 设置字幕自动校准开关（开发者选项，默认开启）。
-  Future<void> setSubtitleAutoAlignEnabled(bool enabled) async {
-    state = state.copyWith(subtitleAutoAlignEnabled: enabled);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_subtitleAutoAlignEnabledKey, enabled);
-  }
-
   /// 设置静音跳过开关（默认开启）。
   Future<void> setSkipSilenceEnabled(bool enabled) async {
+    _settingsLoadGeneration++;
     state = state.copyWith(skipSilenceEnabled: enabled);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_skipSilenceEnabledKey, enabled);
+    userPreferencesSyncEvents.notifyLocalChange();
+  }
+
+  /// 设置播放原音时的字幕逐词高亮（默认开启）。
+  Future<void> setWordHighlightEnabled(bool enabled) async {
+    _settingsLoadGeneration++;
+    _wordHighlightChangedByUser = true;
+    state = state.copyWith(wordHighlightEnabled: enabled);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_wordHighlightEnabledKey, enabled);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 
   /// 设置静音阈值（秒）。范围 [silenceThresholdMinSeconds, silenceThresholdMaxSeconds]。
   Future<void> setSilenceThresholdSeconds(int seconds) async {
+    _settingsLoadGeneration++;
     final clamped = seconds.clamp(
       silenceThresholdMinSeconds,
       silenceThresholdMaxSeconds,
@@ -423,13 +459,16 @@ class AppSettings extends _$AppSettings {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_silenceThresholdSecondsKey, clamped);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 
   /// 设置 AI 转录「自动合并短句」开关（记住用户上次选择，默认开启）。
   Future<void> setAiTranscriptionAutoMergeEnabled(bool enabled) async {
+    _settingsLoadGeneration++;
     state = state.copyWith(aiTranscriptionAutoMergeEnabled: enabled);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_aiTranscriptionAutoMergeEnabledKey, enabled);
+    userPreferencesSyncEvents.notifyLocalChange();
   }
 }

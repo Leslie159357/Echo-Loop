@@ -90,29 +90,53 @@ class AudioListView extends ConsumerStatefulWidget {
   /// 自定义空状态组件
   final Widget? emptyState;
 
+  /// 列表首项；适用于需要随文件一起滚动的详情摘要。
+  final Widget? header;
+
   /// 是否将第一条音频的菜单作为合集详情引导 target。
   final bool guideFirstAudioMenu;
 
-  /// 是否将第一条音频作为列表区域引导 target。
-  final bool guideLeadingItems;
+  /// 外部传入的菜单引导步骤。传入后由外部 flow 统一调度，避免嵌套 flow 抢先启动。
+  final GuideStep? menuGuideStep;
 
   /// 当前音频列表是否允许启动页面引导。
   final bool guideEnabled;
 
   /// 覆盖全局 [audioListSettingsProvider] 的排序类型。
-  /// 非 null 时：使用此值排序，不再 watch provider（适用于官方合集详情页等
+  /// 非 null 时：使用此值排序，不再 watch provider（适用于社区合集详情页等
   /// 需要独立 sort state 的场景）。
   final AudioSortType? overrideSortType;
+
+  /// 覆盖滚动物理属性，例如下拉刷新需要的始终可滚动行为。
+  final ScrollPhysics? scrollPhysics;
+
+  /// 是否处于多选模式（合集详情页批量删除）。默认关闭，库/播客场景零影响。
+  final bool selectionMode;
+
+  /// 多选模式下已选中的音频 id 集合。
+  final Set<String> selectedIds;
+
+  /// 长按某项时回调 —— 进入多选并选中该 id（由外层注入）。
+  final ValueChanged<String>? onEnterSelection;
+
+  /// 多选模式下点击某项时回调 —— 切换该 id 选中态（由外层注入）。
+  final ValueChanged<String>? onToggleSelection;
 
   const AudioListView({
     super.key,
     this.items,
     this.collectionId,
     this.emptyState,
+    this.header,
     this.guideFirstAudioMenu = false,
-    this.guideLeadingItems = false,
+    this.menuGuideStep,
     this.guideEnabled = true,
     this.overrideSortType,
+    this.scrollPhysics,
+    this.selectionMode = false,
+    this.selectedIds = const {},
+    this.onEnterSelection,
+    this.onToggleSelection,
   });
 
   @override
@@ -122,7 +146,6 @@ class AudioListView extends ConsumerStatefulWidget {
 class _AudioListViewState extends ConsumerState<AudioListView> {
   // Guide step keys 在 state 层持有，避免 rebuild 时重建导致 showcaseview
   // 拿到过期的 key。
-  final _keyAudioList = GlobalKey();
   final _keyAudioMenu = GlobalKey();
 
   @override
@@ -135,7 +158,7 @@ class _AudioListViewState extends ConsumerState<AudioListView> {
         ref.watch(audioLibraryProvider.select((s) => s.audioItems));
 
     // 受控模式（overrideSortType 非 null）下不再 watch provider，避免全局排序
-    // 变化把官方合集详情页的独立 sort state 误刷。
+    // 变化把社区合集详情页的独立 sort state 误刷。
     final AudioSortType sortType =
         widget.overrideSortType ??
         ref.watch(audioListSettingsProvider).sortType;
@@ -144,52 +167,68 @@ class _AudioListViewState extends ConsumerState<AudioListView> {
     final sortedItems = _sortItems(audioItems, sortType);
 
     if (sortedItems.isEmpty) {
-      return widget.emptyState ?? _DefaultEmptyState(l10n: l10n);
+      final emptyState = widget.emptyState ?? _DefaultEmptyState(l10n: l10n);
+      final header = widget.header;
+      if (header == null) return emptyState;
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        children: [
+          header,
+          SizedBox(height: 280, child: emptyState),
+        ],
+      );
     }
 
-    final showItemGuide = widget.guideEnabled && widget.guideLeadingItems;
     final showMenuGuide = widget.guideEnabled && widget.guideFirstAudioMenu;
 
-    final stepAudioList = GuideStep(
-      key: _keyAudioList,
-      description: l10n.guideCollectionAudioListDescription,
-    );
-    final stepAudioMenu = GuideStep(
-      key: _keyAudioMenu,
-      description: l10n.guideCollectionAudioMenuDescription,
-    );
+    final stepAudioMenu =
+        widget.menuGuideStep ??
+        GuideStep(
+          key: _keyAudioMenu,
+          description: l10n.guideCollectionAudioMenuDescription,
+        );
 
+    final header = widget.header;
+    final headerCount = header == null ? 0 : 1;
     final listView = ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: sortedItems.length,
+      padding: header == null ? const EdgeInsets.all(8) : EdgeInsets.zero,
+      physics: widget.scrollPhysics,
+      itemCount: sortedItems.length + headerCount,
       itemBuilder: (context, index) {
-        final item = sortedItems[index];
-        final isFirst = index == 0;
+        if (header != null && index == 0) return header;
+        final itemIndex = index - headerCount;
+        final item = sortedItems[itemIndex];
+        final isFirst = itemIndex == 0;
         final tile = AudioListTile(
           audioItem: item,
           collectionId: widget.collectionId,
-          itemStep: (isFirst && showItemGuide) ? stepAudioList : null,
           menuStep: (isFirst && showMenuGuide) ? stepAudioMenu : null,
           onManageCollections: () =>
               _showManageCollectionsSheet(context, item.id),
           onManageTags: () => _showManageTagsSheet(context, item.id),
           onDelete: () => _confirmDeleteAudio(context, ref, item),
+          selectionMode: widget.selectionMode,
+          selected: widget.selectedIds.contains(item.id),
+          onLongPress: widget.onEnterSelection == null
+              ? null
+              : () => widget.onEnterSelection!(item.id),
+          onSelectToggle: widget.onToggleSelection == null
+              ? null
+              : () => widget.onToggleSelection!(item.id),
         );
         return tile;
       },
     );
 
-    if (!showItemGuide && !showMenuGuide) return listView;
+    if (!showMenuGuide || widget.menuGuideStep != null) return listView;
 
     return GuideFlowSequenceHost(
       flows: [
         GuideFlow(
           flowId: GuideFlowIds.collectionDetailAudioList,
           shouldRun: true,
-          steps: [
-            if (showItemGuide) stepAudioList,
-            if (showMenuGuide) stepAudioMenu,
-          ],
+          steps: [if (showMenuGuide) stepAudioMenu],
         ),
       ],
       child: listView,
@@ -370,7 +409,7 @@ class _DeleteFromCollectionDialogState
           ),
           const SizedBox(height: 12),
           // 彻底删除选项：紧凑的可点整行，默认值见 initState。
-          _PermanentlyDeleteOption(
+          PermanentlyDeleteOption(
             value: _permanently,
             onChanged: (v) => setState(() => _permanently = v),
           ),
@@ -403,15 +442,21 @@ class _DeleteFromCollectionDialogState
 
 /// 「彻底删除该音频」紧凑选项行。
 ///
-/// 整行可点切换，左侧小复选框，右侧标题 + 弱化说明，风格与 app 内其它弹窗一致。
-class _PermanentlyDeleteOption extends StatelessWidget {
-  const _PermanentlyDeleteOption({
+/// 整行可点切换，左侧小复选框，右侧标题，风格与 app 内其它删除弹窗一致。
+/// 单条删除与合集批量删除共用，[label] 为空时用单条默认文案。
+class PermanentlyDeleteOption extends StatelessWidget {
+  const PermanentlyDeleteOption({
+    super.key,
     required this.value,
     required this.onChanged,
+    this.label,
   });
 
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// 选项文案，为空时回退到单条删除文案 `permanentlyDeleteAudio`。
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -447,7 +492,7 @@ class _PermanentlyDeleteOption extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  l10n.permanentlyDeleteAudio,
+                  label ?? l10n.permanentlyDeleteAudio,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: accent,
                     fontWeight: FontWeight.w600,
@@ -510,7 +555,7 @@ class _DefaultEmptyState extends StatelessWidget {
 ///
 /// **受控模式**（`allowedTypes` + `current` + `onChanged` 三者非 null）：
 /// 菜单内容完全由调用方决定，状态也由调用方管理，provider 不参与。
-/// 官方合集详情页用此模式避免全局 sort 被污染。
+/// 社区合集详情页用此模式避免全局 sort 被污染。
 class AudioSortButton extends ConsumerWidget {
   /// 受控模式：显示的选项子集（按数组顺序）。为 null 走默认模式。
   final List<AudioSortType>? allowedTypes;

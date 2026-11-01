@@ -59,6 +59,19 @@
 27. 先允许少量重复，确认模式稳定后再抽象。过早抽象比重复更有害。
 28. 优先测试状态流转和业务逻辑，不要只测 UI 表面。
 
+### 2.7 测试要求
+29. 为新增或修改的行为编写真正有价值的测试。
+30. 测试行为，不测试实现细节。
+31. 不测试无关紧要的 UI 细节，例如精确字号、颜色、间距或其他样式常量，除非它们属于明确的产品要求或回归问题。
+32. 覆盖重要的边界情况和失败路径，不要只测试正常流程。
+33. 在可行的情况下优先使用真实组件，避免过度 Mock。
+34. 修复 Bug 时应增加回归测试，该测试应在修复前失败，在修复后通过。
+35. 测试必须稳定且可重复。不要为了让异步测试通过而加入任意延时。
+36. 不要仅为了让测试通过而削弱、跳过或删除现有测试。
+37. 宁可写少量高价值测试，也不要写大量浅层测试。
+38. 不要仅为了提高覆盖率而增加测试。每个测试都应该保护重要行为，或能够发现真实可能发生的回归问题。
+39. 完成任务前，运行相关测试并确保全部通过。
+
 **文档版本**: v4.4
 **更新时间**: 2026-06-27
 
@@ -70,8 +83,7 @@
 
 1. 读取 PLAN.md — 了解项目当前阶段和整体规划
 2. 读取 TASKS.md — 了解待办任务列表和优先级
-3. 输出要执行的任务 — 明确说明接下来做哪一个任务（一次只做一个）
-4. 等待用户确认 — 用户同意后再开始修改代码
+3. 用简单的语言说清楚要完成的任务是啥
 
 ---
 
@@ -252,8 +264,14 @@ flutter test integration_test -d macos
 
 ### 7.17 合集内详情路由拍平在顶层 → 返回后自动多退一层（学习计划页 → 资源库）
 
-- 顶层路由拍平会破坏返回栈。
-- 规则：详情页路由层级要与入口栈保持一致。
+- 顶层路由拍平会破坏返回栈。框架以 null-state 按当前 URI 重解析时（Android Activity 重建等，
+  由 OS 决定，故「只在某些机型偶发」），扁平 URI 不携带入口栈层级 → 栈塌回 shell 根 → 返回多退。
+- 规则：**所有从嵌套栈 push 的全屏页都必须下沉为入口页的嵌套子路由**，让 URL 自表达完整栈。
+  新增全屏页统一走 `AppRoutes.pushNested(context, segment)`（相对当前 matchedLocation 追加），
+  漏声明子路由会即时抛「no route」而非静默塌栈。子页 extra 在重解析后会丢失（不可序列化），
+  builder 需兜底（见 `_RestoredRoutePopper`：extra 为空时首帧 pop 回已重建的入口页）。
+- 已覆盖：plan/player/blind/retell 等 7 条音频页（1.0.21）、sentence-detail、pdf-preview、audio-detail（学习计划卡片进入的音频详情）。
+  回归测试见 `test/router/app_router_test.dart`。
 
 ### 7.18 统一 TTS：嵌入式发音组件不可在 provider build 期触碰平台/数据库（惰性化）
 
@@ -304,3 +322,143 @@ flutter test integration_test -d macos
 
 - 现在协议核心是“按路径设叶子”，避免 O(n²) 重发。
 - 规则：后续结构化流式对象继续优先用增量叶子协议，不回退到整对象快照。
+
+### 7.28 选区能力三层化：自有 selection model + 平台手柄画笔（取代 SelectableText）
+
+- **根因**：Flutter 两个官方选区机制都在**前台失焦时清空选区**（`material/selectable_text.dart`
+  `_handleFocusChanged`、`widgets/selectable_region.dart` `_handleFocusChanged`），
+  且 `SelectableText.didUpdateWidget` 在 `textSpan` 变化时重建 controller 让选区归零
+  （`_TextSpanEditingController._textSpan` 是 final）。而「选中文字 → 在页面内面板里
+  查词/切源/收藏 → 选区必须还在」与该契约直接冲突，只能靠反向投影补救（2026-07-29
+  一晚 7 个补丁的来源）。
+- **规则**：选区需跨交互存活 / 需自定义词边界 / 需自定义操作条时，用**自有 selection
+  model + 平台 `TextSelectionControls` 手柄画笔**（`SelectableRegion` 同款分层），
+  **不要**用 `SelectableText` 或 `SelectionArea`。分三层：L1 会话（唯一真相源，只存
+  字符区间 + 内容身份，不含焦点概念，`idle/selecting/active` 三态）、L2 呈现（平台
+  手柄、tight 高亮、操作条、放大镜）、L3 `SelectionBackend`（命中/词边界/几何/取文本，
+  单段与跨块的唯一差异点）。
+- **词边界单一来源**：点词一律用业务自己的分词，**不能**用 `selectWord()`/ICU 边界——
+  ICU 把 `co-op` 断成 `co`/`-`/`op`、`e.g.` 断成 `e`/`.`/`g`，会让高亮、查询与两个收藏
+  入口各存不同的词。
+- **操作条必须挂页面级宿主**：它会溢出内容的 render box，而**祖先按各自 box 剪裁命中
+  测试**，挂在内容自己的 Stack 里溢出部分点不动（跳过自身剪裁的 `UnboundedHitStack`
+  只解决自身那一层，够手柄用、不够操作条用）；挂根 Overlay 又会盖在页面内面板之上。
+  正确层序：`正文 → 关面板屏障 → 操作条 → 面板`，遮挡与可点性全由层序解决，不做几何
+  同步。锚点用全局坐标推送，由宿主换算（图层自身首次 build 时 `findRenderObject()`
+  仍为 null，不能就地换算）。操作条挂在 Scrollable 外，故正文滚出视口时要主动收起
+  （`rectsVisibleInViewport`）。
+- **不用 `SelectionOverlay`**：它把手柄挂到「最近包含 context 的 Overlay」，手柄会跑到
+  根 Overlay，遮挡与滚动跟随又得手算。手柄当普通 widget 放进内容 Stack 即可。
+- **平台行为对齐**：长按拖选在 Android/Fuchsia/Linux/Windows 按**词**粒度、iOS/macOS 按
+  字符（同框架 `selectWordsInRange` / `selectPositionAt`）；手柄拖拽所有平台都是字符级。
+  手柄命中区以平台 `getHandleAnchor`/`getHandleSize` 推导后放大到 36dp（框架自身用 48dp）。
+- **tight 高亮**：`Selectable` 协议内部硬编码 `boxHeightStyle: max`
+  （`rendering/paragraph.dart`），所以**只要不走该协议**（单段与跨块 backend 都自己
+  读段落几何）就能全程用 tight，两处观感一致。
+- **桌面交互必须自己补齐**（`SelectableText` 白送的，自有实现一样都不会有）：mouse
+  drag-select（限定 `PointerDeviceKind.mouse` 的 `PanGestureRecognizer`，且必须
+  `DragStartBehavior.down`——默认的 `.start` 报的是「拖动被识别时」的位置，选区起点
+  会偏移且触发识别的位移被并入 `onStart` 收不到 `onUpdate`）、**点击手抖兜底**（鼠标
+  slop 只有 1 逻辑像素 `kPrecisePointerHitSlop`，抖 2px 就让 pan 赢 tap 输，pan 结束
+  时未形成选区要按点击处理）、I-beam 光标、**双击选词 / Shift+点击扩选 / Shift+方向键
+  扩选 / Cmd+C**（2026-07-30 补齐）。尚未做：三击选段 / Cmd+A / 拖动已选文本。
+- **双击不能用 `DoubleTapGestureRecognizer`**：它会 hold 住手势竞技场，单击要等双击
+  超时（约 300ms）才生效，点词查词整体变迟钝。自己在 tap 里按「时间窗 + slop」判定
+  （`TapCadence`），单击零延迟。
+- **键盘扩选没有光标态**：本实现只有选区，没有 caret，所以无选区时 Shift+方向键不做
+  任何事；缩回固定端等于选区归零，按结束会话处理。上下行移动走**光标几何**
+  （`caretRectAt` + `offsetAt`），不假设行结构，跨块也能跨到相邻块。Cmd/Ctrl+C **保留**
+  选区（平台标准），与操作条里业务定义的「复制并结束会话」是两个动作。焦点只用于
+  键盘事件路由，且**只有鼠标交互才 requestFocus**（触屏 requestFocus 会收起软键盘）。
+- **长按落在词间空白**不能直接 return（会变成死手势）：把锚点定在该字符，拖出第一个
+  字符再建立会话。
+- **跨块 backend（AI 回答）不走 `SelectionContainer`/`Selectable`**：除了上面的 max
+  高亮与失焦清选区，官方注册表在流式 markdown 帧末增删子节点时还会重入
+  （`ConcurrentModificationError`，T16 修过）。改为直接读渲染树拼扁平字符空间。三个
+  非直觉点：①**文档顺序必须按占位符递归**——`gpt_markdown` 把整段渲染成一个根
+  `RichText`，块级元素（标题/列表/引用/表格）是 `WidgetSpan` 占位符，占位符里又是
+  新的 `RichText`，即**子块嵌在父段落内部**，按「渲染树遇到的先后」排会错乱；正确做法
+  是父段落文本被占位符切成多段、占位符处插入子块（`RenderParagraph` 的占位符子节点
+  顺序 == span 中出现顺序，下标即对应）。②命中判定要用**段自身文本的矩形**，不能用
+  段落 box——嵌套结构下父 box 覆盖子块，会命中外层。③相邻两段之间没有换行/空白时补
+  一个换行（表格相邻单元格），该换行占扁平偏移但不属于任何段。
+- **内容变化 / 卸载时通知宿主必须推迟一帧**：`didUpdateWidget`、`dispose` 里直接调
+  `onHideToolbar` / `onSessionEnded` 会 setState 到**祖先**宿主，触发
+  「markNeedsBuild called during build」；流式 AI 回答每帧都会走到这条路径。
+- **内容被整块摘掉时也要收操作条**（`dispose`，不只是 `didUpdateWidget`）：聊天
+  「新会话」清空消息会直接卸载 AI 回答，操作条否则孤零零留在空白页上。因此
+  「收操作条」的回调必须**携带 owner**、不依赖 `currentState` / `context`（卸载后
+  两者都失效），宿主 show/hide 也要加 `mounted` 守卫（延迟回调可能晚于宿主销毁）。
+- **操作条挂载点抽象为 `SelectionToolbarMount` + `SelectionToolbarScope`**：查词页由
+  `DictionaryPanelHost` 实现（层序 `正文 → 屏障 → 操作条 → 面板`），无面板的页面
+  （聊天载体 `ChatView`）用通用 `SelectionToolbarHost`；内容组件只认接口，不关心自己
+  被放进了哪种页面。
+- **已知代价**（明确接受）：不提供系统选区的无障碍语义；句子文本本身仍可被读屏朗读。依赖的 API 全部公开（`RenderParagraph` 几何、
+  `TextSelectionControls`、`TextMagnifier`、`DefaultSelectionStyle`），无私有状态依赖。
+- **相关代码**：`lib/widgets/selection/`——内核 `selectable_content`（L1+L2 组装、手势
+  语义）、`text_selection_session`（L1）、L2 `selection_presentation` /
+  `selection_gesture_detector` / `selection_extend` / `selection_keyboard` /
+  `platform_selection_handles` / `selection_highlight` / `selection_magnifier` /
+  `selection_toolbar(_layer/_host)` / `selection_geometry` / `unbounded_hit_stack`、
+  L3 `selection_backend` + `paragraph_selection_backend`（单段）+
+  `multi_paragraph_selection_backend`（跨块）、组装件 `app_selectable_text`（单段）；
+  `lib/widgets/practice/selectable_sentence_text.dart`（查词业务薄封装）、
+  `lib/features/chatbot/widgets/selectable_assistant_markdown.dart`（AI 回答薄封装）、
+  `lib/widgets/dictionary/dictionary_panel_host.dart`（操作条挂载 + `isPanelOpenOf`）。
+  测试：`test/widgets/selection/`（`text_selection_session_test` /
+  `selectable_content_desktop_test`）、`test/widgets/practice/selectable_sentence_text_test.dart`、
+  `test/features/chatbot/widgets/selectable_assistant_markdown_test.dart`。
+- **仍在用 `SelectableText` 的地方**（有意保留）：设置页/调试页/播客信息等纯只读文本，
+  没有「选区跨面板交互存活」「自定义词边界」「自定义操作条」的需求，用系统实现更省。
+- **完成时间**：2026-07-30（三层化 + 桌面补齐 + AI 回答迁移）
+
+### 7.29 长期分支落地覆盖主干英文文案：`app_en.arb` 256 个 key 静默回退，且被后续测试"修复"坐实
+
+- **根因**：`video` 分支从 07-21 fork 后持续开发到 08-05 才落地，中途多次 `rebase onto`
+  main 同步；分支自身在 07-29 有一个提交整份重写了 `app_en.arb`（连带 codegen 全量生成的
+  `app_localizations_en.dart`/`app_localizations.dart`），其源头早于主干 07-28 那次英文文案
+  优化（`ece1a4da`）。因为 codegen 文件几乎每行都会变，line-based 三方合并/冲突判定在这种
+  「整份重写」提交上基本失去意义，`ece1a4da` 改的 256 处英文文案被整批带回旧值，08-05 落地
+  时无人逐行核对这么大的 diff。
+- **二次坐实**：落地后全量 `flutter test` 因文案不匹配报出大量断言失败，后续有提交把这些
+  断言"修"成匹配（已回退的、错误的）产出文案，而不是去查文案本身为什么变了——`TASKS.md`
+  2026-08-06 那条"过期断言清理"记录就是这次坐实，之后测试全绿反而掩盖了问题。
+- **规则**：i18n 模板文件（`app_en.arb`）+ 其 codegen 产物**不适合**长期分支持有自己的重写
+  提交去 rebase 合并；长期分支应尽量高频同步 main（而不是攒到落地前才一次性 rebase），且
+  涉及 codegen 全量生成文件的冲突，**必须**基于源文件（`.arb`）本身逐 key 核对，不能整份
+  接受任一侧。当 `flutter test` 因文案不匹配大批失败时，先确认是文案本身出问题还是测试
+  该更新，**不要**默认改测试断言让它变绿了事。
+- **另发现**：`step_complete_dialog.dart` 用本地化后的字符串 `l10n.firstStudy` 做业务分支
+  判断（决定"完成首轮"还是"完成复习"文案），这次因为 `firstStudy` 译文改成 `"First Round"`
+  后恰好撞上某个 widget test 拿 `'First Round'` 当泛型占位符 stageName，暴露了"业务逻辑不
+  应该拿翻译后的展示文本做判断依据"这个更根本的坏味道（`TASKS.md` 07-06 已记录，尚未改造，
+  当前只改了测试的占位符避免碰撞）。
+- **恢复方法**：三点对比法——取「回退前 (`ece1a4da^`)」「意图值 (`ece1a4da`)」「当前 HEAD」
+  三份 arb 逐 key diff，`HEAD == ece1a4da^ 且 ece1a4da 改过` 即判定为被静默回退，按 `ece1a4da`
+  的值恢复；同一方法可扩展到检测任意「长分支落地覆盖主干独立改动」的问题，不限于 l10n。
+- **完成时间**：2026-08-06
+
+### 7.30 跟读实时 VAD：固定 RMS 门槛把小声用户判成静音 → 说话中途被自动结束录音
+
+- 根因：Android `AndroidSpeechPracticeHandler` 与 iOS/macOS `AppDelegate.swift` 都用固定门槛 0.015（**增益前** RMS；写入 WAV 时才 ×2.2，离线 ASR 日志里的 rms² 是增益后的值，换算时别搞混）。Android 离线 ASR 录音中无实时转写，自动停止只靠声学静音兜底，判错即截断。
+- 规则：门槛按底噪自适应（`AdaptiveVadThreshold`，Kotlin + Swift 三端同源，改参数必须三端同步），**必须有上限（= 旧门槛）和下限**；底噪只统计判为静音的 buffer。排查时对比 `[RecordingDiag]` 的 `vadThreshold/vadNoiseFloor/vadVoicedBuffers` 与 `[ASREngine] VAD: x → y` 是否矛盾。
+- 相关：跟读引擎的 `referenceDuration`/`maxDuration` 必须按播放倍速换算（`RepeatFlowConfig.playbackSpeed`），否则慢速播放时动态兜底降到 1s。
+
+### 7.31 复述重听本段：清理录音置 idle 触发自动录音，抢在原文播放前启动 → 原音被录进去
+
+- 根因：`clearRecording` 先同步置 idle 再 await 原生清理；期间跑过一帧时，idle 触发的自动录音在播放器仍为 retelling 时启动，随后才切 listening 放原文（评估中点击最易触发，主线程被评估占用）。
+- 规则：所有「取消/清理录音后播放原文」的入口，清理期间都要先挡住自动录音（`_manualStoppedThisParagraph = true`），清理完、同步切到 listening 前再放开。回归测试见 `retell_player_screen_test.dart`「评估中点击主播放重听本段…」。
+
+### 7.32 media_kit 区间播放：软停止越过句尾带出下一句；seek 未落定就起播
+
+- 根因：句尾靠「位置事件/200ms 轮询发现 `position >= end` → 异步 pause」软停止。Android media_kit 用 `ao=opensles`，部分机型（华为 YAL-AL00 实测）输出缓冲深，`time-pos` 与实际出声有数百毫秒偏差：1.0.43 原包第一句（终点 2524ms）停在 2770ms，暂停后缓存位置又漂到 3100ms，正好覆盖下一句开头 "Would you"（2.74s 起）；末句则在 9045ms 提前收到 EOF。逐句精听在 1.0.42 已走 MediaEngine，回归点不是 1.0.43 的盲听驱动切换。
+- 规则：区间终点用 mpv 原生 `end` 属性在解码层硬裁切（`MediaPlayerBackend.setPlaybackEnd`），终点后的音频不进输出缓冲；修复后同机停在 2523ms / 9524ms。`end` 是全局选项：**seek 前、区间结束/取消、任何非区间播放（play/seek/playToEnd/pause/stop/detach）都要撤销**，换文件时 backend.open 自行撤销，否则自由播放会停在旧终点或 seek 越过旧终点立即 EOF。
+- 起播：seek 回执只代表命令被受理，要等位置流确认到达起点再 play（上限 500ms 兜底，不在命令队列里等）。精确 seek 可能落在目标前不到 1ms（2625 → 2624.9），起点判定要允许少量提前（50ms）。
+- 排查日志：`[MediaEngine Range] start-gate`（outcome/waitedMs）、`[MediaKitBackend] set playback end`、`return: position=`。
+
+### 7.33 共享合集 / 播客未下载材料进入学习计划页：入口判断分散 → 进入逐句精听报 `file unavailable`
+
+- 根因：共享合集与播客单集入库时只有占位行（`audioPath=null`，字幕为空）。学习 Tab 的推荐卡 / 任务卡 / 最近完成直接 `push` 计划页，只有资源库列表点击会先下载；「更新字幕」只写字幕不下载音频，计划页因此出现「有字幕、无音频」，精听 `loadMedia` 报 `file unavailable`。推荐逻辑（`selectStudyRecommendation`）也从未过滤下载状态。
+- 规则：**计划页是媒体就绪的唯一 owner**。入口只负责打开计划页，不做就绪判断，也不做下载。就绪状态由 `resolveMediaReadiness` 纯函数解析，列表行与计划页进度共用 `mediaDownloadSnapshotProvider`；未就绪时计划页只展示 `MediaPreparingView`，学习内容与 autoStart 在 `MediaReady` 之后才构建。
+- 下载器约束：同一下载通道一次只跑一个任务，另一材料请求时解析为 `MediaWaiting`，通道空闲后由计划页自动重试；`MediaFailed` 不自动重试，只由占位页的重试按钮触发，避免失败后循环下载。播客字幕仅在音频成功后由 RSS 附加，未下载单集没有字幕。
+- 排查日志：`[MediaEnsure]`（provision 结果 / 跳过原因）、`[CommunityDownload]`（start rejected / start / done / cancel）、`[PodcastTranscript]`（字幕附加）。
