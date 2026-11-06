@@ -14,7 +14,7 @@ import 'storage_migration_service.dart';
 const appUpdateMigrationVersionKey = 'app_update_migration_version';
 
 /// 当前已注册的应用升级迁移版本。
-const currentAppUpdateMigrationVersion = 11;
+const currentAppUpdateMigrationVersion = 13;
 
 /// 删除已废弃的 TTS 模型下载状态缓存；模型状态现在以安装清单和文件校验为准。
 Future<void> removeLegacyTtsModelDownloadFlags(SharedPreferences prefs) async {
@@ -238,7 +238,9 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
     AppUpdateMigration(
       version: 10,
       name: 'edge_tts_default_engine_migration',
-      action: () => migrateDefaultTtsEngineToEdge(prefs),
+      // 德语版跳过：Edge 无德语音色，本地默认引擎是平台引擎 + 自建 Fish 网关。
+      // 若跟随上游强制写 edge，德语 TTS 会整体失效（下游由 v13 兜底还原）。
+      action: () async {},
     ),
     AppUpdateMigration(
       version: 11,
@@ -249,6 +251,11 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
       version: 12,
       name: 'remove_offline_dictionary_library',
       action: removeOfflineDictionaryLibrary,
+    ),
+    AppUpdateMigration(
+      version: 13,
+      name: 'restore_german_platform_engine',
+      action: () => restoreGermanPlatformEngine(prefs),
     ),
   ];
 }

@@ -94,6 +94,28 @@ Future<void> migrateDefaultTtsEngineToEdge(SharedPreferences prefs) async {
   await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.edge.name);
 }
 
+/// 德语版：撤销上游 v1.0.46 的「默认引擎改 Edge」强制迁移。
+///
+/// Edge 音色全部是英语（美音/英音），没有德语；本地德语链路走平台引擎
+/// + 自建 Fish Audio 网关（`de1`–`de6`）。上游 migration v10 会把所有用户
+/// 的引擎直接写成 `edge`，德语版必须在升级后把这一次性改回来。
+///
+/// 只处理 `edge`（上游强制的值），`kokoro` 等是用户主动选择，不动。
+/// 执行后写 SP 标记，之后用户手动选 Edge 不会被反复改回。
+Future<void> restoreGermanPlatformEngine(SharedPreferences prefs) async {
+  const doneKey = 'tts_engine_de_restored';
+  if (prefs.getBool(doneKey) ?? false) return;
+  final stored = prefs.getString(TtsSettingsKeys.engine);
+  if (stored == TtsEngineKind.edge.name) {
+    await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.platform.name);
+    AppLogger.log(
+      'TtsSettings',
+      '德语版还原默认引擎：edge → platform（自建 Fish 网关）',
+    );
+  }
+  await prefs.setBool(doneKey, true);
+}
+
 /// TTS 设置不可变值对象。
 class TtsSettings {
   /// 合成引擎（默认 Edge 在线 TTS）。
