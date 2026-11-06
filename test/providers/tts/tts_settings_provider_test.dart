@@ -1,35 +1,38 @@
 /// TtsSettings Provider 单元测试
 ///
 /// 覆盖：默认值、SP 同步预读、setEngine（kokoro 持久化）、setAccent 持久化、
-/// languageTag / toSpeechConfig 派生、copyWith / ==。
+/// languageTag / toSpeechConfig 派生、copyWith / ==、Edge 音色与默认引擎迁移。
 library;
 
 import 'package:echo_loop/providers/tts/tts_settings_provider.dart';
+import 'package:echo_loop/services/tts/edge_voices.dart';
 import 'package:echo_loop/services/tts/piper_model_catalog.dart';
 import 'package:echo_loop/services/tts/tts_engine.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../helpers/mock_providers.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   ProviderContainer makeContainer(SharedPreferences prefs) {
     return ProviderContainer(
-      overrides: [
+      overrides: dedupeOverrides([
         initialTtsSettingsProvider.overrideWithValue(
           TtsSettings.fromPrefsSync(prefs),
         ),
-      ],
+      ]),
     );
   }
 
   group('TtsSettings.fromPrefsSync', () {
-    test('SP 缺失 → 默认 Echo Loop AI Advanced + 美音', () async {
+    test('SP 缺失 → 默认 Edge 在线 TTS + 美音', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final s = TtsSettings.fromPrefsSync(prefs);
-      expect(s.engine, TtsEngineKind.kokoro);
+      expect(s.engine, TtsEngineKind.edge);
       expect(s.accent, TtsAccent.us);
       expect(s.languageTag, 'en-US');
     });
@@ -52,7 +55,7 @@ void main() {
       });
       final prefs = await SharedPreferences.getInstance();
       final s = TtsSettings.fromPrefsSync(prefs);
-      expect(s.engine, TtsEngineKind.kokoro);
+      expect(s.engine, TtsEngineKind.edge);
       expect(s.accent, TtsAccent.us);
     });
 
@@ -319,6 +322,76 @@ void main() {
       final s = TtsSettings.fromPrefsSync(prefs);
       expect(s.piperVoiceUs, piperDefaultVoiceUs);
       expect(s.piperVoiceUk, piperDefaultVoiceUk);
+    });
+  });
+
+  group('Edge 音色 / toSpeechConfig', () {
+    test('edge 引擎 → config 带当前口音音色、无 modelTag', () {
+      const us = TtsSettings(engine: TtsEngineKind.edge);
+      expect(us.toSpeechConfig().voiceName, edgeDefaultVoiceUs);
+      expect(us.toSpeechConfig().modelTag, isNull);
+      const uk = TtsSettings(engine: TtsEngineKind.edge, accent: TtsAccent.uk);
+      expect(uk.toSpeechConfig().voiceName, edgeDefaultVoiceUk);
+      expect(uk.toSpeechConfig().languageTag, 'en-GB');
+    });
+
+    test('setEdgeVoice 写对应口音字段 + SP；口音不匹配忽略', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final c = makeContainer(prefs);
+      addTearDown(c.dispose);
+      final notifier = c.read(ttsSettingsProvider.notifier);
+
+      final usAlt = edgeVoicesForAccent(TtsAccent.us).last.id;
+      final ukAlt = edgeVoicesForAccent(TtsAccent.uk).last.id;
+      await notifier.setEdgeVoice(TtsAccent.us, usAlt);
+      await notifier.setEdgeVoice(TtsAccent.uk, ukAlt);
+      // 美音槽传英音音色 → 忽略。
+      await notifier.setEdgeVoice(TtsAccent.us, ukAlt);
+
+      expect(c.read(ttsSettingsProvider).edgeVoiceUs, usAlt);
+      expect(c.read(ttsSettingsProvider).edgeVoiceUk, ukAlt);
+      expect(prefs.getString(TtsSettingsKeys.edgeVoiceUs), usAlt);
+      expect(prefs.getString(TtsSettingsKeys.edgeVoiceUk), ukAlt);
+    });
+
+    test('fromPrefsSync 非法/不匹配音色 → 回退该口音默认', () async {
+      SharedPreferences.setMockInitialValues({
+        TtsSettingsKeys.edgeVoiceUs: edgeDefaultVoiceUk,
+        TtsSettingsKeys.edgeVoiceUk: 'bogus',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final s = TtsSettings.fromPrefsSync(prefs);
+      expect(s.edgeVoiceUs, edgeDefaultVoiceUs);
+      expect(s.edgeVoiceUk, edgeDefaultVoiceUk);
+    });
+  });
+
+  group('migrateDefaultTtsEngineToEdge', () {
+    Future<String?> migrate(String? stored) async {
+      SharedPreferences.setMockInitialValues({
+        if (stored != null) TtsSettingsKeys.engine: stored,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await migrateDefaultTtsEngineToEdge(prefs);
+      return prefs.getString(TtsSettingsKeys.engine);
+    }
+
+    test('未设置偏好 → edge', () async {
+      expect(await migrate(null), 'edge');
+    });
+
+    test('老用户选的本地引擎（无论模型是否已装）→ 统一切到 edge', () async {
+      expect(await migrate('kokoro'), 'edge');
+      expect(await migrate('piper'), 'edge');
+    });
+
+    test('iOS/macOS 显式选的平台 TTS → edge', () async {
+      expect(await migrate('platform'), 'edge');
+    });
+
+    test('已是 edge → 保持不变（幂等）', () async {
+      expect(await migrate('edge'), 'edge');
     });
   });
 

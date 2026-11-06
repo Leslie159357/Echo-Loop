@@ -10,7 +10,9 @@ library;
 
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/audio_event_params.dart';
 import '../../analytics/models/event_names.dart';
@@ -42,6 +44,7 @@ import '../media_engine/media_sense_group_range_playback.dart';
 import '../repeat_flow/repeat_flow_engine.dart';
 import '../repeat_flow/repeat_flow_phase.dart';
 import '../repeat_flow/repeat_flow_state.dart';
+import '../settings_provider.dart';
 import '../speech/speech_recording_controller.dart';
 import '../listening_practice/bookmark_manager.dart';
 import '../favorite_sentence_lifecycle_provider.dart';
@@ -172,7 +175,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
 
       // 清除自由播放器遗留的系统媒体卡片，再由 MediaEngine 接管当前材料。
       await ref.read(audioEngineProvider.notifier).stop();
-      if (!isCurrentEntry()) return MediaLoadResult.cancelled;
+      if (!isCurrentEntry() || !ref.mounted) return MediaLoadResult.cancelled;
 
       final settingsSlot = stageSlotKey(
         StageSettingsSlots.listenAndRepeat,
@@ -256,7 +259,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
   }) async {
     bool isCurrentEntry() => entryGeneration == _entryGeneration;
     await _disposeStudySessionTimer();
-    if (!isCurrentEntry()) return;
+    if (!isCurrentEntry() || !ref.mounted) return;
     _studySessionGeneration += 1;
     _studyAudioItemId = audioItemId;
     _sessionPrepared = false;
@@ -291,7 +294,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
 
     // 从 DB 读断点
     final progress = await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .getLatestOrEnsureProgress(audioItemId);
     if (!isCurrentEntry()) return;
     int startIndex = 0;
@@ -366,6 +369,8 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
       startIndex: startIndex,
       isFreePlay: isFreePlay,
     );
+    // prepareSession 期间 provider 可能已销毁，之后不得再读 ref。
+    if (!ref.mounted) return;
     final timer = StudySessionTimer(
       studyTimeService: _studyTimeService,
       stage: StudyStage.listenAndRepeat,
@@ -466,7 +471,12 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
         sentence != null &&
         position >= sentence.startTime &&
         position < sentence.endTime) {
-      _pausedPromptPosition = position;
+      final resumeFromSentenceStart = ref
+          .read(appSettingsProvider)
+          .resumeFromSentenceStartEnabled;
+      _pausedPromptPosition = resumeFromSentenceStart
+          ? sentence.startTime
+          : position;
     }
     _engine.enterWaitingForUser();
   }
@@ -640,7 +650,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
   /// 保存断点
   Future<void> saveBreakpoint({required bool isFreePlay}) async {
     await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .saveShadowingSentenceIndex(
           _engine.config.audioItemId,
           state.sentenceIndex,
@@ -651,7 +661,7 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
   /// 清除断点
   Future<void> clearBreakpoint({required bool isFreePlay}) async {
     await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .saveShadowingSentenceIndex(
           _engine.config.audioItemId,
           null,
@@ -662,14 +672,14 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
   /// 递增遍数统计
   Future<void> incrementPassCount() async {
     await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .incrementShadowingPassCount(_engine.config.audioItemId);
   }
 
   /// 标记当前子步骤完成
   Future<void> completeSubStage() async {
     await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .completeCurrentSubStage(_engine.config.audioItemId);
   }
 
@@ -922,10 +932,12 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
       await _restoreListeningPractice(restoreGeneration);
     }
 
+    // 退出清理期间 provider 可能已销毁，销毁后不再刷新依赖项。
+    if (!ref.mounted) return;
     ref.invalidate(dailyStudyTimeProvider);
     ref.invalidate(studyDurationRecordsProvider);
     try {
-      await ref.read(studyStatsNotifierProvider.notifier).refresh();
+      await ref.read(studyStatsProvider.notifier).refresh();
     } catch (error, stackTrace) {
       AppLogger.log(
         'StudyExit',
@@ -978,6 +990,8 @@ class ListenAndRepeatController extends _$ListenAndRepeatController {
       sentence,
       ref.read(listenAndRepeatSettingsProvider).playbackSpeed,
     );
+    // 播放期间 controller 可能已销毁（如切库 invalidate），过期则不再访问 ref/state。
+    if (!ref.mounted) return result;
     if (result == SentencePlaybackResult.completed &&
         flowToken == state.flowToken) {
       AppLogger.log(

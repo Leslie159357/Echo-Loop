@@ -5,7 +5,7 @@
 ///
 /// 所有发音调用点（闪卡 / 收藏 / 词典单词 / 词典例句）统一
 /// 通用文本朗读应经 `textPlaybackProvider` 分流；本控制器仅承接
-/// 离线发音未命中或本地播放失败后的 TTS 缓存/生成。
+/// CDN 单词音频未命中或本地播放失败后的 TTS 缓存/生成。
 /// [TtsControllerState.speakingKey] 暴露当前正在朗读项，供发音按钮显激活态。
 library;
 
@@ -17,6 +17,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../database/providers.dart';
 import '../../services/app_logger.dart';
 import '../../services/pronunciation/local_audio_clip_player.dart';
+import '../../services/tts/edge_tts_engine.dart';
+import '../../services/tts/edge_voices.dart';
 import '../../services/tts/kokoro_tts_engine.dart';
 import '../../services/tts/kokoro_voices.dart';
 import '../../services/tts/piper_tts_engine.dart';
@@ -25,11 +27,24 @@ import '../../services/tts/platform_tts_engine.dart';
 import '../../services/tts/tts_cache_store.dart';
 import '../../services/tts/tts_coordinator.dart';
 import '../../services/tts/tts_engine.dart';
+import '../../widgets/tts/edge_tts_unavailable_dialog.dart';
 import '../../widgets/tts/tts_model_download_prompt_dialog.dart';
 import '../short_audio_player_provider.dart';
 import 'kokoro_model_provider.dart';
 import 'piper_model_provider.dart';
 import 'tts_settings_provider.dart';
+
+/// Edge 合成失败记录（引擎写、控制器读），全局共享一份。
+final edgeTtsFailureRecorderProvider = Provider<EdgeTtsFailureRecorder>(
+  (ref) => EdgeTtsFailureRecorder(),
+);
+
+/// 弹出 Edge 不可用提示的入口；测试可替换为记录调用的 fake。
+typedef EdgeTtsUnavailablePrompt = void Function(EdgeTtsFailureKind failure);
+
+final edgeTtsUnavailablePromptProvider = Provider<EdgeTtsUnavailablePrompt>(
+  (ref) => showEdgeTtsUnavailableDialog,
+);
 
 /// TTS 引擎工厂 Provider。
 ///
@@ -59,6 +74,10 @@ final ttsEngineFactoryProvider = Provider<TtsEngineFactory>((ref) {
         return PiperTtsEngine(
           resolvePaths: (voiceId) =>
               ref.read(piperModelManagerProvider(voiceId)).piperConfigPaths(),
+        );
+      case TtsEngineKind.edge:
+        return EdgeTtsEngine(
+          failureRecorder: ref.read(edgeTtsFailureRecorderProvider),
         );
     }
   };
@@ -99,6 +118,11 @@ TtsSpeechConfig ttsPiperVoicePreviewConfig(PiperVoice voice) {
     languageTag: voice.accent == TtsAccent.uk ? 'en-GB' : 'en-US',
     voiceName: voice.id,
   );
+}
+
+/// Edge 某音色「试听」的发音配置（无 modelTag，缓存键按音色分桶）。
+TtsSpeechConfig ttsEdgeVoicePreviewConfig(EdgeVoice voice) {
+  return TtsSpeechConfig(languageTag: voice.languageTag, voiceName: voice.id);
 }
 
 /// 计算有效引擎：始终尊重用户选择。
@@ -222,6 +246,7 @@ class TtsController extends Notifier<TtsControllerState> {
       voiceName: switch (effective) {
         TtsEngineKind.kokoro => settings.activeKokoroVoice,
         TtsEngineKind.piper => settings.activePiperVoice,
+        TtsEngineKind.edge => settings.activeEdgeVoice,
         TtsEngineKind.platform => settings.fishTtsVoice,
       },
       modelTag: effective == TtsEngineKind.kokoro
@@ -239,16 +264,23 @@ class TtsController extends Notifier<TtsControllerState> {
   ///
   /// 协调器当前返回 bool；控制器结合自身 speaking token 将被新请求抢占的
   /// 旧结果区分为 [AudioPlaybackResult.cancelled]，避免上层把失败误记为完成。
+  ///
+  /// [promptIfModelMissing] 为 false 时，本地模型未就绪直接返回 failed，不弹下载框。
   Future<AudioPlaybackResult> speakWithResult(
     String text, {
     String? key,
+    bool promptIfModelMissing = true,
   }) async {
     // 必须在模型检查前登记代际：模型加载/弹窗等待期间关闭词典时，stop()
     // 递增代际，旧请求回来后不得再继续设置播放状态或启动协调器。
     final token = ++_speakingToken;
     final k = key ?? text;
+    final engine = ref.read(ttsSettingsProvider).engine;
     try {
-      if (!await ensureTtsModelReadyForPlayback(ref)) {
+      if (!await ensureTtsModelReadyForPlayback(
+        ref,
+        promptIfModelMissing: promptIfModelMissing,
+      )) {
         return _resultForToken(token, success: false);
       }
       if (token != _speakingToken) return AudioPlaybackResult.cancelled;
@@ -260,6 +292,9 @@ class TtsController extends Notifier<TtsControllerState> {
       final ok = await _readyCoordinator.speak(text);
       final result = _resultForToken(token, success: ok);
       AppLogger.log('TtsController', '用户发音结束：$result 缓存键=$k');
+      if (engine == TtsEngineKind.edge) {
+        _onEdgePlaybackResult(result, isUserInitiated: promptIfModelMissing);
+      }
       return result;
     } catch (error, stackTrace) {
       AppLogger.log('TtsController', '✗ 用户发音异常：$error\n$stackTrace');
@@ -273,8 +308,16 @@ class TtsController extends Notifier<TtsControllerState> {
   }
 
   /// 保留普通发音调用方的 fire-and-forget 入口，实际播放逻辑只有结果型实现一套。
-  Future<void> speak(String text, {String? key}) async {
-    await speakWithResult(text, key: key);
+  Future<void> speak(
+    String text, {
+    String? key,
+    bool promptIfModelMissing = true,
+  }) async {
+    await speakWithResult(
+      text,
+      key: key,
+      promptIfModelMissing: promptIfModelMissing,
+    );
   }
 
   AudioPlaybackResult _resultForToken(int token, {required bool success}) {
@@ -369,6 +412,49 @@ class TtsController extends Notifier<TtsControllerState> {
     if (token == _speakingToken && state.speakingKey == key) {
       state = _stateWithSpeaking(null);
     }
+  }
+
+  /// 试听某 Edge 音色：用该音色朗读示范句。
+  ///
+  /// 在线引擎无模型门控；未命中缓存需联网合成（约 3~5s）。失败时提示 Edge 不可用，
+  Future<void> previewEdgeVoice(EdgeVoice voice) async {
+    final key = ttsVoicePreviewKey(voice.id);
+    final token = ++_speakingToken;
+    state = _stateWithSpeaking(key);
+    try {
+      final ok = await _readyCoordinator.speakWith(
+        kTtsPreviewText,
+        TtsEngineKind.edge,
+        ttsEdgeVoicePreviewConfig(voice),
+      );
+      _onEdgePlaybackResult(
+        _resultForToken(token, success: ok),
+        isUserInitiated: true,
+      );
+    } catch (e, st) {
+      AppLogger.log('TtsController', '✗ previewEdgeVoice 异常: $e\n$st');
+    }
+    if (token == _speakingToken && state.speakingKey == key) {
+      state = _stateWithSpeaking(null);
+    }
+  }
+
+  /// Edge 发音结束后的失败提示：用户每次主动发音失败都提示。
+  ///
+  /// 被抢占（cancelled）不算失败；非主动发音（如查词自动发音）失败只记日志，避免后台触发时打扰用户。
+  void _onEdgePlaybackResult(
+    AudioPlaybackResult result, {
+    required bool isUserInitiated,
+  }) {
+    if (result != AudioPlaybackResult.failed) return;
+    final failure = ref.read(edgeTtsFailureRecorderProvider).lastFailure;
+    if (!isUserInitiated) {
+      AppLogger.log('TtsController', 'Edge 非主动发音失败，不提示：类型=${failure?.name}');
+      return;
+    }
+    ref.read(edgeTtsUnavailablePromptProvider)(
+      failure ?? EdgeTtsFailureKind.service,
+    );
   }
 
   /// 试听某口音（平台 TTS）：用该口音朗读示范句。
@@ -758,6 +844,7 @@ class TtsController extends Notifier<TtsControllerState> {
       TtsEngineKind.platform => 'platform',
       TtsEngineKind.kokoro => 'kokoro|${settings.kokoroVariant.name}',
       TtsEngineKind.piper => 'piper|${settings.activePiperVoice}',
+      TtsEngineKind.edge => 'edge',
     };
   }
 
@@ -776,11 +863,7 @@ class TtsController extends Notifier<TtsControllerState> {
       }
       final config = TtsSpeechConfig(
         languageTag: settings.languageTag,
-        voiceName: switch (settings.engine) {
-          TtsEngineKind.kokoro => settings.activeKokoroVoice,
-          TtsEngineKind.piper => settings.activePiperVoice,
-          TtsEngineKind.platform => null,
-        },
+        voiceName: settings.activeVoiceName,
         modelTag: settings.engine == TtsEngineKind.kokoro
             ? settings.kokoroVariant.name
             : null,
@@ -842,6 +925,8 @@ class TtsController extends Notifier<TtsControllerState> {
   Future<void> stop() async {
     _speakingToken++;
     await _readyCoordinator.stop();
+    // 离开页面 dispose 期间 provider 已销毁，状态无需复位。
+    if (!ref.mounted) return;
     state = _stateWithSpeaking(null);
   }
 

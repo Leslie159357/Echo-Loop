@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   charset_converter
+  connectivity_plus
   firebase_core
   flutter_inappwebview_windows
   flutter_secure_storage_windows
@@ -16,7 +17,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   printing
   screen_retriever_windows
   share_plus
-  sqlite3_flutter_libs
   url_launcher_windows
   window_manager
 )

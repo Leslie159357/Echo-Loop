@@ -18,21 +18,19 @@ import 'package:echo_loop/database/daos/saved_sense_group_dao.dart';
 import 'package:echo_loop/database/daos/saved_word_dao.dart';
 import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/models/dict_entry.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/short_audio_player_provider.dart';
-import 'package:echo_loop/models/pronunciation/pronunciation_clip.dart';
 import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
 import 'package:echo_loop/screens/favorites_screen.dart';
-import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
 import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/utils/app_data_dir.dart';
 import 'package:echo_loop/widgets/common/prewarm_visibility.dart';
-import 'package:sqlite3/sqlite3.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -112,7 +110,11 @@ class _RecordingTtsController extends TtsController {
   }
 
   @override
-  Future<void> speak(String text, {String? key}) async {
+  Future<void> speak(
+    String text, {
+    String? key,
+    bool promptIfModelMissing = true,
+  }) async {
     spokenTexts.add(text);
   }
 
@@ -120,6 +122,7 @@ class _RecordingTtsController extends TtsController {
   Future<AudioPlaybackResult> speakWithResult(
     String text, {
     String? key,
+    bool promptIfModelMissing = true,
   }) async {
     spokenTexts.add(text);
     return AudioPlaybackResult.completed;
@@ -132,9 +135,10 @@ class _RecordingTtsController extends TtsController {
   void cancelTextsPrewarm() => cancelCount++;
 }
 
-/// 记录收藏卡片是否把命中的单词交给离线发音控制器，而非直接调用 TTS。
+/// 记录统一朗读入口的分流：`cdnWords` 中的单词视为 CDN 已有音频，不经 TTS。
 class _RecordingPronunciationPlayback extends TextPlaybackController {
-  final List<PronunciationClip> playedClips = [];
+  final Set<String> cdnWords = {};
+  final List<String> playedCdnWords = [];
 
   @override
   TextPlaybackState build() => const TextPlaybackState();
@@ -143,15 +147,23 @@ class _RecordingPronunciationPlayback extends TextPlaybackController {
   Future<AudioPlaybackResult> speakWithResult(
     String text, {
     String? key,
+    bool promptIfModelMissing = true,
   }) async {
-    final clips = ref.read(pronunciationClipsProvider(text));
-    if (clips.isNotEmpty) {
-      playedClips.add(clips.first);
+    if (cdnWords.contains(text)) {
+      playedCdnWords.add(text);
       return AudioPlaybackResult.completed;
     }
     return ref
         .read(ttsControllerProvider.notifier)
         .speakWithResult(text, key: key);
+  }
+
+  @override
+  Future<void> prewarmWord(String word) async {
+    if (cdnWords.contains(word)) return;
+    await ref.read(ttsControllerProvider.notifier).prewarmTextsIncremental([
+      word,
+    ]);
   }
 }
 
@@ -199,26 +211,28 @@ class _NoopShortAudioBackend implements AudioClipPlayerBackend {
   Future<void> dispose() async {}
 }
 
-Database _createDictionaryDatabase() {
-  final database = sqlite3.openInMemory();
-  database.execute('''
-    CREATE TABLE words (
-      word TEXT PRIMARY KEY,
-      phonetic TEXT NOT NULL,
-      translation TEXT,
-      collins INTEGER DEFAULT 0,
-      tag TEXT
-    )
-  ''');
-  database.execute(
-    "INSERT INTO words (word, phonetic, translation) "
-    "VALUES ('tomorrow', 'təmɒrəʊ', 'adv. 明天')",
-  );
-  database.execute(
-    "INSERT INTO words (word, phonetic, translation) "
-    "VALUES ('instructions', '', 'n. 指令')",
-  );
-  return database;
+MockDictionaryService _createDictionaryService() {
+  final entries = {
+    'tomorrow': const DictEntry(
+      word: 'tomorrow',
+      phonetic: 'təmɒrəʊ',
+      translation: 'adv. 明天',
+    ),
+    'instructions': const DictEntry(
+      word: 'instructions',
+      phonetic: '',
+      translation: 'n. 指令',
+    ),
+  };
+  final service = MockDictionaryService();
+  when(() => service.lookupAll(any())).thenAnswer((invocation) async {
+    final words = invocation.positionalArguments.first as List<String>;
+    return {
+      for (final word in words)
+        if (entries[word] case final entry?) word: entry,
+    };
+  });
+  return service;
 }
 
 SavedWord _word(
@@ -296,8 +310,7 @@ void main() {
   late StreamController<List<SavedSenseGroup>> phraseC;
   late _RecordingTtsController rec;
   late _RecordingPronunciationPlayback pronunciationPlayback;
-  late Database dictionaryDatabase;
-  late DictionaryService oldDictionaryService;
+  late MockDictionaryService dictionaryService;
   late Directory appDataDir;
   late _RecordingShortAudioPlayer shortAudioPlayer;
   late _MockAudioItemDao audioItemDao;
@@ -309,10 +322,7 @@ void main() {
     phraseC = StreamController<List<SavedSenseGroup>>.broadcast();
     rec = _RecordingTtsController();
     pronunciationPlayback = _RecordingPronunciationPlayback();
-    dictionaryDatabase = _createDictionaryDatabase();
-    oldDictionaryService = DictionaryService.replaceInstance(
-      DictionaryService.withDatabase(dictionaryDatabase),
-    );
+    dictionaryService = _createDictionaryService();
     appDataDir = Directory.systemTemp.createTempSync('favorites_audio_test_');
     appDataDirectoryOverride = appDataDir;
     shortAudioPlayer = _RecordingShortAudioPlayer();
@@ -324,14 +334,15 @@ void main() {
     bookmarkC.close();
     wordC.close();
     phraseC.close();
-    DictionaryService.replaceInstance(oldDictionaryService);
-    dictionaryDatabase.dispose();
     appDataDirectoryOverride = null;
     if (appDataDir.existsSync()) appDataDir.deleteSync(recursive: true);
     activeMainTab.dispose();
   });
 
-  Widget createWidget({Set<String> locallyPronouncedWords = const {}}) {
+  Widget createWidget({Set<String> cdnWords = const {}}) {
+    pronunciationPlayback.cdnWords
+      ..clear()
+      ..addAll(cdnWords);
     final router = GoRouter(
       initialLocation: '/favorites',
       routes: [
@@ -358,22 +369,10 @@ void main() {
       routerConfig: router,
     );
     return ProviderScope(
-      overrides: [
+      overrides: dedupeOverrides([
         analyticsOverride(),
         ...studyTimeOverrides(),
-        pronunciationClipsProvider.overrideWith(
-          (ref, word) => locallyPronouncedWords.contains(word)
-              ? [
-                  PronunciationClip(
-                    word: word,
-                    locale: 'us',
-                    audioFilename: '${word}_us.opus',
-                    absolutePath: '/audio/${word}_us.opus',
-                    reason: null,
-                  ),
-                ]
-              : const [],
-        ),
+        dictionaryServiceOverride(dictionaryService),
         bookmarkDaoProvider.overrideWithValue(_TestBookmarkDao(bookmarkC)),
         savedWordDaoProvider.overrideWithValue(_TestSavedWordDao(wordC)),
         savedSenseGroupDaoProvider.overrideWithValue(
@@ -390,7 +389,7 @@ void main() {
         ),
         ttsControllerProvider.overrideWith(() => rec),
         textPlaybackProvider.overrideWith(() => pronunciationPlayback),
-      ],
+      ]),
       child: ValueListenableBuilder<int>(
         valueListenable: activeMainTab,
         builder: (context, index, _) => MainTabVisibilityScope(
@@ -452,8 +451,8 @@ void main() {
     );
   });
 
-  testWidgets('已有离线发音的收藏单词跳过 TTS 预热，意群保留', (tester) async {
-    await tester.pumpWidget(createWidget(locallyPronouncedWords: {'tomorrow'}));
+  testWidgets('CDN 已有音频的收藏单词跳过 TTS 预热，意群保留', (tester) async {
+    await tester.pumpWidget(createWidget(cdnWords: {'tomorrow'}));
     bookmarkC.add([]);
     wordC.add([_word(1, 'tomorrow'), _word(2, 'finished')]);
     phraseC.add([_phrase(1, 'can I book a table')]);
@@ -484,8 +483,8 @@ void main() {
     expect(rec.spokenTexts, ['said they were shy.']);
   });
 
-  testWidgets('点击命中离线发音的收藏单词走本地播放器', (tester) async {
-    await tester.pumpWidget(createWidget(locallyPronouncedWords: {'tomorrow'}));
+  testWidgets('点击 CDN 已有音频的收藏单词走统一入口而不调用 TTS', (tester) async {
+    await tester.pumpWidget(createWidget(cdnWords: {'tomorrow'}));
     bookmarkC.add([]);
     wordC.add([_word(1, 'tomorrow')]);
     phraseC.add([]);
@@ -497,11 +496,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('favorite_speak')));
 
-    expect(pronunciationPlayback.playedClips, hasLength(1));
-    expect(
-      pronunciationPlayback.playedClips.single.absolutePath,
-      '/audio/tomorrow_us.opus',
-    );
+    expect(pronunciationPlayback.playedCdnWords, ['tomorrow']);
+    expect(rec.spokenTexts, isEmpty);
   });
 
   testWidgets('无音标的收藏单词仍显示播放按钮', (tester) async {

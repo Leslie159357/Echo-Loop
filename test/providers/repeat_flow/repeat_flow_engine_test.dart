@@ -9,6 +9,57 @@ import 'package:echo_loop/providers/repeat_flow/repeat_flow_phase.dart';
 import 'package:echo_loop/providers/repeat_flow/repeat_flow_state.dart';
 
 void main() {
+  test('录音取消进行中 dispose 后不再通知外部状态变化', () async {
+    final cancelGate = Completer<void>();
+    final emitted = <RepeatFlowState>[];
+    final engine = RepeatFlowEngine(
+      onStateChanged: emitted.add,
+      callbacks: RepeatFlowCallbacks(
+        pauseAudio: () {},
+        playSentence: (_, _) async => SentencePlaybackResult.completed,
+        resumeSentence: (_, _, _) async => SentencePlaybackResult.completed,
+        startRecording: ({
+          required promptId,
+          required referenceText,
+          required maxDuration,
+          referenceDuration,
+        }) {},
+        // 无语音时 stopRecording 走取消分支，这里挂起直到测试放行。
+        cancelRecording: () => cancelGate.future,
+        stopAndEvaluate: ({required referenceText}) async {},
+        clearRecording: () {},
+        setMaxRecordingDuration: (_) {},
+        hasDetectedSpeech: () => false,
+      ),
+    );
+    engine.prepare(
+      sentences: [
+        Sentence(
+          index: 0,
+          text: 'Stop while disposing.',
+          startTime: Duration.zero,
+          endTime: const Duration(seconds: 1),
+        ),
+      ],
+      config: RepeatFlowConfig(
+        audioItemId: 'audio-stop-dispose',
+        getRepeatCount: (_) => 1,
+        getIntervalDuration: (_) => const Duration(seconds: 30),
+        isManualMode: () => false,
+      ),
+    );
+    await engine.startPlaying();
+    expect(engine.state.phase, isA<Recording>());
+
+    final stopping = engine.stopRecording();
+    engine.dispose();
+    final countAtDispose = emitted.length;
+    cancelGate.complete();
+    await stopping;
+
+    expect(emitted.length, countAtDispose);
+  });
+
   test('暂停后的恢复使用精确位置且不增加重复次数或更换 prompt', () async {
     final firstPlayback = Completer<SentencePlaybackResult>();
     final resumeOffsets = <Duration>[];
@@ -64,6 +115,69 @@ void main() {
     expect(engine.state.repeatIndex, 0);
     expect(engine.currentPromptId, promptId);
     expect(engine.state.phase, isA<Recording>());
+    engine.dispose();
+  });
+
+  test('录音中从暂停位置恢复播放会取消录音', () async {
+    final firstPlayback = Completer<SentencePlaybackResult>();
+    var cancelRecordingCount = 0;
+    final resumeOffsets = <Duration>[];
+    final engine = RepeatFlowEngine(
+      onStateChanged: (_) {},
+      callbacks: RepeatFlowCallbacks(
+        pauseAudio: () {},
+        playSentence: (_, _) => firstPlayback.future,
+        resumeSentence: (_, _, startAt) async {
+          resumeOffsets.add(startAt);
+          return SentencePlaybackResult.completed;
+        },
+        startRecording:
+            ({
+              required promptId,
+              required referenceText,
+              required maxDuration,
+              referenceDuration,
+            }) {},
+        cancelRecording: () async {
+          cancelRecordingCount++;
+        },
+        stopAndEvaluate: ({required referenceText}) async {},
+        clearRecording: () {},
+        setMaxRecordingDuration: (_) {},
+        hasDetectedSpeech: () => false,
+      ),
+    );
+    engine.prepare(
+      sentences: [
+        Sentence(
+          index: 0,
+          text: 'Resume while recording.',
+          startTime: Duration.zero,
+          endTime: const Duration(seconds: 1),
+        ),
+      ],
+      config: RepeatFlowConfig(
+        audioItemId: 'audio-resume-recording',
+        getRepeatCount: (_) => 3,
+        getIntervalDuration: (_) => const Duration(seconds: 30),
+        isManualMode: () => false,
+      ),
+    );
+    final initialPlayback = engine.startPlaying();
+    await Future<void>.delayed(Duration.zero);
+    engine.enterWaitingForUser();
+    engine.startManualRecording();
+    expect(engine.state.phase, isA<Recording>());
+
+    // 只统计 resume 这一步的取消，排除进入等待态时已触发的取消。
+    cancelRecordingCount = 0;
+    const pausedAt = Duration(milliseconds: 420);
+    await engine.resumeCurrentSentence(pausedAt);
+    firstPlayback.complete(SentencePlaybackResult.cancelled);
+    await initialPlayback;
+
+    expect(cancelRecordingCount, 1);
+    expect(resumeOffsets, [pausedAt]);
     engine.dispose();
   });
 

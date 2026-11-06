@@ -1291,6 +1291,9 @@
   "overwrite": "Overwrite",
   "downloadPodcastSubtitle": "Download Podcast Subtitles",
   "downloadPodcastSubtitleSubtitle": "Provided by the podcast, no transcription needed",
+  "podcastTranscriptReminderTitle": "Podcast subtitles may be inaccurate",
+  "podcastTranscriptReminderMessage": "Subtitles provided by podcasts vary in quality and may not match the audio. If they are inaccurate, you can use cloud transcription to generate subtitles instead.",
+  "podcastTranscriptReminderConfirm": "Got it",
   "downloadSubtitle": "Download Subtitles",
   "downloadSubtitleFailed": "Failed to download subtitles",
   "audioContentEmptyWarning": "Possibly empty",
@@ -1706,6 +1709,17 @@
     }
   },
 
+  "reviewReminderSavedBody1": "Time to review your saved sentences and words",
+  "reviewReminderSavedBody2": "Listen to your saved sentences once more to lock them in",
+  "reviewReminderSavedBody3": "A few sentences in spare time add up",
+  "reviewReminderSavedBody4": "Your saved sentences are waiting for you",
+  "reviewReminderSavedBody5": "Repetition is how it sticks. Let's review",
+  "reviewReminderSavedBody6": "Listen a few more times and your saved sentences become yours",
+  "reviewReminderSavedBody7": "Spaced repetition is the key to memory. Let's do a round",
+  "reviewReminderSavedBody8": "Hear a familiar sentence again and you'll notice something new",
+  "reviewReminderSavedBody9": "Saved items need review, or they'll fade",
+  "reviewReminderSavedBody10": "Listening builds over time. Review your saved sentences",
+
   "stageBlindListen": "Listen without subtitles",
   "stageIntensiveListen": "Listen sentence by sentence",
   "stageListenAndRepeat": "Listen & Repeat",
@@ -2007,7 +2021,6 @@
       "count": {"type": "int"}
     }
   },
-  "importList": "Import List",
   "filesSelected": "{count} files selected",
   "@filesSelected": {
     "placeholders": {
@@ -2074,9 +2087,7 @@
   },
   "removeFile": "Remove",
   "goToSettings": "Go to Settings",
-  "dictionaryDownloading": "Downloading dictionary...",
-  "dictionaryDownloadFailed": "Dictionary download failed",
-  "dictionaryNotDownloaded": "Dictionary not yet downloaded",
+  "dictionaryLookupFailed": "Lookup failed. Check your network and try again",
   "dictionaryBaseFormHint": "Showing results for base form “{lemma}”",
   "@dictionaryBaseFormHint": {
     "placeholders": {
@@ -2088,7 +2099,6 @@
   "download": "Download",
   "retry": "Retry",
   "mediaPreparingHint": "Downloading audio and subtitles…",
-  "mediaWaitingOtherDownload": "Another download is in progress. This one will start automatically.",
   "guideNext": "Next",
   "guideDone": "Done",
   "guideSkip": "Skip",
@@ -2306,6 +2316,9 @@
   "skipSilenceDescription": "Skip long silences between sentences",
   "wordHighlightTitle": "Highlight Words During Playback",
   "wordHighlightDescription": "Highlight each word as it is spoken in the original audio",
+  "resumeFromSentenceStartTitle": "Replay from Sentence Start",
+  "resumeFromSentenceStartEnabledDescription": "When replaying the current sentence, playback will start from its beginning",
+  "resumeFromSentenceStartDisabledDescription": "When replaying the current sentence, playback will resume from where you paused",
   "silenceThreshold": "Silence Threshold",
   "silenceThresholdValue": "{seconds}s",
   "@silenceThresholdValue": {
@@ -2480,7 +2493,6 @@
       "subtitleCount": {"type": "int"}
     }
   },
-  "baiduNetdiskImporting": "Importing...",
   "baiduNetdiskImportingFile": "Importing {name}...",
   "@baiduNetdiskImportingFile": {
     "placeholders": {
@@ -2511,6 +2523,16 @@
   "audioUrlDuplicate": "An audio file with this name already exists",
   "audioDownloadFailed": "Failed to download audio",
   "audioDownloadInProgress": "Downloading",
+  "audioQueued": "Queued",
+  "baiduImportedToLibrary": "Imported to library",
+  "baiduImportedToCollections": "Imported to: {names}",
+  "@baiduImportedToCollections": {"placeholders": {"names": {"type": "String"}}},
+  "baiduImportDuplicate": "Already exists",
+  "baiduSubtitleUnmatched": "No matching audio file",
+  "baiduDisconnectActiveTitle": "Imports in progress",
+  "baiduDisconnectActiveMessage": "{count} file(s) are downloading or queued. Disconnecting will cancel them.",
+  "@baiduDisconnectActiveMessage": {"placeholders": {"count": {"type": "int"}}},
+  "mediaQueued": "Queued...",
   "audioImportComplete": "Import complete",
   "audioImportCanceled": "Audio import canceled",
   "cancelDownload": "Cancel Download",
@@ -2572,6 +2594,12 @@
   "ttsEngineEchoLoopDescription": "Best sound quality. Needs a model download; recommended for high-performance devices.",
   "ttsEnginePiper": "Echo Loop AI (Balanced)",
   "ttsEnginePiperDescription": "Natural, smooth sound. Needs a model download; recommended for mid-range devices.",
+  "ttsEngineEdge": "Edge TTS",
+  "ttsEngineEdgeDescription": "Uses Microsoft Neural voices for natural speech. Requires an internet connection.",
+  "edgeTtsUnavailableTitle": "Edge Online Voice unavailable",
+  "edgeTtsUnavailableNetworkMessage": "You're offline. Edge Online Voice needs an internet connection. Check your network and try again, or choose another speech engine in Settings.",
+  "edgeTtsUnavailableServiceMessage": "Edge Online Voice is temporarily unavailable. You can choose another speech engine in Settings.",
+  "edgeTtsUnavailableDismiss": "OK",
   "ttsModel": "Model",
   "ttsModelHighQuality": "High quality",
   "ttsModelHighQualityDescription": "Best sound at acceptable speed. About 300 MB.",
@@ -2621,7 +2649,7 @@
   "dictionarySourcesDescription": "Disabled dictionaries won't appear in the lookup switcher",
   "dictionaryAutoSpeakOnLookup": "Auto-play Pronunciation",
   "dictionaryAdFilterTitle": "Block ads in web dictionaries",
-  "dictSourceLocal": "Local Dictionary",
+  "dictSourceLocal": "Basic Dictionary",
   "dictSourceAi": "AI Dictionary",
   "dictSourceCambridge": "Cambridge",
   "dictSourceAlwaysOn": "Always on",
@@ -2733,16 +2761,6 @@
   "videoNoTranscript": "No transcript",
   "videoRetry": "Retry",
   "pronunciationPlay": "Play pronunciation",
-  "pronunciationStandard": "Pronunciation",
-  "pronunciationAdjective": "Adjective",
-  "pronunciationNoun": "Noun",
-  "pronunciationNounAdjective": "Noun / adjective",
-  "pronunciationVerb": "Verb",
-  "pronunciationPastTense": "Past tense",
-  "pronunciationPresentTense": "Present tense",
-  "pronunciationInterjection": "Interjection",
-  "pronunciationLibrary": "Offline Word Pronunciation",
-  "pronunciationLibraryDescription": "Pre-recorded word audio for dictionary lookups",
   "redownload": "Download again",
   "collapseSidebar": "Collapse sidebar",
   "expandSidebar": "Expand sidebar",

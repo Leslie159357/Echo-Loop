@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -2366,6 +2367,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Provided by the podcast, no transcription needed';
 
   @override
+  String get podcastTranscriptReminderTitle =>
+      'Podcast subtitles may be inaccurate';
+
+  @override
+  String get podcastTranscriptReminderMessage =>
+      'Subtitles provided by podcasts vary in quality and may not match the audio. If they are inaccurate, you can use cloud transcription to generate subtitles instead.';
+
+  @override
+  String get podcastTranscriptReminderConfirm => 'Got it';
+
+  @override
   String get downloadSubtitle => 'Download Subtitles';
 
   @override
@@ -3168,6 +3180,45 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get reviewReminderSavedBody1 =>
+      'Time to review your saved sentences and words';
+
+  @override
+  String get reviewReminderSavedBody2 =>
+      'Listen to your saved sentences once more to lock them in';
+
+  @override
+  String get reviewReminderSavedBody3 => 'A few sentences in spare time add up';
+
+  @override
+  String get reviewReminderSavedBody4 =>
+      'Your saved sentences are waiting for you';
+
+  @override
+  String get reviewReminderSavedBody5 =>
+      'Repetition is how it sticks. Let\'s review';
+
+  @override
+  String get reviewReminderSavedBody6 =>
+      'Listen a few more times and your saved sentences become yours';
+
+  @override
+  String get reviewReminderSavedBody7 =>
+      'Spaced repetition is the key to memory. Let\'s do a round';
+
+  @override
+  String get reviewReminderSavedBody8 =>
+      'Hear a familiar sentence again and you\'ll notice something new';
+
+  @override
+  String get reviewReminderSavedBody9 =>
+      'Saved items need review, or they\'ll fade';
+
+  @override
+  String get reviewReminderSavedBody10 =>
+      'Listening builds over time. Review your saved sentences';
+
+  @override
   String get stageBlindListen => 'Listen without subtitles';
 
   @override
@@ -3781,9 +3832,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get importList => 'Import List';
-
-  @override
   String filesSelected(int count) {
     return '$count files selected';
   }
@@ -3844,13 +3892,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goToSettings => 'Go to Settings';
 
   @override
-  String get dictionaryDownloading => 'Downloading dictionary...';
-
-  @override
-  String get dictionaryDownloadFailed => 'Dictionary download failed';
-
-  @override
-  String get dictionaryNotDownloaded => 'Dictionary not yet downloaded';
+  String get dictionaryLookupFailed =>
+      'Lookup failed. Check your network and try again';
 
   @override
   String dictionaryBaseFormHint(String lemma) {
@@ -3865,10 +3908,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mediaPreparingHint => 'Downloading audio and subtitles…';
-
-  @override
-  String get mediaWaitingOtherDownload =>
-      'Another download is in progress. This one will start automatically.';
 
   @override
   String get guideNext => 'Next';
@@ -4494,6 +4533,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Highlight each word as it is spoken in the original audio';
 
   @override
+  String get resumeFromSentenceStartTitle => 'Replay from Sentence Start';
+
+  @override
+  String get resumeFromSentenceStartEnabledDescription =>
+      'When replaying the current sentence, playback will start from its beginning';
+
+  @override
+  String get resumeFromSentenceStartDisabledDescription =>
+      'When replaying the current sentence, playback will resume from where you paused';
+
+  @override
   String get silenceThreshold => 'Silence Threshold';
 
   @override
@@ -4971,9 +5021,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get baiduNetdiskImporting => 'Importing...';
-
-  @override
   String baiduNetdiskImportingFile(String name) {
     return 'Importing $name...';
   }
@@ -5021,6 +5068,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get audioDownloadInProgress => 'Downloading';
+
+  @override
+  String get audioQueued => 'Queued';
+
+  @override
+  String get baiduImportedToLibrary => 'Imported to library';
+
+  @override
+  String baiduImportedToCollections(String names) {
+    return 'Imported to: $names';
+  }
+
+  @override
+  String get baiduImportDuplicate => 'Already exists';
+
+  @override
+  String get baiduSubtitleUnmatched => 'No matching audio file';
+
+  @override
+  String get baiduDisconnectActiveTitle => 'Imports in progress';
+
+  @override
+  String baiduDisconnectActiveMessage(int count) {
+    return '$count file(s) are downloading or queued. Disconnecting will cancel them.';
+  }
+
+  @override
+  String get mediaQueued => 'Queued...';
 
   @override
   String get audioImportComplete => 'Import complete';
@@ -5175,6 +5250,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Natural, smooth sound. Needs a model download; recommended for mid-range devices.';
 
   @override
+  String get ttsEngineEdge => 'Edge TTS';
+
+  @override
+  String get ttsEngineEdgeDescription =>
+      'Uses Microsoft Neural voices for natural speech. Requires an internet connection.';
+
+  @override
+  String get edgeTtsUnavailableTitle => 'Edge Online Voice unavailable';
+
+  @override
+  String get edgeTtsUnavailableNetworkMessage =>
+      'You\'re offline. Edge Online Voice needs an internet connection. Check your network and try again, or choose another speech engine in Settings.';
+
+  @override
+  String get edgeTtsUnavailableServiceMessage =>
+      'Edge Online Voice is temporarily unavailable. You can choose another speech engine in Settings.';
+
+  @override
+  String get edgeTtsUnavailableDismiss => 'OK';
+
+  @override
   String get ttsModel => 'Model';
 
   @override
@@ -5314,7 +5410,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dictionaryAdFilterTitle => 'Block ads in web dictionaries';
 
   @override
-  String get dictSourceLocal => 'Local Dictionary';
+  String get dictSourceLocal => 'Basic Dictionary';
 
   @override
   String get dictSourceAi => 'AI Dictionary';
@@ -5613,37 +5709,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pronunciationPlay => 'Play pronunciation';
-
-  @override
-  String get pronunciationStandard => 'Pronunciation';
-
-  @override
-  String get pronunciationAdjective => 'Adjective';
-
-  @override
-  String get pronunciationNoun => 'Noun';
-
-  @override
-  String get pronunciationNounAdjective => 'Noun / adjective';
-
-  @override
-  String get pronunciationVerb => 'Verb';
-
-  @override
-  String get pronunciationPastTense => 'Past tense';
-
-  @override
-  String get pronunciationPresentTense => 'Present tense';
-
-  @override
-  String get pronunciationInterjection => 'Interjection';
-
-  @override
-  String get pronunciationLibrary => 'Offline Word Pronunciation';
-
-  @override
-  String get pronunciationLibraryDescription =>
-      'Pre-recorded word audio for dictionary lookups';
 
   @override
   String get redownload => 'Download again';

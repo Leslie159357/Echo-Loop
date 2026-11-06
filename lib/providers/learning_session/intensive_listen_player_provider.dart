@@ -30,6 +30,7 @@ import '../intensive_annotation/intensive_annotation_state.dart';
 import '../intensive_listen_prefs_provider.dart';
 import '../learning_progress_provider.dart';
 import '../learning_settings_provider.dart';
+import '../settings_provider.dart';
 import 'countdown_controller.dart';
 import 'learning_session_provider.dart';
 import 'intensive_listen_playback_driver.dart';
@@ -357,7 +358,12 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
           sentence != null &&
           position >= sentence.startTime &&
           position < sentence.endTime) {
-        _annotationResumePosition = position;
+        final resumeFromSentenceStart = ref
+            .read(appSettingsProvider)
+            .resumeFromSentenceStartEnabled;
+        _annotationResumePosition = resumeFromSentenceStart
+            ? sentence.startTime
+            : position;
         _annotationResumePlayCount = state.currentPlayCount;
       }
       _cleanupAnnotationSession();
@@ -371,7 +377,12 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
     if (sentence != null &&
         position >= sentence.startTime &&
         position < sentence.endTime) {
-      _blindResumePosition = position;
+      final resumeFromSentenceStart = ref
+          .read(appSettingsProvider)
+          .resumeFromSentenceStartEnabled;
+      _blindResumePosition = resumeFromSentenceStart
+          ? sentence.startTime
+          : position;
     }
     _blindEngine.enterWaitingForUser();
     state = state.copyWith(
@@ -535,8 +546,14 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       return;
     }
 
+    // 讲解会话正在播放句子（含主播放重听）时，只登记「播完后等待」，不改播放态；
+    // 否则 isPlaying 会先被置 false，而底层句子仍在播放，按钮图标与声音不一致。
     final phase = state.annotationState!.phase;
-    if (phase is ReplayingWithSubtitle) {
+    final isAnnotationSentencePlaying =
+        state.isPlaying &&
+        _annotationSentencePlaybackSessionId != null &&
+        _annotationSentencePlaybackSessionId == _annotationSessionId;
+    if (phase is ReplayingWithSubtitle || isAnnotationSentencePlaying) {
       _annotationWaitAfterCurrentPlayback = true;
       AppLogger.log('IntensiveAnnotation', '-> WaitingForUser (after replay)');
       return;
@@ -546,6 +563,21 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
       _setAnnotationPhase(const WaitingAnnotationUser());
       return;
     }
+    _setAnnotationPhase(const WaitingAnnotationUser());
+  }
+
+  /// 点击意群 badge 时调用：立即停止句子播放，让位给意群试听。
+  ///
+  /// 与 [onAnnotationUserInteraction] 不同，这里不能「播完后再等待」：意群区间会
+  /// 抢占同一音频引擎，句子根本播不完，等待标志会残留到下一次播放。
+  void interruptAnnotationForSenseGroup() {
+    if (state.annotationState == null) return;
+    if (state.annotationState?.phase is WaitingAnnotationPageTransition) {
+      return;
+    }
+
+    stopSenseGroupPlayback();
+    _cleanupAnnotationSession();
     _setAnnotationPhase(const WaitingAnnotationUser());
   }
 
@@ -1325,7 +1357,7 @@ class IntensiveListenPlayer extends _$IntensiveListenPlayer {
 
     unawaited(
       ref
-          .read(learningProgressNotifierProvider.notifier)
+          .read(learningProgressProvider.notifier)
           .saveIntensiveListenSentenceIndex(
             itemId,
             state.currentSentenceIndex,

@@ -1,6 +1,6 @@
 /// 语音合成（TTS）设置页。
 ///
-/// 合成引擎（平台 TTS / Echo Loop）+ 口音（美音 / 英音）；选中 Echo Loop 时在
+/// 合成引擎（Edge 在线 / 平台 TTS / Echo Loop）+ 口音（美音 / 英音）；选中 Echo Loop 时在
 /// 「Echo Loop TTS」归属标题下用一张卡集中显示其专属子设置（模型下载状态 + 音色）。
 /// 音色按业界惯例收成单行（当前值 + 展开），点开用底部弹层选择，避免多音色平铺撑长
 /// 页面。切换立即生效（写 SP → 协调器热重配）。
@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
-import '../providers/pronunciation/pronunciation_providers.dart';
 import '../providers/tts/kokoro_model_provider.dart';
 import '../providers/tts/piper_model_provider.dart';
 import '../providers/tts/tts_controller_provider.dart';
@@ -21,6 +20,7 @@ import '../providers/tts/tts_model_installation_provider.dart';
 import '../providers/tts/tts_settings_provider.dart';
 import '../services/tts/kokoro_model_manager.dart'
     show AsrModelDownloadStatus, KokoroModelVariant;
+import '../services/tts/edge_voices.dart';
 import '../services/tts/kokoro_voices.dart';
 import '../services/tts/piper_model_catalog.dart';
 import '../services/tts/tts_engine.dart';
@@ -118,9 +118,10 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
       unawaited(controller.prewarmVoicePreviews());
     } else if (settings.engine == TtsEngineKind.piper) {
       unawaited(controller.prewarmActivePiperVoice());
-    } else {
+    } else if (settings.engine == TtsEngineKind.platform) {
       unawaited(controller.prewarmAccentPreviews());
     }
+    // Edge 不预热试听：每个音色一次网络请求，进页批量请求得不偿失，点击时按需合成。
   }
 
   @override
@@ -143,6 +144,7 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
     final settings = ref.watch(ttsSettingsProvider);
     final isEchoLoop = settings.engine == TtsEngineKind.kokoro;
     final isPiper = settings.engine == TtsEngineKind.piper;
+    final isEdge = settings.engine == TtsEngineKind.edge;
     final showPlatformEngine = showPlatformTtsEngine(Platform.isAndroid);
     // 任一已下载模型（Advanced/Kokoro 变体 或 Balanced/Piper 音色）即提供管理入口
     //（删除回收空间），不限当前引擎。
@@ -180,55 +182,180 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
               ),
             ),
 
-            // 德语专属 Fish Audio 神经发音人选择
-            _SectionLabel(text: '德语发音人 (Fish Audio 神经语音)'),
+            // 合成引擎
+            _SectionLabel(text: l10n.ttsEngine),
             Card(
-              child: Column(
-                children: [
-                  for (var i = 0; i < kGermanVoices.length; i++) ...[
-                    RadioListTile<String>(
-                      title: Text(kGermanVoices[i].name),
+              child: RadioGroup<TtsEngineKind>(
+                groupValue: settings.engine,
+                onChanged: _onEngineChanged,
+                child: Column(
+                  children: [
+                    RadioListTile<TtsEngineKind>(
+                      title: Row(
+                        children: [
+                          Flexible(child: Text(l10n.ttsEngineEdge)),
+                          const SizedBox(width: 8),
+                          _RecommendedBadge(
+                            text: l10n.ttsModelRecommended,
+                            theme: theme,
+                          ),
+                        ],
+                      ),
                       subtitle: Text(
-                        kGermanVoices[i].description,
+                        l10n.ttsEngineEdgeDescription,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
-                      value: kGermanVoices[i].id,
-                      groupValue: settings.fishTtsVoice,
-                      selected: settings.fishTtsVoice == kGermanVoices[i].id,
-                      onChanged: (val) {
-                        if (val != null) {
-                          ref.read(ttsSettingsProvider.notifier).setFishTtsVoice(val);
-                          ref.read(ttsControllerProvider.notifier).previewFishVoice(val);
-                        }
-                      },
-                      secondary: IconButton(
-                        icon: const Icon(Icons.volume_up_rounded),
-                        tooltip: '试听发音',
-                        onPressed: () {
-                          final voiceId = kGermanVoices[i].id;
-                          ref.read(ttsSettingsProvider.notifier).setFishTtsVoice(voiceId);
-                          ref.read(ttsControllerProvider.notifier).previewFishVoice(voiceId);
-                        },
-                      ),
+                      value: TtsEngineKind.edge,
+                      selected: isEdge,
                     ),
-                    if (i < kGermanVoices.length - 1)
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    if (showPlatformEngine) ...[
+                      RadioListTile<TtsEngineKind>(
+                        title: Text(platformSpeechEngineName(l10n)),
+                        subtitle: Text(
+                          l10n.ttsEnginePlatformDescription,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                        value: TtsEngineKind.platform,
+                        selected: settings.engine == TtsEngineKind.platform,
+                      ),
                       const Divider(height: 1, indent: 16, endIndent: 16),
+                    ],
+                    RadioListTile<TtsEngineKind>(
+                      title: Text(l10n.ttsEnginePiper),
+                      subtitle: Text(
+                        l10n.ttsEnginePiperDescription,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                      value: TtsEngineKind.piper,
+                      selected: settings.engine == TtsEngineKind.piper,
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    RadioListTile<TtsEngineKind>(
+                      title: Text(l10n.ttsEngineEchoLoop),
+                      subtitle: Text(
+                        l10n.ttsEngineEchoLoopDescription,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                      value: TtsEngineKind.kokoro,
+                      selected: settings.engine == TtsEngineKind.kokoro,
+                    ),
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s),
-              child: Text(
-                '发音已直连自建 Fish Audio 德语真声网关，免下载本地模型，点击喇叭即可即时发音。',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 ),
               ),
             ),
+
+            if (isEchoLoop) ...[
+              // Echo Loop（自然/Kokoro）专属：归属标题 + 一张卡（模型 + 音色单行）。
+              // 不显示独立口音——音色名已自带口音，选音色即定口音（见 _VoiceDisclosure）。
+              const SizedBox(height: AppSpacing.m),
+              _SectionLabel(text: l10n.ttsEngineEchoLoop),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    _ModelPicker(l10n: l10n, theme: theme),
+                    if (ready) ...[
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      _VoiceDisclosure(l10n: l10n),
+                    ],
+                  ],
+                ),
+              ),
+            ] else if (isEdge) ...[
+              // Edge 在线：音色列表（无下载），点击即选中并试听；残留本地模型仍可清理。
+              const SizedBox(height: AppSpacing.m),
+              _SectionLabel(text: l10n.ttsEngineEdge),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: _EdgeVoiceList(l10n: l10n),
+              ),
+              if (anyDownloaded) ...[
+                const SizedBox(height: AppSpacing.m),
+                _ModelStorageRow(l10n: l10n),
+              ],
+            ] else if (isPiper) ...[
+              // Piper（平衡）专属：归属标题 + 音色列表（每音色一个独立模型，
+              // 行内显示各自下载状态，点击就绪音色即试听、点未下载音色即下载）。
+              const SizedBox(height: AppSpacing.m),
+              _SectionLabel(text: l10n.ttsEnginePiper),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: _PiperVoiceList(l10n: l10n),
+              ),
+            ] else ...[
+              // 德语专化：Fish Audio 自建网关音色（平台引擎走自建 TTS 时生效）。
+              const SizedBox(height: AppSpacing.m),
+              _SectionLabel(text: '德语发音人 (Fish Audio)'),
+              Card(
+                child: RadioGroup<String>(
+                  groupValue: settings.fishTtsVoice,
+                  onChanged: (v) {
+                    if (v != null) {
+                      ref
+                          .read(ttsSettingsProvider.notifier)
+                          .setFishTtsVoice(v);
+                    }
+                  },
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < kGermanVoices.length; i++) ...[
+                        if (i > 0)
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        RadioListTile<String>(
+                          title: Text(kGermanVoices[i].name),
+                          subtitle: Text(
+                            kGermanVoices[i].description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.7),
+                            ),
+                          ),
+                          value: kGermanVoices[i].id,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // 平台 TTS：无具名音色，仅显示口音（美/英，决定系统音色语言）。
+              // 点击口音即选中并试听该口音（进页已后台预热，多数秒播）。
+              const SizedBox(height: AppSpacing.m),
+              // 提示弱化显示在「口音」分组标题后：部分机型/系统语音不区分美/英音。
+              _SectionLabel(text: l10n.ttsAccent, hint: l10n.ttsAccentHint),
+              Card(
+                child: Column(
+                  children: [
+                    _AccentPreviewRow(accent: TtsAccent.us, l10n: l10n),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    _AccentPreviewRow(accent: TtsAccent.uk, l10n: l10n),
+                  ],
+                ),
+              ),
+
+              // 本地仍有残留模型（非当前引擎、未在使用）：收成一行存储清理入口，
+              // 不再平铺两张模型卡（避免在「平台 TTS」下误读为可选设置）。
+              if (anyDownloaded) ...[
+                const SizedBox(height: AppSpacing.m),
+                _ModelStorageRow(l10n: l10n),
+              ],
+            ],
           ],
         ),
       ),
@@ -255,7 +382,7 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
       final voiceId = ref.read(ttsSettingsProvider).activePiperVoice;
       ref.read(piperModelProvider.notifier).ensureDownloaded(voiceId);
       ref.read(ttsControllerProvider.notifier).prewarmActivePiperVoice();
-    } else {
+    } else if (value == TtsEngineKind.platform) {
       // 切回平台 TTS：后台预热两个口音试听片段（模型仍在本地则由下方常驻
       //「删除模型」入口回收，不再弹窗）。
       ref.read(ttsControllerProvider.notifier).prewarmAccentPreviews();
@@ -809,6 +936,113 @@ class _AccentPreviewRow extends ConsumerWidget {
   void _onTap(WidgetRef ref) {
     ref.read(ttsSettingsProvider.notifier).setAccent(accent);
     ref.read(ttsControllerProvider.notifier).previewAccent(accent);
+  }
+}
+
+/// Edge 音色列表：按「美音 / 英音」分组列出精选音色，行内直接选择 + 试听。
+///
+/// 在线音色无需下载，故不收进底部弹层，也无下载状态列。
+class _EdgeVoiceList extends ConsumerWidget {
+  const _EdgeVoiceList({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    Widget groupLabel(String label) => Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.m,
+        AppSpacing.m,
+        AppSpacing.m,
+        AppSpacing.xs,
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        groupLabel(l10n.ttsAccentUs),
+        for (final v in edgeVoicesForAccent(TtsAccent.us))
+          _EdgeVoiceRow(voice: v, l10n: l10n),
+        groupLabel(l10n.ttsAccentUk),
+        for (final v in edgeVoicesForAccent(TtsAccent.uk))
+          _EdgeVoiceRow(voice: v, l10n: l10n),
+      ],
+    );
+  }
+}
+
+/// Edge 单个音色行：单选指示 + 名称 + 性别，点击即选中（口音 + 音色）并试听。
+///
+/// 选中项再次点击也会重播（同 [_VoicePreviewRow]）。
+class _EdgeVoiceRow extends ConsumerWidget {
+  const _EdgeVoiceRow({required this.voice, required this.l10n});
+
+  final EdgeVoice voice;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final selectedId = ref.watch(
+      ttsSettingsProvider.select((s) => s.activeEdgeVoice),
+    );
+    final isPlaying =
+        ref.watch(ttsControllerProvider.select((s) => s.speakingKey)) ==
+        ttsVoicePreviewKey(voice.id);
+
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+      leading: Radio<String>(
+        value: voice.id,
+        // ignore: deprecated_member_use
+        groupValue: selectedId,
+        // ignore: deprecated_member_use
+        onChanged: (_) => _onTap(ref),
+      ),
+      title: Text(
+        voice.displayName,
+        style: theme.textTheme.titleSmall,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isPlaying) ...[
+            Icon(Icons.volume_up, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            voice.isFemale ? l10n.ttsVoiceFemale : l10n.ttsVoiceMale,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: voice.isFemale
+                  ? AppTheme.femaleVoiceColor
+                  : AppTheme.maleVoiceColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+      onTap: () => _onTap(ref),
+    );
+  }
+
+  void _onTap(WidgetRef ref) {
+    final notifier = ref.read(ttsSettingsProvider.notifier);
+    notifier.setAccent(voice.accent);
+    notifier.setEdgeVoice(voice.accent, voice.id);
+    ref.read(ttsControllerProvider.notifier).previewEdgeVoice(voice);
   }
 }
 

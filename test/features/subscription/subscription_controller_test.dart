@@ -17,9 +17,13 @@ import 'package:echo_loop/config/client_distribution.dart';
 import 'package:echo_loop/features/subscription/state/entitlement_state.dart';
 import 'package:echo_loop/services/entitlement_signal_interceptor.dart';
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:flutter_riverpod/legacy.dart';
+
+import '../../helpers/mock_providers.dart';
 
 class _MockDio extends Mock implements Dio {}
 
@@ -323,7 +327,7 @@ void main() {
     PaddleBillingRepository? paddleRepository,
   }) {
     final container = ProviderContainer(
-      overrides: [
+      overrides: dedupeOverrides([
         entitlementRepositoryProvider.overrideWithValue(repo),
         entitlementCacheProvider.overrideWithValue(cache),
         purchaseServiceProvider.overrideWithValue(
@@ -335,7 +339,7 @@ void main() {
           (ref) => ref.watch(testIdentityProvider),
         ),
         subscriptionPaymentChannelProvider.overrideWithValue(paymentChannel),
-      ],
+      ]),
     );
     addTearDown(container.dispose);
     container.read(testIdentityProvider.notifier).state = identity;
@@ -379,7 +383,7 @@ void main() {
         cache: FakeEntitlementCache(),
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -401,7 +405,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.web,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final state = container.read(subscriptionControllerProvider);
@@ -420,7 +424,7 @@ void main() {
         repo: FakeEntitlementRepository((_) async => proEntitlement),
         cache: cache,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final state = container.read(subscriptionControllerProvider);
@@ -436,7 +440,7 @@ void main() {
       final repo = FakeEntitlementRepository((_) async => proEntitlement);
       final cache = FakeEntitlementCache();
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           entitlementRepositoryProvider.overrideWithValue(repo),
           entitlementCacheProvider.overrideWithValue(cache),
           purchaseServiceProvider.overrideWithValue(FakePurchaseService()),
@@ -446,13 +450,13 @@ void main() {
           subscriptionPaymentChannelProvider.overrideWithValue(
             ClientPaymentChannel.web,
           ),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
       container.read(testIdentityProvider.notifier).state =
           SubscriptionIdentity.pending;
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       expect(
@@ -493,7 +497,7 @@ void main() {
           repo: repo,
           cache: FakeEntitlementCache(),
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         async.flushMicrotasks();
 
         expect(
@@ -552,7 +556,7 @@ void main() {
         final controller = container.read(
           subscriptionControllerProvider.notifier,
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         async.flushMicrotasks();
 
         async.elapse(const Duration(minutes: 5));
@@ -597,7 +601,7 @@ void main() {
           repo: repo,
           cache: FakeEntitlementCache(),
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         async.flushMicrotasks();
 
         async.elapse(const Duration(days: 30));
@@ -620,7 +624,7 @@ void main() {
         cache: cache,
         purchases: FakePurchaseService()..currentError = Exception('offline'),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final state = container.read(subscriptionControllerProvider);
@@ -637,7 +641,7 @@ void main() {
         repo: FakeEntitlementRepository((_) async => Entitlement.free),
         cache: cache,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       expect(
@@ -657,7 +661,7 @@ void main() {
         cache: cache,
         purchases: FakePurchaseService()..currentError = Exception('offline'),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       expect(
@@ -677,7 +681,7 @@ void main() {
         cache: cache,
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -697,6 +701,48 @@ void main() {
     });
   });
 
+  testWidgets('登出发生在页面构建期间 → 仍清权益、清缓存并解绑购买身份', (tester) async {
+    final cache = FakeEntitlementCache();
+    final purchases = FakePurchaseService();
+    final container = makeContainer(
+      identity: signedIn,
+      repo: FakeEntitlementRepository((_) async => proEntitlement),
+      cache: cache,
+      purchases: purchases,
+    );
+    container.listen(subscriptionControllerProvider, (_, __) {});
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    expect(
+      container.read(subscriptionControllerProvider).status,
+      EntitlementStatus.premium,
+    );
+
+    // 页面 watch 身份：登出时身份重算发生在 build 中，触发 controller 监听。
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: Consumer(
+          builder: (context, ref, _) {
+            ref.watch(subscriptionIdentityProvider);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    container.read(testIdentityProvider.notifier).state =
+        SubscriptionIdentity.anonymous;
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+
+    expect(
+      container.read(subscriptionControllerProvider).status,
+      EntitlementStatus.free,
+    );
+    expect(purchases.identifyCalls, contains(null));
+    expect(cache.clears, greaterThanOrEqualTo(1));
+  });
+
   test('登出时 RC 解绑未完成 → 本地立即清权益与缓存', () async {
     await withClock(Clock.fixed(now), () async {
       final cache = FakeEntitlementCache();
@@ -708,7 +754,7 @@ void main() {
         cache: cache,
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -742,7 +788,7 @@ void main() {
         cache: cache,
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -773,7 +819,7 @@ void main() {
         cache: FakeEntitlementCache(),
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -818,7 +864,7 @@ void main() {
           ),
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -849,7 +895,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -876,7 +922,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       expect(repo.calls, contains('u1'));
@@ -902,7 +948,7 @@ void main() {
         paymentChannel: ClientPaymentChannel.appleStore,
       );
 
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       // identify 尚未完成时，不能抢先读取旧匿名 / 旧账号的权益。
@@ -940,7 +986,7 @@ void main() {
         paymentChannel: ClientPaymentChannel.appleStore,
       );
 
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final state = container.read(subscriptionControllerProvider);
@@ -971,7 +1017,7 @@ void main() {
       final controller = container.read(
         subscriptionControllerProvider.notifier,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final refreshFuture = controller.refresh();
@@ -1016,7 +1062,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       await container.read(subscriptionControllerProvider.notifier).restore();
@@ -1048,7 +1094,7 @@ void main() {
           ..restoreOriginalAppUserId = 'u1',
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       await container.read(subscriptionControllerProvider.notifier).restore();
@@ -1137,7 +1183,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.web,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       await container.read(subscriptionControllerProvider.notifier).restore();
@@ -1182,7 +1228,7 @@ void main() {
         paymentChannel: ClientPaymentChannel.appleStore,
         paddleRepository: PaddleBillingRepository.withDio(dio),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final uri = await container
@@ -1217,7 +1263,7 @@ void main() {
         purchases: FakePurchaseService()..currentResult = appleEntitlement,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       await expectLater(
@@ -1292,7 +1338,7 @@ void main() {
         cache: FakeEntitlementCache(),
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       // fireImmediately 令 build 即以当前已登录身份触发 ensureIdentified(logIn + appUserID 核对)。
@@ -1309,7 +1355,7 @@ void main() {
         cache: FakeEntitlementCache(),
         purchases: purchases,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       // 匿名→匿名无变化，_onIdentityChanged 提前 return，不应调 logOut(null)。
@@ -1336,7 +1382,7 @@ void main() {
           cache: cache,
           paymentChannel: ClientPaymentChannel.appleStore,
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         await pumpEventQueue();
 
         final state = container.read(subscriptionControllerProvider);
@@ -1355,7 +1401,7 @@ void main() {
         cache: cache,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final state = container.read(subscriptionControllerProvider);
@@ -1376,7 +1422,7 @@ void main() {
           purchases: purchases,
           paymentChannel: ClientPaymentChannel.appleStore,
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         await pumpEventQueue();
 
         await container.read(subscriptionControllerProvider.notifier).restore();
@@ -1407,7 +1453,7 @@ void main() {
           purchases: FakePurchaseService()..purchaseResult = proEntitlement,
           paymentChannel: ClientPaymentChannel.appleStore,
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         async.flushMicrotasks();
 
         unawaited(
@@ -1445,7 +1491,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       // identify 故障不得阻断纯后端刷新：restore 命中 premium 即返回。
@@ -1472,7 +1518,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       // 不应把 receiptInUse 冒泡为「购买失败」。
@@ -1504,7 +1550,7 @@ void main() {
         purchases: purchases,
         paymentChannel: ClientPaymentChannel.appleStore,
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
 
       final purchaseFuture = container
@@ -1541,7 +1587,7 @@ void main() {
           purchases: FakePurchaseService()..purchaseResult = proEntitlement,
           paymentChannel: ClientPaymentChannel.appleStore,
         );
-        container.read(subscriptionControllerProvider);
+        container.listen(subscriptionControllerProvider, (_, __) {});
         async.flushMicrotasks();
 
         var completed = false;
@@ -1577,7 +1623,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -1616,7 +1662,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -1663,7 +1709,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       final onSignal = EntitlementSignalInterceptor.onSignal!;
 
@@ -1692,7 +1738,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(repo.calls.length, 1);
 
@@ -1725,7 +1771,7 @@ void main() {
         repo: repo,
         cache: FakeEntitlementCache(),
       );
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -1759,7 +1805,7 @@ void main() {
         cache: FakeEntitlementCache(),
       );
       // u1 对账挂起。
-      container.read(subscriptionControllerProvider);
+      container.listen(subscriptionControllerProvider, (_, __) {});
       await pumpEventQueue();
       expect(
         container.read(subscriptionControllerProvider).status,
@@ -1796,7 +1842,7 @@ void main() {
       repo: repo,
       cache: FakeEntitlementCache(),
     );
-    container.read(subscriptionControllerProvider);
+    container.listen(subscriptionControllerProvider, (_, __) {});
     await pumpEventQueue();
     repo.calls.clear();
     repo.forceCalls.clear();
@@ -1827,7 +1873,7 @@ void main() {
       repo: repo,
       cache: FakeEntitlementCache(),
     );
-    container.read(subscriptionControllerProvider);
+    container.listen(subscriptionControllerProvider, (_, __) {});
     await pumpEventQueue();
     repo.calls.clear();
     repo.forceCalls.clear();

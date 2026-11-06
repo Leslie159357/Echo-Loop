@@ -6,6 +6,9 @@
 library;
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../utils/provider_override_error.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
@@ -32,7 +35,8 @@ class ReadingTextPrefsNotifier extends _$ReadingTextPrefsNotifier {
     final generation = ++_loadGeneration;
     try {
       return _readFromPrefs(ref.read(sharedPreferencesProvider));
-    } on UnimplementedError {
+    } catch (error) {
+      if (!isProviderNotOverriddenError(error)) rethrow;
       _loadAsync(generation);
       return const ReadingTextPrefs();
     }
@@ -44,7 +48,7 @@ class ReadingTextPrefsNotifier extends _$ReadingTextPrefsNotifier {
 
   Future<void> _loadAsync(int generation) async {
     final prefs = await SharedPreferences.getInstance();
-    if (generation != _loadGeneration) return;
+    if (generation != _loadGeneration || !ref.mounted) return;
     state = _readFromPrefs(prefs);
   }
 

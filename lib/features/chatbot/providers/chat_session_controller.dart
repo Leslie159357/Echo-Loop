@@ -7,9 +7,9 @@ library;
 
 import 'package:clock/clock.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../../analytics/analytics_providers.dart';
@@ -150,7 +150,7 @@ class ChatSessionController extends _$ChatSessionController {
     }
     final accessToken = ref
         .read(supabaseSessionProvider)
-        .valueOrNull
+        .value
         ?.accessToken;
     if (accessToken == null || accessToken.isEmpty) {
       state = state.copyWith(gate: ChatGate.authRequired);
@@ -195,12 +195,11 @@ class ChatSessionController extends _$ChatSessionController {
     final client = ref.read(chatApiClientProvider);
     // 追问引用指令按界面语言本地化：界面语言未显式设置时回退到系统 locale 匹配，
     // 使指令语言与用户界面一致（英文指令会让模型倾向英文回答）。
-    final uiLocale =
-        ref.read(appSettingsProvider.select((s) => s.locale)) ??
-        matchUiLocale(WidgetsBinding.instance.platformDispatcher.locale);
-    final followUpInstruction = lookupAppLocalizations(
-      uiLocale,
-    ).chatFollowUpInstruction;
+    final uiLocale = resolveUiLocale(
+      ref.read(appSettingsProvider.select((s) => s.locale)),
+    );
+    final followUpInstruction = lookupAppLocalizations(uiLocale)
+        .chatFollowUpInstruction;
 
     try {
       await for (final frame in client.streamChat(

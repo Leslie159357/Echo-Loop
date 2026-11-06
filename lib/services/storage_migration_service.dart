@@ -4,8 +4,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'resource_install_manifest.dart';
-import 'dictionary/dictionary_catalog.dart';
-import 'pronunciation/pronunciation_catalog.dart';
 import 'app_logger.dart';
 
 /// Documents → Application Support 一次性数据迁移。
@@ -58,101 +56,33 @@ Future<void> migrateTtsModelInstallLayout() async {
   }
 }
 
-/// 将旧版按需下载的词典文件迁移到统一资源安装布局。
+/// 删除旧版离线词典（约 12MB，`en_<母语>/dict.sqlite`）及更早版本遗留的 `dict.db`。
 ///
-/// 迁移只处理本地文件，不联网；重命名和写入清单分别可安全重试。
-Future<void> migrateLegacyDictionaryInstallLayout() async {
+/// 查词已改为在线 API + 本地缓存表，旧词典文件无人读取。删除失败只记日志，不阻塞启动。
+Future<void> removeOfflineDictionaryLibrary() async {
   final support = await getApplicationSupportDirectory();
+  final legacyDatabase = File(p.join(support.path, 'dict.db'));
   final root = Directory(p.join(support.path, 'dictionary'));
-  for (final spec in dictionarySpecs.values) {
-    final directory = Directory(p.join(root.path, 'en_${spec.nativeLanguage}'));
-    if (!await directory.exists()) continue;
-
-    final legacy = File(p.join(directory.path, 'dict.db'));
-    final database = File(p.join(directory.path, 'dict.sqlite'));
-    if (await legacy.exists() && !await database.exists()) {
-      await legacy.rename(database.path);
-      AppLogger.log(
-        'DictMigration',
-        'renamed legacy dictionary lang=${spec.nativeLanguage} '
-            'from=dict.db to=dict.sqlite',
-      );
-    }
-    if (!await database.exists()) {
-      AppLogger.log(
-        'DictMigration',
-        'no dictionary to migrate lang=${spec.nativeLanguage}',
-      );
-      continue;
-    }
-
-    ResourceInstallManifest? manifest;
-    try {
-      manifest = await readResourceInstallManifest(directory);
-    } on FormatException {
-      manifest = null;
-    }
-    if (manifest == null || manifest.resourceId != spec.resourceId) {
-      final stat = await database.stat();
-      await writeResourceInstallManifest(
-        directory,
-        resourceId: spec.resourceId,
-        installAt: stat.changed,
-      );
-      AppLogger.log(
-        'DictMigration',
-        'install manifest migrated lang=${spec.nativeLanguage} '
-            'resource=${spec.resourceId}',
-      );
-    } else {
-      AppLogger.log(
-        'DictMigration',
-        'dictionary install already current lang=${spec.nativeLanguage} '
-            'resource=${spec.resourceId}',
-      );
-    }
+  try {
+    if (await legacyDatabase.exists()) await legacyDatabase.delete();
+    if (await root.exists()) await root.delete(recursive: true);
+    AppLogger.log('DictMigration', '已删除旧版离线词典');
+  } on FileSystemException catch (error) {
+    AppLogger.log('DictMigration', '删除旧版离线词典失败：$error');
   }
 }
 
-/// 将旧版 `pronunciation/v2` 发音包迁移到固定的 pronunciation 目录。
-Future<void> migrateLegacyPronunciationInstallLayout() async {
+/// 删除旧版离线单词发音库（约 41MB）。单词发音已改为按需从 CDN 获取并缓存，
+/// 旧目录不再有读取方，删除失败只记日志，不阻塞启动。
+Future<void> removeOfflinePronunciationLibrary() async {
   final support = await getApplicationSupportDirectory();
   final root = Directory(p.join(support.path, 'pronunciation'));
-  final legacy = Directory(p.join(root.path, 'v2'));
-  if (await legacy.exists()) {
-    await _migrateDirectoryContents(legacy, root);
-    if (await legacy.exists()) await legacy.delete(recursive: true);
-  }
-  final database = File(p.join(root.path, 'pronunciation.sqlite'));
-  if (!await database.exists()) return;
-
-  ResourceInstallManifest? manifest;
+  if (!await root.exists()) return;
   try {
-    manifest = await readResourceInstallManifest(root);
-  } on FormatException {
-    manifest = null;
-  }
-  if (manifest?.resourceId == pronunciationSpec.resourceId) return;
-  final stat = await database.stat();
-  await writeResourceInstallManifest(
-    root,
-    resourceId: pronunciationSpec.resourceId,
-    installAt: stat.changed,
-  );
-}
-
-Future<void> _migrateDirectoryContents(
-  Directory source,
-  Directory target,
-) async {
-  await target.create(recursive: true);
-  await for (final entity in source.list(followLinks: false)) {
-    final destination = p.join(target.path, p.basename(entity.path));
-    if (FileSystemEntity.typeSync(destination) !=
-        FileSystemEntityType.notFound) {
-      continue;
-    }
-    await entity.rename(destination);
+    await root.delete(recursive: true);
+    AppLogger.log('PronunciationMigration', '已删除旧版离线单词发音库');
+  } on FileSystemException catch (error) {
+    AppLogger.log('PronunciationMigration', '删除旧版离线单词发音库失败：$error');
   }
 }
 

@@ -13,19 +13,15 @@ import 'package:echo_loop/providers/dictionary/dictionary_registry.dart';
 import 'package:echo_loop/providers/dictionary/lookup_controller.dart';
 import 'package:echo_loop/providers/dictionary/visible_sources_provider.dart';
 import 'package:echo_loop/services/dictionary/dictionary_source.dart';
-import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/dictionary/dictionary_panel_host.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/mock_providers.dart';
-
-class _MockDictionaryService extends Mock implements DictionaryService {}
 
 /// 按词返回固定本地释义的 fake 源
 class _WordedLocalSource implements DictionarySource {
@@ -54,20 +50,15 @@ class _WordedLocalSource implements DictionarySource {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late DictionaryService oldInstance;
   late SharedPreferences prefs;
   late _WordedLocalSource local;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     prefs = await SharedPreferences.getInstance();
-    final mock = _MockDictionaryService();
-    when(() => mock.isAvailable).thenReturn(true);
-    oldInstance = DictionaryService.replaceInstance(mock);
     local = _WordedLocalSource();
   });
 
-  tearDown(() => DictionaryService.replaceInstance(oldInstance));
 
   final hostKey = GlobalKey<DictionaryPanelHostState>();
 
@@ -78,9 +69,9 @@ void main() {
   var bodyTaps = 0;
 
   Widget wrap({bool handleBackButton = false}) => ProviderScope(
-    overrides: [
+    overrides: dedupeOverrides([
       analyticsOverride(),
-      dictionaryOverride(),
+      dictionaryServiceOverride(),
       sharedPreferencesProvider.overrideWithValue(prefs),
       dictionarySourcesProvider.overrideWithValue([local]),
       dictionarySourcesByIdProvider.overrideWithValue({'local': local}),
@@ -91,7 +82,7 @@ void main() {
           targetLanguage: 'zh-CN',
         ),
       ),
-    ],
+    ]),
     child: MaterialApp(
       locale: const Locale('en'),
       supportedLocales: const [Locale('en'), Locale('zh')],
@@ -273,9 +264,9 @@ void main() {
     addTearDown(pageController.dispose);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
+        overrides: dedupeOverrides([
           analyticsOverride(),
-          dictionaryOverride(),
+          dictionaryServiceOverride(),
           sharedPreferencesProvider.overrideWithValue(prefs),
           dictionarySourcesProvider.overrideWithValue([local]),
           dictionarySourcesByIdProvider.overrideWithValue({'local': local}),
@@ -286,7 +277,7 @@ void main() {
               targetLanguage: 'zh-CN',
             ),
           ),
-        ],
+        ]),
         child: MaterialApp(
           locale: const Locale('en'),
           supportedLocales: const [Locale('en'), Locale('zh')],

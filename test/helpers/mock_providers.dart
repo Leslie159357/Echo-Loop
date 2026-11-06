@@ -6,7 +6,6 @@
 /// 公共 Notifier/DAO 替身已抽到 shared/，本文件仅保留 widget test 特化部分。
 library;
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:echo_loop/analytics/analytics_channel.dart';
@@ -24,7 +23,8 @@ import 'package:echo_loop/models/audio_engine_state.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/providers/app_update_provider.dart';
-import 'package:echo_loop/providers/dictionary_provider.dart';
+import 'package:echo_loop/providers/dictionary/dictionary_registry.dart';
+import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/providers/notification_permission_provider.dart';
 import 'package:echo_loop/providers/offline_asr_settings_provider.dart';
 import 'package:echo_loop/providers/retell_recording_controller_provider.dart';
@@ -38,6 +38,7 @@ import 'package:echo_loop/services/notification_permission_service.dart';
 import 'package:echo_loop/services/study_time_service.dart';
 import 'package:echo_loop/services/transcription_api_client.dart';
 import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
+import 'package:flutter_riverpod/misc.dart';
 
 // 共享替身
 import 'shared/fake_notifiers.dart';
@@ -275,27 +276,20 @@ Override notificationPermissionOverride() {
 
 // ========== 词典 ==========
 
-/// 返回 dictionaryProvider 的 override
-Override dictionaryOverride({
-  DictionaryStatus status = DictionaryStatus.downloaded,
-  String nativeLanguage = 'zh',
-}) {
-  return dictionaryProvider.overrideWith(
-    () => _TestDictionary(
-      DictionaryState(status: status, nativeLanguage: nativeLanguage),
-    ),
+class MockDictionaryService extends Mock implements DictionaryService {}
+
+/// 返回在线词典服务的 override。未传入 [service] 时使用默认桩：所有词均未收录。
+Override dictionaryServiceOverride([DictionaryService? service]) {
+  return dictionaryServiceProvider.overrideWithValue(
+    service ?? _unmatchedDictionaryService(),
   );
 }
 
-class _TestDictionary extends Dictionary {
-  final DictionaryState _initialState;
-  _TestDictionary(this._initialState);
-
-  @override
-  DictionaryState build() => _initialState;
-
-  @override
-  Future<void> retryDownload() async {}
+DictionaryService _unmatchedDictionaryService() {
+  final service = MockDictionaryService();
+  when(() => service.lookup(any())).thenAnswer((_) async => null);
+  when(() => service.lookupAll(any())).thenAnswer((_) async => const {});
+  return service;
 }
 
 // ========== 学习设置 ==========
@@ -313,6 +307,7 @@ List<Override> learningSettingsOverrides({
   bool retellAutoPlaybackPromptShown = false,
   bool pdfExportReminderShown = false,
   bool unclearAutoSaveReminderShown = false,
+  bool podcastTranscriptReminderShown = false,
   SharedPreferences? prefs,
 }) {
   return [
@@ -330,6 +325,7 @@ List<Override> learningSettingsOverrides({
         retellAutoPlaybackPromptShown: retellAutoPlaybackPromptShown,
         pdfExportReminderShown: pdfExportReminderShown,
         unclearAutoSaveReminderShown: unclearAutoSaveReminderShown,
+        podcastTranscriptReminderShown: podcastTranscriptReminderShown,
       ),
     ),
     if (prefs != null) sharedPreferencesProvider.overrideWithValue(prefs),
@@ -616,4 +612,17 @@ SentenceAiCacheDao createStubbedMockCacheDao() {
   final mock = _StubbedMockCacheDao();
   when(() => mock.getByHash(any(), any())).thenAnswer((_) async => null);
   return mock;
+}
+
+/// 合并 override 列表：同一 provider 只保留最后一次 override。
+///
+/// Riverpod 2 允许同一容器内重复 override（后者生效）；Riverpod 3 对此直接断言。
+/// 测试辅助函数（如 [studyTimeOverrides]）与用例显式 override 可能重复，这里按
+/// 「后写覆盖先写」保持原有语义。
+List<Override> dedupeOverrides(Iterable<Override> overrides) {
+  final byOrigin = <Object, Override>{};
+  for (final override in overrides) {
+    byOrigin[override.origin] = override;
+  }
+  return byOrigin.values.toList();
 }

@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:echo_loop/services/resource_install_manifest.dart';
 import 'package:echo_loop/services/storage_migration_service.dart';
 
 void main() {
@@ -135,58 +134,51 @@ void main() {
     });
   });
 
-  test('迁移旧 dict.db 为 dict.sqlite 并写入统一安装清单', () async {
+  test('删除旧版离线词典目录与遗留 dict.db', () async {
     final directory = Directory(
       p.join(fakeAppSupportDir.path, 'dictionary', 'en_zh-CN'),
     )..createSync(recursive: true);
-    final legacy = File(p.join(directory.path, 'dict.db'))
-      ..writeAsBytesSync(List<int>.filled(8, 1));
+    File(p.join(directory.path, 'dict.sqlite')).writeAsBytesSync([1, 2]);
+    File(p.join(fakeAppSupportDir.path, 'dict.db')).writeAsBytesSync([3]);
 
-    await migrateLegacyDictionaryInstallLayout();
+    await removeOfflineDictionaryLibrary();
 
-    expect(legacy.existsSync(), isFalse);
-    final database = File(p.join(directory.path, 'dict.sqlite'));
-    expect(database.existsSync(), isTrue);
-    final manifest = await readResourceInstallManifest(directory);
-    expect(manifest?.resourceId, 'dict-en_zh-CN-v1');
-    expect(manifest?.resourceSize, 8);
-  });
-
-  test('词典迁移可重复执行且不会覆盖已有 dict.sqlite', () async {
-    final directory = Directory(
-      p.join(fakeAppSupportDir.path, 'dictionary', 'en_zh-TW'),
-    )..createSync(recursive: true);
-    final database = File(p.join(directory.path, 'dict.sqlite'))
-      ..writeAsBytesSync(List<int>.filled(4, 2));
-
-    await migrateLegacyDictionaryInstallLayout();
-    await migrateLegacyDictionaryInstallLayout();
-
-    expect(database.readAsBytesSync(), List<int>.filled(4, 2));
-    final manifest = await readResourceInstallManifest(directory);
-    expect(manifest?.resourceId, 'dict-en_zh-TW-v1');
-  });
-
-  test('迁移旧 pronunciation/v2 到固定目录并统一安装清单', () async {
-    final legacy = Directory(
-      p.join(fakeAppSupportDir.path, 'pronunciation', 'v2'),
-    )..createSync(recursive: true);
-    File(p.join(legacy.path, 'pronunciation.sqlite')).writeAsBytesSync([1, 2]);
-    Directory(p.join(legacy.path, 'audio')).createSync();
-    File(
-      p.join(legacy.path, 'install.json'),
-    ).writeAsStringSync('{"version":"v2","sha256":"old"}');
-
-    await migrateLegacyPronunciationInstallLayout();
-
-    final root = Directory(p.join(fakeAppSupportDir.path, 'pronunciation'));
-    expect(legacy.existsSync(), isFalse);
     expect(
-      File(p.join(root.path, 'pronunciation.sqlite')).existsSync(),
-      isTrue,
+      Directory(p.join(fakeAppSupportDir.path, 'dictionary')).existsSync(),
+      isFalse,
     );
-    final manifest = await readResourceInstallManifest(root);
-    expect(manifest?.resourceId, 'pronunciation-v2');
-    expect(manifest?.resourceSize, greaterThan(2));
+    expect(
+      File(p.join(fakeAppSupportDir.path, 'dict.db')).existsSync(),
+      isFalse,
+    );
+  });
+
+  test('旧离线词典不存在时删除为空操作', () async {
+    await removeOfflineDictionaryLibrary();
+
+    expect(
+      Directory(p.join(fakeAppSupportDir.path, 'dictionary')).existsSync(),
+      isFalse,
+    );
+  });
+
+  test('删除旧版离线单词发音库目录', () async {
+    final root = Directory(p.join(fakeAppSupportDir.path, 'pronunciation'))
+      ..createSync(recursive: true);
+    File(p.join(root.path, 'pronunciation.sqlite')).writeAsBytesSync([1, 2]);
+    Directory(p.join(root.path, 'audio')).createSync();
+
+    await removeOfflinePronunciationLibrary();
+
+    expect(root.existsSync(), isFalse);
+  });
+
+  test('旧发音库不存在时删除为空操作', () async {
+    await removeOfflinePronunciationLibrary();
+
+    expect(
+      Directory(p.join(fakeAppSupportDir.path, 'pronunciation')).existsSync(),
+      isFalse,
+    );
   });
 }

@@ -27,12 +27,14 @@ import '../providers/audio_library_provider.dart';
 import '../providers/favorite_sentence_lifecycle_provider.dart';
 import '../providers/audio_sentences_provider.dart';
 import '../providers/learning_progress_provider.dart';
+import '../providers/learning_settings_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/transcription_task_provider.dart';
 import '../providers/local_transcription_task_provider.dart';
 import '../providers/local_transcription_model_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
+import 'dialogs/podcast_transcript_reminder_dialog.dart';
 import '../l10n/app_localizations.dart';
 import '../router/app_router.dart';
 import '../services/app_logger.dart';
@@ -136,10 +138,6 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     _autoMergeShortSentences = ref
         .read(appSettingsProvider)
         .aiTranscriptionAutoMergeEnabled;
-    // 播客已提供字幕地址时默认选中「下载播客字幕」（免费且更快）
-    if (_hasPodcastTranscript(widget.audioItem)) {
-      _selectedAction = _SubtitleAction.podcastDownload;
-    }
     // 打开弹窗时异步清除之前的失败/空结果状态
     final taskState = ref.read(
       transcriptionTaskManagerProvider,
@@ -1715,6 +1713,17 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       if (!confirmed || !mounted) return;
     }
 
+    // 播客字幕质量参差不齐：首次下载前提醒一次，之后不再打扰。
+    if (!ref.read(learningSettingsProvider).podcastTranscriptReminderShown) {
+      if (!context.mounted) return;
+      await showPodcastTranscriptReminderDialog(context);
+      if (!mounted) return;
+      await ref
+          .read(learningSettingsProvider.notifier)
+          .markPodcastTranscriptReminderShown();
+      if (!mounted) return;
+    }
+
     setState(() {
       _isDownloadingSubtitle = true;
       _error = null;
@@ -2120,9 +2129,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
       title:
           l10n?.transcriptionSignInRequiredTitle ??
           'Sign in to use AI transcription',
-      message:
-          l10n?.transcriptionSignInRequiredMessage ??
-          'AI transcription uses the cloud transcription service. Sign in to transcribe audio with AI.',
+      message: l10n?.transcriptionSignInRequiredMessage ?? 'AI transcription uses the cloud transcription service. Sign in to transcribe audio with AI.',
     );
   }
 
@@ -2211,7 +2218,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     // 学习进度基于句子索引/段落索引，字幕删除后这些索引失去参照；
     // 若不重置，重新导入字幕时旧断点会指向错位的句子。
     await ref
-        .read(learningProgressNotifierProvider.notifier)
+        .read(learningProgressProvider.notifier)
         .resetProgress(audioItem.id);
 
     // 7. 清除 listeningPracticeProvider 中缓存的句子数据

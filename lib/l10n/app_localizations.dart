@@ -4148,6 +4148,24 @@ abstract class AppLocalizations {
   /// **'Provided by the podcast, no transcription needed'**
   String get downloadPodcastSubtitleSubtitle;
 
+  /// No description provided for @podcastTranscriptReminderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Podcast subtitles may be inaccurate'**
+  String get podcastTranscriptReminderTitle;
+
+  /// No description provided for @podcastTranscriptReminderMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtitles provided by podcasts vary in quality and may not match the audio. If they are inaccurate, you can use cloud transcription to generate subtitles instead.'**
+  String get podcastTranscriptReminderMessage;
+
+  /// No description provided for @podcastTranscriptReminderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get podcastTranscriptReminderConfirm;
+
   /// No description provided for @downloadSubtitle.
   ///
   /// In en, this message translates to:
@@ -5564,6 +5582,66 @@ abstract class AppLocalizations {
   /// **'{audioName} · Review round {round} is ready'**
   String reviewReminderBody(String audioName, int round);
 
+  /// No description provided for @reviewReminderSavedBody1.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to review your saved sentences and words'**
+  String get reviewReminderSavedBody1;
+
+  /// No description provided for @reviewReminderSavedBody2.
+  ///
+  /// In en, this message translates to:
+  /// **'Listen to your saved sentences once more to lock them in'**
+  String get reviewReminderSavedBody2;
+
+  /// No description provided for @reviewReminderSavedBody3.
+  ///
+  /// In en, this message translates to:
+  /// **'A few sentences in spare time add up'**
+  String get reviewReminderSavedBody3;
+
+  /// No description provided for @reviewReminderSavedBody4.
+  ///
+  /// In en, this message translates to:
+  /// **'Your saved sentences are waiting for you'**
+  String get reviewReminderSavedBody4;
+
+  /// No description provided for @reviewReminderSavedBody5.
+  ///
+  /// In en, this message translates to:
+  /// **'Repetition is how it sticks. Let\'s review'**
+  String get reviewReminderSavedBody5;
+
+  /// No description provided for @reviewReminderSavedBody6.
+  ///
+  /// In en, this message translates to:
+  /// **'Listen a few more times and your saved sentences become yours'**
+  String get reviewReminderSavedBody6;
+
+  /// No description provided for @reviewReminderSavedBody7.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaced repetition is the key to memory. Let\'s do a round'**
+  String get reviewReminderSavedBody7;
+
+  /// No description provided for @reviewReminderSavedBody8.
+  ///
+  /// In en, this message translates to:
+  /// **'Hear a familiar sentence again and you\'ll notice something new'**
+  String get reviewReminderSavedBody8;
+
+  /// No description provided for @reviewReminderSavedBody9.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved items need review, or they\'ll fade'**
+  String get reviewReminderSavedBody9;
+
+  /// No description provided for @reviewReminderSavedBody10.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening builds over time. Review your saved sentences'**
+  String get reviewReminderSavedBody10;
+
   /// No description provided for @stageBlindListen.
   ///
   /// In en, this message translates to:
@@ -6632,12 +6710,6 @@ abstract class AppLocalizations {
   /// **'{count} items'**
   String recycleBinItemCount(int count);
 
-  /// No description provided for @importList.
-  ///
-  /// In en, this message translates to:
-  /// **'Import List'**
-  String get importList;
-
   /// No description provided for @filesSelected.
   ///
   /// In en, this message translates to:
@@ -6716,23 +6788,11 @@ abstract class AppLocalizations {
   /// **'Go to Settings'**
   String get goToSettings;
 
-  /// No description provided for @dictionaryDownloading.
+  /// No description provided for @dictionaryLookupFailed.
   ///
   /// In en, this message translates to:
-  /// **'Downloading dictionary...'**
-  String get dictionaryDownloading;
-
-  /// No description provided for @dictionaryDownloadFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Dictionary download failed'**
-  String get dictionaryDownloadFailed;
-
-  /// No description provided for @dictionaryNotDownloaded.
-  ///
-  /// In en, this message translates to:
-  /// **'Dictionary not yet downloaded'**
-  String get dictionaryNotDownloaded;
+  /// **'Lookup failed. Check your network and try again'**
+  String get dictionaryLookupFailed;
 
   /// No description provided for @dictionaryBaseFormHint.
   ///
@@ -6757,12 +6817,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloading audio and subtitles…'**
   String get mediaPreparingHint;
-
-  /// No description provided for @mediaWaitingOtherDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'Another download is in progress. This one will start automatically.'**
-  String get mediaWaitingOtherDownload;
 
   /// No description provided for @guideNext.
   ///
@@ -7862,6 +7916,24 @@ abstract class AppLocalizations {
   /// **'Highlight each word as it is spoken in the original audio'**
   String get wordHighlightDescription;
 
+  /// No description provided for @resumeFromSentenceStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay from Sentence Start'**
+  String get resumeFromSentenceStartTitle;
+
+  /// No description provided for @resumeFromSentenceStartEnabledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When replaying the current sentence, playback will start from its beginning'**
+  String get resumeFromSentenceStartEnabledDescription;
+
+  /// No description provided for @resumeFromSentenceStartDisabledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When replaying the current sentence, playback will resume from where you paused'**
+  String get resumeFromSentenceStartDisabledDescription;
+
   /// No description provided for @silenceThreshold.
   ///
   /// In en, this message translates to:
@@ -8720,12 +8792,6 @@ abstract class AppLocalizations {
   /// **'Import ({audioCount, plural, =0{} =1{1 item} other{{audioCount} items}}{subtitleCount, plural, =0{} =1{, 1 subtitle} other{, {subtitleCount} subtitles}})'**
   String importAudioAndSubtitleCount(int audioCount, int subtitleCount);
 
-  /// No description provided for @baiduNetdiskImporting.
-  ///
-  /// In en, this message translates to:
-  /// **'Importing...'**
-  String get baiduNetdiskImporting;
-
   /// No description provided for @baiduNetdiskImportingFile.
   ///
   /// In en, this message translates to:
@@ -8809,6 +8875,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloading'**
   String get audioDownloadInProgress;
+
+  /// No description provided for @audioQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get audioQueued;
+
+  /// No description provided for @baiduImportedToLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported to library'**
+  String get baiduImportedToLibrary;
+
+  /// No description provided for @baiduImportedToCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported to: {names}'**
+  String baiduImportedToCollections(String names);
+
+  /// No description provided for @baiduImportDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Already exists'**
+  String get baiduImportDuplicate;
+
+  /// No description provided for @baiduSubtitleUnmatched.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching audio file'**
+  String get baiduSubtitleUnmatched;
+
+  /// No description provided for @baiduDisconnectActiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Imports in progress'**
+  String get baiduDisconnectActiveTitle;
+
+  /// No description provided for @baiduDisconnectActiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} file(s) are downloading or queued. Disconnecting will cancel them.'**
+  String baiduDisconnectActiveMessage(int count);
+
+  /// No description provided for @mediaQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued...'**
+  String get mediaQueued;
 
   /// No description provided for @audioImportComplete.
   ///
@@ -9080,6 +9194,42 @@ abstract class AppLocalizations {
   /// **'Natural, smooth sound. Needs a model download; recommended for mid-range devices.'**
   String get ttsEnginePiperDescription;
 
+  /// No description provided for @ttsEngineEdge.
+  ///
+  /// In en, this message translates to:
+  /// **'Edge TTS'**
+  String get ttsEngineEdge;
+
+  /// No description provided for @ttsEngineEdgeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Uses Microsoft Neural voices for natural speech. Requires an internet connection.'**
+  String get ttsEngineEdgeDescription;
+
+  /// No description provided for @edgeTtsUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edge Online Voice unavailable'**
+  String get edgeTtsUnavailableTitle;
+
+  /// No description provided for @edgeTtsUnavailableNetworkMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re offline. Edge Online Voice needs an internet connection. Check your network and try again, or choose another speech engine in Settings.'**
+  String get edgeTtsUnavailableNetworkMessage;
+
+  /// No description provided for @edgeTtsUnavailableServiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Edge Online Voice is temporarily unavailable. You can choose another speech engine in Settings.'**
+  String get edgeTtsUnavailableServiceMessage;
+
+  /// No description provided for @edgeTtsUnavailableDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get edgeTtsUnavailableDismiss;
+
   /// No description provided for @ttsModel.
   ///
   /// In en, this message translates to:
@@ -9317,7 +9467,7 @@ abstract class AppLocalizations {
   /// No description provided for @dictSourceLocal.
   ///
   /// In en, this message translates to:
-  /// **'Local Dictionary'**
+  /// **'Basic Dictionary'**
   String get dictSourceLocal;
 
   /// No description provided for @dictSourceAi.
@@ -9889,66 +10039,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Play pronunciation'**
   String get pronunciationPlay;
-
-  /// No description provided for @pronunciationStandard.
-  ///
-  /// In en, this message translates to:
-  /// **'Pronunciation'**
-  String get pronunciationStandard;
-
-  /// No description provided for @pronunciationAdjective.
-  ///
-  /// In en, this message translates to:
-  /// **'Adjective'**
-  String get pronunciationAdjective;
-
-  /// No description provided for @pronunciationNoun.
-  ///
-  /// In en, this message translates to:
-  /// **'Noun'**
-  String get pronunciationNoun;
-
-  /// No description provided for @pronunciationNounAdjective.
-  ///
-  /// In en, this message translates to:
-  /// **'Noun / adjective'**
-  String get pronunciationNounAdjective;
-
-  /// No description provided for @pronunciationVerb.
-  ///
-  /// In en, this message translates to:
-  /// **'Verb'**
-  String get pronunciationVerb;
-
-  /// No description provided for @pronunciationPastTense.
-  ///
-  /// In en, this message translates to:
-  /// **'Past tense'**
-  String get pronunciationPastTense;
-
-  /// No description provided for @pronunciationPresentTense.
-  ///
-  /// In en, this message translates to:
-  /// **'Present tense'**
-  String get pronunciationPresentTense;
-
-  /// No description provided for @pronunciationInterjection.
-  ///
-  /// In en, this message translates to:
-  /// **'Interjection'**
-  String get pronunciationInterjection;
-
-  /// No description provided for @pronunciationLibrary.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline Word Pronunciation'**
-  String get pronunciationLibrary;
-
-  /// No description provided for @pronunciationLibraryDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Pre-recorded word audio for dictionary lookups'**
-  String get pronunciationLibraryDescription;
 
   /// No description provided for @redownload.
   ///
