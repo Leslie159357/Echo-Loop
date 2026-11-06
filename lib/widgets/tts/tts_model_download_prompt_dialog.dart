@@ -90,7 +90,6 @@ Future<bool> ensureTtsModelReadyForPlayback(
 }) async {
   return true;
 }
-}
 
 /// 只检查指定 TTS 配置是否可用，不弹窗、不下载，供后台 warmup 使用。
 Future<bool> isTtsModelReadyForConfig(
