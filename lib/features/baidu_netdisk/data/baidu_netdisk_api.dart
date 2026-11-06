@@ -26,10 +26,10 @@ abstract interface class BaiduNetdiskApi {
     int limit = 100,
   });
 
-  /// 获取文件下载 dlink。
-  Future<BaiduDownloadLink> fetchDownloadLink({
+  /// 批量获取文件下载 dlink。返回的 map 只包含百度给出有效链接的文件，缺失的 fs_id 不在其中。
+  Future<Map<int, BaiduDownloadLink>> fetchDownloadLinks({
     required String accessToken,
-    required int fsId,
+    required List<int> fsIds,
   });
 
   /// 下载 dlink 到本地文件。
@@ -37,6 +37,8 @@ abstract interface class BaiduNetdiskApi {
     required String accessToken,
     required String dlink,
     required String savePath,
+    required String displayName,
+    String? resourceKey,
     CancelToken? cancelToken,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
   });
@@ -50,6 +52,9 @@ abstract interface class BaiduNetdiskApi {
     onProgress,
   });
 }
+
+/// 百度网盘文件的资源身份。dlink 每次获取都不同，只能用文件 id。
+String baiduResourceKey(int fsId) => 'baidu:$fsId';
 
 /// 百度网盘批量下载中的单个文件请求。
 class BaiduNetdiskDownloadRequest {
@@ -173,35 +178,40 @@ class DefaultBaiduNetdiskApi implements BaiduNetdiskApi {
   }
 
   @override
-  Future<BaiduDownloadLink> fetchDownloadLink({
+  Future<Map<int, BaiduDownloadLink>> fetchDownloadLinks({
     required String accessToken,
-    required int fsId,
+    required List<int> fsIds,
   }) async {
-    final data = await _getJson(
-      _metadataDio,
-      '/rest/2.0/xpan/multimedia',
-      queryParameters: <String, Object?>{
-        'method': 'filemetas',
-        'access_token': accessToken,
-        'fsids': '[$fsId]',
-        'dlink': 1,
-      },
-    );
-    final list = data['list'];
-    if (list is! List || list.isEmpty || list.first is! Map) {
-      throw const BaiduNetdiskFileException(
-        kind: BaiduNetdiskFileErrorKind.notFound,
-        message: 'Baidu download link is unavailable.',
+    final links = <int, BaiduDownloadLink>{};
+    // filemetas 单次 fsids 数量有上限，超出时分块请求。
+    for (var start = 0; start < fsIds.length; start += _downloadLinkBatchSize) {
+      final chunk = fsIds.skip(start).take(_downloadLinkBatchSize);
+      final data = await _getJson(
+        _metadataDio,
+        '/rest/2.0/xpan/multimedia',
+        queryParameters: <String, Object?>{
+          'method': 'filemetas',
+          'access_token': accessToken,
+          'fsids': '[${chunk.join(',')}]',
+          'dlink': 1,
+        },
       );
+      final list = data['list'];
+      if (list is! List) {
+        throw const BaiduNetdiskFileException(
+          kind: BaiduNetdiskFileErrorKind.unknown,
+          message: 'Baidu filemetas response is missing file list.',
+        );
+      }
+      for (final item in list.whereType<Map>()) {
+        // 无法下载的文件会缺少或清空 dlink；单个文件异常不应让整批请求失败。
+        final dlink = item['dlink'];
+        if (dlink is! String || dlink.isEmpty) continue;
+        final link = BaiduDownloadLink.fromBaiduJson(item);
+        links[link.fsId] = link;
+      }
     }
-    final link = BaiduDownloadLink.fromBaiduJson(list.first as Map);
-    if (link.dlink.isEmpty) {
-      throw const BaiduNetdiskFileException(
-        kind: BaiduNetdiskFileErrorKind.notFound,
-        message: 'Baidu download link is empty.',
-      );
-    }
-    return link;
+    return links;
   }
 
   @override
@@ -209,6 +219,8 @@ class DefaultBaiduNetdiskApi implements BaiduNetdiskApi {
     required String accessToken,
     required String dlink,
     required String savePath,
+    required String displayName,
+    String? resourceKey,
     CancelToken? cancelToken,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
   }) async {
@@ -223,6 +235,8 @@ class DefaultBaiduNetdiskApi implements BaiduNetdiskApi {
       await _backgroundDownloader.download(
         uri: downloadUri,
         savePath: savePath,
+        displayName: displayName,
+        resourceKey: resourceKey,
         headers: const {'User-Agent': _baiduUserAgent},
         cancelToken: cancelToken,
         onProgress: onProgress,
@@ -248,6 +262,7 @@ class DefaultBaiduNetdiskApi implements BaiduNetdiskApi {
             id: request.id,
             uri: _downloadUri(request.dlink, accessToken),
             savePath: request.savePath,
+            resourceKey: baiduResourceKey(request.fsId),
             displayName: request.displayName,
             headers: const {'User-Agent': _baiduUserAgent},
           ),
@@ -425,3 +440,7 @@ class DefaultBaiduNetdiskApi implements BaiduNetdiskApi {
 }
 
 const _baiduUserAgent = 'pan.baidu.com';
+
+/// 单次 filemetas 请求最多携带的 fs_id 数量。
+/// 数值取自百度文件元信息接口的单次上限（未在本地实测），超过时需要调整。
+const _downloadLinkBatchSize = 100;

@@ -8,7 +8,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../models/audio_item.dart';
+import '../utils/file_size.dart';
 import '../utils/time_format.dart';
 import '../models/learning_progress.dart';
 import '../models/tag.dart';
@@ -114,9 +116,7 @@ class AudioListTile extends ConsumerWidget {
 
     // 精确订阅学习进度
     final progress = ref.watch(
-      learningProgressNotifierProvider.select(
-        (s) => s.progressMap[audioItem.id],
-      ),
+      learningProgressProvider.select((s) => s.progressMap[audioItem.id]),
     );
 
     // 全局上下文：精确订阅所属合集名称
@@ -133,10 +133,16 @@ class AudioListTile extends ConsumerWidget {
     );
     // 本项下载进度与计划页共用同一派生源（mediaDownloadSnapshotProvider）。
     // double? 语义：null 表示未在下载本项；非 null（含 -1 不定态）表示正在下载。
+    final bool downloadQueued = ref.watch(
+      mediaDownloadQueuedProvider(audioItem.id),
+    );
     final double? downloadProgress = ref.watch(
-      mediaDownloadSnapshotProvider(
-        audioItem.id,
-      ).select((snapshot) => snapshot?.progress),
+      mediaDownloadSnapshotProvider(audioItem.id)
+          .select((snapshot) => snapshot?.progress),
+    );
+    final double? downloadSpeed = ref.watch(
+      mediaDownloadSnapshotProvider(audioItem.id)
+          .select((snapshot) => snapshot?.speedBytesPerSecond),
     );
 
     return LayoutBuilder(
@@ -199,6 +205,8 @@ class AudioListTile extends ConsumerWidget {
                                   tagData,
                                   transcriptionTask,
                                   downloadProgress,
+                                  downloadQueued,
+                                  downloadSpeed,
                                   difficulty,
                                 ),
                               ],
@@ -335,6 +343,8 @@ class AudioListTile extends ConsumerWidget {
     List<Tag> tagData,
     TranscriptionTaskState? transcriptionTask,
     double? downloadProgress,
+    bool downloadQueued,
+    double? downloadSpeed,
     CommunityDifficulty? difficulty,
   ) {
     // 是否有进行中的转录任务
@@ -593,7 +603,13 @@ class AudioListTile extends ConsumerWidget {
                 ),
               ),
               if (downloadProgress != null)
-                _buildDownloadProgress(theme, l10n, downloadProgress),
+                _buildDownloadProgress(
+                  theme,
+                  l10n,
+                  downloadProgress,
+                  queued: downloadQueued,
+                  speedBytesPerSecond: downloadSpeed,
+                ),
             ],
           ),
         ],
@@ -607,13 +623,18 @@ class AudioListTile extends ConsumerWidget {
   Widget _buildDownloadProgress(
     ThemeData theme,
     AppLocalizations l10n,
-    double progress,
-  ) {
+    double progress, {
+    required bool queued,
+    double? speedBytesPerSecond,
+  }) {
     final value = progress < 0 ? null : progress.clamp(0.0, 1.0);
     final percent = value == null ? null : (value * 100).toStringAsFixed(0);
+    final speed = speedBytesPerSecond == null
+        ? ''
+        : ' · ${formatBytes(speedBytesPerSecond.round())}/s';
     return SizedBox(
       key: const Key('audio_list_tile_download_progress'),
-      width: 180,
+      width: 220,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -621,9 +642,10 @@ class AudioListTile extends ConsumerWidget {
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              percent == null
-                  ? l10n.audioDownloadInProgress
-                  : '${l10n.audioDownloadInProgress} $percent%',
+              queued
+                  ? l10n.audioQueued
+                  : '${l10n.audioDownloadInProgress}'
+                        '${percent == null ? '' : ' $percent%'}$speed',
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.primary,
@@ -730,9 +752,7 @@ class AudioListTile extends ConsumerWidget {
     required bool isDownloading,
   }) {
     final progressForMenu = ref.read(
-      learningProgressNotifierProvider.select(
-        (s) => s.progressMap[audioItem.id],
-      ),
+      learningProgressProvider.select((s) => s.progressMap[audioItem.id]),
     );
     final hasProgress = progressForMenu?.isStarted ?? false;
     final isPausedForMenu = progressForMenu?.isPaused ?? false;
@@ -892,11 +912,15 @@ class AudioListTile extends ConsumerWidget {
         onSelected: (value) {
           if (value == 'cancelDownload') {
             if (isPodcastEpisode) {
-              unawaited(
-                ref.read(podcastDownloadControllerProvider.notifier).cancel(),
-              );
+              ref
+                  .read(podcastDownloadControllerProvider.notifier)
+                  .cancel(audioItem.id);
             } else if (isCommunity) {
-              unawaited(ref.read(communityDownloadProvider.notifier).cancel());
+              unawaited(
+                ref
+                    .read(communityDownloadProvider.notifier)
+                    .cancel(audioItem.id),
+              );
             }
           } else if (value == 'togglePin') {
             ref.read(audioLibraryProvider.notifier).togglePin(audioItem.id);
@@ -1042,9 +1066,8 @@ class AudioListTile extends ConsumerWidget {
       }
     } on CommunitySubtitleUnavailable {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.noTranscript)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.noTranscript)));
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1083,7 +1106,7 @@ class AudioListTile extends ConsumerWidget {
     bool isPaused,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    final notifier = ref.read(learningProgressNotifierProvider.notifier);
+    final notifier = ref.read(learningProgressProvider.notifier);
 
     if (isPaused) {
       await notifier.resumeProgress(audioItem.id);
@@ -1141,7 +1164,7 @@ class AudioListTile extends ConsumerWidget {
 
     if (confirm == true) {
       await ref
-          .read(learningProgressNotifierProvider.notifier)
+          .read(learningProgressProvider.notifier)
           .resetProgress(audioItem.id);
       if (context.mounted) {
         ScaffoldMessenger.of(

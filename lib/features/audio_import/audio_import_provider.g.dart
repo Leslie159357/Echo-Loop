@@ -6,70 +6,200 @@ part of 'audio_import_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$audioImportServiceHash() =>
-    r'fa43b6fee47482637bb5576aa70601da4d83c2ab';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
 
-/// See also [audioImportService].
 @ProviderFor(audioImportService)
-final audioImportServiceProvider =
-    AutoDisposeProvider<AudioImportService>.internal(
-      audioImportService,
-      name: r'audioImportServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$audioImportServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
+final audioImportServiceProvider = AudioImportServiceProvider._();
+
+final class AudioImportServiceProvider
+    extends
+        $FunctionalProvider<
+          AudioImportService,
+          AudioImportService,
+          AudioImportService
+        >
+    with $Provider<AudioImportService> {
+  AudioImportServiceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'audioImportServiceProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$audioImportServiceHash();
+
+  @$internal
+  @override
+  $ProviderElement<AudioImportService> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  AudioImportService create(Ref ref) {
+    return audioImportService(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AudioImportService value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AudioImportService>(value),
     );
+  }
+}
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef AudioImportServiceRef = AutoDisposeProviderRef<AudioImportService>;
-String _$audioImportControllerHash() =>
-    r'89bb3214ffdd3585eb2361a753a6562cac7725de';
+String _$audioImportServiceHash() =>
+    r'e2f957e79a4bc80d64725177faa6e97b20c6faec';
 
-/// See also [AudioImportController].
 @ProviderFor(AudioImportController)
-final audioImportControllerProvider =
-    AutoDisposeNotifierProvider<
-      AudioImportController,
-      AudioImportState
-    >.internal(
-      AudioImportController.new,
-      name: r'audioImportControllerProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$audioImportControllerHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final audioImportControllerProvider = AudioImportControllerProvider._();
 
-typedef _$AudioImportController = AutoDisposeNotifier<AudioImportState>;
-String _$podcastDownloadControllerHash() =>
-    r'c834b3a7d27fe38f1ee513ca474534d7f86af38f';
+final class AudioImportControllerProvider
+    extends $NotifierProvider<AudioImportController, AudioImportState> {
+  AudioImportControllerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'audioImportControllerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$audioImportControllerHash();
+
+  @$internal
+  @override
+  AudioImportController create() => AudioImportController();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AudioImportState value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AudioImportState>(value),
+    );
+  }
+}
+
+String _$audioImportControllerHash() =>
+    r'17da01d2d262dc8a298c2049098c870441eb79f5';
+
+abstract class _$AudioImportController extends $Notifier<AudioImportState> {
+  AudioImportState build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AudioImportState, AudioImportState>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AudioImportState, AudioImportState>,
+              AudioImportState,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
 
 /// Podcast 单集懒下载控制器。
 ///
 /// 与 [AudioImportController]（从链接导入）**完全独立**：两条流程各自持有状态，
 /// 一方的下载失败不会污染另一方的 UI（避免播客下载失败后，打开「从链接导入」
 /// 误显下载失败提示）。复用同一套 [AudioImportState] 模型类。
-///
-/// Copied from [PodcastDownloadController].
-@ProviderFor(PodcastDownloadController)
-final podcastDownloadControllerProvider =
-    AutoDisposeNotifierProvider<
-      PodcastDownloadController,
-      AudioImportState
-    >.internal(
-      PodcastDownloadController.new,
-      name: r'podcastDownloadControllerProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$podcastDownloadControllerHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+// keepAlive：同 AudioImportController，离开页面后下载继续。
 
-typedef _$PodcastDownloadController = AutoDisposeNotifier<AudioImportState>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+@ProviderFor(PodcastDownloadController)
+final podcastDownloadControllerProvider = PodcastDownloadControllerProvider._();
+
+/// Podcast 单集懒下载控制器。
+///
+/// 与 [AudioImportController]（从链接导入）**完全独立**：两条流程各自持有状态，
+/// 一方的下载失败不会污染另一方的 UI（避免播客下载失败后，打开「从链接导入」
+/// 误显下载失败提示）。复用同一套 [AudioImportState] 模型类。
+// keepAlive：同 AudioImportController，离开页面后下载继续。
+final class PodcastDownloadControllerProvider
+    extends
+        $NotifierProvider<
+          PodcastDownloadController,
+          Map<String, AudioImportState>
+        > {
+  /// Podcast 单集懒下载控制器。
+  ///
+  /// 与 [AudioImportController]（从链接导入）**完全独立**：两条流程各自持有状态，
+  /// 一方的下载失败不会污染另一方的 UI（避免播客下载失败后，打开「从链接导入」
+  /// 误显下载失败提示）。复用同一套 [AudioImportState] 模型类。
+  // keepAlive：同 AudioImportController，离开页面后下载继续。
+  PodcastDownloadControllerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'podcastDownloadControllerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$podcastDownloadControllerHash();
+
+  @$internal
+  @override
+  PodcastDownloadController create() => PodcastDownloadController();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Map<String, AudioImportState> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Map<String, AudioImportState>>(
+        value,
+      ),
+    );
+  }
+}
+
+String _$podcastDownloadControllerHash() =>
+    r'62f2a02a4129f020df4baf5d42794befc0e8ab69';
+
+/// Podcast 单集懒下载控制器。
+///
+/// 与 [AudioImportController]（从链接导入）**完全独立**：两条流程各自持有状态，
+/// 一方的下载失败不会污染另一方的 UI（避免播客下载失败后，打开「从链接导入」
+/// 误显下载失败提示）。复用同一套 [AudioImportState] 模型类。
+// keepAlive：同 AudioImportController，离开页面后下载继续。
+
+abstract class _$PodcastDownloadController
+    extends $Notifier<Map<String, AudioImportState>> {
+  Map<String, AudioImportState> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref
+            as $Ref<
+              Map<String, AudioImportState>,
+              Map<String, AudioImportState>
+            >;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<
+                Map<String, AudioImportState>,
+                Map<String, AudioImportState>
+              >,
+              Map<String, AudioImportState>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

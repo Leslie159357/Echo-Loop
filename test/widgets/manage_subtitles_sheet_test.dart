@@ -15,12 +15,12 @@ import 'package:echo_loop/providers/tag_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
+import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/learning_session/learning_session_provider.dart';
 import 'package:echo_loop/providers/learning_session/blind_listen_player_provider.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/transcription_task_provider.dart';
 import 'package:echo_loop/providers/local_transcription_task_provider.dart';
-import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/features/subscription/models/premium_feature.dart';
 import 'package:echo_loop/features/subscription/models/ai_quota_rejection.dart';
 import 'package:echo_loop/features/subscription/services/free_allowance_policy.dart';
@@ -32,6 +32,7 @@ import 'package:echo_loop/features/auth/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/misc.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
@@ -64,6 +65,17 @@ class _FakePodcastTranscriptDownloader extends PodcastTranscriptDownloader {
     if (error case final e?) throw e;
     return text;
   }
+}
+
+/// 字幕选项卡片是否处于选中态（卡片为 InkWell，内含 radio 指示器图标）。
+bool _isOptionSelected(String title) {
+  final tile = find
+      .ancestor(of: find.text(title), matching: find.byType(InkWell))
+      .first;
+  return find
+      .descendant(of: tile, matching: find.byIcon(Icons.radio_button_checked))
+      .evaluate()
+      .isNotEmpty;
 }
 
 class _DenyAiAllowancePolicy implements FreeAllowancePolicy {
@@ -102,6 +114,10 @@ void main() {
       ),
       bool subscriptionPro = true,
       Future<TranscriptDecodeResult?> Function()? transcriptContentPicker,
+      // 默认视为已提醒过「播客字幕可能不准确」，避免提醒弹窗打断无关用例；
+      // 提醒相关用例显式传 false 并注入 prefs 以验证持久化。
+      bool podcastTranscriptReminderShown = true,
+      SharedPreferences? prefs,
       List<Override> extraOverrides = const [],
     }) {
       final libraryState = AudioLibraryState(audioItems: [audioItem]);
@@ -121,7 +137,7 @@ void main() {
             child: const Text('Open'),
           ),
         ),
-        overrides: [
+        overrides: dedupeOverrides([
           analyticsOverride(),
           appSettingsProvider.overrideWith(
             () => TestAppSettings(appSettingsState),
@@ -133,7 +149,7 @@ void main() {
           tagListProvider.overrideWith(() => TestTagList()),
           listeningPracticeProvider.overrideWith(() => TestListeningPractice()),
           audioEngineProvider.overrideWith(() => TestAudioEngine()),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             () => TestLearningProgressNotifier(
               progressState ?? const LearningProgressState(),
             ),
@@ -146,13 +162,17 @@ void main() {
           transcriptionApiClientProvider.overrideWith(
             (ref) => createTestTranscriptionApiClient(),
           ),
-          supabaseSessionProvider.overrideWith(
-            (ref) => Stream<Session?>.value(session),
+          supabaseSessionProvider.overrideWithValue(
+            AsyncData<Session?>(session),
           ),
           // 已登录用户视为已解锁（Pro），使转录机制测试不被额度闸拦截。
           subscriptionEntitlementOverride(pro: subscriptionPro),
+          ...learningSettingsOverrides(
+            podcastTranscriptReminderShown: podcastTranscriptReminderShown,
+            prefs: prefs,
+          ),
           ...extraOverrides,
-        ],
+        ]),
       );
     }
 
@@ -454,9 +474,8 @@ void main() {
       });
 
       testWidgets('AI 转录读取远程时长限制并在弹窗内显示错误提示', (tester) async {
-        final item = createTestAudioItem(
-          totalDuration: 2 * 60,
-        ).copyWith(transcriptSource: TranscriptSource.local);
+        final item = createTestAudioItem(totalDuration: 2 * 60)
+            .copyWith(transcriptSource: TranscriptSource.local);
         await tester.pumpWidget(
           buildSheet(
             item,
@@ -873,7 +892,19 @@ void main() {
         expect(find.text('Download Podcast Subtitles'), findsNothing);
       });
 
-      testWidgets('有字幕地址：默认选中并下载入库，成功后关闭弹窗', (tester) async {
+      testWidgets('有字幕地址：默认选中 AI 转录，播客字幕需用户主动选择', (tester) async {
+        final item = podcastItem(hasTranscript: false);
+        await tester.pumpWidget(buildSheet(item));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Download Podcast Subtitles'), findsOneWidget);
+        expect(_isOptionSelected('Download Podcast Subtitles'), isFalse);
+        expect(_isOptionSelected('Cloud Transcription'), isTrue);
+      });
+
+      testWidgets('选择播客字幕后下载入库，成功后关闭弹窗', (tester) async {
         final item = podcastItem(hasTranscript: false);
         final downloader = _FakePodcastTranscriptDownloader();
         final dao = TestAudioItemDao();
@@ -891,6 +922,8 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Download Podcast Subtitles'), findsOneWidget);
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.widgetWithText(FilledButton, 'Download Subtitles'),
         );
@@ -917,6 +950,8 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.widgetWithText(FilledButton, 'Download Subtitles'),
         );
@@ -947,6 +982,8 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.widgetWithText(FilledButton, 'Download Subtitles'),
         );
@@ -977,6 +1014,8 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.widgetWithText(FilledButton, 'Download Subtitles'),
         );
@@ -1013,6 +1052,8 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.widgetWithText(FilledButton, 'Download Subtitles'),
         );
@@ -1026,6 +1067,80 @@ void main() {
 
         await tester.pump(const Duration(seconds: 12));
         await tester.pumpAndSettle();
+      });
+
+      testWidgets('首次下载播客字幕：先弹一次性提醒，点知道了后才下载并记录已提醒', (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final item = podcastItem(hasTranscript: false);
+        final downloader = _FakePodcastTranscriptDownloader();
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            podcastTranscriptReminderShown: false,
+            prefs: prefs,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Podcast subtitles may be inaccurate'),
+          findsOneWidget,
+        );
+        expect(downloader.requestedUrls, isEmpty);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Got it'));
+        await tester.pumpAndSettle();
+
+        expect(downloader.requestedUrls, [podcastUrl]);
+        expect(dao.transcriptSrtStore[item.id], contains('Hello podcast'));
+        expect(
+          prefs.getBool(LearningSettingsKeys.podcastTranscriptReminderShown),
+          isTrue,
+        );
+        expect(find.byType(ManageSubtitlesSheet), findsNothing);
+      });
+
+      testWidgets('已提醒过：再次下载播客字幕不再弹窗', (tester) async {
+        final item = podcastItem(hasTranscript: false);
+        final downloader = _FakePodcastTranscriptDownloader();
+        final dao = TestAudioItemDao();
+        await tester.pumpWidget(
+          buildSheet(
+            item,
+            extraOverrides: [
+              podcastTranscriptDownloaderProvider.overrideWithValue(downloader),
+              audioItemDaoProvider.overrideWithValue(dao),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Download Podcast Subtitles'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Download Subtitles'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Podcast subtitles may be inaccurate'), findsNothing);
+        expect(downloader.requestedUrls, [podcastUrl]);
       });
     });
   });

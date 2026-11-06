@@ -392,7 +392,15 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     if (sentences.isNotEmpty &&
         snapshotPosition >= sentences.first.startTime &&
         snapshotPosition < sentences.last.endTime) {
-      _resumePosition = snapshotPosition;
+      final resumeFromSentenceStart = ref
+          .read(appSettingsProvider)
+          .resumeFromSentenceStartEnabled;
+      final pausedSentenceIndex = sentences.lastIndexWhere(
+        (sentence) => sentence.startTime <= snapshotPosition,
+      );
+      _resumePosition = resumeFromSentenceStart
+          ? sentences[pausedSentenceIndex].startTime
+          : snapshotPosition;
     }
     // 暂停：停保活 + 锁屏图标转暂停；保留回调槽，使锁屏播放可续播。
     _playback.setSessionActive(false);
@@ -815,7 +823,7 @@ class BlindListenPlayer extends _$BlindListenPlayer {
 
     unawaited(
       ref
-          .read(learningProgressNotifierProvider.notifier)
+          .read(learningProgressProvider.notifier)
           .saveBlindListenSentenceIndex(
             audioItemId,
             globalIdx,
@@ -1107,6 +1115,7 @@ class BlindListenPlayer extends _$BlindListenPlayer {
     _playback.setProgressFrozen(true);
 
     _countdown.start(duration).then((_) {
+      if (!ref.mounted) return;
       if (state.isPauseCountdown && runId == _countdownRunId) {
         _onPauseCountdownFinished();
       }

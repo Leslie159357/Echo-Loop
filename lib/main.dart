@@ -14,9 +14,7 @@ import 'database/app_database.dart';
 import 'database/providers.dart';
 import 'config/client_distribution.dart';
 import 'providers/package_info_provider.dart';
-import 'providers/dictionary_provider.dart';
 import 'providers/download_provider.dart';
-import 'providers/pronunciation/pronunciation_providers.dart';
 import 'providers/settings_provider.dart';
 import 'providers/startup_bootstrap_provider.dart';
 import 'router/app_router.dart';
@@ -167,6 +165,10 @@ void main() async {
   runApp(
     PostHogWidget(
       child: ProviderScope(
+        // Riverpod 3 默认对失败的 provider 指数退避重试（最多 10 次），会重复发起
+        // 网络 / 数据库请求。Riverpod 2 无此行为，错误由各 provider 自行处理，这里
+        // 关闭自动重试以保持原有语义。
+        retry: (_, _) => null,
         overrides: [
           analyticsServiceProvider.overrideWithValue(analyticsService),
           packageInfoProvider.overrideWithValue(packageInfo),
@@ -258,7 +260,7 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
         .listenManual<AsyncValue<UserRegionBootstrapResult>>(
           userRegionBootstrapProvider,
           (_, next) {
-            final result = next.valueOrNull;
+            final result = next.value;
             if (result == null) return;
             ref
                 .read(remoteConfigProvider.notifier)
@@ -316,11 +318,9 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
     _didStartLocalEffects = true;
     activeStartupTrace?.mark('main_navigation_released');
 
-    // 下载注册表和词典预热都可能访问文件系统，统一放到首帧后。
+    // 下载注册表和媒体预热都可能访问文件系统，统一放到首帧后。
     unawaited(startRegisteredDownloads(ref));
     _scheduleMediaKitPrewarm();
-    ref.read(dictionaryProvider);
-    ref.read(pronunciationLibraryProvider);
 
     final bridge = ref.read(notificationTapRouterBridgeProvider);
     _intentSubscription = bridge.intents.listen(_handleNotificationIntent);
@@ -371,32 +371,21 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
     // 重新读取 SDK 当前快照，再创建订阅 controller，避免 controller 首次构造时
     // 先按匿名身份发起一次无效权益对账。
     ref.invalidate(supabaseSessionProvider);
-    try {
-      // Supabase.initialize() 返回不代表 auth.currentSession 已完成恢复；
-      // 等待 provider 收到 initialSession，避免启动预热仍抢跑到匿名态。
-      await ref.read(supabaseSessionProvider.future);
-    } catch (error, stackTrace) {
-      AppLogger.log(
-        'AuthSession',
-        '等待 initialSession 失败，保留 pending 语义 error=$error stack=$stackTrace',
-      );
-    }
-    if (!mounted) return;
-    ref.read(subscriptionControllerProvider);
-    ref.read(subscriptionPlansProvider);
-    _authSessionSubscription = ref.listenManual<AsyncValue<Session?>>(
-      supabaseSessionProvider,
-      (previous, next) {
+    // 必须先由常驻监听持有 session provider 再等待首值，否则 Riverpod 3 暂停
+    // 无监听的 StreamProvider 会让等待永久挂起（详见 startSupabaseSessionTracking）。
+    final sessionTracking = startSupabaseSessionTracking(
+      ProviderScope.containerOf(context),
+      onChanged: (previous, next) {
         if (next.hasValue) {
           unawaited(
             ref
                 .read(onboardingSyncProvider)
-                .onSessionChanged(isSignedIn: next.valueOrNull != null),
+                .onSessionChanged(isSignedIn: next.value != null),
           );
           unawaited(
             ref
                 .read(userPreferencesSyncServiceProvider)
-                .onSessionChanged(next.valueOrNull?.user.id)
+                .onSessionChanged(next.value?.user.id)
                 .catchError((Object error, StackTrace stackTrace) {
                   AppLogger.log(
                     'UserPreferencesSync',
@@ -409,13 +398,26 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
           ref
               .read(authAnalyticsSyncProvider)
               .syncSessionChange(
-                previous: previous?.valueOrNull,
-                current: next.valueOrNull,
+                previous: previous?.value,
+                current: next.value,
               ),
         );
       },
-      fireImmediately: true,
     );
+    _authSessionSubscription = sessionTracking.subscription;
+    try {
+      // Supabase.initialize() 返回不代表 auth.currentSession 已完成恢复；
+      // 等待 provider 收到 initialSession，避免启动预热仍抢跑到匿名态。
+      await sessionTracking.initialSession;
+    } catch (error, stackTrace) {
+      AppLogger.log(
+        'AuthSession',
+        '等待 initialSession 失败，保留 pending 语义 error=$error stack=$stackTrace',
+      );
+    }
+    if (!mounted) return;
+    ref.read(subscriptionControllerProvider);
+    ref.read(subscriptionPlansProvider);
   }
 
   @override
@@ -448,7 +450,7 @@ class _EchoLoopAppState extends ConsumerState<EchoLoopApp>
         if (ref.read(localStartupProvider).hasValue) {
           _triggerCommunitySync();
         }
-        final session = ref.read(supabaseSessionProvider).valueOrNull;
+        final session = ref.read(supabaseSessionProvider).value;
         if (session != null) {
           unawaited(ref.read(onboardingSyncProvider).onAppResumed());
           unawaited(

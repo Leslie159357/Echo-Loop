@@ -167,6 +167,9 @@ class RepeatFlowEngine {
   /// 当前导航事务是否正在提交。
   bool _navigationInFlight = false;
 
+  /// 是否已销毁。销毁后在途的异步续接仍会更新内部快照，但不再回调外部。
+  bool _disposed = false;
+
   /// 导航请求编号，仅用于日志关联。
   int _navigationRequestSequence = 0;
 
@@ -505,9 +508,8 @@ class RepeatFlowEngine {
   Future<void> resumeCurrentSentence(Duration startAt) async {
     if (currentSentence == null) return;
     _waitAfterCurrentPrompt = false;
-    callbacks.pauseAudio();
-    _countdown.cancel();
-    _playbackService.stop();
+    // 录音中点播放会走这里，必须同时释放麦克风，与 _stopActiveResources 保持一致。
+    _stopActiveResources();
     _updateState(
       _state.copyWith(phase: const Idle(), flowToken: _state.flowToken + 1),
     );
@@ -698,6 +700,7 @@ class RepeatFlowEngine {
 
   /// 释放资源
   void dispose() {
+    _disposed = true;
     _waitAfterCurrentPrompt = false;
     _countdown.cancel();
     _playbackService.dispose();
@@ -710,6 +713,8 @@ class RepeatFlowEngine {
 
   void _updateState(RepeatFlowState newState) {
     _state = newState;
+    // 销毁后外部 owner 可能已不存在，在途续接不得再回调。
+    if (_disposed) return;
     onStateChanged(newState);
   }
 

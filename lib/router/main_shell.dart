@@ -30,6 +30,7 @@ import '../providers/learning_session/favorite_review_due_count_provider.dart';
 import '../providers/notification_permission_provider.dart';
 import '../providers/reminder_settings_provider.dart';
 import '../providers/review_reminder_provider.dart';
+import '../providers/settings_provider.dart';
 import '../providers/startup_bootstrap_provider.dart';
 import '../providers/listening_practice/listening_practice_provider.dart';
 import '../providers/media_playback/media_playback_provider.dart';
@@ -45,6 +46,7 @@ import '../services/review_reminder_service.dart';
 import '../services/review_reminder_time_calculator.dart';
 import '../screens/log_viewer_screen.dart';
 import '../providers/new_user_guide_provider.dart';
+import '../features/subscription/widgets/member_tab_badge.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_update_dialog.dart';
 import '../widgets/notification_permission_dialog.dart';
@@ -64,12 +66,14 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> with RouteAware {
+class _MainShellState extends ConsumerState<MainShell>
+    with RouteAware, WidgetsBindingObserver {
   ModalRoute<void>? _observedRoute;
   ProviderSubscription<int>? _pendingTaskCountSubscription;
   ProviderSubscription<Map<String, LearningProgress>>? _progressMapSubscription;
   ProviderSubscription<AppUpdateState>? _appUpdateSubscription;
   ProviderSubscription<ReminderSettings>? _reminderSettingsSubscription;
+  ProviderSubscription<Locale?>? _appLocaleSubscription;
   ProviderSubscription<int>? _notificationPromptSubscription;
   ProviderSubscription<GuideControllerState>? _guideWaitSubscription;
   ProviderSubscription<AsyncValue<StartupReport>>? _localStartupSubscription;
@@ -171,13 +175,14 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
   Future<void> _bootstrapStudyLandingData() {
     return Future.wait<void>([
       ref.read(audioLibraryProvider.notifier).loadLibrary(),
-      ref.read(learningProgressNotifierProvider.notifier).loadAll(),
+      ref.read(learningProgressProvider.notifier).loadAll(),
     ]);
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     activeStartupTrace?.mark('main_shell_init_state');
     // 缓存 controller，避免 dispose 阶段从已卸载的 ConsumerState ref 读取 provider。
     _remoteConfigController = ref.read(remoteConfigProvider.notifier);
@@ -246,7 +251,7 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
       ref
           .read(notificationPermissionServiceProvider)
           .syncSystemAuthorizationStatus();
-      final regionResult = ref.read(userRegionBootstrapProvider).valueOrNull;
+      final regionResult = ref.read(userRegionBootstrapProvider).value;
       final startupConfigResolved = regionResult?.configFetched ?? false;
       _remoteConfigController.startPeriodicRefresh(
         forceFirst: !startupConfigResolved,
@@ -274,7 +279,7 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
           'study bootstrap ready: '
               'audioItems=${audioState.audioItems.length}, '
               'progressItems='
-              '${ref.read(learningProgressNotifierProvider).progressMap.length}',
+              '${ref.read(learningProgressProvider).progressMap.length}',
         );
         activeStartupTrace?.mark('study_audio_library_and_progress_ready');
 
@@ -334,7 +339,7 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
       // pendingStudyTaskCountProvider 只监听任务数量，完成复习后任务数
       // 可能不变（reviewReady → reviewUpcoming），导致通知不会被调度。
       _progressMapSubscription = ref.listenManual(
-        learningProgressNotifierProvider.select((s) => s.progressMap),
+        learningProgressProvider.select((s) => s.progressMap),
         (_, __) {
           final service = ref.read(reviewReminderServiceProvider);
           _syncPerAudioReminders(service);
@@ -343,10 +348,16 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
 
       // 监听提醒设置变更，触发重新同步通知调度
       _reminderSettingsSubscription = ref.listenManual<ReminderSettings>(
-        reminderSettingsNotifierProvider,
+        reminderSettingsProvider,
         (_, next) {
           _onReminderSettingsChanged(next);
         },
+      );
+
+      // 界面语言变化时，按新语言重新调度收藏 / 音频复习提醒的通知文案
+      _appLocaleSubscription = ref.listenManual<Locale?>(
+        appSettingsProvider.select((s) => s.locale),
+        (_, __) => unawaited(_resyncReminderTexts()),
       );
 
       // 监听通知权限 pre-prompt 触发器：价值锚点（首次完成 sub_stage / 收藏）
@@ -427,6 +438,7 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_observedRoute != null) {
       rootRouteObserver.unsubscribe(this);
     }
@@ -436,6 +448,7 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
     _progressMapSubscription?.close();
     _appUpdateSubscription?.close();
     _reminderSettingsSubscription?.close();
+    _appLocaleSubscription?.close();
     _notificationPromptSubscription?.close();
     _guideWaitSubscription?.close();
     _localStartupSubscription?.close();
@@ -550,8 +563,8 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
     ref.invalidate(completedAudioProvider);
     ref.invalidate(studyDurationRecordsProvider);
     try {
-      await ref.read(studyStatsNotifierProvider.notifier).refresh();
-      final stats = ref.read(studyStatsNotifierProvider).valueOrNull;
+      await ref.read(studyStatsProvider.notifier).refresh();
+      final stats = ref.read(studyStatsProvider).value;
       AppLogger.log(
         'StudyRefresh',
         'complete source=$source '
@@ -654,11 +667,32 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
     );
   }
 
+  /// 系统语言变化时同步提醒文案：仅「跟随系统」时系统语言才影响提醒文案。
+  ///
+  /// iOS 切换语言时通常会结束 App；Android 进程可能仍存活，此时需要这里的监听来刷新。
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    super.didChangeLocales(locales);
+    if (!mounted) return;
+    if (ref.read(appSettingsProvider).locale != null) return;
+    unawaited(_resyncReminderTexts());
+  }
+
+  /// 按当前界面语言重新同步收藏与音频复习提醒的通知文案。
+  ///
+  /// 收藏提醒关闭时 [_syncSavedReviewReminder] 会提前返回，因此这里总是再同步一次音频提醒；
+  /// 收藏提醒开启时第二次调用因快照去重而跳过，不会重复调度。
+  Future<void> _resyncReminderTexts() async {
+    final service = ref.read(reviewReminderServiceProvider);
+    await _syncSavedReviewReminder();
+    await _syncPerAudioReminders(service);
+  }
+
   /// 查询收藏数据并调度收藏复习提醒
   ///
   /// 收藏句子或单词任一不为空时才调度，否则取消。
   Future<void> _syncSavedReviewReminder() async {
-    final settings = ref.read(reminderSettingsNotifierProvider);
+    final settings = ref.read(reminderSettingsProvider);
     final service = ref.read(reviewReminderServiceProvider);
 
     if (!settings.savedReviewReminderEnabled) {
@@ -677,14 +711,14 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
 
   /// 收集当前处于复习阶段且 nextReviewAt 在未来的音频，调度单条通知
   Future<void> _syncPerAudioReminders(ReviewReminderService service) async {
-    final settings = ref.read(reminderSettingsNotifierProvider);
+    final settings = ref.read(reminderSettingsProvider);
     if (!settings.perAudioReminderEnabled) {
       await service.cancelAllPerAudioReminders();
       return;
     }
 
     final progressMap = ref.read(
-      learningProgressNotifierProvider.select((s) => s.progressMap),
+      learningProgressProvider.select((s) => s.progressMap),
     );
     final audioItems = ref.read(audioLibraryProvider).audioItems;
 
@@ -791,10 +825,14 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
                       label: l10n.favorites,
                     ),
                     NavigationDestination(
-                      icon: const Icon(Icons.person_outline),
-                      selectedIcon: const Icon(
-                        Icons.person,
-                        color: AppTheme.navActiveColor,
+                      icon: const MemberTabBadge(
+                        child: Icon(Icons.person_outline),
+                      ),
+                      selectedIcon: const MemberTabBadge(
+                        child: Icon(
+                          Icons.person,
+                          color: AppTheme.navActiveColor,
+                        ),
                       ),
                       label: l10n.profile,
                     ),
@@ -829,16 +867,14 @@ class _MainShellState extends ConsumerState<MainShell> with RouteAware {
                     children: [
                       Text(
                         l10n.startupLocalDataErrorTitle,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: colors.onErrorContainer,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(color: colors.onErrorContainer),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         l10n.startupLocalDataErrorMessage,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onErrorContainer,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: colors.onErrorContainer),
                       ),
                     ],
                   ),

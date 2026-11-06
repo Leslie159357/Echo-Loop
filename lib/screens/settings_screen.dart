@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -44,12 +45,12 @@ import '../router/app_router.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import '../services/app_network_image_cache.dart';
 import '../services/tts/tts_cache_store.dart';
-import '../services/dictionary_download_manager.dart';
 import '../services/orphan_file_cleanup_service.dart';
 import '../services/temp_cleanup_service.dart';
 import '../utils/file_size.dart';
 import '../services/demo_data_seeder.dart';
 import '../models/dict_entry.dart';
+import '../services/app_logger.dart';
 import '../services/dictionary_service.dart';
 import '../theme/app_theme.dart';
 import '../providers/dictionary/dictionary_registry.dart';
@@ -65,6 +66,7 @@ import 'playback_settings_screen.dart';
 import 'reading_text_settings_screen.dart';
 import 'preferences_viewer_screen.dart';
 import 'storage_browser_screen.dart';
+import 'download_tasks_screen.dart';
 import 'reminder_settings_screen.dart';
 import '../services/runtime_endpoint_router.dart';
 import '../widgets/app_update_dialog.dart';
@@ -107,12 +109,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               _buildThemeModeTile(context, l10n, settings, settingsController),
               _buildLanguageTile(context, l10n, settings, settingsController),
-              _buildNativeLanguageTile(
-                context,
-                l10n,
-                settings,
-                settingsController,
-              ),
               _buildReadingTextTile(context, l10n),
             ],
           ),
@@ -141,7 +137,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 构建账号分组：登录入口 + 订阅入口（登录 item 下方）。
   Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
-    final session = ref.watch(supabaseSessionProvider).valueOrNull;
+    final session = ref.watch(supabaseSessionProvider).value;
     final isChinaUser = ref.watch(isChinaUserProvider);
     final isSignedIn = session != null;
     final accountSubtitle = session == null
@@ -240,10 +236,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final theme = Theme.of(context);
     final gold = AppTheme.premiumGold(theme.brightness);
     final isPremium = ref.watch(subscriptionControllerProvider).isActive;
-    final upgradeBadgeBackground = theme.brightness == Brightness.dark
-        ? const Color(0xFFD8B11E)
-        : const Color(0xFFFCE76B);
-    const upgradeBadgeTextColor = Color(0xFF111111);
+    final upgradeBadgeBackground = AppTheme.premiumUpgradeBadgeBackground(
+      theme.brightness,
+    );
+    const upgradeBadgeTextColor = AppTheme.onPremiumUpgradeBadge;
 
     return ListTile(
       leading: _settingsSvgIcon('assets/icon/diamond.svg'),
@@ -325,9 +321,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     WidgetRef ref,
     AppLocalizations l10n,
   ) {
-    final reminderSettings = ref.watch(reminderSettingsNotifierProvider);
+    final reminderSettings = ref.watch(reminderSettingsProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final showAsr = ref.watch(showOfflineAsrSectionProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final settingsController = ref.read(appSettingsProvider.notifier);
 
     return _buildSection(
       context,
@@ -432,6 +430,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        _buildNativeLanguageTile(context, l10n, settings, settingsController),
         ListTile(
           leading: _settingsSvgIcon('assets/icon/locale-1.svg'),
           title: Text(l10n.dictionarySettings),
@@ -463,6 +462,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _ttsEngineSummary(AppLocalizations l10n, TtsEngineKind engine) {
     return switch (engine) {
       TtsEngineKind.platform => platformSpeechEngineName(l10n),
+      TtsEngineKind.edge => l10n.ttsEngineEdge,
       TtsEngineKind.kokoro || TtsEngineKind.piper => l10n.asrBackendOffline,
     };
   }
@@ -531,13 +531,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // 3.5 清网络图片磁盘缓存（走 flutter_cache_manager API，自动清文件+索引）
     final imageFreed = await _clearNetworkImageCache();
 
-    // 4. 清理非当前语言的词典文件 + 旧版遗留 dict.db
-    final settings = ref.read(appSettingsProvider);
-    final dictManager = DictionaryDownloadManager();
-    final dictFreed = await dictManager.deleteUnusedDictionaries(
-      settings.nativeLanguage,
-    );
-    dictManager.dispose();
+    // 4. 清空在线词典查词缓存（可按需重建，不含词典文件）
+    await ref.read(dictionaryCacheDaoProvider).deleteAll();
 
     // 5. 清扫孤儿音频/字幕文件（磁盘有、DB 无引用）+ 全量清波形缓存
     final referencedRelPaths = await ref
@@ -554,7 +549,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final totalFreed =
         result.freedBytes +
         imageFreed +
-        dictFreed +
         orphanResult.freedBytes +
         waveformResult.freedBytes +
         ttsFreed;
@@ -909,6 +903,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        ListTile(
+          leading: _emojiIcon('⬇️'),
+          title: const Text('下载任务'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const DownloadTasksScreen(),
+            ),
+          ),
+        ),
+        // 仅 macOS：插件桌面端客户端不读取系统代理，开启后把系统代理写入下载插件。
+        if (defaultTargetPlatform == TargetPlatform.macOS)
+          SwitchListTile(
+            secondary: _emojiIcon('🌐'),
+            title: const Text('下载使用系统代理'),
+            subtitle: const Text('默认开启；读取 macOS 系统代理，对之后开始的下载生效。无系统代理时直连'),
+            value: ref.watch(useSystemProxyForDownloadsProvider),
+            onChanged: (value) => ref
+                .read(useSystemProxyForDownloadsProvider.notifier)
+                .setEnabled(value),
+          ),
       ],
     );
   }
@@ -954,7 +969,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showDictionaryLookupDialog(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (context) => const _DictionaryLookupDialog(),
+      builder: (context) => _DictionaryLookupDialog(
+        service: ref.read(dictionaryServiceProvider),
+      ),
     );
   }
 
@@ -984,12 +1001,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         final demoDb = AppDatabase(openConnectionWithName('echo_loop_demo.db'));
         await DemoDataSeeder(demoDb).seedIfEmpty();
         // Step 3a: 切换指向
-        switchAppDatabase(demoDb, ref);
+        switchAppDatabase(demoDb, (p) => ref.invalidate(p));
       } else {
         // Step 2b: 创建 prod 库
         final prodDb = AppDatabase(openConnectionWithName('echo_loop.db'));
         // Step 3b: 切换指向
-        switchAppDatabase(prodDb, ref);
+        switchAppDatabase(prodDb, (p) => ref.invalidate(p));
         // 清理演示文件（demo 数据库已关闭）
         await DemoDataSeeder.cleanupFiles();
       }
@@ -998,17 +1015,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(audioLibraryProvider.notifier).loadLibrary();
       ref.read(collectionListProvider.notifier).loadCollections();
       ref.read(tagListProvider.notifier).loadTags();
-      await ref.read(learningProgressNotifierProvider.notifier).loadAll();
+      await ref.read(learningProgressProvider.notifier).loadAll();
 
       await controller.setDemoMode(enabled);
     } catch (e) {
       // 恢复数据库连接，防止 app 处于无数据库状态
       final fallbackDb = AppDatabase(openConnectionWithName(currentDbName));
-      switchAppDatabase(fallbackDb, ref);
+      switchAppDatabase(fallbackDb, (p) => ref.invalidate(p));
       await ref.read(audioLibraryProvider.notifier).loadLibrary();
       ref.read(collectionListProvider.notifier).loadCollections();
       ref.read(tagListProvider.notifier).loadTags();
-      await ref.read(learningProgressNotifierProvider.notifier).loadAll();
+      await ref.read(learningProgressProvider.notifier).loadAll();
 
       controller.setDemoModeLoading(false);
       if (!context.mounted) return;
@@ -1651,9 +1668,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 /// 词典查询对话框
 ///
 /// 输入单词后调用 [DictionaryService.lookup] 查询，
-/// 显示音标、释义、柯林斯星级和考试标签，未收录时提示。
+/// 显示音标、释义、柯林斯星级和考试标签，未收录或查询失败时提示。
 class _DictionaryLookupDialog extends StatefulWidget {
-  const _DictionaryLookupDialog();
+  const _DictionaryLookupDialog({required this.service});
+
+  final DictionaryService service;
 
   @override
   State<_DictionaryLookupDialog> createState() =>
@@ -1665,6 +1684,7 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
   DictEntry? _result;
   bool _searched = false;
   bool _loading = false;
+  bool _failed = false;
 
   @override
   void dispose() {
@@ -1672,16 +1692,32 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
     super.dispose();
   }
 
-  void _lookup() {
+  Future<void> _lookup() async {
     final word = _controller.text.trim();
     if (word.isEmpty) return;
 
-    final entry = DictionaryService.instance.lookup(word);
     setState(() {
-      _result = entry;
-      _searched = true;
-      _loading = false;
+      _loading = true;
+      _failed = false;
     });
+    try {
+      final entry = await widget.service.lookup(word);
+      if (!mounted) return;
+      setState(() {
+        _result = entry;
+        _searched = true;
+        _loading = false;
+      });
+    } on DioException catch (error) {
+      AppLogger.log('Dict', '开发者查词失败 type=${error.type}');
+      if (!mounted) return;
+      setState(() {
+        _result = null;
+        _searched = true;
+        _loading = false;
+        _failed = true;
+      });
+    }
   }
 
   @override
@@ -1724,6 +1760,12 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
 
   /// 构建查询结果展示
   Widget _buildResult() {
+    if (_failed) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('查询失败', style: TextStyle(color: Colors.red, fontSize: 16)),
+      );
+    }
     if (_result == null) {
       return const Padding(
         padding: EdgeInsets.all(16),

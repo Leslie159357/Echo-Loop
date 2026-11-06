@@ -18,11 +18,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/sign_in_required_dialog.dart';
 import '../../features/subscription/widgets/feature_gate.dart';
 import '../../models/dictionary/dict_speakable_texts.dart';
-import '../../models/pronunciation/pronunciation_clip.dart';
 import '../../providers/dictionary/dictionary_registry.dart';
 import '../../providers/dictionary/dictionary_settings_provider.dart';
 import '../../providers/dictionary/lookup_controller.dart';
-import '../../providers/dictionary_provider.dart';
 import '../../providers/reading_text_prefs_provider.dart';
 import '../../providers/pronunciation/pronunciation_providers.dart';
 import '../../providers/saved_word_provider.dart';
@@ -38,7 +36,6 @@ import '../common/text_context_menu.dart';
 import 'dictionary_panel_host.dart';
 import 'dictionary_result_view.dart';
 import 'reading_text_scale.dart';
-import 'pronunciation_controls.dart';
 import 'source_switcher.dart';
 import '../common/prewarm_visibility.dart';
 
@@ -87,7 +84,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
   /// 本面板可能发起朗读的单词与例句 key。
   final Set<String> _dictionaryPlaybackKeys = {};
 
-  /// 当前单词及其离线发音命中状态的预热签名，避免 build 重复调度。
+  /// 当前单词及其配置版本的预热签名，避免 build 重复调度。
   String? _headwordPrewarmSignature;
   bool _isPrewarmVisible = false;
   int _prewarmVisibilityEpoch = 0;
@@ -176,7 +173,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
     final word = normalizeDictionaryQueryForPrompt(queryWord);
     final normalized = normalizeWord(word);
     if (normalized.isEmpty || _lastAutoSpokenWord == normalized) return;
-    if (!ref.read(dictionarySettingsNotifierProvider).autoSpeakOnLookup) return;
+    if (!ref.read(dictionarySettingsProvider).autoSpeakOnLookup) return;
     _lastAutoSpokenWord = normalized;
     final epoch = ++_autoSpeakEpoch;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -185,14 +182,18 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
   }
 
   /// 播放自动发音并保留请求所有权，关闭面板时可直接取消尚未同步 UI 状态的 TTS。
+  ///
+  /// 自动发音不是用户主动操作，本地模型未就绪时静默跳过，不弹下载提示。
   Future<void> _playAutoSpeak(String word, int epoch) async {
     if (!mounted || epoch != _autoSpeakEpoch) return;
-    if (!ref.read(dictionarySettingsNotifierProvider).autoSpeakOnLookup) {
+    if (!ref.read(dictionarySettingsProvider).autoSpeakOnLookup) {
       return;
     }
     _autoSpeakInFlight = true;
     try {
-      await ref.read(textPlaybackProvider.notifier).speak(word, key: word);
+      await ref
+          .read(textPlaybackProvider.notifier)
+          .speak(word, key: word, promptIfModelMissing: false);
     } finally {
       if (epoch == _autoSpeakEpoch) _autoSpeakInFlight = false;
     }
@@ -215,7 +216,6 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
       _ttsController?.warmUpCurrentEngine();
       _headwordPrewarmSignature = null;
       _scheduleHeadwordPrewarm(
-        ref.read(pronunciationClipsProvider(_normalizedWord)).isNotEmpty,
         ref.read(
           ttsControllerProvider.select((state) => state.configurationVersion),
         ),
@@ -304,7 +304,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
 
   /// 归一化后的表面词形（单词或词组），用于展示、TTS 与收藏。
   ///
-  /// 这里一律小写，保持既有正文下划线、收藏 key、本地词典匹配语义不变。
+  /// 这里一律小写，保持既有正文下划线、收藏 key、在线词典匹配语义不变。
   String get _normalizedWord => normalizeWord(widget.query.word);
 
   /// 保留大小写的查词 query，用作 controller family key 与 AI 请求输入。
@@ -377,16 +377,16 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
     _ttsController?.prewarmTextsIncremental(texts);
   }
 
-  /// 在订阅离线发音命中结果后再调度标题预热，确保已有本地音频不进入 TTS 队列。
-  void _scheduleHeadwordPrewarm(bool hasLocalClip, int configurationVersion) {
+  /// 调度标题发音预热：CDN 已有音频则只落本地缓存，缺失时才进入 TTS 预热。
+  void _scheduleHeadwordPrewarm(int configurationVersion) {
     final signature =
-        '$_normalizedWord|$hasLocalClip|$configurationVersion|$_prewarmVisibilityEpoch';
+        '$_lookupQuery|$configurationVersion|$_prewarmVisibilityEpoch';
     if (_headwordPrewarmSignature == signature) return;
     _headwordPrewarmSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isPrewarmVisible) return;
-      if (hasLocalClip) return;
-      _ttsController?.prewarmTextsIncremental([_normalizedWord]);
+      // 与标题点击使用同一文本（保留大小写），CDN 文件名才能命中。
+      ref.read(textPlaybackProvider.notifier).prewarmWord(_lookupQuery);
     });
   }
 
@@ -396,10 +396,6 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
     final word = _normalizedWord;
     _dictionaryPlaybackKeys.add(word);
     final lookupQuery = _lookupQuery;
-    final pronunciationClips = ref.watch(pronunciationClipsProvider(word));
-    _dictionaryPlaybackKeys.addAll(
-      pronunciationClips.map((clip) => clip.playbackKey),
-    );
     final controllerProvider = _controllerProvider(lookupQuery);
     final state = ref.watch(controllerProvider);
     final ttsConfigurationVersion = ref.watch(
@@ -417,16 +413,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
       textPlaybackProvider.select((state) => state.playingKey),
     );
     _sessionSource = ref.read(dictionarySessionSourceProvider.notifier);
-    final hasLocalClip = pronunciationClips.isNotEmpty;
-    _scheduleHeadwordPrewarm(hasLocalClip, ttsConfigurationVersion);
-
-    // 本地词典下载完成后，若当前选中本地源，自动重新查询
-    ref.listen(dictionaryProvider, (prev, next) {
-      if (next.status == DictionaryStatus.downloaded &&
-          state.selectedSourceId == 'local') {
-        notifier.retry();
-      }
-    });
+    _scheduleHeadwordPrewarm(ttsConfigurationVersion);
 
     // 例句边流边预热：流式帧与完成态都取当前部分结果，增量预热「单词 + 已到达例句」，
     // 用户点击发音时命中缓存秒播。每帧传完整可发音列表，增量入口靠 seen-set 只对
@@ -440,12 +427,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
       };
       if (result == null) return;
       _prewarmDictionaryTexts(
-        dictionaryPrewarmTexts(
-          result,
-          hasLocalClip: ref
-              .read(pronunciationClipsProvider(_normalizedWord))
-              .isNotEmpty,
-        ),
+        dictionaryPrewarmTexts(result),
       );
     });
 
@@ -491,7 +473,6 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
                     word,
                     lookupQuery,
                     isResizable,
-                    pronunciationClips,
                   ),
                   const SizedBox(height: AppSpacing.s),
 
@@ -575,7 +556,6 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
     String savedWord,
     String displayWord,
     bool resizable,
-    List<PronunciationClip> pronunciationClips,
   ) {
     final header = Column(
       mainAxisSize: MainAxisSize.min,
@@ -606,14 +586,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
         const SizedBox(height: 8),
 
         // 标题行：单词 + 发音 + 收藏 + 关闭（跨源恒定）
-        _buildTitleRow(theme, displayWord, savedWord, pronunciationClips),
-        if (pronunciationClips.length > 1) ...[
-          const SizedBox(height: 8),
-          PronunciationBadgeGroup(
-            clips: pronunciationClips,
-            fallbackText: displayWord,
-          ),
-        ],
+        _buildTitleRow(theme, displayWord, savedWord),
       ],
     );
     if (!resizable) return header;
@@ -669,19 +642,12 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
   /// [displayWord] 为保留大小写的清洗 query，用于标题展示与标题发音；
   /// [savedWord] 为小写归一化词形，用于收藏状态和保存内容。各源的词形还原/
   /// headword 原形仅用于内容展示，不占据标题，也不改变收藏内容。
-  Widget _buildTitleRow(
-    ThemeData theme,
-    String displayWord,
-    String savedWord,
-    List<PronunciationClip> pronunciationClips,
-  ) {
+  Widget _buildTitleRow(ThemeData theme, String displayWord, String savedWord) {
     // 收藏态统一读取两类底层收藏：对用户而言单词与意群没有状态差异，
     // 任一表命中即显示已收藏，避免多词在来源句查词时漏显收藏状态。
-    final textPrefs = ref.watch(readingTextPrefsNotifierProvider);
-    final savedWords = ref.watch(savedWordTextsProvider).valueOrNull;
-    final savedSenseGroups = ref
-        .watch(savedSenseGroupTextsProvider)
-        .valueOrNull;
+    final textPrefs = ref.watch(readingTextPrefsProvider);
+    final savedWords = ref.watch(savedWordTextsProvider).value;
+    final savedSenseGroups = ref.watch(savedSenseGroupTextsProvider).value;
     final isSaved =
         (savedWords ?? const <String>{}).contains(savedWord) ||
         (savedSenseGroups ?? const <String>{}).contains(savedWord);
@@ -708,13 +674,7 @@ class _DictionaryPanelState extends ConsumerState<DictionaryPanel> {
             ),
           ),
         ),
-        if (pronunciationClips.length == 1)
-          LocalPronunciationIconButton(
-            clip: pronunciationClips.single,
-            fallbackText: displayWord,
-          )
-        else if (pronunciationClips.isEmpty)
-          SpeakButton(text: displayWord),
+        SpeakButton(text: displayWord),
         AnimatedBookmarkIcon(
           key: const Key('dict_panel_bookmark'),
           isSaved: isSaved,

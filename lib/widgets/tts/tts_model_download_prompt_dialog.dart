@@ -41,17 +41,16 @@ class TtsPlaybackModelState {
   });
 
   bool get isReady =>
-      engine == TtsEngineKind.platform ||
-      status == AsrModelDownloadStatus.downloaded;
+      !engine.requiresLocalModel || status == AsrModelDownloadStatus.downloaded;
 }
 
 /// 从全局 TTS provider 派生当前发音所需模型的单一状态快照。
 final ttsPlaybackModelStateProvider = Provider<TtsPlaybackModelState>((ref) {
   final settings = ref.watch(ttsSettingsProvider);
   switch (settings.engine) {
-    case TtsEngineKind.platform:
-      return const TtsPlaybackModelState(
-        engine: TtsEngineKind.platform,
+    case TtsEngineKind.platform || TtsEngineKind.edge:
+      return TtsPlaybackModelState(
+        engine: settings.engine,
         status: AsrModelDownloadStatus.downloaded,
         progress: 1,
         failure: null,
@@ -64,9 +63,8 @@ final ttsPlaybackModelStateProvider = Provider<TtsPlaybackModelState>((ref) {
         status: state.downloadStatus,
         progress: state.downloadProgress,
         failure: state.downloadError,
-        estimatedDownloadBytes: kokoroSpecOf(
-          settings.kokoroVariant,
-        ).estimatedDownloadBytes,
+        estimatedDownloadBytes: kokoroSpecOf(settings.kokoroVariant)
+            .estimatedDownloadBytes,
       );
     case TtsEngineKind.piper:
       final state = ref.watch(piperModelProvider).of(settings.activePiperVoice);
@@ -84,8 +82,14 @@ final ttsPlaybackModelStateProvider = Provider<TtsPlaybackModelState>((ref) {
 
 /// 发音前检查当前本地 TTS 模型。
 /// 自建云端 Fish Audio 模式下无需下载任何本地模型，直接放行。
-Future<bool> ensureTtsModelReadyForPlayback(Ref ref) async {
+///
+/// 保留上游的可选参数签名，避免调用方编译失败。
+Future<bool> ensureTtsModelReadyForPlayback(
+  Ref ref, {
+  bool promptIfModelMissing = true,
+}) async {
   return true;
+}
 }
 
 /// 只检查指定 TTS 配置是否可用，不弹窗、不下载，供后台 warmup 使用。
@@ -95,12 +99,12 @@ Future<bool> isTtsModelReadyForConfig(
   KokoroModelVariant? kokoroVariant,
   String? piperVoiceId,
 }) async {
-  if (engine == TtsEngineKind.platform) return true;
+  if (!engine.requiresLocalModel) return true;
   await ref
       .read(ttsModelInstallationGateProvider)
       .ensureInstallationStatesLoaded();
   final ready = switch (engine) {
-    TtsEngineKind.platform => true,
+    TtsEngineKind.platform || TtsEngineKind.edge => true,
     TtsEngineKind.kokoro =>
       kokoroVariant != null &&
           ref.read(kokoroModelProvider).of(kokoroVariant).isReady,
@@ -133,8 +137,11 @@ Future<bool> ensureTtsModelReadyForConfig(
   );
   // 已有内存 ready 状态时同步放行，避免正常试听因重新扫描安装标记产生可见延迟。
   switch (engine) {
-    case TtsEngineKind.platform:
-      AppLogger.log('TtsModelGate', '指定配置检查结果 ready=true engine=platform');
+    case TtsEngineKind.platform || TtsEngineKind.edge:
+      AppLogger.log(
+        'TtsModelGate',
+        '指定配置检查结果 ready=true engine=${engine.diagnosticName}',
+      );
       return true;
     case TtsEngineKind.kokoro:
       final variant = kokoroVariant;
@@ -160,8 +167,11 @@ Future<bool> ensureTtsModelReadyForConfig(
       .read(ttsModelInstallationGateProvider)
       .ensureInstallationStatesLoaded();
   switch (engine) {
-    case TtsEngineKind.platform:
-      AppLogger.log('TtsModelGate', '指定配置刷新后结果 ready=true engine=platform');
+    case TtsEngineKind.platform || TtsEngineKind.edge:
+      AppLogger.log(
+        'TtsModelGate',
+        '指定配置刷新后结果 ready=true engine=${engine.diagnosticName}',
+      );
       return true;
     case TtsEngineKind.kokoro:
       final variant = kokoroVariant;
@@ -204,8 +214,8 @@ class TtsModelDownloadDialog extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(ttsSettingsProvider);
     final model = switch (settings.engine) {
-      TtsEngineKind.platform => const TtsPlaybackModelState(
-        engine: TtsEngineKind.platform,
+      TtsEngineKind.platform || TtsEngineKind.edge => TtsPlaybackModelState(
+        engine: settings.engine,
         status: AsrModelDownloadStatus.downloaded,
         progress: 1,
         failure: null,
@@ -312,9 +322,8 @@ class TtsModelDownloadDialog extends ConsumerWidget {
       status: state.downloadStatus,
       progress: state.downloadProgress,
       failure: state.downloadError,
-      estimatedDownloadBytes: kokoroSpecOf(
-        settings.kokoroVariant,
-      ).estimatedDownloadBytes,
+      estimatedDownloadBytes: kokoroSpecOf(settings.kokoroVariant)
+          .estimatedDownloadBytes,
     );
   }
 
@@ -334,7 +343,7 @@ class TtsModelDownloadDialog extends ConsumerWidget {
   void _retryDownload(WidgetRef ref, TtsEngineKind engine) {
     final settings = ref.read(ttsSettingsProvider);
     switch (engine) {
-      case TtsEngineKind.platform:
+      case TtsEngineKind.platform || TtsEngineKind.edge:
         return;
       case TtsEngineKind.kokoro:
         ref
@@ -350,7 +359,7 @@ class TtsModelDownloadDialog extends ConsumerWidget {
   void _startDownload(WidgetRef ref, TtsEngineKind engine) {
     final settings = ref.read(ttsSettingsProvider);
     switch (engine) {
-      case TtsEngineKind.platform:
+      case TtsEngineKind.platform || TtsEngineKind.edge:
         return;
       case TtsEngineKind.kokoro:
         ref
@@ -366,7 +375,7 @@ class TtsModelDownloadDialog extends ConsumerWidget {
   Future<void> _cancelDownload(WidgetRef ref, TtsEngineKind engine) async {
     final settings = ref.read(ttsSettingsProvider);
     switch (engine) {
-      case TtsEngineKind.platform:
+      case TtsEngineKind.platform || TtsEngineKind.edge:
         return;
       case TtsEngineKind.kokoro:
         await ref

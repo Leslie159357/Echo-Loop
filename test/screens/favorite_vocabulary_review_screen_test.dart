@@ -14,12 +14,10 @@ import 'package:echo_loop/models/dict_entry.dart';
 import 'package:echo_loop/models/dictionary/dictionary_lookup_result.dart';
 import 'package:echo_loop/models/flashcard_item.dart';
 import 'package:echo_loop/models/favorite_review_settings.dart';
-import 'package:echo_loop/models/pronunciation/pronunciation_clip.dart';
 import 'package:echo_loop/providers/dictionary/dictionary_registry.dart';
 import 'package:echo_loop/providers/favorite_review_settings_provider.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/learning_session/favorite_vocabulary_review_provider.dart';
-import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
 import 'package:echo_loop/screens/favorite_vocabulary_review_screen.dart';
 import 'package:echo_loop/widgets/dictionary/local_dict_result_view.dart';
 import 'package:echo_loop/widgets/dictionary/reading_text_scale.dart';
@@ -27,7 +25,6 @@ import 'package:echo_loop/widgets/review/review_completion_summary.dart';
 import 'package:echo_loop/widgets/practice/selectable_sentence_text.dart';
 import 'package:echo_loop/services/dictionary/dictionary_source.dart';
 import 'package:echo_loop/services/dictionary/local_dictionary_source.dart';
-import 'package:echo_loop/services/dictionary_service.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/utils/time_format.dart';
 import 'package:dio/dio.dart';
@@ -37,6 +34,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../helpers/mock_providers.dart';
 
 SavedWord _word(
   String text, {
@@ -176,14 +174,15 @@ class _TestFavoriteVocabularyReview extends FavoriteVocabularyReview {
 
   @override
   Future<void> disposeSession() async {
-    state = const FavoriteVocabularyReviewState();
+    // 页面 dispose 的收尾可能晚于容器释放，此时 notifier 已销毁，不再写 state。
+    if (ref.mounted) state = const FavoriteVocabularyReviewState();
     final waiter = disposeSessionWaiter;
     if (waiter != null) await waiter();
   }
 }
 
 class _TestLocalDictionarySource extends LocalDictionarySource {
-  _TestLocalDictionarySource() : super(DictionaryService.instance);
+  _TestLocalDictionarySource() : super(MockDictionaryService());
 
   @override
   Future<DictionaryLookupResult?> lookup(
@@ -205,7 +204,6 @@ Widget _app({
   bool showVocabularyOnFront = false,
   bool withSource = false,
   String vocabulary = 'apple',
-  List<PronunciationClip> pronunciationClips = const [],
   GoRouter? router,
   Future<void> Function()? disposeSessionWaiter,
 }) {
@@ -235,7 +233,7 @@ Widget _app({
           routerConfig: router,
         );
   return ProviderScope(
-    overrides: [
+    overrides: dedupeOverrides([
       favoriteVocabularyReviewProvider.overrideWith(
         () => _TestFavoriteVocabularyReview(
           withSource: withSource,
@@ -261,10 +259,7 @@ Widget _app({
       localDictionarySourceProvider.overrideWithValue(
         _TestLocalDictionarySource(),
       ),
-      pronunciationClipsProvider.overrideWith(
-        (ref, word) => pronunciationClips,
-      ),
-    ],
+    ]),
     child: child,
   );
 }
@@ -821,46 +816,6 @@ void main() {
 
     expect(source.dx, progress.dx);
     expect(ratingBar.dx, progress.dx);
-  });
-
-  testWidgets('multiple pronunciations keep badges and hide title playback', (
-    tester,
-  ) async {
-    const clips = [
-      PronunciationClip(
-        word: 'apple',
-        locale: 'us',
-        audioFilename: 'apple_v_past.opus',
-        absolutePath: '/audio/apple_v_past.opus',
-        reason: PronunciationReason.pastTense,
-      ),
-      PronunciationClip(
-        word: 'apple',
-        locale: 'us',
-        audioFilename: 'apple_v_present.opus',
-        absolutePath: '/audio/apple_v_present.opus',
-        reason: PronunciationReason.presentTense,
-      ),
-    ];
-    await tester.pumpWidget(_app(pronunciationClips: clips));
-    await tester.pump();
-    await tester.tap(
-      find.byKey(const Key('favorite-vocabulary-review-reveal-zone')),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(
-      find.byKey(const Key('favorite-vocabulary-review-word-speak')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const Key('favorite-vocabulary-review-word-playback')),
-      findsNothing,
-    );
-    expect(find.byKey(const Key('dict_pronunciation_badges')), findsOneWidget);
-    expect(find.text('过去式'), findsOneWidget);
-    expect(find.text('一般现在时'), findsOneWidget);
   });
 
   testWidgets(

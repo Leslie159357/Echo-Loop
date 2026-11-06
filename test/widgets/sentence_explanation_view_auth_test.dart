@@ -37,6 +37,7 @@ import 'package:echo_loop/widgets/practice/sentence_annotation_card.dart';
 import 'package:echo_loop/widgets/practice/sentence_explanation_view.dart';
 import 'package:echo_loop/widgets/dictionary/dictionary_panel_host.dart';
 import 'package:echo_loop/widgets/animated_bookmark_icon.dart';
+import 'package:flutter_riverpod/misc.dart';
 
 import '../helpers/mock_providers.dart';
 
@@ -217,6 +218,24 @@ class _NoopSenseGroupRangePlayback implements SenseGroupRangePlayback {
   Future<void> play(String audioItemId, Duration start, Duration end) async {}
 }
 
+/// 记录取消次数；[play] 返回的 Future 由测试决定何时完成，用于模拟意群试听进行中。
+class _RecordingSenseGroupRangePlayback implements SenseGroupRangePlayback {
+  int cancelCount = 0;
+  int playCount = 0;
+  final Completer<void> _playCompleter = Completer<void>();
+
+  @override
+  Future<void> cancel() async {
+    cancelCount++;
+  }
+
+  @override
+  Future<void> play(String audioItemId, Duration start, Duration end) {
+    playCount++;
+    return _playCompleter.future;
+  }
+}
+
 /// 讲解页测试不验证真实音频播放，避免触碰未初始化的后台音频 handler。
 class _NoopAudioEngine extends TestAudioEngine {
   @override
@@ -373,7 +392,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
+        overrides: dedupeOverrides([
           analyticsOverride(),
           usageOverride(),
           ...learningSettingsOverrides(
@@ -383,15 +402,13 @@ void main() {
             autoShowAiTranslation: autoShowAiTranslation,
             autoShowAiSenseGroups: autoShowAiSenseGroups,
           ),
-          supabaseSessionProvider.overrideWith(
-            (ref) => Stream<Session?>.value(signedIn ? testSession() : null),
-          ),
+          supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(signedIn ? testSession() : null)),
           savedSenseGroupDaoProvider.overrideWithValue(savedSenseGroupDao),
           savedWordDaoProvider.overrideWithValue(savedWordDao),
           audioEngineProvider.overrideWith(() => _NoopAudioEngine()),
           subscriptionAvailabilityProvider.overrideWithValue(true),
           ...extraOverrides,
-        ],
+        ]),
         child: MaterialApp.router(
           locale: const Locale('en'),
           supportedLocales: AppLocalizations.supportedLocales,
@@ -793,7 +810,7 @@ void main() {
       ),
       wrapDictionaryPanelHost: true,
       senseGroupRangePlayback: _NoopSenseGroupRangePlayback(),
-      extraOverrides: [dictionaryOverride()],
+      extraOverrides: [dictionaryServiceOverride()],
     );
 
     await tester.tap(find.byKey(const ValueKey('senseGroup')));
@@ -817,11 +834,83 @@ void main() {
     expect(find.byKey(const Key('dict_panel_surface')), findsOneWidget);
   });
 
+  testWidgets('意群生成后不打断正在播放的整句', (tester) async {
+    final cacheDao = _MockCacheDao();
+    final savedSenseGroupDao = _MockSavedSenseGroupDao();
+    final rangePlayback = _RecordingSenseGroupRangePlayback();
+    when(() => cacheDao.getByHash(any(), any())).thenAnswer((_) async => null);
+    when(
+      savedSenseGroupDao.watchSavedPhraseTexts,
+    ).thenAnswer((_) => Stream<Set<String>>.value(const {}));
+
+    await pumpAuthTestApp(
+      tester,
+      cacheDao: cacheDao,
+      savedSenseGroupDao: savedSenseGroupDao,
+      signedIn: true,
+      autoShowAiExplanation: false,
+      aiNotifier: _RecordingSentenceAiNotifier(
+        cacheDao: cacheDao,
+        apiClient: _NoopSentenceAiApiClient(),
+      ),
+      senseGroupRangePlayback: rangePlayback,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('senseGroup')));
+    await tester.pumpAndSettle();
+
+    expect(rangePlayback.cancelCount, 0);
+  });
+
+  testWidgets('意群试听中切换意群模式时才停止意群试听', (tester) async {
+    final cacheDao = _MockCacheDao();
+    final savedSenseGroupDao = _MockSavedSenseGroupDao();
+    final audioItemDao = _MockAudioItemDao();
+    final rangePlayback = _RecordingSenseGroupRangePlayback();
+    when(() => cacheDao.getByHash(any(), any())).thenAnswer((_) async => null);
+    when(() => audioItemDao.getById('audio-1')).thenAnswer((_) async => null);
+    when(
+      () => audioItemDao.getTranscriptSrt('audio-1'),
+    ).thenAnswer((_) async => null);
+    when(
+      savedSenseGroupDao.watchSavedPhraseTexts,
+    ).thenAnswer((_) => Stream<Set<String>>.value(const {}));
+
+    await pumpAuthTestApp(
+      tester,
+      cacheDao: cacheDao,
+      savedSenseGroupDao: savedSenseGroupDao,
+      signedIn: true,
+      autoShowAiExplanation: false,
+      aiNotifier: _RecordingSentenceAiNotifier(
+        cacheDao: cacheDao,
+        apiClient: _NoopSentenceAiApiClient(),
+      ),
+      senseGroupRangePlayback: rangePlayback,
+      audioItemId: 'audio-1',
+      extraOverrides: [
+        audioItemDaoProvider.overrideWithValue(audioItemDao),
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('senseGroup')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hello world'));
+    await tester.pumpAndSettle();
+    expect(rangePlayback.playCount, 1);
+    expect(rangePlayback.cancelCount, 0);
+
+    await tester.tap(find.byKey(const ValueKey('senseGroup')));
+    await tester.pumpAndSettle();
+
+    expect(rangePlayback.cancelCount, 1);
+  });
+
   testWidgets('收藏意群后操作栏保持显示并随收藏真值切换为取消收藏', (tester) async {
     final cacheDao = _MockCacheDao();
     final savedSenseGroupDao = _MockSavedSenseGroupDao();
     final audioItemDao = _MockAudioItemDao();
-    final database = AppDatabase(NativeDatabase.memory());
+    final database = AppDatabase(NativeDatabase.memory(setup: configureAppDatabaseConnection));
     addTearDown(database.close);
     final savedTexts = StreamController<Set<String>>.broadcast();
     addTearDown(savedTexts.close);
@@ -879,7 +968,7 @@ void main() {
       extraOverrides: [
         appDatabaseProvider.overrideWithValue(database),
         audioItemDaoProvider.overrideWithValue(audioItemDao),
-        dictionaryOverride(),
+        dictionaryServiceOverride(),
         remoteFeatureEnabledProvider(
           RemoteFeature.aiChatAssistant,
         ).overrideWithValue(false),

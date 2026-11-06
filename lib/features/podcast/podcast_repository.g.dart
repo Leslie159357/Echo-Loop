@@ -6,23 +6,59 @@ part of 'podcast_repository.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$podcastRepositoryHash() => r'445741831465e39b0c799b79f7c013e1770ea798';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
+/// 播客仓库由 app 作用域持有：它持有 [Ref] 并在后台刷新（订阅启动刷新、回前台刷新）
+/// 的异步 continuation 中继续读取 provider，不能因无人监听而被 autoDispose。
 
-/// See also [podcastRepository].
 @ProviderFor(podcastRepository)
-final podcastRepositoryProvider =
-    AutoDisposeProvider<PodcastRepository>.internal(
-      podcastRepository,
-      name: r'podcastRepositoryProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$podcastRepositoryHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final podcastRepositoryProvider = PodcastRepositoryProvider._();
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef PodcastRepositoryRef = AutoDisposeProviderRef<PodcastRepository>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+/// 播客仓库由 app 作用域持有：它持有 [Ref] 并在后台刷新（订阅启动刷新、回前台刷新）
+/// 的异步 continuation 中继续读取 provider，不能因无人监听而被 autoDispose。
+
+final class PodcastRepositoryProvider
+    extends
+        $FunctionalProvider<
+          PodcastRepository,
+          PodcastRepository,
+          PodcastRepository
+        >
+    with $Provider<PodcastRepository> {
+  /// 播客仓库由 app 作用域持有：它持有 [Ref] 并在后台刷新（订阅启动刷新、回前台刷新）
+  /// 的异步 continuation 中继续读取 provider，不能因无人监听而被 autoDispose。
+  PodcastRepositoryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'podcastRepositoryProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$podcastRepositoryHash();
+
+  @$internal
+  @override
+  $ProviderElement<PodcastRepository> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  PodcastRepository create(Ref ref) {
+    return podcastRepository(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(PodcastRepository value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<PodcastRepository>(value),
+    );
+  }
+}
+
+String _$podcastRepositoryHash() => r'e0984a4ede3fe8002bdfd759d27b3a2b4f8ae480';

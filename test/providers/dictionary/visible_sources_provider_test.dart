@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../helpers/mock_providers.dart';
 
 class _FakeSource implements DictionarySource {
   @override
@@ -40,18 +41,22 @@ void main() {
 
   ProviderContainer makeContainer() {
     final c = ProviderContainer(
-      overrides: [
+      overrides: dedupeOverrides([
         dictionarySourcesProvider.overrideWithValue(fakeSources),
         sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
+      ]),
     );
     addTearDown(c.dispose);
     return c;
   }
 
+  // 真实注册表会构造在线词典服务（依赖数据库缓存 DAO），这里用桩替代，避免测试触达未初始化的数据库
   ProviderContainer makeRegistryContainer() {
     final c = ProviderContainer(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        dictionaryServiceOverride(),
+      ],
     );
     addTearDown(c.dispose);
     return c;
@@ -78,7 +83,7 @@ void main() {
     );
 
     await c
-        .read(dictionarySettingsNotifierProvider.notifier)
+        .read(dictionarySettingsProvider.notifier)
         .setDisabled('eudic', true);
 
     expect(
@@ -87,13 +92,13 @@ void main() {
           .any((source) => source.id == 'eudic'),
       isFalse,
     );
-    expect(c.read(dictionarySettingsNotifierProvider).defaultSourceId, 'local');
+    expect(c.read(dictionarySettingsProvider).defaultSourceId, 'local');
   });
 
   test('禁用 cambridge → 可见列表排除它', () async {
     final c = makeContainer();
     await c
-        .read(dictionarySettingsNotifierProvider.notifier)
+        .read(dictionarySettingsProvider.notifier)
         .setDisabled('cambridge', true);
     final visible = c.read(visibleDictionarySourcesProvider);
     expect(visible.map((s) => s.id), ['local', 'ai']);
@@ -101,7 +106,7 @@ void main() {
 
   test('resolvedDefaultSourceId：默认源可见时原样返回', () async {
     final c = makeContainer();
-    await c.read(dictionarySettingsNotifierProvider.notifier).setDefault('ai');
+    await c.read(dictionarySettingsProvider.notifier).setDefault('ai');
     expect(c.read(resolvedDefaultSourceIdProvider), 'ai');
   });
 
@@ -116,7 +121,7 @@ void main() {
     final c = makeContainer();
 
     expect(
-      c.read(dictionarySettingsNotifierProvider).defaultSourceId,
+      c.read(dictionarySettingsProvider).defaultSourceId,
       'cambridge',
     );
     expect(c.read(resolvedDefaultSourceIdProvider), 'local'); // 回退

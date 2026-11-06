@@ -9,8 +9,9 @@
 library;
 
 import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart' show Ref;
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../analytics/analytics_providers.dart';
 import '../../analytics/audio_event_params.dart';
 import '../../analytics/models/event_names.dart';
@@ -36,6 +37,7 @@ import '../media_engine/media_sense_group_range_playback.dart';
 import '../repeat_flow/repeat_flow_engine.dart';
 import '../repeat_flow/repeat_flow_phase.dart';
 import '../repeat_flow/repeat_flow_state.dart';
+import '../settings_provider.dart';
 import '../speech/speech_recording_controller.dart';
 import 'intensive_listen_playback_driver.dart';
 import 'learning_session_provider.dart';
@@ -301,6 +303,8 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     await _disposeStudySessionTimer();
     _settingsSlot = settingsSlot;
     await _playback.invalidateSession();
+    // 等待播放会话释放期间 provider 可能已销毁，之后不得再读 ref 或写 state。
+    if (!ref.mounted) return;
     _playback.unbindLockScreen();
     _playback =
         playbackDriver ??
@@ -491,10 +495,16 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
     if (sentence != null &&
         position >= sentence.startTime &&
         position < sentence.endTime) {
+      final resumeFromSentenceStart = ref
+          .read(appSettingsProvider)
+          .resumeFromSentenceStartEnabled;
+      final resumePosition = resumeFromSentenceStart
+          ? sentence.startTime
+          : position;
       if (state.isAnnotationMode) {
-        _repeatResumePosition = position;
+        _repeatResumePosition = resumePosition;
       } else {
-        _blindResumePosition = position;
+        _blindResumePosition = resumePosition;
       }
     }
     unawaited(_playback.invalidateSession());
@@ -911,6 +921,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
   /// 重置到第一句
   Future<void> resetToStart() async {
     await _playback.invalidateSession();
+    if (!ref.mounted) return;
     _blindEngine.stopSession();
     _exitAnnotationMode();
     state = ReviewDifficultPracticeState(
@@ -1223,6 +1234,8 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
           'sentenceIndex=${state.currentSentenceIndex} '
           'elapsedMs=${invalidation.elapsedMilliseconds}',
     );
+    // 播放会话释放期间 provider 可能已销毁，之后不得再读 ref。
+    if (!ref.mounted) return;
     _persistCurrentSentenceIndexAsync();
     if (autoplay) {
       await _blindEngine.startPlaying();
@@ -1345,7 +1358,7 @@ class ReviewDifficultPractice extends _$ReviewDifficultPractice {
 
     unawaited(
       ref
-          .read(learningProgressNotifierProvider.notifier)
+          .read(learningProgressProvider.notifier)
           .saveDifficultPracticeSentenceIndex(
             audioItemId,
             state.currentSentenceIndex,

@@ -11,13 +11,14 @@ import 'package:echo_loop/services/runtime_endpoint_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../helpers/mock_providers.dart';
 
 void main() {
   const endpoints = RegionalServiceEndpoints(
     globalApiBaseUrl: 'https://global.example',
     chinaApiBaseUrl: 'https://china.example',
-    globalModelCdnBaseUrl: 'https://global-cdn.example',
-    chinaModelCdnBaseUrl: 'https://china-cdn.example',
+    globalStaticCdnBaseUrl: 'https://global-cdn.example',
+    chinaStaticCdnBaseUrl: 'https://china-cdn.example',
   );
 
   test('覆盖值可保存读取，选回自动时清除', () async {
@@ -49,7 +50,7 @@ void main() {
     final router = RuntimeEndpointRouter(endpoints: endpoints);
     final calls = <String>[];
     final container = ProviderContainer(
-      overrides: [
+      overrides: dedupeOverrides([
         userRegionDeviceCountryCodeProvider.overrideWithValue(() => 'US'),
         userRegionEndpointRouterProvider.overrideWithValue(router),
         remoteConfigServiceProvider.overrideWithValue(
@@ -64,7 +65,7 @@ void main() {
             },
           ),
         ),
-      ],
+      ]),
     );
     addTearDown(container.dispose);
 

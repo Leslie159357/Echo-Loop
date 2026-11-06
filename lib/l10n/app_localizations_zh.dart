@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -2260,6 +2261,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloadPodcastSubtitleSubtitle => '播客已提供字幕，无需转录';
 
   @override
+  String get podcastTranscriptReminderTitle => '播客字幕可能不准确';
+
+  @override
+  String get podcastTranscriptReminderMessage =>
+      '播客提供的字幕质量参差不齐，可能与音频对不上。如果不准确，可以改用云端转录重新生成字幕。';
+
+  @override
+  String get podcastTranscriptReminderConfirm => '知道了';
+
+  @override
   String get downloadSubtitle => '下载字幕';
 
   @override
@@ -3042,6 +3053,36 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get reviewReminderSavedBody1 => '复习一下收藏的句子和单词吧';
+
+  @override
+  String get reviewReminderSavedBody2 => '听一遍收藏的句子，巩固记忆';
+
+  @override
+  String get reviewReminderSavedBody3 => '碎片时间听几句，积少成多';
+
+  @override
+  String get reviewReminderSavedBody4 => '收藏的句子在等你，来复习一下';
+
+  @override
+  String get reviewReminderSavedBody5 => '反复听才能记住，来复习吧';
+
+  @override
+  String get reviewReminderSavedBody6 => '收藏的好句子，多听几遍才是你的';
+
+  @override
+  String get reviewReminderSavedBody7 => '间隔重复是记忆的关键，来听一轮';
+
+  @override
+  String get reviewReminderSavedBody8 => '熟悉的句子再听一遍，会有新感觉';
+
+  @override
+  String get reviewReminderSavedBody9 => '收藏了就要复习，不然会忘';
+
+  @override
+  String get reviewReminderSavedBody10 => '听力靠积累，来复习收藏的句子';
+
+  @override
   String get stageBlindListen => '盲听';
 
   @override
@@ -3620,9 +3661,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get importList => '导入列表';
-
-  @override
   String filesSelected(int count) {
     return '已选择 $count 个文件';
   }
@@ -3682,13 +3720,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get goToSettings => '前往设置';
 
   @override
-  String get dictionaryDownloading => '词典下载中...';
-
-  @override
-  String get dictionaryDownloadFailed => '词典下载失败';
-
-  @override
-  String get dictionaryNotDownloaded => '词典尚未下载';
+  String get dictionaryLookupFailed => '查词失败，请检查网络后重试';
 
   @override
   String dictionaryBaseFormHint(String lemma) {
@@ -3703,9 +3735,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mediaPreparingHint => '正在下载音频和字幕…';
-
-  @override
-  String get mediaWaitingOtherDownload => '另一项下载进行中，完成后将自动开始。';
 
   @override
   String get guideNext => '下一步';
@@ -4284,6 +4313,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wordHighlightDescription => '播放原音时高亮当前读到的单词';
 
   @override
+  String get resumeFromSentenceStartTitle => '重播时从句首开始';
+
+  @override
+  String get resumeFromSentenceStartEnabledDescription => '重播当前句子时将从句首开始播放';
+
+  @override
+  String get resumeFromSentenceStartDisabledDescription => '重播当前句子时将从暂停位置继续播放。';
+
+  @override
   String get silenceThreshold => '静音阈值';
 
   @override
@@ -4738,9 +4776,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get baiduNetdiskImporting => '正在导入...';
-
-  @override
   String baiduNetdiskImportingFile(String name) {
     return '正在导入 $name...';
   }
@@ -4787,6 +4822,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get audioDownloadInProgress => '正在下载';
+
+  @override
+  String get audioQueued => '排队中';
+
+  @override
+  String get baiduImportedToLibrary => '已导入到资源库';
+
+  @override
+  String baiduImportedToCollections(String names) {
+    return '已导入到：$names';
+  }
+
+  @override
+  String get baiduImportDuplicate => '已存在';
+
+  @override
+  String get baiduSubtitleUnmatched => '没有匹配到同名音频';
+
+  @override
+  String get baiduDisconnectActiveTitle => '有文件正在导入';
+
+  @override
+  String baiduDisconnectActiveMessage(int count) {
+    return '$count 个文件正在下载或排队，断开连接后这些导入会被取消。';
+  }
+
+  @override
+  String get mediaQueued => '排队中...';
 
   @override
   String get audioImportComplete => '导入完成';
@@ -4935,6 +4998,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ttsEnginePiperDescription => '音质自然流畅，需下载模型，推荐中等配置设备使用。';
 
   @override
+  String get ttsEngineEdge => 'Edge TTS';
+
+  @override
+  String get ttsEngineEdgeDescription => '采用微软 Neural 音色，语音自然，需联网使用。';
+
+  @override
+  String get edgeTtsUnavailableTitle => 'Edge 在线语音暂时不可用';
+
+  @override
+  String get edgeTtsUnavailableNetworkMessage =>
+      '网络不可用，Edge 在线语音需要联网。请检查网络后重试，或到设置中选择其他语音引擎。';
+
+  @override
+  String get edgeTtsUnavailableServiceMessage =>
+      'Edge 在线语音服务暂时无法使用，可以到设置中选择其他语音引擎。';
+
+  @override
+  String get edgeTtsUnavailableDismiss => '知道了';
+
+  @override
   String get ttsModel => '模型';
 
   @override
@@ -5064,7 +5147,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dictionaryAdFilterTitle => '屏蔽网页词典广告';
 
   @override
-  String get dictSourceLocal => '本地词典';
+  String get dictSourceLocal => '基础词典';
 
   @override
   String get dictSourceAi => 'AI 词典';
@@ -5357,36 +5440,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pronunciationPlay => '播放发音';
-
-  @override
-  String get pronunciationStandard => '标准发音';
-
-  @override
-  String get pronunciationAdjective => '形容词';
-
-  @override
-  String get pronunciationNoun => '名词';
-
-  @override
-  String get pronunciationNounAdjective => '名词 / 形容词';
-
-  @override
-  String get pronunciationVerb => '动词';
-
-  @override
-  String get pronunciationPastTense => '过去式';
-
-  @override
-  String get pronunciationPresentTense => '一般现在时';
-
-  @override
-  String get pronunciationInterjection => '感叹词';
-
-  @override
-  String get pronunciationLibrary => '离线单词发音';
-
-  @override
-  String get pronunciationLibraryDescription => '词典查词时优先播放预录的单词发音';
 
   @override
   String get redownload => '重新下载';

@@ -12868,6 +12868,360 @@ class TtsCacheCompanion extends UpdateCompanion<TtsCacheData> {
   }
 }
 
+class $DictionaryCacheTable extends DictionaryCache
+    with TableInfo<$DictionaryCacheTable, DictionaryCacheData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DictionaryCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _dictMeta = const VerificationMeta('dict');
+  @override
+  late final GeneratedColumn<String> dict = GeneratedColumn<String>(
+    'dict',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wordMeta = const VerificationMeta('word');
+  @override
+  late final GeneratedColumn<String> word = GeneratedColumn<String>(
+    'word',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dataMeta = const VerificationMeta('data');
+  @override
+  late final GeneratedColumn<String> data = GeneratedColumn<String>(
+    'data',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, dict, word, data, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dictionary_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DictionaryCacheData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('dict')) {
+      context.handle(
+        _dictMeta,
+        dict.isAcceptableOrUnknown(data['dict']!, _dictMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dictMeta);
+    }
+    if (data.containsKey('word')) {
+      context.handle(
+        _wordMeta,
+        word.isAcceptableOrUnknown(data['word']!, _wordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_wordMeta);
+    }
+    if (data.containsKey('data')) {
+      context.handle(
+        _dataMeta,
+        this.data.isAcceptableOrUnknown(data['data']!, _dataMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dataMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {dict, word},
+  ];
+  @override
+  DictionaryCacheData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DictionaryCacheData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      dict: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dict'],
+      )!,
+      word: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}word'],
+      )!,
+      data: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}data'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DictionaryCacheTable createAlias(String alias) {
+    return $DictionaryCacheTable(attachedDatabase, alias);
+  }
+}
+
+class DictionaryCacheData extends DataClass
+    implements Insertable<DictionaryCacheData> {
+  /// 自增主键
+  final int id;
+
+  /// 词典 ID（如 `en_zh-CN`），与母语一一对应
+  final String dict;
+
+  /// 归一化后的查询键，与后端查询参数口径一致
+  final String word;
+
+  /// 词条 JSON 原文
+  final String data;
+
+  /// 创建时间
+  final DateTime createdAt;
+  const DictionaryCacheData({
+    required this.id,
+    required this.dict,
+    required this.word,
+    required this.data,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['dict'] = Variable<String>(dict);
+    map['word'] = Variable<String>(word);
+    map['data'] = Variable<String>(data);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  DictionaryCacheCompanion toCompanion(bool nullToAbsent) {
+    return DictionaryCacheCompanion(
+      id: Value(id),
+      dict: Value(dict),
+      word: Value(word),
+      data: Value(data),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory DictionaryCacheData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DictionaryCacheData(
+      id: serializer.fromJson<int>(json['id']),
+      dict: serializer.fromJson<String>(json['dict']),
+      word: serializer.fromJson<String>(json['word']),
+      data: serializer.fromJson<String>(json['data']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'dict': serializer.toJson<String>(dict),
+      'word': serializer.toJson<String>(word),
+      'data': serializer.toJson<String>(data),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  DictionaryCacheData copyWith({
+    int? id,
+    String? dict,
+    String? word,
+    String? data,
+    DateTime? createdAt,
+  }) => DictionaryCacheData(
+    id: id ?? this.id,
+    dict: dict ?? this.dict,
+    word: word ?? this.word,
+    data: data ?? this.data,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  DictionaryCacheData copyWithCompanion(DictionaryCacheCompanion data) {
+    return DictionaryCacheData(
+      id: data.id.present ? data.id.value : this.id,
+      dict: data.dict.present ? data.dict.value : this.dict,
+      word: data.word.present ? data.word.value : this.word,
+      data: data.data.present ? data.data.value : this.data,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DictionaryCacheData(')
+          ..write('id: $id, ')
+          ..write('dict: $dict, ')
+          ..write('word: $word, ')
+          ..write('data: $data, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, dict, word, data, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DictionaryCacheData &&
+          other.id == this.id &&
+          other.dict == this.dict &&
+          other.word == this.word &&
+          other.data == this.data &&
+          other.createdAt == this.createdAt);
+}
+
+class DictionaryCacheCompanion extends UpdateCompanion<DictionaryCacheData> {
+  final Value<int> id;
+  final Value<String> dict;
+  final Value<String> word;
+  final Value<String> data;
+  final Value<DateTime> createdAt;
+  const DictionaryCacheCompanion({
+    this.id = const Value.absent(),
+    this.dict = const Value.absent(),
+    this.word = const Value.absent(),
+    this.data = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  DictionaryCacheCompanion.insert({
+    this.id = const Value.absent(),
+    required String dict,
+    required String word,
+    required String data,
+    required DateTime createdAt,
+  }) : dict = Value(dict),
+       word = Value(word),
+       data = Value(data),
+       createdAt = Value(createdAt);
+  static Insertable<DictionaryCacheData> custom({
+    Expression<int>? id,
+    Expression<String>? dict,
+    Expression<String>? word,
+    Expression<String>? data,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dict != null) 'dict': dict,
+      if (word != null) 'word': word,
+      if (data != null) 'data': data,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  DictionaryCacheCompanion copyWith({
+    Value<int>? id,
+    Value<String>? dict,
+    Value<String>? word,
+    Value<String>? data,
+    Value<DateTime>? createdAt,
+  }) {
+    return DictionaryCacheCompanion(
+      id: id ?? this.id,
+      dict: dict ?? this.dict,
+      word: word ?? this.word,
+      data: data ?? this.data,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (dict.present) {
+      map['dict'] = Variable<String>(dict.value);
+    }
+    if (word.present) {
+      map['word'] = Variable<String>(word.value);
+    }
+    if (data.present) {
+      map['data'] = Variable<String>(data.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DictionaryCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('dict: $dict, ')
+          ..write('word: $word, ')
+          ..write('data: $data, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MemorySchedulesTable extends MemorySchedules
     with TableInfo<$MemorySchedulesTable, MemorySchedule> {
   @override
@@ -15221,6 +15575,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DailyStageStudyRecordsTable dailyStageStudyRecords =
       $DailyStageStudyRecordsTable(this);
   late final $TtsCacheTable ttsCache = $TtsCacheTable(this);
+  late final $DictionaryCacheTable dictionaryCache = $DictionaryCacheTable(
+    this,
+  );
   late final $MemorySchedulesTable memorySchedules = $MemorySchedulesTable(
     this,
   );
@@ -15260,6 +15617,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final TtsCacheDao ttsCacheDao = TtsCacheDao(this as AppDatabase);
+  late final DictionaryCacheDao dictionaryCacheDao = DictionaryCacheDao(
+    this as AppDatabase,
+  );
   late final MemoryScheduleDao memoryScheduleDao = MemoryScheduleDao(
     this as AppDatabase,
   );
@@ -15287,6 +15647,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dailyStudyRecords,
     dailyStageStudyRecords,
     ttsCache,
+    dictionaryCache,
     memorySchedules,
     memoryReviewEvents,
     memoryReviewQueueEntries,
@@ -15373,80 +15734,78 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$AudioItemsTableCreateCompanionBuilder =
-    AudioItemsCompanion Function({
-      required String id,
-      required String name,
-      Value<String?> audioPath,
-      Value<String?> transcriptPath,
-      required DateTime addedDate,
-      Value<int> totalDuration,
-      Value<int> sentenceCount,
-      Value<int> wordCount,
-      Value<bool> isPinned,
-      Value<int?> transcriptSource,
-      Value<String?> audioSha256,
-      Value<String?> originalAudioSha256,
-      Value<String?> transcriptLanguage,
-      Value<int?> audioContentStatus,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<String?> wordTimestampsJson,
-      Value<String?> transcriptSrt,
-      Value<int> syncStatus,
-      Value<String?> remoteAudioId,
-      Value<DateTime?> originalDate,
-      Value<DateTime?> communityUnavailableAt,
-      Value<String?> difficulty,
-      Value<String?> description,
-      Value<String?> importSourceType,
-      Value<String?> importSourceUrl,
-      Value<String?> podcastEpisodeGuid,
-      Value<String?> podcastEnclosureUrl,
-      Value<String?> podcastEnclosureType,
-      Value<String?> podcastImageUrl,
-      Value<String?> podcastLink,
-      Value<String?> podcastTranscriptUrl,
-      Value<String?> podcastTranscriptFormat,
-      Value<int> rowid,
-    });
-typedef $$AudioItemsTableUpdateCompanionBuilder =
-    AudioItemsCompanion Function({
-      Value<String> id,
-      Value<String> name,
-      Value<String?> audioPath,
-      Value<String?> transcriptPath,
-      Value<DateTime> addedDate,
-      Value<int> totalDuration,
-      Value<int> sentenceCount,
-      Value<int> wordCount,
-      Value<bool> isPinned,
-      Value<int?> transcriptSource,
-      Value<String?> audioSha256,
-      Value<String?> originalAudioSha256,
-      Value<String?> transcriptLanguage,
-      Value<int?> audioContentStatus,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<String?> wordTimestampsJson,
-      Value<String?> transcriptSrt,
-      Value<int> syncStatus,
-      Value<String?> remoteAudioId,
-      Value<DateTime?> originalDate,
-      Value<DateTime?> communityUnavailableAt,
-      Value<String?> difficulty,
-      Value<String?> description,
-      Value<String?> importSourceType,
-      Value<String?> importSourceUrl,
-      Value<String?> podcastEpisodeGuid,
-      Value<String?> podcastEnclosureUrl,
-      Value<String?> podcastEnclosureType,
-      Value<String?> podcastImageUrl,
-      Value<String?> podcastLink,
-      Value<String?> podcastTranscriptUrl,
-      Value<String?> podcastTranscriptFormat,
-      Value<int> rowid,
-    });
+typedef $$AudioItemsTableCreateCompanionBuilder = AudioItemsCompanion Function({
+  required String id,
+  required String name,
+  Value<String?> audioPath,
+  Value<String?> transcriptPath,
+  required DateTime addedDate,
+  Value<int> totalDuration,
+  Value<int> sentenceCount,
+  Value<int> wordCount,
+  Value<bool> isPinned,
+  Value<int?> transcriptSource,
+  Value<String?> audioSha256,
+  Value<String?> originalAudioSha256,
+  Value<String?> transcriptLanguage,
+  Value<int?> audioContentStatus,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<String?> wordTimestampsJson,
+  Value<String?> transcriptSrt,
+  Value<int> syncStatus,
+  Value<String?> remoteAudioId,
+  Value<DateTime?> originalDate,
+  Value<DateTime?> communityUnavailableAt,
+  Value<String?> difficulty,
+  Value<String?> description,
+  Value<String?> importSourceType,
+  Value<String?> importSourceUrl,
+  Value<String?> podcastEpisodeGuid,
+  Value<String?> podcastEnclosureUrl,
+  Value<String?> podcastEnclosureType,
+  Value<String?> podcastImageUrl,
+  Value<String?> podcastLink,
+  Value<String?> podcastTranscriptUrl,
+  Value<String?> podcastTranscriptFormat,
+  Value<int> rowid,
+});
+typedef $$AudioItemsTableUpdateCompanionBuilder = AudioItemsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<String?> audioPath,
+  Value<String?> transcriptPath,
+  Value<DateTime> addedDate,
+  Value<int> totalDuration,
+  Value<int> sentenceCount,
+  Value<int> wordCount,
+  Value<bool> isPinned,
+  Value<int?> transcriptSource,
+  Value<String?> audioSha256,
+  Value<String?> originalAudioSha256,
+  Value<String?> transcriptLanguage,
+  Value<int?> audioContentStatus,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<String?> wordTimestampsJson,
+  Value<String?> transcriptSrt,
+  Value<int> syncStatus,
+  Value<String?> remoteAudioId,
+  Value<DateTime?> originalDate,
+  Value<DateTime?> communityUnavailableAt,
+  Value<String?> difficulty,
+  Value<String?> description,
+  Value<String?> importSourceType,
+  Value<String?> importSourceUrl,
+  Value<String?> podcastEpisodeGuid,
+  Value<String?> podcastEnclosureUrl,
+  Value<String?> podcastEnclosureType,
+  Value<String?> podcastImageUrl,
+  Value<String?> podcastLink,
+  Value<String?> podcastTranscriptUrl,
+  Value<String?> podcastTranscriptFormat,
+  Value<int> rowid,
+});
 
 final class $$AudioItemsTableReferences
     extends BaseReferences<_$AppDatabase, $AudioItemsTable, AudioItem> {
@@ -15459,10 +15818,7 @@ final class $$AudioItemsTableReferences
   _collectionAudioItemsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.collectionAudioItems,
-        aliasName: $_aliasNameGenerator(
-          db.audioItems.id,
-          db.collectionAudioItems.audioItemId,
-        ),
+        aliasName: 'audio_items__id__collection_audio_items__audio_item_id',
       );
 
   $$CollectionAudioItemsTableProcessedTableManager
@@ -15483,7 +15839,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$BookmarksTable, List<Bookmark>>
   _bookmarksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.bookmarks,
-    aliasName: $_aliasNameGenerator(db.audioItems.id, db.bookmarks.audioItemId),
+    aliasName: 'audio_items__id__bookmarks__audio_item_id',
   );
 
   $$BookmarksTableProcessedTableManager get bookmarksRefs {
@@ -15501,10 +15857,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$PlaybackStatesTable, List<PlaybackState>>
   _playbackStatesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.playbackStates,
-    aliasName: $_aliasNameGenerator(
-      db.audioItems.id,
-      db.playbackStates.audioItemId,
-    ),
+    aliasName: 'audio_items__id__playback_states__audio_item_id',
   );
 
   $$PlaybackStatesTableProcessedTableManager get playbackStatesRefs {
@@ -15526,10 +15879,7 @@ final class $$AudioItemsTableReferences
   _learningProgressesRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.learningProgresses,
-        aliasName: $_aliasNameGenerator(
-          db.audioItems.id,
-          db.learningProgresses.audioItemId,
-        ),
+        aliasName: 'audio_items__id__learning_progresses__audio_item_id',
       );
 
   $$LearningProgressesTableProcessedTableManager get learningProgressesRefs {
@@ -15549,10 +15899,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$StageCompletionsTable, List<StageCompletion>>
   _stageCompletionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.stageCompletions,
-    aliasName: $_aliasNameGenerator(
-      db.audioItems.id,
-      db.stageCompletions.audioItemId,
-    ),
+    aliasName: 'audio_items__id__stage_completions__audio_item_id',
   );
 
   $$StageCompletionsTableProcessedTableManager get stageCompletionsRefs {
@@ -15572,10 +15919,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$AudioItemTagsTable, List<AudioItemTag>>
   _audioItemTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.audioItemTags,
-    aliasName: $_aliasNameGenerator(
-      db.audioItems.id,
-      db.audioItemTags.audioItemId,
-    ),
+    aliasName: 'audio_items__id__audio_item_tags__audio_item_id',
   );
 
   $$AudioItemTagsTableProcessedTableManager get audioItemTagsRefs {
@@ -15593,10 +15937,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$SavedWordsTable, List<SavedWord>>
   _savedWordsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.savedWords,
-    aliasName: $_aliasNameGenerator(
-      db.audioItems.id,
-      db.savedWords.audioItemId,
-    ),
+    aliasName: 'audio_items__id__saved_words__audio_item_id',
   );
 
   $$SavedWordsTableProcessedTableManager get savedWordsRefs {
@@ -15614,10 +15955,7 @@ final class $$AudioItemsTableReferences
   static MultiTypedResultKey<$SavedSenseGroupsTable, List<SavedSenseGroup>>
   _savedSenseGroupsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.savedSenseGroups,
-    aliasName: $_aliasNameGenerator(
-      db.audioItems.id,
-      db.savedSenseGroups.audioItemId,
-    ),
+    aliasName: 'audio_items__id__saved_sense_groups__audio_item_id',
   );
 
   $$SavedSenseGroupsTableProcessedTableManager get savedSenseGroupsRefs {
@@ -16728,7 +17066,7 @@ class $$AudioItemsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AudioItemsTable, AudioItem>(table),
                   $$AudioItemsTableReferences(db, table, e),
                 ),
               )
@@ -16760,10 +17098,11 @@ class $$AudioItemsTableTableManager
                   getPrefetchedDataCallback: (items) async {
                     return [
                       if (collectionAudioItemsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          CollectionAudioItem
+                          CollectionAudioItem,
+                          $CollectionAudioItemsTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16774,17 +17113,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).collectionAudioItemsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (bookmarksRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          Bookmark
+                          Bookmark,
+                          $BookmarksTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16795,17 +17133,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).bookmarksRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (playbackStatesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          PlaybackState
+                          PlaybackState,
+                          $PlaybackStatesTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16816,17 +17153,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).playbackStatesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (learningProgressesRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          LearningProgressesData
+                          LearningProgressesData,
+                          $LearningProgressesTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16837,17 +17173,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).learningProgressesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (stageCompletionsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          StageCompletion
+                          StageCompletion,
+                          $StageCompletionsTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16858,17 +17193,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).stageCompletionsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (audioItemTagsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          AudioItemTag
+                          AudioItemTag,
+                          $AudioItemTagsTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16879,17 +17213,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).audioItemTagsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (savedWordsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          SavedWord
+                          SavedWord,
+                          $SavedWordsTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16900,17 +17233,16 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).savedWordsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                       if (savedSenseGroupsRefs)
-                        await $_getPrefetchedData<
+                        await $_getPrefetchedDataByColumns<
                           AudioItem,
                           $AudioItemsTable,
-                          SavedSenseGroup
+                          SavedSenseGroup,
+                          $SavedSenseGroupsTable
                         >(
                           currentTable: table,
                           referencedTable: $$AudioItemsTableReferences
@@ -16921,10 +17253,8 @@ class $$AudioItemsTableTableManager
                                 table,
                                 p0,
                               ).savedSenseGroupsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.audioItemId == item.id,
-                              ),
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
                     ];
@@ -17018,10 +17348,7 @@ final class $$CollectionsTableReferences
   _collectionAudioItemsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.collectionAudioItems,
-        aliasName: $_aliasNameGenerator(
-          db.collections.id,
-          db.collectionAudioItems.collectionId,
-        ),
+        aliasName: 'collections__id__collection_audio_items__collection_id',
       );
 
   $$CollectionAudioItemsTableProcessedTableManager
@@ -17526,7 +17853,7 @@ class $$CollectionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$CollectionsTable, Collection>(table),
                   $$CollectionsTableReferences(db, table, e),
                 ),
               )
@@ -17541,10 +17868,11 @@ class $$CollectionsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (collectionAudioItemsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       Collection,
                       $CollectionsTable,
-                      CollectionAudioItem
+                      CollectionAudioItem,
+                      $CollectionAudioItemsTable
                     >(
                       currentTable: table,
                       referencedTable: $$CollectionsTableReferences
@@ -17555,10 +17883,8 @@ class $$CollectionsTableTableManager
                             table,
                             p0,
                           ).collectionAudioItemsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.collectionId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'collection_id',
                       typedResults: items,
                     ),
                 ];
@@ -17613,13 +17939,9 @@ final class $$CollectionAudioItemsTableReferences
     super.$_typedResult,
   );
 
-  static $CollectionsTable _collectionIdTable(_$AppDatabase db) =>
-      db.collections.createAlias(
-        $_aliasNameGenerator(
-          db.collectionAudioItems.collectionId,
-          db.collections.id,
-        ),
-      );
+  static $CollectionsTable _collectionIdTable(_$AppDatabase db) => db
+      .collections
+      .createAlias('collection_audio_items__collection_id__collections__id');
 
   $$CollectionsTableProcessedTableManager get collectionId {
     final $_column = $_itemColumn<String>('collection_id')!;
@@ -17635,13 +17957,8 @@ final class $$CollectionAudioItemsTableReferences
     );
   }
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(
-          db.collectionAudioItems.audioItemId,
-          db.audioItems.id,
-        ),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('collection_audio_items__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -17917,7 +18234,9 @@ class $$CollectionAudioItemsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$CollectionAudioItemsTable, CollectionAudioItem>(
+                    table,
+                  ),
                   $$CollectionAudioItemsTableReferences(db, table, e),
                 ),
               )
@@ -17943,34 +18262,26 @@ class $$CollectionAudioItemsTableTableManager
                     >
                   >(state) {
                     if (collectionId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.collectionId,
-                                referencedTable:
-                                    $$CollectionAudioItemsTableReferences
-                                        ._collectionIdTable(db),
-                                referencedColumn:
-                                    $$CollectionAudioItemsTableReferences
-                                        ._collectionIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.collectionId,
+                        referencedTable: $$CollectionAudioItemsTableReferences
+                            ._collectionIdTable(db),
+                        referencedColumn: $$CollectionAudioItemsTableReferences
+                            ._collectionIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable:
-                                    $$CollectionAudioItemsTableReferences
-                                        ._audioItemIdTable(db),
-                                referencedColumn:
-                                    $$CollectionAudioItemsTableReferences
-                                        ._audioItemIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$CollectionAudioItemsTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$CollectionAudioItemsTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -17998,43 +18309,39 @@ typedef $$CollectionAudioItemsTableProcessedTableManager =
       CollectionAudioItem,
       PrefetchHooks Function({bool collectionId, bool audioItemId})
     >;
-typedef $$BookmarksTableCreateCompanionBuilder =
-    BookmarksCompanion Function({
-      Value<int> id,
-      Value<String?> memorySubjectId,
-      required String audioItemId,
-      required int sentenceIndex,
-      required String sentenceText,
-      required double startTime,
-      required double endTime,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-    });
-typedef $$BookmarksTableUpdateCompanionBuilder =
-    BookmarksCompanion Function({
-      Value<int> id,
-      Value<String?> memorySubjectId,
-      Value<String> audioItemId,
-      Value<int> sentenceIndex,
-      Value<String> sentenceText,
-      Value<double> startTime,
-      Value<double> endTime,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-    });
+typedef $$BookmarksTableCreateCompanionBuilder = BookmarksCompanion Function({
+  Value<int> id,
+  Value<String?> memorySubjectId,
+  required String audioItemId,
+  required int sentenceIndex,
+  required String sentenceText,
+  required double startTime,
+  required double endTime,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+});
+typedef $$BookmarksTableUpdateCompanionBuilder = BookmarksCompanion Function({
+  Value<int> id,
+  Value<String?> memorySubjectId,
+  Value<String> audioItemId,
+  Value<int> sentenceIndex,
+  Value<String> sentenceText,
+  Value<double> startTime,
+  Value<double> endTime,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+});
 
 final class $$BookmarksTableReferences
     extends BaseReferences<_$AppDatabase, $BookmarksTable, Bookmark> {
   $$BookmarksTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.bookmarks.audioItemId, db.audioItems.id),
-      );
+      db.audioItems.createAlias('bookmarks__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -18369,7 +18676,7 @@ class $$BookmarksTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$BookmarksTable, Bookmark>(table),
                   $$BookmarksTableReferences(db, table, e),
                 ),
               )
@@ -18395,17 +18702,15 @@ class $$BookmarksTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable: $$BookmarksTableReferences
-                                    ._audioItemIdTable(db),
-                                referencedColumn: $$BookmarksTableReferences
-                                    ._audioItemIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$BookmarksTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$BookmarksTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -18458,10 +18763,8 @@ final class $$PlaybackStatesTableReferences
     super.$_typedResult,
   );
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.playbackStates.audioItemId, db.audioItems.id),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('playback_states__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -18679,7 +18982,7 @@ class $$PlaybackStatesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlaybackStatesTable, PlaybackState>(table),
                   $$PlaybackStatesTableReferences(db, table, e),
                 ),
               )
@@ -18705,18 +19008,15 @@ class $$PlaybackStatesTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable: $$PlaybackStatesTableReferences
-                                    ._audioItemIdTable(db),
-                                referencedColumn:
-                                    $$PlaybackStatesTableReferences
-                                        ._audioItemIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$PlaybackStatesTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$PlaybackStatesTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -18826,13 +19126,8 @@ final class $$LearningProgressesTableReferences
     super.$_typedResult,
   );
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(
-          db.learningProgresses.audioItemId,
-          db.audioItems.id,
-        ),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('learning_progresses__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -19578,7 +19873,9 @@ class $$LearningProgressesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$LearningProgressesTable, LearningProgressesData>(
+                    table,
+                  ),
                   $$LearningProgressesTableReferences(db, table, e),
                 ),
               )
@@ -19604,19 +19901,15 @@ class $$LearningProgressesTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable:
-                                    $$LearningProgressesTableReferences
-                                        ._audioItemIdTable(db),
-                                referencedColumn:
-                                    $$LearningProgressesTableReferences
-                                        ._audioItemIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$LearningProgressesTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$LearningProgressesTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -19672,10 +19965,8 @@ final class $$StageCompletionsTableReferences
     super.$_typedResult,
   );
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.stageCompletions.audioItemId, db.audioItems.id),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('stage_completions__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -19923,7 +20214,7 @@ class $$StageCompletionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$StageCompletionsTable, StageCompletion>(table),
                   $$StageCompletionsTableReferences(db, table, e),
                 ),
               )
@@ -19949,19 +20240,15 @@ class $$StageCompletionsTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable:
-                                    $$StageCompletionsTableReferences
-                                        ._audioItemIdTable(db),
-                                referencedColumn:
-                                    $$StageCompletionsTableReferences
-                                        ._audioItemIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$StageCompletionsTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$StageCompletionsTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -19989,28 +20276,26 @@ typedef $$StageCompletionsTableProcessedTableManager =
       StageCompletion,
       PrefetchHooks Function({bool audioItemId})
     >;
-typedef $$TagsTableCreateCompanionBuilder =
-    TagsCompanion Function({
-      required String id,
-      required String name,
-      required int color,
-      required DateTime createdDate,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-      Value<int> rowid,
-    });
-typedef $$TagsTableUpdateCompanionBuilder =
-    TagsCompanion Function({
-      Value<String> id,
-      Value<String> name,
-      Value<int> color,
-      Value<DateTime> createdDate,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-      Value<int> rowid,
-    });
+typedef $$TagsTableCreateCompanionBuilder = TagsCompanion Function({
+  required String id,
+  required String name,
+  required int color,
+  required DateTime createdDate,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+  Value<int> rowid,
+});
+typedef $$TagsTableUpdateCompanionBuilder = TagsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<int> color,
+  Value<DateTime> createdDate,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+  Value<int> rowid,
+});
 
 final class $$TagsTableReferences
     extends BaseReferences<_$AppDatabase, $TagsTable, Tag> {
@@ -20019,7 +20304,7 @@ final class $$TagsTableReferences
   static MultiTypedResultKey<$AudioItemTagsTable, List<AudioItemTag>>
   _audioItemTagsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.audioItemTags,
-    aliasName: $_aliasNameGenerator(db.tags.id, db.audioItemTags.tagId),
+    aliasName: 'tags__id__audio_item_tags__tag_id',
   );
 
   $$AudioItemTagsTableProcessedTableManager get audioItemTagsRefs {
@@ -20276,8 +20561,10 @@ class $$TagsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$TagsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$TagsTable, Tag>(table),
+                  $$TagsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({audioItemTagsRefs = false}) {
@@ -20290,7 +20577,12 @@ class $$TagsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (audioItemTagsRefs)
-                    await $_getPrefetchedData<Tag, $TagsTable, AudioItemTag>(
+                    await $_getPrefetchedDataByColumns<
+                      Tag,
+                      $TagsTable,
+                      AudioItemTag,
+                      $AudioItemTagsTable
+                    >(
                       currentTable: table,
                       referencedTable: $$TagsTableReferences
                           ._audioItemTagsRefsTable(db),
@@ -20299,8 +20591,8 @@ class $$TagsTableTableManager
                         table,
                         p0,
                       ).audioItemTagsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.tagId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'tag_id',
                       typedResults: items,
                     ),
                 ];
@@ -20348,9 +20640,8 @@ final class $$AudioItemTagsTableReferences
     super.$_typedResult,
   );
 
-  static $TagsTable _tagIdTable(_$AppDatabase db) => db.tags.createAlias(
-    $_aliasNameGenerator(db.audioItemTags.tagId, db.tags.id),
-  );
+  static $TagsTable _tagIdTable(_$AppDatabase db) =>
+      db.tags.createAlias('audio_item_tags__tag_id__tags__id');
 
   $$TagsTableProcessedTableManager get tagId {
     final $_column = $_itemColumn<String>('tag_id')!;
@@ -20366,10 +20657,8 @@ final class $$AudioItemTagsTableReferences
     );
   }
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.audioItemTags.audioItemId, db.audioItems.id),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('audio_item_tags__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id')!;
@@ -20620,7 +20909,7 @@ class $$AudioItemTagsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AudioItemTagsTable, AudioItemTag>(table),
                   $$AudioItemTagsTableReferences(db, table, e),
                 ),
               )
@@ -20646,30 +20935,26 @@ class $$AudioItemTagsTableTableManager
                     >
                   >(state) {
                     if (tagId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.tagId,
-                                referencedTable: $$AudioItemTagsTableReferences
-                                    ._tagIdTable(db),
-                                referencedColumn: $$AudioItemTagsTableReferences
-                                    ._tagIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.tagId,
+                        referencedTable: $$AudioItemTagsTableReferences
+                            ._tagIdTable(db),
+                        referencedColumn: $$AudioItemTagsTableReferences
+                            ._tagIdTable(db)
+                            .id,
+                      ) as T;
                     }
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable: $$AudioItemTagsTableReferences
-                                    ._audioItemIdTable(db),
-                                referencedColumn: $$AudioItemTagsTableReferences
-                                    ._audioItemIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$AudioItemTagsTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$AudioItemTagsTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -20894,7 +21179,18 @@ class $$SentenceAiCacheTableTableManager
                 lastAccessedAt: lastAccessedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SentenceAiCacheTable, SentenceAiCacheData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SentenceAiCacheTable,
+                    SentenceAiCacheData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -20922,53 +21218,49 @@ typedef $$SentenceAiCacheTableProcessedTableManager =
       SentenceAiCacheData,
       PrefetchHooks Function()
     >;
-typedef $$SavedWordsTableCreateCompanionBuilder =
-    SavedWordsCompanion Function({
-      Value<int> id,
-      required String word,
-      Value<String?> memorySubjectId,
-      Value<String?> audioItemId,
-      Value<int?> sentenceIndex,
-      Value<String?> sentenceText,
-      Value<int?> sentenceStartMs,
-      Value<int?> sentenceEndMs,
-      Value<int> practiceCount,
-      Value<int> totalStudyMs,
-      Value<bool> viewedBack,
-      Value<DateTime?> lastPracticedAt,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-    });
-typedef $$SavedWordsTableUpdateCompanionBuilder =
-    SavedWordsCompanion Function({
-      Value<int> id,
-      Value<String> word,
-      Value<String?> memorySubjectId,
-      Value<String?> audioItemId,
-      Value<int?> sentenceIndex,
-      Value<String?> sentenceText,
-      Value<int?> sentenceStartMs,
-      Value<int?> sentenceEndMs,
-      Value<int> practiceCount,
-      Value<int> totalStudyMs,
-      Value<bool> viewedBack,
-      Value<DateTime?> lastPracticedAt,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<DateTime?> deletedAt,
-      Value<int> syncStatus,
-    });
+typedef $$SavedWordsTableCreateCompanionBuilder = SavedWordsCompanion Function({
+  Value<int> id,
+  required String word,
+  Value<String?> memorySubjectId,
+  Value<String?> audioItemId,
+  Value<int?> sentenceIndex,
+  Value<String?> sentenceText,
+  Value<int?> sentenceStartMs,
+  Value<int?> sentenceEndMs,
+  Value<int> practiceCount,
+  Value<int> totalStudyMs,
+  Value<bool> viewedBack,
+  Value<DateTime?> lastPracticedAt,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+});
+typedef $$SavedWordsTableUpdateCompanionBuilder = SavedWordsCompanion Function({
+  Value<int> id,
+  Value<String> word,
+  Value<String?> memorySubjectId,
+  Value<String?> audioItemId,
+  Value<int?> sentenceIndex,
+  Value<String?> sentenceText,
+  Value<int?> sentenceStartMs,
+  Value<int?> sentenceEndMs,
+  Value<int> practiceCount,
+  Value<int> totalStudyMs,
+  Value<bool> viewedBack,
+  Value<DateTime?> lastPracticedAt,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<DateTime?> deletedAt,
+  Value<int> syncStatus,
+});
 
 final class $$SavedWordsTableReferences
     extends BaseReferences<_$AppDatabase, $SavedWordsTable, SavedWord> {
   $$SavedWordsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.savedWords.audioItemId, db.audioItems.id),
-      );
+      db.audioItems.createAlias('saved_words__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager? get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id');
@@ -21400,7 +21692,7 @@ class $$SavedWordsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SavedWordsTable, SavedWord>(table),
                   $$SavedWordsTableReferences(db, table, e),
                 ),
               )
@@ -21426,17 +21718,15 @@ class $$SavedWordsTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable: $$SavedWordsTableReferences
-                                    ._audioItemIdTable(db),
-                                referencedColumn: $$SavedWordsTableReferences
-                                    ._audioItemIdTable(db)
-                                    .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$SavedWordsTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$SavedWordsTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -21518,10 +21808,8 @@ final class $$SavedSenseGroupsTableReferences
     super.$_typedResult,
   );
 
-  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) =>
-      db.audioItems.createAlias(
-        $_aliasNameGenerator(db.savedSenseGroups.audioItemId, db.audioItems.id),
-      );
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('saved_sense_groups__audio_item_id__audio_items__id');
 
   $$AudioItemsTableProcessedTableManager? get audioItemId {
     final $_column = $_itemColumn<String>('audio_item_id');
@@ -22014,7 +22302,7 @@ class $$SavedSenseGroupsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SavedSenseGroupsTable, SavedSenseGroup>(table),
                   $$SavedSenseGroupsTableReferences(db, table, e),
                 ),
               )
@@ -22040,19 +22328,15 @@ class $$SavedSenseGroupsTableTableManager
                     >
                   >(state) {
                     if (audioItemId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.audioItemId,
-                                referencedTable:
-                                    $$SavedSenseGroupsTableReferences
-                                        ._audioItemIdTable(db),
-                                referencedColumn:
-                                    $$SavedSenseGroupsTableReferences
-                                        ._audioItemIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$SavedSenseGroupsTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$SavedSenseGroupsTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -22220,7 +22504,16 @@ class $$LearnedWordFormsTableTableManager
                 firstLearnedAt: firstLearnedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$LearnedWordFormsTable, LearnedWordForm>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LearnedWordFormsTable,
+                    LearnedWordForm
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22534,7 +22827,16 @@ class $$DailyStudyRecordsTableTableManager
                 outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$DailyStudyRecordsTable, DailyStudyRecord>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $DailyStudyRecordsTable,
+                    DailyStudyRecord
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22836,7 +23138,19 @@ class $$DailyStageStudyRecordsTableTableManager
                 outputTimeMilliseconds: outputTimeMilliseconds,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $DailyStageStudyRecordsTable,
+                    DailyStageStudyRecord
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $DailyStageStudyRecordsTable,
+                    DailyStageStudyRecord
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -22864,42 +23178,40 @@ typedef $$DailyStageStudyRecordsTableProcessedTableManager =
       DailyStageStudyRecord,
       PrefetchHooks Function()
     >;
-typedef $$TtsCacheTableCreateCompanionBuilder =
-    TtsCacheCompanion Function({
-      Value<int> id,
-      required String cacheKey,
-      required String textHash,
-      required String sourceText,
-      required String engine,
-      required String voice,
-      required String languageCode,
-      required double speed,
-      required String format,
-      required String filePath,
-      required int fileSize,
-      required DateTime createdAt,
-      required DateTime lastAccessedAt,
-      Value<DateTime?> expiresAt,
-      Value<bool> isPinned,
-    });
-typedef $$TtsCacheTableUpdateCompanionBuilder =
-    TtsCacheCompanion Function({
-      Value<int> id,
-      Value<String> cacheKey,
-      Value<String> textHash,
-      Value<String> sourceText,
-      Value<String> engine,
-      Value<String> voice,
-      Value<String> languageCode,
-      Value<double> speed,
-      Value<String> format,
-      Value<String> filePath,
-      Value<int> fileSize,
-      Value<DateTime> createdAt,
-      Value<DateTime> lastAccessedAt,
-      Value<DateTime?> expiresAt,
-      Value<bool> isPinned,
-    });
+typedef $$TtsCacheTableCreateCompanionBuilder = TtsCacheCompanion Function({
+  Value<int> id,
+  required String cacheKey,
+  required String textHash,
+  required String sourceText,
+  required String engine,
+  required String voice,
+  required String languageCode,
+  required double speed,
+  required String format,
+  required String filePath,
+  required int fileSize,
+  required DateTime createdAt,
+  required DateTime lastAccessedAt,
+  Value<DateTime?> expiresAt,
+  Value<bool> isPinned,
+});
+typedef $$TtsCacheTableUpdateCompanionBuilder = TtsCacheCompanion Function({
+  Value<int> id,
+  Value<String> cacheKey,
+  Value<String> textHash,
+  Value<String> sourceText,
+  Value<String> engine,
+  Value<String> voice,
+  Value<String> languageCode,
+  Value<double> speed,
+  Value<String> format,
+  Value<String> filePath,
+  Value<int> fileSize,
+  Value<DateTime> createdAt,
+  Value<DateTime> lastAccessedAt,
+  Value<DateTime?> expiresAt,
+  Value<bool> isPinned,
+});
 
 class $$TtsCacheTableFilterComposer
     extends Composer<_$AppDatabase, $TtsCacheTable> {
@@ -23230,7 +23542,16 @@ class $$TtsCacheTableTableManager
                 isPinned: isPinned,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$TtsCacheTable, TtsCacheData>(table),
+                  BaseReferences<_$AppDatabase, $TtsCacheTable, TtsCacheData>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -23252,6 +23573,221 @@ typedef $$TtsCacheTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $TtsCacheTable, TtsCacheData>,
       ),
       TtsCacheData,
+      PrefetchHooks Function()
+    >;
+typedef $$DictionaryCacheTableCreateCompanionBuilder =
+    DictionaryCacheCompanion Function({
+      Value<int> id,
+      required String dict,
+      required String word,
+      required String data,
+      required DateTime createdAt,
+    });
+typedef $$DictionaryCacheTableUpdateCompanionBuilder =
+    DictionaryCacheCompanion Function({
+      Value<int> id,
+      Value<String> dict,
+      Value<String> word,
+      Value<String> data,
+      Value<DateTime> createdAt,
+    });
+
+class $$DictionaryCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $DictionaryCacheTable> {
+  $$DictionaryCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dict => $composableBuilder(
+    column: $table.dict,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get word => $composableBuilder(
+    column: $table.word,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get data => $composableBuilder(
+    column: $table.data,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DictionaryCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $DictionaryCacheTable> {
+  $$DictionaryCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dict => $composableBuilder(
+    column: $table.dict,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get word => $composableBuilder(
+    column: $table.word,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get data => $composableBuilder(
+    column: $table.data,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DictionaryCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DictionaryCacheTable> {
+  $$DictionaryCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get dict =>
+      $composableBuilder(column: $table.dict, builder: (column) => column);
+
+  GeneratedColumn<String> get word =>
+      $composableBuilder(column: $table.word, builder: (column) => column);
+
+  GeneratedColumn<String> get data =>
+      $composableBuilder(column: $table.data, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$DictionaryCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DictionaryCacheTable,
+          DictionaryCacheData,
+          $$DictionaryCacheTableFilterComposer,
+          $$DictionaryCacheTableOrderingComposer,
+          $$DictionaryCacheTableAnnotationComposer,
+          $$DictionaryCacheTableCreateCompanionBuilder,
+          $$DictionaryCacheTableUpdateCompanionBuilder,
+          (
+            DictionaryCacheData,
+            BaseReferences<
+              _$AppDatabase,
+              $DictionaryCacheTable,
+              DictionaryCacheData
+            >,
+          ),
+          DictionaryCacheData,
+          PrefetchHooks Function()
+        > {
+  $$DictionaryCacheTableTableManager(
+    _$AppDatabase db,
+    $DictionaryCacheTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DictionaryCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DictionaryCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DictionaryCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> dict = const Value.absent(),
+                Value<String> word = const Value.absent(),
+                Value<String> data = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => DictionaryCacheCompanion(
+                id: id,
+                dict: dict,
+                word: word,
+                data: data,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String dict,
+                required String word,
+                required String data,
+                required DateTime createdAt,
+              }) => DictionaryCacheCompanion.insert(
+                id: id,
+                dict: dict,
+                word: word,
+                data: data,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DictionaryCacheTable, DictionaryCacheData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $DictionaryCacheTable,
+                    DictionaryCacheData
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DictionaryCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DictionaryCacheTable,
+      DictionaryCacheData,
+      $$DictionaryCacheTableFilterComposer,
+      $$DictionaryCacheTableOrderingComposer,
+      $$DictionaryCacheTableAnnotationComposer,
+      $$DictionaryCacheTableCreateCompanionBuilder,
+      $$DictionaryCacheTableUpdateCompanionBuilder,
+      (
+        DictionaryCacheData,
+        BaseReferences<
+          _$AppDatabase,
+          $DictionaryCacheTable,
+          DictionaryCacheData
+        >,
+      ),
+      DictionaryCacheData,
       PrefetchHooks Function()
     >;
 typedef $$MemorySchedulesTableCreateCompanionBuilder =
@@ -23312,10 +23848,7 @@ final class $$MemorySchedulesTableReferences
   _memoryReviewEventsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.memoryReviewEvents,
-        aliasName: $_aliasNameGenerator(
-          db.memorySchedules.id,
-          db.memoryReviewEvents.scheduleId,
-        ),
+        aliasName: 'memory_schedules__id__memory_review_events__schedule_id',
       );
 
   $$MemoryReviewEventsTableProcessedTableManager get memoryReviewEventsRefs {
@@ -23777,7 +24310,7 @@ class $$MemorySchedulesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$MemorySchedulesTable, MemorySchedule>(table),
                   $$MemorySchedulesTableReferences(db, table, e),
                 ),
               )
@@ -23792,10 +24325,11 @@ class $$MemorySchedulesTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (memoryReviewEventsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       MemorySchedule,
                       $MemorySchedulesTable,
-                      MemoryReviewEvent
+                      MemoryReviewEvent,
+                      $MemoryReviewEventsTable
                     >(
                       currentTable: table,
                       referencedTable: $$MemorySchedulesTableReferences
@@ -23806,8 +24340,8 @@ class $$MemorySchedulesTableTableManager
                             table,
                             p0,
                           ).memoryReviewEventsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.scheduleId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'schedule_id',
                       typedResults: items,
                     ),
                 ];
@@ -23886,13 +24420,9 @@ final class $$MemoryReviewEventsTableReferences
     super.$_typedResult,
   );
 
-  static $MemorySchedulesTable _scheduleIdTable(_$AppDatabase db) =>
-      db.memorySchedules.createAlias(
-        $_aliasNameGenerator(
-          db.memoryReviewEvents.scheduleId,
-          db.memorySchedules.id,
-        ),
-      );
+  static $MemorySchedulesTable _scheduleIdTable(_$AppDatabase db) => db
+      .memorySchedules
+      .createAlias('memory_review_events__schedule_id__memory_schedules__id');
 
   $$MemorySchedulesTableProcessedTableManager get scheduleId {
     final $_column = $_itemColumn<String>('schedule_id')!;
@@ -24325,7 +24855,9 @@ class $$MemoryReviewEventsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$MemoryReviewEventsTable, MemoryReviewEvent>(
+                    table,
+                  ),
                   $$MemoryReviewEventsTableReferences(db, table, e),
                 ),
               )
@@ -24351,19 +24883,15 @@ class $$MemoryReviewEventsTableTableManager
                     >
                   >(state) {
                     if (scheduleId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.scheduleId,
-                                referencedTable:
-                                    $$MemoryReviewEventsTableReferences
-                                        ._scheduleIdTable(db),
-                                referencedColumn:
-                                    $$MemoryReviewEventsTableReferences
-                                        ._scheduleIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.scheduleId,
+                        referencedTable: $$MemoryReviewEventsTableReferences
+                            ._scheduleIdTable(db),
+                        referencedColumn: $$MemoryReviewEventsTableReferences
+                            ._scheduleIdTable(db)
+                            .id,
+                      ) as T;
                     }
 
                     return state;
@@ -24578,7 +25106,19 @@ class $$MemoryReviewQueueEntriesTableTableManager
                 enqueuedAt: enqueuedAt,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $MemoryReviewQueueEntriesTable,
+                    MemoryReviewQueueEntry
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MemoryReviewQueueEntriesTable,
+                    MemoryReviewQueueEntry
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -24644,6 +25184,8 @@ class $AppDatabaseManager {
       );
   $$TtsCacheTableTableManager get ttsCache =>
       $$TtsCacheTableTableManager(_db, _db.ttsCache);
+  $$DictionaryCacheTableTableManager get dictionaryCache =>
+      $$DictionaryCacheTableTableManager(_db, _db.dictionaryCache);
   $$MemorySchedulesTableTableManager get memorySchedules =>
       $$MemorySchedulesTableTableManager(_db, _db.memorySchedules);
   $$MemoryReviewEventsTableTableManager get memoryReviewEvents =>

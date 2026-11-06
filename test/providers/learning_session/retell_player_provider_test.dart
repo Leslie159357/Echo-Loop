@@ -355,7 +355,7 @@ ProviderContainer _createRetellStatsContainer(
   StudyActivityGate? activityGate,
 }) {
   return ProviderContainer(
-    overrides: [
+    overrides: dedupeOverrides([
       foregroundAudioEngineProvider.overrideWith(TestForegroundAudioEngine.new),
       learningSessionProvider.overrideWith(TestLearningSession.new),
       analyticsOverride(),
@@ -368,7 +368,7 @@ ProviderContainer _createRetellStatsContainer(
         ),
       if (activityGate != null)
         studyActivityGateProvider.overrideWithValue(activityGate),
-    ],
+    ]),
   );
 }
 
@@ -1038,13 +1038,13 @@ void main() {
     setUp(() {
       engine = SequencedTestAudioEngine();
       container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => engine),
           learningSessionProvider.overrideWith(TestLearningSession.new),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       notifier = container.read(retellPlayerProvider.notifier);
     });
@@ -1113,6 +1113,45 @@ void main() {
       await notifier.resume();
 
       expect(driver.ranges.last.start, pausedAt);
+      expect(driver.ranges.last.end, sentence.endTime);
+    });
+
+    test('开启暂停后从句首继续时，resume 从暂停所在句的句首开播', () async {
+      final sentenceContainer = ProviderContainer(
+        overrides: dedupeOverrides([
+          foregroundAudioEngineProvider.overrideWith(() => engine),
+          learningSessionProvider.overrideWith(TestLearningSession.new),
+          analyticsOverride(),
+          appSettingsProvider.overrideWith(
+            () => TestAppSettings(
+              const AppSettingsState(resumeFromSentenceStartEnabled: true),
+            ),
+          ),
+          ...learningSettingsOverrides(),
+          ...studyTimeOverrides(),
+        ]),
+      );
+      addTearDown(sentenceContainer.dispose);
+      final sentenceNotifier = sentenceContainer.read(
+        retellPlayerProvider.notifier,
+      );
+      final driver = _RecordingParagraphPlaybackDriver();
+      final sentence = Sentence(
+        index: 0,
+        text: 'Resume this sentence.',
+        startTime: const Duration(seconds: 1),
+        endTime: const Duration(seconds: 4),
+      );
+      await sentenceNotifier.initialize([
+        [sentence],
+      ], playbackDriver: driver);
+      await sentenceNotifier.startPlaying();
+
+      driver.position = const Duration(milliseconds: 2350);
+      await sentenceNotifier.pause();
+      await sentenceNotifier.resume();
+
+      expect(driver.ranges.last.start, sentence.startTime);
       expect(driver.ranges.last.end, sentence.endTime);
     });
 
@@ -1259,7 +1298,7 @@ void main() {
 
     test('等待态挂起时，当前段播完后进入 waiting for user', () async {
       final delayedContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(
             () => DelayedRetellTestAudioEngine(),
           ),
@@ -1267,7 +1306,7 @@ void main() {
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(delayedContainer.dispose);
 
@@ -1304,7 +1343,7 @@ void main() {
 
     test('无限重复时完成一遍后继续当前段', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(
             () => SequencedTestAudioEngine(),
           ),
@@ -1312,7 +1351,7 @@ void main() {
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -1349,7 +1388,7 @@ void main() {
         ),
       );
       final saveContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(
             () => SequencedTestAudioEngine(),
           ),
@@ -1361,11 +1400,11 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(() => progressNotifier),
+          learningProgressProvider.overrideWith(() => progressNotifier),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(saveContainer.dispose);
 
@@ -1402,7 +1441,7 @@ void main() {
         ),
       );
       final saveContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(
             () => SequencedTestAudioEngine(),
           ),
@@ -1415,11 +1454,11 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(() => progressNotifier),
+          learningProgressProvider.overrideWith(() => progressNotifier),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(saveContainer.dispose);
 
@@ -1457,7 +1496,7 @@ void main() {
       final posEngine = PositionDrivenTestAudioEngine();
       final studyTimeService = _RecordingRetellStudyTimeService();
       final posContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => posEngine),
           learningSessionProvider.overrideWith(
             () => TestLearningSession(
@@ -1467,14 +1506,14 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(() => progressNotifier),
+          learningProgressProvider.overrideWith(() => progressNotifier),
           // 静音跳过会读 appSettingsProvider；用测试实现避免触发 SharedPreferences 加载
           appSettingsProvider.overrideWith(() => TestAppSettings()),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
           studyTimeServiceProvider.overrideWithValue(studyTimeService),
-        ],
+        ]),
       );
       addTearDown(() {
         posEngine.release();
@@ -1606,14 +1645,14 @@ void main() {
       final studyTimeService = _RecordingRetellStudyTimeService();
       final posEngine = PositionDrivenTestAudioEngine();
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => posEngine),
           learningSessionProvider.overrideWith(TestLearningSession.new),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
           studyTimeServiceProvider.overrideWithValue(studyTimeService),
-        ],
+        ]),
       );
       addTearDown(() {
         posEngine.release();
@@ -1666,7 +1705,7 @@ void main() {
     test('复述倒计时中点击上一段会正确进入上一段，不会停留在当前段', () async {
       final countdownEngine = CountdownNavigationTestAudioEngine();
       final countdownContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => countdownEngine),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -1676,13 +1715,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(countdownContainer.dispose);
 
@@ -1751,7 +1790,7 @@ void main() {
       () async {
         final countdownEngine = CountdownNavigationTestAudioEngine();
         final testContainer = ProviderContainer(
-          overrides: [
+          overrides: dedupeOverrides([
             foregroundAudioEngineProvider.overrideWith(() => countdownEngine),
             learningSessionProvider.overrideWith(
               () => _PassiveLearningSession(
@@ -1761,13 +1800,13 @@ void main() {
                 ),
               ),
             ),
-            learningProgressNotifierProvider.overrideWith(
+            learningProgressProvider.overrideWith(
               _InMemoryLearningProgressNotifier.new,
             ),
             analyticsOverride(),
             ...learningSettingsOverrides(),
             ...studyTimeOverrides(),
-          ],
+          ]),
         );
         addTearDown(testContainer.dispose);
 
@@ -1834,7 +1873,7 @@ void main() {
     test('未手动切换 displayMode 时，进入 retelling phase 正常重置为 keywordsOnly', () async {
       final countdownEngine = CountdownNavigationTestAudioEngine();
       final testContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => countdownEngine),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -1844,13 +1883,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(testContainer.dispose);
 
@@ -1891,7 +1930,7 @@ void main() {
     test('复述倒计时中点击下一段只推进一段，不会跳过一段', () async {
       final countdownEngine = CountdownNavigationTestAudioEngine();
       final countdownContainer = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(() => countdownEngine),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -1901,13 +1940,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(countdownContainer.dispose);
 
@@ -2003,7 +2042,7 @@ void main() {
 
     test('同段 seek 保留 displayMode（如用户已切 showAll）', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(_SeekTestAudioEngine.new),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -2013,13 +2052,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -2048,7 +2087,7 @@ void main() {
 
     test('跨段 seek 重置 displayMode 和 userOverrodeDisplayMode', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(_SeekTestAudioEngine.new),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -2058,13 +2097,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -2094,7 +2133,7 @@ void main() {
 
     test('seekToParagraph 跳到目标段首句，越界则不动', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(_SeekTestAudioEngine.new),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -2104,13 +2143,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -2145,7 +2184,7 @@ void main() {
 
     test('retelling phase 中 seek 强制切回 listening + 清等待态', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(_SeekTestAudioEngine.new),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -2155,13 +2194,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -2225,7 +2264,7 @@ void main() {
 
     test('pause → goToNextParagraph 下一段从段首开播（不污染）', () async {
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           foregroundAudioEngineProvider.overrideWith(_SeekTestAudioEngine.new),
           learningSessionProvider.overrideWith(
             () => _PassiveLearningSession(
@@ -2235,13 +2274,13 @@ void main() {
               ),
             ),
           ),
-          learningProgressNotifierProvider.overrideWith(
+          learningProgressProvider.overrideWith(
             _InMemoryLearningProgressNotifier.new,
           ),
           analyticsOverride(),
           ...learningSettingsOverrides(),
           ...studyTimeOverrides(),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 

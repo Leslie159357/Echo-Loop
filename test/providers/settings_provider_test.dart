@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/mock_providers.dart';
+
 void main() {
   group('AppSettingsState', () {
     group('默认值', () {
@@ -197,6 +199,113 @@ void main() {
       expect(prefs.getBool('word_highlight_enabled'), isFalse);
     });
 
+    test('暂停后从句首继续默认关闭并可持久化开启选择', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(appSettingsProvider.notifier);
+      expect(
+        container.read(appSettingsProvider).resumeFromSentenceStartEnabled,
+        isFalse,
+      );
+
+      await notifier.setResumeFromSentenceStartEnabled(true);
+
+      expect(
+        container.read(appSettingsProvider).resumeFromSentenceStartEnabled,
+        isTrue,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('resume_from_sentence_start_enabled'), isTrue);
+    });
+
+    test('加载已保存的暂停后从句首继续开关', () async {
+      SharedPreferences.setMockInitialValues({
+        'resume_from_sentence_start_enabled': true,
+        'theme_mode': 'dark',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final loaded = Completer<void>();
+      final subscription = container.listen(appSettingsProvider, (_, next) {
+        if (next.themeMode == ThemeMode.dark && !loaded.isCompleted) {
+          loaded.complete();
+        }
+      });
+      addTearDown(subscription.close);
+
+      await loaded.future.timeout(const Duration(seconds: 5));
+
+      expect(
+        container.read(appSettingsProvider).resumeFromSentenceStartEnabled,
+        isTrue,
+      );
+    });
+
+    test('本地切换逐词高亮后，云端拉取的值会生效', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.setWordHighlightEnabled(false);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('word_highlight_enabled', true);
+      await notifier.reloadFromPrefs();
+
+      expect(container.read(appSettingsProvider).wordHighlightEnabled, isTrue);
+    });
+
+    test('设置写入与云端拉取并发时，内存状态与 SP 最终一致（设置先开始）', () async {
+      SharedPreferences.setMockInitialValues({'skip_silence_enabled': true});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.reloadFromPrefs();
+
+      await Future.wait([
+        notifier.setSkipSilenceEnabled(false),
+        notifier.reloadFromPrefs(),
+      ]);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('skip_silence_enabled'), isFalse);
+      expect(container.read(appSettingsProvider).skipSilenceEnabled, isFalse);
+    });
+
+    test('设置写入与云端拉取并发时，内存状态与 SP 最终一致（拉取先开始）', () async {
+      SharedPreferences.setMockInitialValues({'skip_silence_enabled': true});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.reloadFromPrefs();
+
+      await Future.wait([
+        notifier.reloadFromPrefs(),
+        notifier.setSkipSilenceEnabled(false),
+      ]);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('skip_silence_enabled'), isFalse);
+      expect(container.read(appSettingsProvider).skipSilenceEnabled, isFalse);
+    });
+
+    test('本地切换后，云端拉取的暂停后从句首继续值会生效', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(appSettingsProvider.notifier);
+      await notifier.setResumeFromSentenceStartEnabled(true);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('resume_from_sentence_start_enabled', false);
+      await notifier.reloadFromPrefs();
+
+      expect(
+        container.read(appSettingsProvider).resumeFromSentenceStartEnabled,
+        isFalse,
+      );
+    });
+
     test('没有已保存值时，读取其他偏好后逐词高亮仍默认开启', () async {
       SharedPreferences.setMockInitialValues({'theme_mode': 'dark'});
 
@@ -327,9 +436,9 @@ void main() {
       SharedPreferences.setMockInitialValues({'locale': 'zh-CN'});
 
       final container = ProviderContainer(
-        overrides: [
+        overrides: dedupeOverrides([
           initialUiLocaleProvider.overrideWithValue(const Locale('zh', 'CN')),
-        ],
+        ]),
       );
       addTearDown(container.dispose);
 
@@ -374,11 +483,11 @@ void main() {
         });
 
         final container = ProviderContainer(
-          overrides: [
+          overrides: dedupeOverrides([
             initialAiTranscriptionAutoMergeEnabledProvider.overrideWithValue(
               false,
             ),
-          ],
+          ]),
         );
         addTearDown(container.dispose);
 
@@ -507,6 +616,37 @@ void main() {
       expect(
         container.read(appSettingsProvider).aiTranscriptionAutoMergeEnabled,
         isFalse,
+      );
+    });
+  });
+
+  group('resolveUiLocale', () {
+    test('用户显式设置的语言优先，不受系统语言影响', () {
+      expect(
+        resolveUiLocale(const Locale('en'), const Locale('zh', 'CN')),
+        equals(const Locale('en')),
+      );
+      expect(
+        resolveUiLocale(const Locale('zh', 'CN'), const Locale('fr', 'FR')),
+        equals(const Locale('zh', 'CN')),
+      );
+    });
+
+    test('跟随系统（设置为 null）时按系统语言匹配', () {
+      expect(
+        resolveUiLocale(null, const Locale('zh', 'TW')),
+        equals(const Locale('zh', 'CN')),
+      );
+    });
+
+    test('跟随系统且系统语言不受支持时回退英文，不抛异常（fr_CN 回归）', () {
+      expect(
+        resolveUiLocale(null, const Locale('fr', 'CN')),
+        equals(const Locale('en')),
+      );
+      expect(
+        resolveUiLocale(null, const Locale('ja', 'JP')),
+        equals(const Locale('en')),
       );
     });
   });

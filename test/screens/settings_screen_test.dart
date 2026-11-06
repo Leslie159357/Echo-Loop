@@ -37,6 +37,8 @@ import 'package:echo_loop/providers/package_info_provider.dart';
 import 'package:echo_loop/services/tts/tts_engine.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/misc.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
@@ -510,12 +512,10 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
-              supabaseSessionProvider.overrideWith(
-                (ref) => Stream<Session?>.value(session),
-              ),
-            ],
+              supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(session)),
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -545,12 +545,10 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
-              supabaseSessionProvider.overrideWith(
-                (ref) => Stream<Session?>.value(session),
-              ),
-            ],
+              supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(session)),
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -581,12 +579,10 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
-              supabaseSessionProvider.overrideWith(
-                (ref) => Stream<Session?>.value(session),
-              ),
-            ],
+              supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(session)),
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -617,12 +613,10 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
-              supabaseSessionProvider.overrideWith(
-                (ref) => Stream<Session?>.value(session),
-              ),
-            ],
+              supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(session)),
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -653,12 +647,10 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
-              supabaseSessionProvider.overrideWith(
-                (ref) => Stream<Session?>.value(session),
-              ),
-            ],
+              supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(session)),
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -671,13 +663,13 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
               subscriptionControllerProvider.overrideWith(
                 () =>
                     _TestSubscriptionController(const EntitlementState.free()),
               ),
-            ],
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -695,7 +687,7 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
               subscriptionControllerProvider.overrideWith(
                 () => _TestSubscriptionController(
@@ -708,7 +700,7 @@ void main() {
                   ),
                 ),
               ),
-            ],
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -723,13 +715,13 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(),
               subscriptionControllerProvider.overrideWith(
                 () =>
                     _TestSubscriptionController(const EntitlementState.free()),
               ),
-            ],
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -744,13 +736,13 @@ void main() {
         await tester.pumpWidget(
           createTestScreen(
             const SettingsScreen(),
-            overrides: [
+            overrides: dedupeOverrides([
               ...buildOverrides(subscriptionAvailable: false),
               subscriptionControllerProvider.overrideWith(
                 () =>
                     _TestSubscriptionController(const EntitlementState.free()),
               ),
-            ],
+            ]),
           ),
         );
         await tester.pumpAndSettle();
@@ -781,14 +773,14 @@ void main() {
         expect(find.text('Speech Recognition'), findsOneWidget);
       });
 
-      testWidgets('语音合成入口显示当前 Echo Loop 引擎，不显示口音', (tester) async {
+      testWidgets('语音合成入口显示默认 Edge 在线引擎，不显示口音', (tester) async {
         await tester.pumpWidget(
           createTestScreen(const SettingsScreen(), overrides: buildOverrides()),
         );
         await tester.pumpAndSettle();
 
         expect(find.text('Text-to-Speech'), findsOneWidget);
-        expect(find.text('Echo Loop AI'), findsOneWidget);
+        expect(find.text('Edge TTS'), findsOneWidget);
         expect(find.text('American'), findsNothing);
       });
 

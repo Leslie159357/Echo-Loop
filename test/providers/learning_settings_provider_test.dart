@@ -13,17 +13,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/mock_providers.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   ProviderContainer makeContainer(SharedPreferences prefs) {
     return ProviderContainer(
-      overrides: [
+      overrides: dedupeOverrides([
         sharedPreferencesProvider.overrideWithValue(prefs),
         initialLearningSettingsProvider.overrideWithValue(
           LearningSettings.fromPrefsSync(prefs),
         ),
-      ],
+      ]),
     );
   }
 
@@ -358,6 +360,31 @@ void main() {
       );
       expect(
         prefs.getBool(LearningSettingsKeys.pdfExportReminderShown),
+        isTrue,
+      );
+    });
+
+    test('markPodcastTranscriptReminderShown 写 SP + 翻转 state，重复调用幂等', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = makeContainer(prefs);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(learningSettingsProvider.notifier);
+      expect(
+        container.read(learningSettingsProvider).podcastTranscriptReminderShown,
+        isFalse,
+      );
+
+      await notifier.markPodcastTranscriptReminderShown();
+      await notifier.markPodcastTranscriptReminderShown();
+
+      expect(
+        container.read(learningSettingsProvider).podcastTranscriptReminderShown,
+        isTrue,
+      );
+      expect(
+        prefs.getBool(LearningSettingsKeys.podcastTranscriptReminderShown),
         isTrue,
       );
     });

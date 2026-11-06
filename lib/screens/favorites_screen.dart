@@ -36,7 +36,7 @@ import '../providers/favorite_sentence_lifecycle_provider.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/saved_sense_group_provider.dart';
 import '../providers/saved_word_provider.dart';
-import '../services/dictionary_service.dart';
+import '../providers/dictionary/dictionary_registry.dart';
 import '../services/app_logger.dart';
 import '../services/pronunciation/local_audio_clip_player.dart';
 import '../services/pronunciation/local_audio_range_player.dart';
@@ -297,10 +297,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     // 获取收藏数量
     final bookmarksAsync = ref.watch(bookmarkListProvider);
-    final sentenceCount = bookmarksAsync.valueOrNull?.length;
-    final wordCount = ref.watch(savedWordListProvider).valueOrNull?.length ?? 0;
+    final sentenceCount = bookmarksAsync.value?.length;
+    final wordCount = ref.watch(savedWordListProvider).value?.length ?? 0;
     final phraseCount =
-        ref.watch(savedSenseGroupListProvider).valueOrNull?.length ?? 0;
+        ref.watch(savedSenseGroupListProvider).value?.length ?? 0;
     final vocabCount = wordCount + phraseCount;
 
     // ----- 新手引导 flow 声明 -----
@@ -551,7 +551,7 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allBookmarks = ref.watch(bookmarkListProvider).valueOrNull ?? [];
+    final allBookmarks = ref.watch(bookmarkListProvider).value ?? [];
     if (allBookmarks.isEmpty) return const SizedBox.shrink();
 
     // 过滤掉无效书签（迁移遗留的无时长条目）
@@ -562,7 +562,7 @@ class _FloatingSentenceReviewButton extends ConsumerWidget {
     if (validBookmarks.isEmpty) return const SizedBox.shrink();
 
     final dueCountAsync = ref.watch(favoriteSentenceDueCountProvider);
-    final dueCount = dueCountAsync.valueOrNull;
+    final dueCount = dueCountAsync.value;
     final l10n = AppLocalizations.of(context)!;
 
     return _FloatingReviewButton(
@@ -617,15 +617,15 @@ class _FloatingFlashcardButton extends ConsumerWidget {
     final savedWordsAsync = ref.watch(savedWordListProvider);
     final savedPhrasesAsync = ref.watch(savedSenseGroupListProvider);
 
-    final words = savedWordsAsync.valueOrNull ?? [];
-    final phrases = savedPhrasesAsync.valueOrNull ?? [];
+    final words = savedWordsAsync.value ?? [];
+    final phrases = savedPhrasesAsync.value ?? [];
     final totalCount = words.length + phrases.length;
 
     if (totalCount == 0) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context)!;
     final dueCountAsync = ref.watch(favoriteVocabularyDueCountProvider);
-    final dueCount = dueCountAsync.valueOrNull;
+    final dueCount = dueCountAsync.value;
     return _FloatingReviewButton(
       leading: dueCount == 0
           ? const Text('🎉', style: TextStyle(fontSize: 18))
@@ -1232,14 +1232,17 @@ class _WordsViewState extends ConsumerState<_WordsView> {
   }
 
   /// 当单词列表变化时，批量查询字典释义
-  void _loadDictEntries(List<SavedWord> words) {
+  Future<void> _loadDictEntries(List<SavedWord> words) async {
     final wordStrings = words.map((w) => w.word).toList();
     // 单词列表未变化时跳过
     if (_listEquals(wordStrings, _lastWordKeys)) return;
     _lastWordKeys = wordStrings;
 
-    final entries = DictionaryService.instance.lookupAll(wordStrings);
-    if (!mounted) return;
+    final entries = await ref
+        .read(dictionaryServiceProvider)
+        .lookupAll(wordStrings);
+    // 查询期间列表已变化时丢弃过期结果，避免旧释义覆盖新列表
+    if (!mounted || !_listEquals(wordStrings, _lastWordKeys)) return;
     setState(() => _dictMap = entries);
   }
 
@@ -1264,8 +1267,8 @@ class _WordsViewState extends ConsumerState<_WordsView> {
       return Center(child: Text('Error: ${savedWordsAsync.error}'));
     }
 
-    final words = savedWordsAsync.valueOrNull ?? [];
-    final phrases = savedPhrasesAsync.valueOrNull ?? [];
+    final words = savedWordsAsync.value ?? [];
+    final phrases = savedPhrasesAsync.value ?? [];
 
     if (words.isEmpty && phrases.isEmpty) {
       return _buildEmptyState(context, isSentences: false);
@@ -1720,7 +1723,7 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
     }
   }
 
-  /// Tile 被列表创建后才预热；离线 Opus 命中时无需再生成同词的 TTS 缓存。
+  /// Tile 被列表创建后才预热；CDN 单词音频命中时无需再生成同词的 TTS 缓存。
   void _schedulePrewarm() {
     final configurationVersion = ref.read(
       ttsControllerProvider.select((state) => state.configurationVersion),
@@ -1738,11 +1741,10 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       if (!mounted ||
           !widget.isActive ||
           widget.isScrolling ||
-          !_isInScrollableViewport(context) ||
-          ref.read(pronunciationClipsProvider(word)).isNotEmpty) {
+          !_isInScrollableViewport(context)) {
         return;
       }
-      ref.read(ttsControllerProvider.notifier).prewarmTextsIncremental([word]);
+      ref.read(textPlaybackProvider.notifier).prewarmWord(word);
     });
   }
 
@@ -1877,14 +1879,14 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 播放入口不依赖本地词典命中，固定跟随音标左侧排列。
+                    // 播放入口不依赖在线词典命中，固定跟随音标左侧排列。
                     _FavoritePronunciationRow(
                       rowKey: const Key('favorite-word-pronunciation-row'),
                       buttonKey: const Key('favorite_speak'),
                       text: word.word,
                       phonetic: widget.dictEntry?.phonetic,
                     ),
-                    // 完整释义仅在本地词典精确命中时展示。
+                    // 完整释义仅在在线词典精确命中时展示。
                     if (widget.dictEntry != null) ...[
                       if (widget.dictEntry!.translation != null) ...[
                         const SizedBox(height: AppSpacing.xs),

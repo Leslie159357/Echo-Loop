@@ -613,7 +613,7 @@ class RetellPlayer extends _$RetellPlayer {
 
     unawaited(
       ref
-          .read(learningProgressNotifierProvider.notifier)
+          .read(learningProgressProvider.notifier)
           .saveRetellSentenceIndex(
             audioItemId,
             globalIdx,
@@ -665,7 +665,15 @@ class RetellPlayer extends _$RetellPlayer {
         sentences.isNotEmpty &&
         snapshotPosition >= sentences.first.startTime &&
         snapshotPosition < sentences.last.endTime) {
-      _resumePosition = snapshotPosition;
+      final resumeFromSentenceStart = ref
+          .read(appSettingsProvider)
+          .resumeFromSentenceStartEnabled;
+      final pausedSentenceIndex = sentences.lastIndexWhere(
+        (sentence) => sentence.startTime <= snapshotPosition,
+      );
+      _resumePosition = resumeFromSentenceStart
+          ? sentences[pausedSentenceIndex].startTime
+          : snapshotPosition;
     }
     state = state.copyWith(
       isPlaying: false,
@@ -1200,6 +1208,8 @@ class RetellPlayer extends _$RetellPlayer {
       speed: state.settings.playbackSpeed,
       onRangeReady: () => _startPositionTracking(sentences, sessionId: sid),
     );
+    // 播放期间 notifier 可能已销毁，过期则不再访问 state。
+    if (!ref.mounted) return;
 
     // 播放完成后进入复述阶段（用局部变量检查）
     final sessionStillActive =
