@@ -335,20 +335,10 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                 ),
               ),
 
-              // 平台 TTS：无具名音色，仅显示口音（美/英，决定系统音色语言）。
-              // 点击口音即选中并试听该口音（进页已后台预热，多数秒播）。
-              const SizedBox(height: AppSpacing.m),
-              // 提示弱化显示在「口音」分组标题后：部分机型/系统语音不区分美/英音。
-              _SectionLabel(text: l10n.ttsAccent, hint: l10n.ttsAccentHint),
-              Card(
-                child: Column(
-                  children: [
-                    _AccentPreviewRow(accent: TtsAccent.us, l10n: l10n),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    _AccentPreviewRow(accent: TtsAccent.uk, l10n: l10n),
-                  ],
-                ),
-              ),
+              // 德语版：平台引擎下不显示「口音」区。
+              // 上游的「美音 / 英音」对本版无意义——平台引擎实际走自建 Fish Audio
+              // 德语网关，音色由上方「德语发音人」决定，语言固定 de-DE。
+              // 保留口音区会误导：点它试听的是默认 de1（男声），与已选音色不符。
 
               // 本地仍有残留模型（非当前引擎、未在使用）：收成一行存储清理入口，
               // 不再平铺两张模型卡（避免在「平台 TTS」下误读为可选设置）。

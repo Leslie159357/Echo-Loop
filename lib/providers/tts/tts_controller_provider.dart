@@ -463,8 +463,11 @@ class TtsController extends Notifier<TtsControllerState> {
   /// 实时朗读，口音仍生效）。设 [speakingKey] 为该口音试听 key，供口音行显播放态。
   /// 仅平台 TTS 场景调用（口音行只在平台引擎下显示）。
   Future<void> previewAccent(TtsAccent accent) async {
+    // 德语版：必须带上当前选中的 Fish 音色，否则 voiceName 为 null，
+    // 平台引擎会回落到默认 de1（男声），表现为「选哪个音色试听都是男声」。
     final config = TtsSpeechConfig(
       languageTag: 'de-DE',
+      voiceName: ref.read(ttsSettingsProvider).fishTtsVoice,
     );
     final key = ttsAccentPreviewKey(accent);
     final token = ++_speakingToken;
@@ -540,8 +543,10 @@ class TtsController extends Notifier<TtsControllerState> {
           return; // 已被取消/重发：停止旧批次
         }
         final accent = TtsAccent.values[i];
+        // 德语版：预热也要带 Fish 音色，保证首次播放即用户选中的音色。
         final config = TtsSpeechConfig(
           languageTag: 'de-DE',
+          voiceName: ref.read(ttsSettingsProvider).fishTtsVoice,
         );
         AppLogger.log(
           'TtsController',
