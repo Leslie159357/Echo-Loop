@@ -28,11 +28,11 @@ void main() {
   }
 
   group('TtsSettings.fromPrefsSync', () {
-    test('SP 缺失 → 默认 Edge 在线 TTS + 美音', () async {
+    test('SP 缺失 → 默认平台引擎（德语版走自建 Fish 网关）', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final s = TtsSettings.fromPrefsSync(prefs);
-      expect(s.engine, TtsEngineKind.edge);
+      expect(s.engine, TtsEngineKind.platform);
       expect(s.accent, TtsAccent.us);
       expect(s.languageTag, 'en-US');
     });
@@ -55,7 +55,7 @@ void main() {
       });
       final prefs = await SharedPreferences.getInstance();
       final s = TtsSettings.fromPrefsSync(prefs);
-      expect(s.engine, TtsEngineKind.edge);
+      expect(s.engine, TtsEngineKind.platform);
       expect(s.accent, TtsAccent.us);
     });
 
