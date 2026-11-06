@@ -183,6 +183,8 @@ Widget _buildTestPage(
       ttsControllerProvider.overrideWith(_StubTtsController.new),
       textPlaybackProvider.overrideWith(_StubTextPlaybackController.new),
       savedTextIndexProvider.overrideWithValue(const SavedTextIndex.empty()),
+      // 收藏词集合依赖 DB；本测试不建库，固定为空集，避免 LateInitializationError
+      savedWordTextsProvider.overrideWith(() => _FakeSavedWordTexts(const {})),
     ]),
     child: MaterialApp(
       locale: const Locale('en'),
@@ -221,6 +223,14 @@ Future<void> _openSheet(WidgetTester tester, String word) async {
   await tester.pump();
   await tester.pump();
   await tester.pumpAndSettle();
+}
+
+/// 固定收藏词集合的 fake（绕过 DB，避免未初始化数据库）
+class _FakeSavedWordTexts extends SavedWordTexts {
+  final Set<String> value;
+  _FakeSavedWordTexts(this.value);
+  @override
+  Stream<Set<String>> build() => Stream.value(value);
 }
 
 void main() {
