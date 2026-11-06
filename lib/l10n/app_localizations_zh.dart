@@ -5080,13 +5080,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ttsAccent => '口音';
 
   @override
-  String get ttsAccentUs => '美音';
+  String get ttsAccentUs => '德语女声';
 
   @override
-  String get ttsAccentUk => '英音';
+  String get ttsAccentUk => '德语男声';
 
   @override
-  String get ttsAccentHint => '（部分机型不区分美音和英音）';
+  String get ttsAccentHint => '（德语版：按男声 / 女声分组）';
 
   @override
   String get ttsVoice => '音色';

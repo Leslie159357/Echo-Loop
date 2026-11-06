@@ -91,7 +91,7 @@ class WordAudioRepository {
 
   Future<String> _localDirectory() async {
     final base = await _resolveCacheDir();
-    final directory = Directory(p.join(base.path, 'word_audio', 'en-US'));
+    final directory = Directory(p.join(base.path, 'word_audio', 'de-DE'));
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }

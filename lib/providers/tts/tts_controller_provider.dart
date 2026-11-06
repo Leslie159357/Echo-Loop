@@ -101,7 +101,7 @@ TtsSpeechConfig ttsVoicePreviewConfig(
   KokoroModelVariant variant,
 ) {
   return TtsSpeechConfig(
-    languageTag: voice.accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+    languageTag: 'de-DE',
     voiceName: voice.id,
     modelTag: variant.name,
   );
@@ -115,7 +115,7 @@ String ttsAccentPreviewKey(TtsAccent accent) =>
 /// 与 [TtsController.prewarmTexts] 无关；无 modelTag（Piper 缓存键按 voiceId 分桶）。
 TtsSpeechConfig ttsPiperVoicePreviewConfig(PiperVoice voice) {
   return TtsSpeechConfig(
-    languageTag: voice.accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+    languageTag: 'de-DE',
     voiceName: voice.id,
   );
 }
@@ -464,7 +464,7 @@ class TtsController extends Notifier<TtsControllerState> {
   /// 仅平台 TTS 场景调用（口音行只在平台引擎下显示）。
   Future<void> previewAccent(TtsAccent accent) async {
     final config = TtsSpeechConfig(
-      languageTag: accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+      languageTag: 'de-DE',
     );
     final key = ttsAccentPreviewKey(accent);
     final token = ++_speakingToken;
@@ -541,7 +541,7 @@ class TtsController extends Notifier<TtsControllerState> {
         }
         final accent = TtsAccent.values[i];
         final config = TtsSpeechConfig(
-          languageTag: accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+          languageTag: 'de-DE',
         );
         AppLogger.log(
           'TtsController',

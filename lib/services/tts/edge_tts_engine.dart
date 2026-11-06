@@ -92,7 +92,7 @@ class EdgeTtsEngine implements TtsEngine {
     final voice =
         effective.voiceName ??
         edgeDefaultVoice(
-          effective.languageTag == 'en-GB' ? TtsAccent.uk : TtsAccent.us,
+          TtsAccent.us,
         ).id;
 
     final bytes = await _synthesizeWithRetry(

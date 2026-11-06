@@ -221,7 +221,7 @@ class PlatformTtsEngine implements TtsEngine {
     String fullPath,
     TtsSpeechConfig? cfg,
   ) async {
-    final c = cfg ?? const TtsSpeechConfig(languageTag: 'en-US');
+    final c = cfg ?? const TtsSpeechConfig(languageTag: 'de-DE');
     try {
       final ok = await _nativeMacosSynth(
         text: text,

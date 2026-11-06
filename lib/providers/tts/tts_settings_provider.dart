@@ -116,6 +116,25 @@ Future<void> restoreGermanPlatformEngine(SharedPreferences prefs) async {
   await prefs.setBool(doneKey, true);
 }
 
+/// 德语版：把 SP 里残留的英语 Edge 音色 id 迁成德语对应音色。
+///
+/// 上游音色目录是 `en-US-*` / `en-GB-*`，本版整份换成 `de-DE-*`；
+/// 老用户 SP 里存的是英语 id，不迁移会让 Edge 合成请求带上不存在的音色，
+/// 表现为无声或回退系统语音。只处理 `en-` 前缀，用户已选的德语 id 不动。
+Future<void> migrateEdgeVoicesToGerman(SharedPreferences prefs) async {
+  for (final key in (TtsSettingsKeys.edgeVoiceUs, TtsSettingsKeys.edgeVoiceUk)) {
+    final v = prefs.getString(key);
+    if (v == null) continue;
+    final isEnglish = v.startsWith('en-US-') || v.startsWith('en-GB-');
+    if (!isEnglish) continue;
+    final fallback = key == TtsSettingsKeys.edgeVoiceUk
+        ? edgeDefaultVoiceUk
+        : edgeDefaultVoiceUs;
+    await prefs.setString(key, fallback);
+    AppLogger.log('TtsSettings', 'Edge 音色迁移：$v → $fallback');
+  }
+}
+
 /// TTS 设置不可变值对象。
 class TtsSettings {
   /// 合成引擎（默认 Edge 在线 TTS）。
