@@ -14,7 +14,7 @@ import 'storage_migration_service.dart';
 const appUpdateMigrationVersionKey = 'app_update_migration_version';
 
 /// 当前已注册的应用升级迁移版本。
-const currentAppUpdateMigrationVersion = 14;
+const currentAppUpdateMigrationVersion = 15;
 
 /// 删除已废弃的 TTS 模型下载状态缓存；模型状态现在以安装清单和文件校验为准。
 Future<void> removeLegacyTtsModelDownloadFlags(SharedPreferences prefs) async {
@@ -261,6 +261,11 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
       version: 14,
       name: 'migrate_edge_voices_to_german',
       action: () => migrateEdgeVoicesToGerman(prefs),
+    ),
+    AppUpdateMigration(
+      version: 15,
+      name: 'migrate_off_piper_engine',
+      action: () => migrateOffPiperEngine(prefs),
     ),
   ];
 }

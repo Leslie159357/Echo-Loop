@@ -228,20 +228,21 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                       ),
                       const Divider(height: 1, indent: 16, endIndent: 16),
                     ],
-                    RadioListTile<TtsEngineKind>(
-                      title: Text(l10n.ttsEnginePiper),
-                      subtitle: Text(
-                        l10n.ttsEnginePiperDescription,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
+                    if (kPiperEngineEnabled) ...[
+                      RadioListTile<TtsEngineKind>(
+                        title: Text(l10n.ttsEnginePiper),
+                        subtitle: Text(
+                          l10n.ttsEnginePiperDescription,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
                           ),
                         ),
+                        value: TtsEngineKind.piper,
+                        selected: settings.engine == TtsEngineKind.piper,
                       ),
-                      value: TtsEngineKind.piper,
-                      selected: settings.engine == TtsEngineKind.piper,
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                    ],
                     RadioListTile<TtsEngineKind>(
                       title: Text(l10n.ttsEngineEchoLoop),
                       subtitle: Text(

@@ -136,6 +136,17 @@ Future<void> migrateEdgeVoicesToGerman(SharedPreferences prefs) async {
   }
 }
 
+/// 德语版：Piper 引擎入口已隐藏，把还停在该引擎上的用户回落到平台引擎。
+///
+/// 否则用户看不到 Piper 选项、却仍被它朗读（下英文模型读英文），无法自行退出。
+Future<void> migrateOffPiperEngine(SharedPreferences prefs) async {
+  final key = TtsSettingsKeys.engine;
+  final stored = prefs.getString(key);
+  if (stored != 'piper') return;
+  await prefs.setString(key, TtsEngineKind.platform.name);
+  AppLogger.log('TtsSettings', 'Piper 已停用，引擎回落 platform（德语 Fish 网关）');
+}
+
 /// TTS 设置不可变值对象。
 class TtsSettings {
   /// 合成引擎（默认 Edge 在线 TTS）。
