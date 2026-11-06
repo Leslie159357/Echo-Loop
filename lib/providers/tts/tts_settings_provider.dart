@@ -122,14 +122,15 @@ Future<void> restoreGermanPlatformEngine(SharedPreferences prefs) async {
 /// 老用户 SP 里存的是英语 id，不迁移会让 Edge 合成请求带上不存在的音色，
 /// 表现为无声或回退系统语音。只处理 `en-` 前缀，用户已选的德语 id 不动。
 Future<void> migrateEdgeVoicesToGerman(SharedPreferences prefs) async {
-  for (final key in (TtsSettingsKeys.edgeVoiceUs, TtsSettingsKeys.edgeVoiceUk)) {
+  final targets = [
+    (TtsSettingsKeys.edgeVoiceUs, edgeDefaultVoiceUs),
+    (TtsSettingsKeys.edgeVoiceUk, edgeDefaultVoiceUk),
+  ];
+  for (final (key, fallback) in targets) {
     final v = prefs.getString(key);
     if (v == null) continue;
     final isEnglish = v.startsWith('en-US-') || v.startsWith('en-GB-');
     if (!isEnglish) continue;
-    final fallback = key == TtsSettingsKeys.edgeVoiceUk
-        ? edgeDefaultVoiceUk
-        : edgeDefaultVoiceUs;
     await prefs.setString(key, fallback);
     AppLogger.log('TtsSettings', 'Edge 音色迁移：$v → $fallback');
   }

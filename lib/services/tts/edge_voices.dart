@@ -92,3 +92,20 @@ const List<EdgeVoice> edgeVoices = [
     isFemale: false,
   ),
 ];
+
+/// 返回指定分组下的全部 Edge 音色（us = 德语女声组，uk = 德语男声组）。
+List<EdgeVoice> edgeVoicesForAccent(TtsAccent accent) =>
+    edgeVoices.where((v) => v.accent == accent).toList(growable: false);
+
+/// 按 id 查找 Edge 音色；未知 id 返回 null。
+EdgeVoice? edgeVoiceById(String id) {
+  for (final v in edgeVoices) {
+    if (v.id == id) return v;
+  }
+  return null;
+}
+
+/// 指定分组的默认 Edge 音色。
+EdgeVoice edgeDefaultVoice(TtsAccent accent) => edgeVoiceById(
+  accent == TtsAccent.uk ? edgeDefaultVoiceUk : edgeDefaultVoiceUs,
+)!;
