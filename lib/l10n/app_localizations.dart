@@ -9491,19 +9491,19 @@ abstract class AppLocalizations {
   /// No description provided for @ttsAccentUs.
   ///
   /// In en, this message translates to:
-  /// **'American'**
+  /// **'German (female)'**
   String get ttsAccentUs;
 
   /// No description provided for @ttsAccentUk.
   ///
   /// In en, this message translates to:
-  /// **'British'**
+  /// **'German (male)'**
   String get ttsAccentUk;
 
   /// No description provided for @ttsAccentHint.
   ///
   /// In en, this message translates to:
-  /// **'(Some devices don\'t distinguish American from British)'**
+  /// **'(German edition: grouped by female / male voice)'**
   String get ttsAccentHint;
 
   /// No description provided for @ttsVoice.

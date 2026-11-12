@@ -6,11 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _expectedChinaApiBaseUrl = String.fromEnvironment(
   'API_CHINA_BASE_URL',
-  defaultValue: 'https://www.echo-loop.cn',
+  defaultValue: 'https://echoloop.1122275.xyz',
 );
 const _expectedGlobalApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://www.echo-loop.top',
+  defaultValue: 'https://echoloop.1122275.xyz',
 );
 
 const _testEndpoints = RegionalServiceEndpoints(
@@ -34,11 +34,11 @@ void main() {
     );
     expect(
       regionalServiceEndpoints.staticCdnBaseUrlFor(ServiceEndpointRegion.global),
-      'https://cdn.echo-loop.top',
+      'https://echoloop.1122275.xyz',
     );
     expect(
       regionalServiceEndpoints.staticCdnBaseUrlFor(ServiceEndpointRegion.china),
-      'https://static-cdn.echo-loop.cn',
+      'https://echoloop.1122275.xyz',
     );
   });
 
@@ -54,7 +54,7 @@ void main() {
       runtimeEndpointRouter.endpoints.staticCdnBaseUrlFor(
         ServiceEndpointRegion.china,
       ),
-      'https://static-cdn.echo-loop.cn',
+      'https://echoloop.1122275.xyz',
     );
   });
 

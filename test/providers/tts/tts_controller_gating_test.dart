@@ -26,47 +26,47 @@ void main() {
       );
     });
 
-    test('选 Echo Loop 但未就绪 → 仍使用 Echo Loop，不回退平台', () {
+    test('选 Echo Loop 但未就绪 → 德语版统一走平台 Fish 网关', () {
       expect(
         effectiveTtsEngine(
           TtsEngineKind.kokoro,
           kokoroReady: false,
           piperReady: true,
         ),
-        TtsEngineKind.kokoro,
+        TtsEngineKind.platform,
       );
     });
 
-    test('选 Echo Loop 且已就绪 → Echo Loop', () {
+    test('选 Echo Loop 且已就绪 → 德语版仍走平台 Fish 网关', () {
       expect(
         effectiveTtsEngine(
           TtsEngineKind.kokoro,
           kokoroReady: true,
           piperReady: false,
         ),
-        TtsEngineKind.kokoro,
+        TtsEngineKind.platform,
       );
     });
 
-    test('选 Piper 但未就绪 → 仍使用 Piper，不回退平台', () {
+    test('选 Piper 但未就绪 → 德语版统一走平台 Fish 网关', () {
       expect(
         effectiveTtsEngine(
           TtsEngineKind.piper,
           kokoroReady: true,
           piperReady: false,
         ),
-        TtsEngineKind.piper,
+        TtsEngineKind.platform,
       );
     });
 
-    test('选 Piper 且已就绪 → Piper', () {
+    test('选 Piper 且已就绪 → 德语版仍走平台 Fish 网关', () {
       expect(
         effectiveTtsEngine(
           TtsEngineKind.piper,
           kokoroReady: false,
           piperReady: true,
         ),
-        TtsEngineKind.piper,
+        TtsEngineKind.platform,
       );
     });
   });

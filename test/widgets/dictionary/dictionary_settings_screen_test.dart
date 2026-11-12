@@ -124,7 +124,7 @@ void main() {
 
     expect(
       container.read(dictionarySettingsProvider).defaultSourceId,
-      'local',
+      'dehelper',
     );
     // 默认区在前，首个 'AI Dictionary' 即默认区项
     await tester.tap(find.text('AI Dictionary').first);

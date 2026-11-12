@@ -5431,7 +5431,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ttsAccentHint =>
-      '(German edition: grouped by female / male voice)'t distinguish American from British)';
+      '(German edition: grouped by female / male voice)';
 
   @override
   String get ttsVoice => 'Voice';

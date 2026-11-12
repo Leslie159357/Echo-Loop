@@ -58,7 +58,7 @@ void main() {
   test('默认值', () {
     final c = makeContainer();
     final s = c.read(dictionarySettingsProvider);
-    expect(s.defaultSourceId, 'local');
+    expect(s.defaultSourceId, 'dehelper');
     expect(s.disabledIds, isEmpty);
     expect(s.autoSpeakOnLookup, isTrue);
     expect(s.adFilteringEnabled, isFalse);

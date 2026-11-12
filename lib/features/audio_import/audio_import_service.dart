@@ -369,6 +369,8 @@ class AudioImportService {
       return p.join('tmp', 'audio_import', p.basename(downloadedFile.path));
     } on BackgroundFileDownloadException catch (e) {
       if (e.isCanceled) {
+        // 用户主动取消：后台下载器可能已写入部分文件，这里统一清掉。
+        await _deleteIfExists(downloadedFile);
         throw const AudioImportException(
           AudioImportFailureCode.canceled,
           'Audio import canceled',

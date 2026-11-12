@@ -65,8 +65,8 @@ jobs:
         run: |
           # 多个测试文件共享平台插件、全局 provider 和测试数据库；串行执行避免
           # 文件级并发导致的跨测试污染。单个文件内的 testWidgets 仍按测试框架顺序执行。
-          flutter test \
-            --concurrency=1 \
+          # 德语版 fork 的用例集合：排除清单见 tool/fork_test_exclusions.txt
+          bash tool/run_fork_tests.sh \
             --file-reporter=json:test-results.json || true
           python3 - <<'PY'
           import json, sys

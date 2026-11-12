@@ -236,7 +236,11 @@ class _FakeSavedWordTexts extends SavedWordTexts {
 void main() {
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    // 德语版默认词典源是 dehelper（网页源）；本文件验证本地词典渲染，
+    // 显式注入 local 作为默认源，避免 WebDictionaryView 拉起 InAppWebView。
+    SharedPreferences.setMockInitialValues({
+      'dictionary_settings': '{"defaultSourceId":"local"}',
+    });
     _prefs = await SharedPreferences.getInstance();
     _prewarmCalls.clear();
     _headwordPrewarmCalls.clear();
@@ -282,7 +286,7 @@ void main() {
     testWidgets('TTS 开始时不会被词典面板监听器再次停止', (tester) async {
       await _prefs.setString(
         'dictionary_settings',
-        '{"autoSpeakOnLookup":false}',
+        '{"defaultSourceId":"local","autoSpeakOnLookup":false}',
       );
       _forwardTextPlaybackToTts = true;
       await _openSheet(tester, 'run');
@@ -420,7 +424,7 @@ void main() {
     testWidgets('关闭自动发音后查词不触发播放', (tester) async {
       await _prefs.setString(
         'dictionary_settings',
-        '{"autoSpeakOnLookup":false}',
+        '{"defaultSourceId":"local","autoSpeakOnLookup":false}',
       );
       await _openSheet(tester, 'running');
 

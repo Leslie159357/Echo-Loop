@@ -34,7 +34,7 @@ void main() {
       final s = TtsSettings.fromPrefsSync(prefs);
       expect(s.engine, TtsEngineKind.platform);
       expect(s.accent, TtsAccent.us);
-      expect(s.languageTag, 'en-US');
+      expect(s.languageTag, 'de-DE');
     });
 
     test('SP 已写 → 同步返回保存值', () async {
@@ -45,7 +45,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final s = TtsSettings.fromPrefsSync(prefs);
       expect(s.accent, TtsAccent.uk);
-      expect(s.languageTag, 'en-GB');
+      expect(s.languageTag, 'de-DE');
     });
 
     test('非法值 → 回退默认', () async {
@@ -68,7 +68,7 @@ void main() {
       await migrateAndroidPlatformTtsPreference(prefs);
 
       expect(prefs.getString(TtsSettingsKeys.engine), 'kokoro');
-      expect(TtsSettings.fromPrefsSync(prefs).engine, TtsEngineKind.kokoro);
+      expect(TtsSettings.fromPrefsSync(prefs).engine, TtsEngineKind.platform);
     });
 
     test('历史 echoLoop 值迁移为 kokoro', () async {
@@ -80,7 +80,7 @@ void main() {
       await migrateLegacyEchoLoopTtsPreference(prefs);
 
       expect(prefs.getString(TtsSettingsKeys.engine), 'kokoro');
-      expect(TtsSettings.fromPrefsSync(prefs).engine, TtsEngineKind.kokoro);
+      expect(TtsSettings.fromPrefsSync(prefs).engine, TtsEngineKind.platform);
     });
 
     test('全平台旧值迁移不会处理 platform', () async {
@@ -116,9 +116,9 @@ void main() {
   });
 
   group('toSpeechConfig', () {
-    test('英音 → languageTag en-GB', () {
+    test('英音 → languageTag de-DE（德语版固定）', () {
       const s = TtsSettings(accent: TtsAccent.uk);
-      expect(s.toSpeechConfig().languageTag, 'en-GB');
+      expect(s.toSpeechConfig().languageTag, 'de-DE');
     });
   });
 
@@ -206,9 +206,9 @@ void main() {
       expect(s.toSpeechConfig().voiceName, 'bm_george');
     });
 
-    test('平台引擎 → config 不带 voiceName', () {
+    test('平台引擎 → config 带自建 Fish 音色 de1', () {
       const s = TtsSettings(engine: TtsEngineKind.platform);
-      expect(s.toSpeechConfig().voiceName, isNull);
+      expect(s.toSpeechConfig().voiceName, 'de1');
     });
 
     test('fromPrefsSync 非法/不匹配音色 → 回退该口音默认', () async {
@@ -332,7 +332,7 @@ void main() {
       expect(us.toSpeechConfig().modelTag, isNull);
       const uk = TtsSettings(engine: TtsEngineKind.edge, accent: TtsAccent.uk);
       expect(uk.toSpeechConfig().voiceName, edgeDefaultVoiceUk);
-      expect(uk.toSpeechConfig().languageTag, 'en-GB');
+      expect(uk.toSpeechConfig().languageTag, 'de-DE');
     });
 
     test('setEdgeVoice 写对应口音字段 + SP；口音不匹配忽略', () async {

@@ -19,7 +19,7 @@ import 'word_audio_identity.dart';
 const _logTag = 'WordAudio';
 
 /// CDN 上单词音频所在的路径前缀（locale 目录与生成端一致）。
-const _cdnDirectory = 'words/en-US';
+const _cdnDirectory = 'words/de-DE';
 
 class WordAudioRepository {
   WordAudioRepository({
