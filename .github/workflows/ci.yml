@@ -139,13 +139,13 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # 只做 iOS：Android 打包用的 upload-keystore 已损坏（Tag number over 30），
+      # 且本 fork 只交付 iOS 未签名包，Android job 纯属噪音。
       matrix:
-        platform: [ios, android]
+        platform: [ios]
         include:
           - platform: ios
             runner: macos-latest
-          - platform: android
-            runner: ubuntu-latest
 
     runs-on: ${{ matrix.runner }}
 
