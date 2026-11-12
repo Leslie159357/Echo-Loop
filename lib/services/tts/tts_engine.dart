@@ -48,6 +48,13 @@ extension TtsEngineKindModelRequirement on TtsEngineKind {
   };
 }
 
+/// 是否在设置页暴露 Piper 引擎。
+///
+/// 德语版关闭：Piper 只有英语 VITS 模型（`en_US-amy` 等），没有可用德语模型，
+/// 选中后会下载英文包并用英语朗读，对德语学习是纯干扰项。
+/// 引擎实现与已有缓存保留，仅隐藏入口；需要时改回 `true` 即可恢复。
+const bool kPiperEngineEnabled = false;
+
 /// 发音口音。
 enum TtsAccent {
   /// 美音。

@@ -142,7 +142,7 @@ class PiperTtsEngine implements TtsEngine {
   String _voiceIdFor(TtsSpeechConfig? config) {
     final name = config?.voiceName;
     if (name != null && piperVoiceById(name) != null) return name;
-    final accent = config?.languageTag == 'en-GB' ? TtsAccent.uk : TtsAccent.us;
+    final accent = TtsAccent.us;
     return piperDefaultVoice(accent).id;
   }
 }

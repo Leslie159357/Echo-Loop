@@ -36,21 +36,19 @@ bool requiresAsrBeforeEnteringSubStage(
 }
 
 /// 在进入语音练习前检查本地 ASR 是否已就绪。
-///
-/// 返回 `true` 时允许继续原本的进入动作；用户关闭、下载中、下载失败或完成
-/// 下载后均返回 `false`，要求用户再次明确触发录音。
+/// 非离线模型（Apple AI 或 自建独服）直接放行；仅离线模式且未下载时弹窗提示下载。
 Future<bool> ensureAsrReadyBeforeSpeechPractice(
   BuildContext context,
   WidgetRef ref,
 ) async {
+  final state = ref.read(offlineAsrSettingsProvider);
+  if (state.backend != AsrBackend.offline) return true;
+
   await ref
       .read(asrModelInstallationGateProvider)
       .ensureInstallationStatesLoaded();
   if (!context.mounted) return false;
-  final state = ref.read(offlineAsrSettingsProvider);
 
-  // 非 offline 后端不依赖本地 Whisper 模型。
-  if (state.backend != AsrBackend.offline) return true;
   if (state.downloadStatus == AsrModelDownloadStatus.downloaded) {
     unawaited(_ensureEngineLoaded(ref));
     return true;

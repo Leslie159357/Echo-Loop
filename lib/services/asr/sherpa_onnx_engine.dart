@@ -1210,7 +1210,7 @@ sherpa.OfflineRecognizerConfig _buildWhisperConfig({
   final whisper = sherpa.OfflineWhisperModelConfig(
     encoder: p.join(modelDir, '$prefix-encoder.int8.onnx'),
     decoder: p.join(modelDir, '$prefix-decoder.int8.onnx'),
-    language: 'en',
+    language: 'de',
     task: 'transcribe',
     // 开启 segment 级时间戳：靠 logit filter 保留 whisper 原生时间戳 token，**不需
     // 重导模型**（现有 int8 模型即可，见 sherpa-onnx PR #2945）。分段路径据此把每个
@@ -1234,8 +1234,8 @@ sherpa.OfflineRecognizerConfig _buildWhisperConfig({
 
 /// 从 modelId 提取 Whisper 文件名前缀。
 String _whisperFilePrefix(String modelId) {
-  if (modelId.contains('tiny')) return 'tiny.en';
-  if (modelId.contains('base')) return 'base.en';
-  if (modelId.contains('small')) return 'small.en';
+  if (modelId.contains('tiny')) return 'tiny';
+  if (modelId.contains('base')) return 'base';
+  if (modelId.contains('small')) return 'small';
   throw ArgumentError('Unknown Whisper model: $modelId');
 }

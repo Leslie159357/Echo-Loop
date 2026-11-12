@@ -63,12 +63,12 @@ AiDictionarySource aiDictionarySource(Ref ref) => AiDictionarySource(
 List<WebDictionarySource> webDictionarySources(Ref ref) =>
     kWebDictConfigs.map(WebDictionarySource.new).toList(growable: false);
 
-/// 全部数据源（顺序即默认排列/回退优先级）
+/// 全部数据源（顺序即默认排列/回退优先级，德语优先网页德语助手/Duden，其次本地离线，再次AI）
 @Riverpod(keepAlive: true)
 List<DictionarySource> dictionarySources(Ref ref) => [
+  ...ref.watch(webDictionarySourcesProvider),
   ref.watch(localDictionarySourceProvider),
   ref.watch(aiDictionarySourceProvider),
-  ...ref.watch(webDictionarySourcesProvider),
 ];
 
 /// id → source 查找表

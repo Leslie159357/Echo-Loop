@@ -13,6 +13,7 @@ import '../providers/asr_engine_provider.dart';
 import '../providers/offline_asr_settings_provider.dart';
 import 'app_logger.dart';
 import 'asr/offline_asr_backend.dart';
+import 'asr/server_asr_backend.dart';
 
 /// 统一后端 provider。
 ///
@@ -21,11 +22,16 @@ import 'asr/offline_asr_backend.dart';
 ///
 /// - ASR 关闭 → 平台后端（纯录音）
 /// - Apple Speech → 平台后端（平台 ASR）
+/// - 自建独服 → ServerAsrBackend（云端 Large-v3-Turbo 转录）
 /// - Echo Loop AI + 引擎就绪 → OfflineAsrBackend（离线转录）
 /// - Echo Loop AI + 引擎未就绪 → 平台后端（降级为纯录音）
 final speechPracticeBackendProvider = Provider<SpeechPracticeBackend>((ref) {
   final s = ref.watch(offlineAsrSettingsProvider);
   final platform = SpeechPracticePlatform.instance;
+
+  if (s.backend == AsrBackend.server) {
+    return ServerAsrBackend(platform: platform);
+  }
 
   if (s.isOfflineReady) {
     final engine = ref.read(offlineAsrEngineProvider);
@@ -79,12 +85,12 @@ abstract class SpeechPracticeBackend {
   Future<void> setRecognitionEnabled(bool enabled);
 
   /// 预热引擎：页面进入时调用，提前初始化 AVAudioEngine + tap。
-  Future<void> warmup({String locale = 'en-US'});
+  Future<void> warmup({String locale = 'de-DE'});
 
   /// 开始 live ASR 录音。
   Future<String> startSession({
     required String promptId,
-    String locale = 'en-US',
+    String locale = 'de-DE',
   });
 
   /// 停止 live ASR 录音。
@@ -184,7 +190,7 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
   }
 
   @override
-  Future<void> warmup({String locale = 'en-US'}) async {
+  Future<void> warmup({String locale = 'de-DE'}) async {
     _ensureSupported();
     AppLogger.log('SpeechPlatform', '┌ warmup locale=$locale');
     await _invokeMap('warmup', {'locale': locale});
@@ -194,7 +200,7 @@ class SpeechPracticePlatform implements SpeechPracticeBackend {
   @override
   Future<String> startSession({
     required String promptId,
-    String locale = 'en-US',
+    String locale = 'de-DE',
   }) async {
     _ensureSupported();
     AppLogger.log(

@@ -1,15 +1,21 @@
 import 'api_config.dart';
 
-/// 全球静态资源 CDN 地址（模型、单词发音、词典资源等）。
-const globalStaticCdnBaseUrl = 'https://cdn.echo-loop.top';
+/// 全球静态资源 CDN 地址（模型、单词发音、词典资源等）——指向自建网关。
+const globalStaticCdnBaseUrl = 'https://echoloop.1122275.xyz';
+
+/// 中国大陆静态资源 CDN 地址——自建网关无区域分流，同一域名。
+const chinaStaticCdnBaseUrl = 'https://echoloop.1122275.xyz';
+
+/// 兼容本地旧引用（上游已改名 staticCdn，此处保留别名避免大面积改动）。
+const globalModelCdnBaseUrl = globalStaticCdnBaseUrl;
+const chinaModelCdnBaseUrl = chinaStaticCdnBaseUrl;
 
 /// 中国 API 与静态资源 CDN 地址；与全球地址一起编入同一个发布包。
 /// 中国 API 可通过 `API_CHINA_BASE_URL` 编译期变量覆盖。
 const chinaApiBaseUrl = String.fromEnvironment(
   'API_CHINA_BASE_URL',
-  defaultValue: 'https://www.echo-loop.cn',
+  defaultValue: defaultSelfHostedUrl,
 );
-const chinaStaticCdnBaseUrl = 'https://static-cdn.echo-loop.cn';
 
 class RegionalServiceEndpoints {
   const RegionalServiceEndpoints({

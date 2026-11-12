@@ -81,37 +81,14 @@ final ttsPlaybackModelStateProvider = Provider<TtsPlaybackModelState>((ref) {
 });
 
 /// 发音前检查当前本地 TTS 模型。
+/// 自建云端 Fish Audio 模式下无需下载任何本地模型，直接放行。
 ///
-/// 返回 true 才允许本次发音；下载中、未下载或失败均返回 false。
-///
-/// [promptIfModelMissing] 为 false 时（查词自动发音等非用户主动的发音）不弹窗，
-/// 只记录日志并返回 false，避免用户仅因查词就被要求下载模型。
+/// 保留上游的可选参数签名，避免调用方编译失败。
 Future<bool> ensureTtsModelReadyForPlayback(
   Ref ref, {
   bool promptIfModelMissing = true,
 }) async {
-  await ref
-      .read(ttsModelInstallationGateProvider)
-      .ensureInstallationStatesLoaded();
-  final state = ref.read(ttsPlaybackModelStateProvider);
-  if (state.isReady) return true;
-
-  if (!promptIfModelMissing) {
-    AppLogger.log(
-      'TtsModelGate',
-      '非主动发音跳过：模型未就绪，不弹出下载提示 engine=${state.engine.diagnosticName}',
-    );
-    return false;
-  }
-
-  final context = rootNavigatorKey.currentContext;
-  if (context == null || !context.mounted) return false;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (_) => const TtsModelDownloadDialog(),
-  );
-  return false;
+  return true;
 }
 
 /// 只检查指定 TTS 配置是否可用，不弹窗、不下载，供后台 warmup 使用。

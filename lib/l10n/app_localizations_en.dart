@@ -5424,14 +5424,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ttsAccent => 'Accent';
 
   @override
-  String get ttsAccentUs => 'American';
+  String get ttsAccentUs => 'German (female)';
 
   @override
-  String get ttsAccentUk => 'British';
+  String get ttsAccentUk => 'German (male)';
 
   @override
   String get ttsAccentHint =>
-      '(Some devices don\'t distinguish American from British)';
+      '(German edition: grouped by female / male voice)'t distinguish American from British)';
 
   @override
   String get ttsVoice => 'Voice';
