@@ -5,7 +5,7 @@ void main() {
   group('DictionarySettings', () {
     test('默认值', () {
       final s = DictionarySettings();
-      expect(s.defaultSourceId, 'local');
+      expect(s.defaultSourceId, 'dehelper');
       expect(s.disabledIds, isEmpty);
       expect(s.autoSpeakOnLookup, isTrue);
       expect(s.adFilteringEnabled, isFalse);
@@ -31,7 +31,7 @@ void main() {
         'defaultSourceId': 42, // 类型不符
         'disabledIds': 'nope', // 类型不符
       });
-      expect(s.defaultSourceId, 'local');
+      expect(s.defaultSourceId, 'dehelper');
       expect(s.disabledIds, isEmpty);
       expect(s.autoSpeakOnLookup, isTrue);
       expect(s.adFilteringEnabled, isFalse);

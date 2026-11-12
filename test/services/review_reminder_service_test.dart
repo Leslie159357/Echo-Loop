@@ -182,14 +182,14 @@ void main() {
       expect(scheduledBodies(15), everyElement('Saved body'));
     });
 
-    test('文案解析失败时回退英文且仍然调度（不抛异常）', () async {
+    test('文案解析失败时回退中文且仍然调度（不抛异常）', () async {
       final service = createService(
         resolveTexts: () => throw StateError('unsupported locale'),
       );
 
       await service.syncPerAudioReminders([oneReminder()]);
 
-      expect(scheduledBodies(1).single, contains('Review round 1'));
+      expect(scheduledBodies(1).single, contains('第1轮复习'));
     });
 
     test('语言变化时即使提醒列表不变也会重新调度', () async {
