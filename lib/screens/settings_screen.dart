@@ -4,14 +4,19 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../features/daily_goal_check_in/providers/daily_check_in_share_provider.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart'
     show getTemporaryDirectory, getApplicationCacheDirectory;
+
 import '../database/app_database.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
@@ -33,8 +38,12 @@ import '../providers/tag_provider.dart';
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
 import '../config/app_store_config.dart';
+import '../config/client_distribution.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/auth/screens/account_screen.dart';
+import '../features/profile/providers/user_profile_provider.dart';
+import '../features/profile/widgets/user_avatar.dart';
+import '../features/rating_prompt/presentation/rating_prompt_status_dialog.dart';
 import '../features/user_region/user_region_override.dart';
 import '../features/user_region/user_region_providers.dart';
 import '../features/user_region/widgets/user_region_override_tile.dart';
@@ -59,6 +68,7 @@ import '../widgets/dictionary/dict_source_presentation.dart';
 import 'asr_settings_screen.dart';
 import 'dictionary_settings_screen.dart';
 import 'display_settings_screen.dart';
+import 'toast_debug_screen.dart';
 import 'tts_settings_screen.dart';
 import 'learning_settings_screen.dart';
 import 'log_viewer_screen.dart';
@@ -76,6 +86,22 @@ const double _settingsSvgIconExtent = 26;
 const double _settingsBrandIconExtent = 20;
 const double _settingsMaterialIconExtent = 26;
 const _faqUrl = 'https://my.feishu.cn/docx/OPZRdXkRvoAW5Bx78LocBUdqn80';
+
+/// 设置页“评价我们”入口是否展示。
+///
+/// iOS 保持原行为；Android 仅 Google Play 包展示，直装 APK 没有商店评价页。
+/// 渠道未注入（`null`）时同样隐藏，避免非商店构建误导用户去商店评价。
+@visibleForTesting
+bool showsRatingEntry(
+  TargetPlatform platform,
+  ClientDistribution? distribution,
+) {
+  return switch (platform) {
+    TargetPlatform.iOS => true,
+    TargetPlatform.android => distribution == ClientDistribution.play,
+    _ => false,
+  };
+}
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -140,16 +166,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final session = ref.watch(supabaseSessionProvider).value;
     final isChinaUser = ref.watch(isChinaUserProvider);
     final isSignedIn = session != null;
+    final profile = ref.watch(userProfileProvider).value;
     final accountSubtitle = session == null
         ? null
-        : switch (authDisplayProviderForSession(session)) {
-            AuthDisplayProvider.apple => l10n.authSignedInWithApple,
-            AuthDisplayProvider.google => l10n.authSignedInWithGoogle,
-            AuthDisplayProvider.email ||
-            AuthDisplayProvider.unknown => compactAccountListIdentifier(
-              session.user.email ?? session.user.id,
-            ),
-          };
+        : profile?.nickname ??
+              switch (authDisplayProviderForSession(session)) {
+                AuthDisplayProvider.apple => l10n.authSignedInWithApple,
+                AuthDisplayProvider.google => l10n.authSignedInWithGoogle,
+                AuthDisplayProvider.email ||
+                AuthDisplayProvider.unknown => compactAccountListIdentifier(
+                  session.user.email ?? session.user.id,
+                ),
+              };
 
     return _buildSection(
       context,
@@ -158,10 +186,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ListTile(
           leading: _buildAccountLeadingIcon(
             context,
-            l10n,
-            isChinaUser: isChinaUser,
+            isSignedIn: isSignedIn,
+            avatarUrl: profile?.avatarUrl,
           ),
-          title: Text(l10n.account),
+          title: _buildAccountTitle(context, l10n, isChinaUser: isChinaUser),
           subtitle: accountSubtitle == null
               ? null
               : Text(
@@ -192,37 +220,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 中国区路由启用时，在账号入口图标右上角显示地区标记。
+  /// 已登录时展示圆形头像（未设置头像时为默认圆形图标），未登录保持原有账号图标。
   Widget _buildAccountLeadingIcon(
+    BuildContext context, {
+    required bool isSignedIn,
+    required String? avatarUrl,
+  }) {
+    if (!isSignedIn) {
+      return _settingsThemedSvgIcon(context, 'assets/icon/account-1.svg');
+    }
+    return UserAvatar(size: _settingsSvgIconExtent, avatarUrl: avatarUrl);
+  }
+
+  /// 账号标题；中国区路由启用时，地区标记紧跟在标题文字后面，不遮挡头像。
+  Widget _buildAccountTitle(
     BuildContext context,
     AppLocalizations l10n, {
     required bool isChinaUser,
   }) {
-    final accountIcon = _settingsThemedSvgIcon(
-      context,
-      'assets/icon/account-1.svg',
-    );
-    if (!isChinaUser) return accountIcon;
+    if (!isChinaUser) return Text(l10n.account);
 
-    return Tooltip(
-      message: l10n.chinaRoutingIndicatorTooltip,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          accountIcon,
-          Positioned(
-            top: 0,
-            right: 0,
-            child: ExcludeSemantics(
-              child: SvgPicture.asset(
-                'assets/icon/china_flag.svg',
-                width: 12,
-                height: 8,
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(l10n.account),
+        const SizedBox(width: AppSpacing.xs),
+        Tooltip(
+          message: l10n.chinaRoutingIndicatorTooltip,
+          child: ExcludeSemantics(
+            child: SvgPicture.asset(
+              'assets/icon/china_flag.svg',
+              width: 16,
+              height: 11,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -498,6 +531,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     WidgetRef ref,
     AppLocalizations l10n,
   ) async {
+    final container = ProviderScope.containerOf(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -524,6 +558,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // 2. 清空内存缓存（句子 AI + AI 词典的 L1，否则清缓存后重查仍命中旧结果）
     ref.read(sentenceAiNotifierProvider).clearMemoryCache();
     ref.read(aiDictionarySourceProvider).clearMemoryCache();
+    if (container.exists(dailyCheckInShareProvider)) {
+      container.read(dailyCheckInShareProvider.notifier).clear();
+    }
+
+    if (container.exists(dailyShareBackgroundRepositoryProvider)) {
+      await container.read(dailyShareBackgroundRepositoryProvider).clear();
+    }
 
     // 3. 清理临时目录（录音 .caf 残留、Library/Caches 下 app 自建导出/导入临时目录）
     final result = await cleanupAllTempFiles();
@@ -565,9 +606,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } else {
       message = l10n.clearCacheSuccess;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// 清网络图片磁盘缓存，返回释放字节数（best-effort）。
@@ -642,13 +682,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => launchUrl(Uri.parse('mailto:support@echo-loop.top')),
         ),
-        if (defaultTargetPlatform == TargetPlatform.iOS)
+        if (showsRatingEntry(defaultTargetPlatform, clientDistribution))
           ListTile(
             leading: _settingsMaterialIcon(Icons.star_rounded),
             title: Text(l10n.rateUs),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => launchUrl(
-              appStoreReviewUri,
+              defaultTargetPlatform == TargetPlatform.iOS
+                  ? appStoreReviewUri
+                  : googlePlayReviewUri,
               mode: LaunchMode.externalApplication,
             ),
           ),
@@ -884,6 +926,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onTap: () => _showDictionaryLookupDialog(context),
         ),
         ListTile(
+          leading: _emojiIcon('⭐'),
+          title: const Text('评价提醒状态'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => const RatingPromptStatusDialog(),
+          ),
+        ),
+        ListTile(
           leading: _emojiIcon('⚙️'),
           title: const Text('偏好设置'),
           trailing: const Icon(Icons.chevron_right),
@@ -913,6 +964,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        ListTile(
+          leading: _emojiIcon('🍞'),
+          title: const Text('Toast 样式'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ToastDebugScreen()),
+          ),
+        ),
         // 仅 macOS：插件桌面端客户端不读取系统代理，开启后把系统代理写入下载插件。
         if (defaultTargetPlatform == TargetPlatform.macOS)
           SwitchListTile(
@@ -937,9 +996,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await ref.read(guideControllerProvider.notifier).resetAll();
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.resetNewUserGuideDone)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.resetNewUserGuideDone)));
   }
 
   /// 重置 Onboarding 问卷状态：清空问卷答案 SP key，便于开发调试。
@@ -960,18 +1018,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await storage.clear();
 
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.resetOnboardingDone)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.resetOnboardingDone)));
   }
 
   /// 显示词典查询对话框
   void _showDictionaryLookupDialog(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (context) => _DictionaryLookupDialog(
-        service: ref.read(dictionaryServiceProvider),
-      ),
+      builder: (context) =>
+          _DictionaryLookupDialog(service: ref.read(dictionaryServiceProvider)),
     );
   }
 
@@ -1029,9 +1085,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       controller.setDemoModeLoading(false);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Demo mode error: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Demo mode error: $e')));
     }
   }
 
@@ -1454,12 +1509,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       selected: isSelected,
       onTap: () {
         if (!isSelected) {
-          ref
-              .read(analyticsServiceProvider)
-              .track(Events.nativeLanguageChanged, {
-                EventParams.previousLanguage: settings.nativeLanguage,
-                EventParams.newLanguage: code,
-              });
+          ref.read(analyticsServiceProvider).track(
+            Events.nativeLanguageChanged,
+            {
+              EventParams.previousLanguage: settings.nativeLanguage,
+              EventParams.newLanguage: code,
+            },
+          );
         }
         controller.setNativeLanguage(code);
         Navigator.pop(context);

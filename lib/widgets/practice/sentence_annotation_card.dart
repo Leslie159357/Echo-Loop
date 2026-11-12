@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../l10n/app_localizations.dart';
 import '../../providers/reading_text_prefs_provider.dart';
 import '../../providers/sentence_ai_provider.dart';
@@ -938,9 +939,11 @@ class SentenceAnnotationCardState
   /// 根据图标、文字和水平内边距计算按钮的相对占宽，维持内容比例。
   int _toolbarButtonFlex(String label, BuildContext context) {
     final textStyle = Theme.of(context).textTheme.labelMedium;
+    // 测量宽度需与按钮文字的实际渲染缩放一致，否则系统大字下按钮会被裁切
     final textWidth = TextPainter(
       text: TextSpan(text: label, style: textStyle),
       textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     return (16 + 4 + 16 + textWidth.width).ceil();
   }
@@ -985,8 +988,9 @@ class SentenceAnnotationCardState
             )
           : SelectableSentenceText(
               text: widget.text,
-              style: theme.textTheme.titleMedium?.copyWith(
-                height: 1.6,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                height: readingBodyLineHeight,
+                letterSpacing: 0,
                 color: theme.colorScheme.onSurface,
               ),
               highlightedSegments: widget.highlightedSegments,
@@ -1066,9 +1070,7 @@ class SentenceAnnotationCardState
             _translationContent ?? '',
             style: translationStyle == null
                 ? null
-                : ref
-                      .watch(readingTextPrefsProvider)
-                      .applyTo(translationStyle),
+                : ref.watch(readingTextPrefsProvider).applyTo(translationStyle),
           ),
         );
       case ContentLoadState.error:
@@ -1235,11 +1237,15 @@ class _AnalysisContent extends StatelessWidget {
             child: Icon(s.icon, size: 12, color: cs.primary),
           ),
           const SizedBox(width: 6),
+          // 标题与解析正文同一字号偏好，否则调整字号时标题不跟随
           Text(
             s.label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w600,
+            style: textPrefs.applyTo(
+              theme.textTheme.titleMedium?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ) ??
+                  const TextStyle(),
             ),
           ),
         ],
@@ -1250,9 +1256,11 @@ class _AnalysisContent extends StatelessWidget {
   /// 段落正文：把结构化要点逐条渲染为 bullet（标签加粗 + 详解）。
   Widget _buildSectionBody(ThemeData theme, List<(String, String)> items) {
     final cs = theme.colorScheme;
-    final rawBody = theme.textTheme.bodySmall?.copyWith(
+    // 解析正文与译文同一套参数：14pt、字间距 0、行高 1.5
+    final rawBody = theme.textTheme.bodyMedium?.copyWith(
       color: cs.onSurfaceVariant,
-      height: 1.4,
+      height: 1.5,
+      letterSpacing: 0,
     );
     final body = rawBody == null ? null : textPrefs.applyTo(rawBody);
 
@@ -1275,7 +1283,7 @@ class _AnalysisContent extends StatelessWidget {
     return key.replaceAll('`', '').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// 统一 bullet 条目：▸ + 可选加粗标签 + "：" + 详解（详解含反引号高亮/IPA chip）。
+  /// 统一 bullet 条目：• + 可选加粗标签 + "：" + 详解（详解含反引号高亮/IPA chip）。
   /// 流式渐显时详解可能暂为空，此时只显示标签。
   Widget _buildBulletItem(
     ThemeData theme,
@@ -1288,16 +1296,15 @@ class _AnalysisContent extends StatelessWidget {
     final key = trimmedKey.isEmpty ? null : _cleanBulletKey(trimmedKey);
     final value = rawValue.trim();
 
+    // 圆点与正文使用同一字号和行高，首行基线才能对齐；字号不能与正文不同，
+    // 否则两者行框高度不一致，圆点会偏离首行文字的中线。
     final bullet = Padding(
-      padding: const EdgeInsets.only(top: 1, right: 6),
+      padding: const EdgeInsets.only(right: 6),
       child: Text(
-        '▸',
-        style: TextStyle(
-          // 与正文同比缩放：正文字号 +1（默认 bodySmall 12 → 13，与原值一致）
-          fontSize: (body?.fontSize ?? 12) + 1,
+        '•',
+        style: (body ?? const TextStyle()).copyWith(
           fontWeight: FontWeight.w700,
           color: cs.primary,
-          height: 1,
         ),
       ),
     );
@@ -1373,9 +1380,10 @@ class _AnalysisContent extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'monospace',
                   fontFamilyFallback: const ['Menlo', 'Courier'],
-                  fontSize: (body?.fontSize ?? 13) - 1,
+                  // 音标与正文同字号，行高跟随正文，避免比正文挤
+                  fontSize: body?.fontSize ?? 14,
                   color: cs.onSurface,
-                  height: 1.2,
+                  height: body?.height,
                 ),
               ),
             ),

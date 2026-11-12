@@ -40,8 +40,11 @@ void main() {
     bool retellRatingEnabled = true,
     bool? guideEnabled,
     bool seedGuideSeen = false,
+    int? dailyGoalMinutes,
   }) async {
     SharedPreferences.setMockInitialValues({
+      if (dailyGoalMinutes != null)
+        LearningSettingsKeys.dailyGoalMinutes: dailyGoalMinutes,
       if (autoSkipRetell) LearningSettingsKeys.autoSkipRetell: true,
       if (!autoShowAiExplanation)
         LearningSettingsKeys.autoShowAiExplanation: false,
@@ -79,6 +82,25 @@ void main() {
       ),
     );
   }
+
+  testWidgets('每日目标下方显示今日一刻开关，默认开启且可关闭', (tester) async {
+    await tester.pumpWidget(await buildApp());
+    await tester.pumpAndSettle();
+    final toggle = find.widgetWithText(
+      SwitchListTile,
+      'Auto-show Today’s Moment',
+    );
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    expect(
+      tester.getTopLeft(find.byIcon(Icons.flag_outlined)).dy,
+      lessThan(tester.getTopLeft(toggle).dy),
+    );
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(LearningSettingsKeys.autoShowDailyShare), isFalse);
+  });
 
   testWidgets('默认显示 AI 讲解总开关 ON，解析/翻译 ON，意群 OFF', (tester) async {
     await tester.pumpWidget(await buildApp());
@@ -232,6 +254,8 @@ void main() {
           w.title is Text &&
           (w.title as Text).data == 'Show rating after each retelling',
     );
+    await tester.ensureVisible(ratingFinder);
+    await tester.pumpAndSettle();
     await tester.tap(ratingFinder);
     await tester.pumpAndSettle();
 
@@ -252,6 +276,8 @@ void main() {
           w.title is Text &&
           (w.title as Text).data == 'Show rating after each repeat',
     );
+    await tester.ensureVisible(ratingFinder);
+    await tester.pumpAndSettle();
     await tester.tap(ratingFinder);
     await tester.pumpAndSettle();
 
@@ -340,6 +366,7 @@ void main() {
   });
 
   testWidgets('新手引导没有开关，整行是「重置」入口且无描述', (tester) async {
+    _useTallViewport(tester);
     await tester.pumpWidget(await buildApp());
     await tester.pumpAndSettle();
 
@@ -383,5 +410,22 @@ void main() {
 
     expect(prefs.getBool(seenKey), isNull);
     expect(find.text('New user guide has been reset'), findsOneWidget);
+  });
+
+  testWidgets('每日学习目标显示当前分钟数，选择档位后写入 SP 并刷新', (tester) async {
+    await tester.pumpWidget(await buildApp(dailyGoalMinutes: 30));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Daily study goal'), findsOneWidget);
+    expect(find.text('30 min'), findsOneWidget);
+
+    await tester.tap(find.text('Daily study goal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('45 min'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('45 min'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt(LearningSettingsKeys.dailyGoalMinutes), 45);
   });
 }

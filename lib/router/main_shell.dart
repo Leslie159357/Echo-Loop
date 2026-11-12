@@ -20,6 +20,9 @@ import '../analytics/models/event_names.dart';
 import '../services/runtime_endpoint_router.dart';
 import '../database/providers.dart';
 import '../features/podcast/podcast_refresh_controller.dart';
+import '../features/daily_goal_check_in/providers/daily_check_in_share_provider.dart';
+import '../features/daily_goal_check_in/providers/daily_goal_check_in_provider.dart';
+import '../features/daily_goal_check_in/widgets/daily_check_in_share_dialog.dart';
 import '../features/remote_config/remote_config_providers.dart';
 import '../features/user_region/user_region_providers.dart';
 import '../providers/app_update_provider.dart';
@@ -40,6 +43,7 @@ import '../providers/study_task_provider.dart';
 import '../providers/tag_provider.dart';
 import '../providers/time_provider.dart';
 import '../services/app_logger.dart';
+import '../services/temp_cleanup_service.dart';
 import '../services/startup_trace.dart';
 import '../services/app_update_launcher.dart';
 import '../services/review_reminder_service.dart';
@@ -305,6 +309,7 @@ class _MainShellState extends ConsumerState<MainShell>
         await ref.read(audioLibraryProvider.notifier).backfillTranscriptSrt();
         ref.read(audioLibraryProvider.notifier).backfillTranscriptStats();
         activeStartupTrace?.mark('study_bootstrap_success');
+        unawaited(_maybeShowDailyShare());
       } catch (e, st) {
         // 启动预热失败：先落盘日志（崩溃/异常排查重度依赖落盘日志），再给用户反馈。
         AppLogger.log('StartupLoad', 'study bootstrap failed: $e');
@@ -563,6 +568,8 @@ class _MainShellState extends ConsumerState<MainShell>
     ref.invalidate(completedAudioProvider);
     ref.invalidate(studyDurationRecordsProvider);
     try {
+      await ref.read(dailyGoalCheckInProvider.notifier).settlePendingCheckIns();
+      if (!mounted) return;
       await ref.read(studyStatsProvider.notifier).refresh();
       final stats = ref.read(studyStatsProvider).value;
       AppLogger.log(
@@ -570,6 +577,7 @@ class _MainShellState extends ConsumerState<MainShell>
         'complete source=$source '
             'todayInputWords=${stats?.todayInputWords ?? 'unknown'}',
       );
+      unawaited(_maybeShowDailyShare());
     } catch (error, stackTrace) {
       AppLogger.log(
         'StudyRefresh',
@@ -579,8 +587,51 @@ class _MainShellState extends ConsumerState<MainShell>
     }
   }
 
+  /// 只由进入首页或回前台触发，图片准备完成本身不会补弹。
+  Future<void> _maybeShowDailyShare() async {
+    bool canPresent() =>
+        mounted &&
+        _rootRouteVisible &&
+        widget.navigationShell.currentIndex == 1 &&
+        GoRouter.of(context).routeInformationProvider.value.uri.path ==
+            '/study' &&
+        !ref.read(guideControllerProvider).isActive;
+    try {
+      String? skipReason;
+      if (!mounted) {
+        skipReason = '首页已销毁';
+      } else if (!_rootRouteVisible) {
+        skipReason = '其它页面或弹窗遮挡';
+      } else if (widget.navigationShell.currentIndex != 1 ||
+          GoRouter.of(context).routeInformationProvider.value.uri.path !=
+              '/study') {
+        skipReason = '当前不是学习首页';
+      } else if (ref.read(guideControllerProvider).isActive) {
+        skipReason = '新手引导正在展示';
+      } else if (ref.read(dailyShareUserIdProvider) == null) {
+        skipReason = '未登录';
+      } else if (WidgetsBinding.instance.lifecycleState != null &&
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        skipReason = '应用处于后台';
+      }
+      if (skipReason != null) {
+        AppLogger.log('DailyShare', '跳过自动分享弹窗：$skipReason');
+        return;
+      }
+      await showDailyCheckInShareDialog(
+        context,
+        ref,
+        automatic: true,
+        canPresent: canPresent,
+      );
+    } on Object catch (error, stackTrace) {
+      AppLogger.log('DailyShare', '首页分享展示检查失败: $error\n$stackTrace');
+    }
+  }
+
   /// App 回到前台回调：刷新学习数据 + 后台检查版本更新 + 同步通知权限
   void _onAppResume() {
+    unawaited(cleanupStaleDailyShareExportTemp());
     AppLogger.log('AppUpdate', 'onAppResume: trigger checkInBackground');
     unawaited(_refreshStudyData(source: 'app-resume'));
     if (ref.read(thirdPartyStartupProvider).hasValue) {

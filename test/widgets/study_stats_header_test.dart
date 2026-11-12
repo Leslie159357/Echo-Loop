@@ -1,3 +1,4 @@
+import 'package:echo_loop/features/daily_goal_check_in/providers/daily_check_in_share_provider.dart';
 // 学习统计头部组件 Widget 测试
 //
 // 验证今日卡片、本周柱状图、词汇量 badge 的渲染和交互。
@@ -6,12 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:drift/native.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/database/app_database.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/features/daily_goal_check_in/widgets/daily_check_in_share_icon.dart';
 import 'package:echo_loop/widgets/study/study_stats_header.dart';
+import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/study_stats_provider.dart';
 import 'package:echo_loop/theme/app_theme.dart';
+
 import '../helpers/mock_providers.dart';
 
 // ========== 测试用 Mock ==========
@@ -29,11 +34,14 @@ class _TestStudyStatsNotifier extends StudyStatsNotifier {
 void main() {
   /// 每个测试共享的内存数据库，tearDown 时关闭
   late AppDatabase testDb;
+  late SharedPreferences prefs;
 
-  setUp(() {
+  setUp(() async {
     testDb = AppDatabase(
       NativeDatabase.memory(setup: configureAppDatabaseConnection),
     );
+    SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
   });
 
   tearDown(() => testDb.close());
@@ -42,14 +50,17 @@ void main() {
     required StudyStats stats,
     Locale locale = const Locale('en'),
     AppDatabase? db,
+    LearningSettings learningSettings = const LearningSettings(),
+    String? shareUserId,
   }) {
     final effectiveDb = db ?? testDb;
     return ProviderScope(
       overrides: dedupeOverrides([
+        dailyShareUserIdProvider.overrideWithValue(shareUserId),
         appDatabaseProvider.overrideWithValue(effectiveDb),
-        studyStatsProvider.overrideWith(
-          () => _TestStudyStatsNotifier(stats),
-        ),
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        studyStatsProvider.overrideWith(() => _TestStudyStatsNotifier(stats)),
+        initialLearningSettingsProvider.overrideWithValue(learningSettings),
       ]),
       child: MaterialApp(
         locale: locale,
@@ -120,7 +131,107 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('+42'), findsOneWidget);
+      expect(find.text('42'), findsOneWidget);
+    });
+
+    testWidgets('听、说、新词三项都有维度标签，避免只看到数字', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(stats: const StudyStats(todaySeconds: 60)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Listen'), findsOneWidget);
+      expect(find.text('Speak'), findsOneWidget);
+      expect(find.text('New words'), findsOneWidget);
+    });
+
+    testWidgets('未打卡时右侧显示目标时长与完成百分比徽章，进度条按已学比例填充', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(todaySeconds: 300), // 5 min
+          learningSettings: const LearningSettings(dailyGoalMinutes: 10),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Goal 10 min'), findsOneWidget);
+      expect(find.text('50%'), findsOneWidget);
+      expect(find.text('Checked in today'), findsNothing);
+      expect(find.byIcon(Icons.check), findsNothing);
+      final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      );
+      expect(bar.value, closeTo(0.5, 1e-9));
+    });
+
+    testWidgets('未打卡且已学超过目标时进度条与百分比徽章都封顶为 100%', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(todaySeconds: 1800), // 30 min
+          learningSettings: const LearningSettings(dailyGoalMinutes: 10),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Goal 10 min'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+      final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      );
+      expect(bar.value, 1.0);
+    });
+
+    testWidgets('未登录用户已打卡时显示状态胶囊，不显示分享入口', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(todaySeconds: 900, isTodayCheckedIn: true),
+          learningSettings: const LearningSettings(dailyGoalMinutes: 10),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Checked in today'), findsOneWidget);
+      expect(find.text('Goal 10 min'), findsNothing);
+      expect(find.text('100%'), findsNothing);
+      expect(find.byIcon(Icons.check_circle), findsNothing);
+      expect(find.byType(DailyCheckInShareIcon), findsNothing);
+      final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      );
+      expect(bar.value, 1.0);
+    });
+
+    testWidgets('登录用户的打卡状态胶囊同时包含分享图标并作为一个按钮', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(todaySeconds: 900, isTodayCheckedIn: true),
+          learningSettings: const LearningSettings(dailyGoalMinutes: 10),
+          shareUserId: 'test-user',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final shareButton = find
+          .ancestor(
+            of: find.byType(DailyCheckInShareIcon),
+            matching: find.byType(InkWell),
+          )
+          .first;
+      expect(
+        find.descendant(
+          of: shareButton,
+          matching: find.byIcon(Icons.check_circle),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: shareButton,
+          matching: find.text('Checked in today'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.widget<InkWell>(shareButton).onTap, isNotNull);
     });
   });
 
@@ -190,6 +301,64 @@ void main() {
 
       expect(find.text('30m'), findsOneWidget);
     });
+
+    testWidgets('取消确认框后保留柱状图且不写入设置', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(
+            weekTotalSeconds: 7200,
+            dailySeconds: [0, 0, 0, 0, 0, 0, 600],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Hide weekly chart'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This Week: 2h 0m'), findsOneWidget);
+      expect(prefs.getBool(LearningSettingsKeys.showWeeklyStudyChart), isNull);
+    });
+
+    testWidgets('确认后隐藏柱状图、今日卡片保留并写入关闭状态', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(
+            weekTotalSeconds: 7200,
+            todaySeconds: 600,
+            dailySeconds: [0, 0, 0, 0, 0, 0, 600],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Hide weekly chart'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This Week: 2h 0m'), findsNothing);
+      expect(find.byType(Card), findsOneWidget);
+      expect(prefs.getBool(LearningSettingsKeys.showWeeklyStudyChart), isFalse);
+    });
+
+    testWidgets('设置中已关闭时不显示柱状图', (tester) async {
+      // 设置从 SP 构建，需直接写入 SP 而非仅覆盖 initialLearningSettingsProvider
+      await prefs.setBool(LearningSettingsKeys.showWeeklyStudyChart, false);
+      await tester.pumpWidget(
+        createTestWidget(
+          stats: const StudyStats(
+            weekTotalSeconds: 7200,
+            dailySeconds: [0, 0, 0, 0, 0, 0, 600],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('This Week: 2h 0m'), findsNothing);
+    });
   });
 
   group('StudyStatsHeader — 词汇量', () {
@@ -203,7 +372,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+1'));
+      await tester.tap(find.text('1'));
       await tester.pumpAndSettle();
 
       expect(find.text('Vocab'), findsWidgets);
@@ -435,7 +604,7 @@ void main() {
       // 本周柱状图标题
       expect(find.text('本周: 1小时0分钟'), findsOneWidget);
       // 词汇今日新增（嵌入今日卡片）
-      expect(find.text('+12'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
     });
   });
 }

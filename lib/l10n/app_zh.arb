@@ -300,6 +300,9 @@
   "sentenceMenuSaved": "已收藏",
   "sentenceMenuUnsaved": "已取消收藏",
   "sentenceMenuActionFailed": "操作失败，请重试。",
+  "sentenceAudioUnavailable": "音频文件不可用，无法播放。",
+  "sentenceDetailLoadFailed": "字幕加载失败，请重试。",
+  "sentenceDetailRetry": "重试",
   "hotkeyReplay": "R：重播",
   "hotkeyPlayPause": "空格：播放/暂停",
   "hotkeyToggleTranscript": "↑：显示/隐藏字幕",
@@ -563,7 +566,6 @@
   "aiVocabulary": "重点词汇",
   "aiListening": "听力提示",
   "intensiveListenWordDictNotFound": "未收录该单词",
-  "intensiveListenContinue": "继续",
   "intensiveListenReplayingWithSubtitle": "再听一遍，巩固记忆",
   "intensiveListenPauseBetweenPlays": "{seconds}秒后播放下一遍",
   "@intensiveListenPauseBetweenPlays": {
@@ -1380,6 +1382,7 @@
   "stageBreakdownLessThanOneMin": "<1分",
   "stageBreakdownListenShort": "听",
   "stageBreakdownSpeakShort": "说",
+  "todayNewWordsShort": "新词",
   "stageBreakdownNoStageData": "详细分布数据从此版本开始记录",
   "stageBreakdownNoRecord": "当天没有学习记录",
   "chartLegendListening": "听",
@@ -1501,12 +1504,21 @@
       "month": { "type": "String" }
     }
   },
+  "unitMinute": "分钟",
+  "unitHour": "小时",
+  "unitDay": "天",
+  "hourMinuteUnit": "小时{minutes}分",
+  "@hourMinuteUnit": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "unitSecond": "秒",
+  "unitItem": "项",
   "monthlyTotal": "总计",
   "monthlyActiveDays": "学习天数",
   "monthlyAvgPerDay": "日均",
   "monthlyBestStreak": "最长连续",
-  "daysSuffix": "{days}天",
-  "activeDaysFraction": "{active}/{total}天",
   "senseGroupSplit": "拆分意群",
   "senseGroupLoading": "拆分中...",
   "senseGroupSingleGroup": "此句为单个意群",
@@ -1781,7 +1793,6 @@
   "onboardingQ2Option10": "约 10 分钟",
   "onboardingQ2Option20": "约 20 分钟",
   "onboardingQ2Option30": "30 分钟以上",
-  "onboardingQ2OptionFlexible": "不固定",
   "onboardingQ3Prompt": "你是从哪里知道我们的？",
   "onboardingQ3OptionAppStore": "应用商店",
   "onboardingQ3OptionYoutube": "YouTube",
@@ -1790,12 +1801,12 @@
   "onboardingQ3OptionXiaohongshu": "小红书",
   "onboardingQ3OptionWechat": "微信",
   "onboardingQ3OptionBilibili": "B 站",
-  "onboardingQ3OptionGoogleSearch": "Google 搜索",
   "onboardingQ3OptionGithub": "GitHub",
   "onboardingQ3OptionFriend": "朋友推荐",
   "onboardingQ3OptionOther": "其他",
   "onboardingQ3OptionShortVideo": "短视频",
   "onboardingQ3OptionSearchEngine": "搜索引擎",
+  "onboardingQ3OptionAiAssistant": "AI 助手",
   "onboardingQ3OptionTeacherSchool": "老师 / 学校",
   "onboardingQ3OtherHint": "可选，告诉我们具体是从哪里知道的",
   "onboardingPermissionsHint": "为了保证体验我们将请求以下权限",
@@ -1806,12 +1817,51 @@
   "playbackSettings": "播放设置",
   "learningSection": "学习",
   "learningSettings": "学习设置",
+  "dailyGoalSetting": "每日学习目标",
+  "dailyGoalSettingSubtitle": "每天计划学习的时长",
+  "dailyGoalMinutesValue": "{minutes} 分钟",
+  "activityDayCheckedInSemantics": "，已完成每日目标",
+  "dailyGoalTodayTitle": "今日目标",
+  "dailyGoalStudiedLabel": "已学 {minutes} 分钟",
+  "@dailyGoalStudiedLabel": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "dailyGoalTargetLabel": "目标 {minutes} 分钟",
+  "@dailyGoalTargetLabel": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "dailyGoalTodayCheckedIn": "今日已打卡",
+  "monthlyCheckInDays": "打卡天数",
+  "activityLegendCheckedIn": "已完成每日目标",
+  "dailyGoalCompletedToast": "今日 {minutes} 分钟学习目标已完成！",
+  "@dailyGoalCompletedToast": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "@dailyGoalMinutesValue": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
   "displaySettings": "显示设置",
   "showRecommendationToggle": "显示推荐卡片",
   "showRecommendationSubtitle": "在学习页显示「为你推荐」卡片",
   "hideRecommendationTooltip": "关闭推荐",
   "hideRecommendationTitle": "隐藏推荐卡片？",
-  "hideRecommendationMessage": "隐藏后学习页将不再显示推荐。如需恢复，可在「设置 › 学习 › 显示设置」中重新开启。",
+  "hideRecommendationMessage": "隐藏后学习页将不再显示推荐。如需恢复，可在「我的 › 显示设置」中重新开启。",
+  "showWeeklyChartToggle": "显示周学习时长",
+  "showWeeklyChartSubtitle": "在学习页显示本周学习时长图",
+  "showPlaybackSpeedButtonToggle": "显示倍速调节按钮",
+  "showPlaybackSpeedButtonSubtitle": "在学习任务中显示倍速调节按钮。",
+  "playbackSpeedDragHint": "左右滑动 · 松手应用",
+  "hideWeeklyChartTooltip": "关闭周学习时长",
+  "hideWeeklyChartTitle": "隐藏周学习时长图？",
+  "hideWeeklyChartMessage": "隐藏后学习页将不再显示周学习时长图。如需恢复，可在「我的 › 显示设置」中重新开启。",
   "speakingPracticeSection": "口语练习",
   "autoSkipRetellToggle": "自动跳过复述",
   "autoSkipRetellSubtitle": "学习计划遇到复述任务时自动跳过",
@@ -2279,5 +2329,34 @@
     "placeholders": {
       "collections": {"type": "String"}
     }
-  }
+  },
+  "profileNickname": "昵称",
+  "profileNicknameHint": "1–30 个字符",
+  "profileNicknameEmpty": "昵称不能为空",
+  "profileNicknameTooLong": "昵称最多 30 个字符",
+  "profileNicknameInvalid": "昵称不能包含换行或控制字符",
+  "profileSection": "个人资料",
+  "signInSection": "登录方式",
+  "profileAvatar": "头像",
+  "profileChangeAvatar": "更换头像",
+  "profileRemoveAvatar": "移除头像",
+  "profileCropTitle": "裁剪头像",
+  "profileSaveFailed": "保存失败，请稍后重试",
+  "profileImageUnsupported": "无法使用这张图片，请换一张 JPEG、PNG 或 WebP 格式的照片",
+  "profileLoadFailed": "资料加载失败，点击重试",
+  "autoShowDailyShareToggle": "自动显示今日一刻",
+  "autoShowDailyShareSubtitle": "完成每日目标后，返回学习页时自动展示卡片",
+  "shareCardTitle": "今日一刻",
+  "shareCardPreparing": "今日卡片正在准备中，请稍后再试",
+  "shareCardPreparationFailed": "今日卡片准备失败，正在重试，请稍后再试",
+  "shareCardNoCards": "暂时没有可用的分享卡片，请稍后再试",
+  "shareCardNoAlternative": "暂无其它卡片",
+  "shareCardSave": "保存",
+  "shareCardSaveDesktop": "保存图片",
+  "shareCardShare": "分享",
+  "shareCardChange": "换一个",
+  "shareCardSaved": "图片已保存",
+  "shareCardActionFailed": "操作失败，请稍后重试",
+  "shareCardPermissionDenied": "没有保存图片的权限，请在系统设置中允许访问相册",
+  "shareCardNotSignedIn": "请先登录后分享"
 }

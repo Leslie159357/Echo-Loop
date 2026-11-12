@@ -1,21 +1,30 @@
 /// 学习内容文字偏好（字号）
 ///
-/// 只作用于学习正文（当前试点：字幕列表），不缩放整个界面。
-/// 叠加在主题基础样式之上，系统字体缩放（`MediaQuery.textScaler`）仍照常生效。
+/// 只作用于学习正文（字幕列表、句子讲解、意群等），不缩放整个界面。
+/// 叠加在主题基础样式之上：应用内 100% 即系统字体缩放后的基准，系统字体缩放
+/// （`MediaQuery.textScaler`）照常生效，所有学习正文文字都必须跟随。
+///
+/// 100% 档的正文基准统一为 16pt、w400、字间距 0、行高 [readingBodyLineHeight]：
+/// 原文正文样式一律基于 `bodyLarge`，不要再用 `bodyMedium`（14pt）或
+/// `titleMedium`（w500）作正文，否则各页面字重、字间距和行距不一致。
+/// 翻译、解析等次级文字不受此约束。
 library;
 
 import 'package:flutter/material.dart';
 
 /// 可选字号倍率档位（相对主题基础字号）。
 ///
-/// 85% ~ 175%，每档 5%。离散档位比连续滑块更好测、更好同步，
+/// 85% ~ 150%，每档 5%。离散档位比连续滑块更好测、更好同步，
 /// 也避免出现 1.07 这类无意义的值。按整数百分比生成，避免浮点累加误差。
 final readingFontScaleSteps = List<double>.unmodifiable(
-  List.generate(19, (i) => (85 + 5 * i) / 100),
+  List.generate(14, (i) => (85 + 5 * i) / 100),
 );
 
 /// 默认字号倍率。
 const readingFontScaleDefault = 1.0;
+
+/// 学习正文统一行高。所有原文正文共用，避免各页面行距不一致。
+const readingBodyLineHeight = 1.4;
 
 /// 基础样式未声明字号时的兜底值（Material bodyMedium 默认字号）。
 const _fallbackBaseFontSize = 14.0;

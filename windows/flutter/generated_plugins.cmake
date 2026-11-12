@@ -6,11 +6,13 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   charset_converter
   connectivity_plus
+  file_selector_windows
   firebase_core
   flutter_inappwebview_windows
   flutter_secure_storage_windows
   flutter_timezone
   flutter_tts
+  gal
   media_kit_libs_windows_video
   media_kit_video
   permission_handler_windows

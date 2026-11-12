@@ -19,6 +19,7 @@ import '../features/subscription/models/premium_feature.dart';
 import '../features/subscription/widgets/ai_quota_exceeded_dialog.dart';
 import '../features/subscription/widgets/feature_gate.dart' show openPaywall;
 import '../l10n/app_localizations.dart';
+import '../widgets/common/playback_controls.dart';
 import '../utils/playback_speed.dart';
 import '../models/retell_review_sample.dart';
 import '../models/media_learning_startup.dart';
@@ -1360,6 +1361,14 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     }
   }
 
+  /// 播放栏速度按钮与设置面板走同一更新路径，保证两处行为一致。
+  void _handlePlaybackSpeedSelected(double speed) {
+    final settings = ref.read(retellPlayerProvider).settings;
+    ref
+        .read(retellPlayerProvider.notifier)
+        .updateSettings(settings.copyWith(playbackSpeed: speed));
+  }
+
   Future<void> _goToPreviousParagraph() async {
     if (_isParagraphTransitioning) return;
     _isParagraphTransitioning = true;
@@ -1490,12 +1499,9 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
         audioName: audioName,
         sentenceText: sentence.text,
         sentenceIndex: sentence.index,
-        totalSentenceCount: ref
-            .read(retellPlayerProvider.notifier)
-            .totalSentenceCount,
         startTimeMs: sentence.startTime.inMilliseconds,
         endTimeMs: sentence.endTime.inMilliseconds,
-        rangePlayback: _retellMediaRangePlayback,
+        rangePlaybackBuilder: _buildMediaRangePlayback,
         wordHighlightSource: _wordHighlightSource(),
         mediaSession: usesMedia ? _buildMediaSession() : null,
       ),
@@ -1510,12 +1516,13 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
         .initializeBookmarks(widget.audioItemId);
   }
 
-  late final MediaSenseGroupRangePlayback _retellMediaRangePlayback =
-      MediaSenseGroupRangePlayback(
-        engine: ref.read(mediaEngineProvider.notifier),
-        playbackSpeed: () =>
-            ref.read(retellPlayerProvider).settings.playbackSpeed,
-      );
+  /// 讲解页按自身速度创建媒体区间播放器，不沿用复述的播放速度。
+  MediaSenseGroupRangePlayback _buildMediaRangePlayback(
+    double Function() playbackSpeed,
+  ) => MediaSenseGroupRangePlayback(
+    engine: ref.read(mediaEngineProvider.notifier),
+    playbackSpeed: playbackSpeed,
+  );
 
   WordHighlightSource _wordHighlightSource() {
     final engine = ref.read(mediaEngineProvider.notifier);
@@ -1587,6 +1594,9 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
     final retellRecState = ref.read(retellRecordingControllerProvider);
     final retellRatingEnabled = ref.watch(
       learningSettingsProvider.select((s) => s.retellRatingEnabled),
+    );
+    final showPlaybackSpeedButton = ref.watch(
+      learningSettingsProvider.select((s) => s.showPlaybackSpeedButton),
     );
     final reviewPhase = ref.watch(
       retellReviewEvaluationProvider.select((s) => s.phase),
@@ -1784,8 +1794,8 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                   isLast:
                       state.currentParagraphIndex >= state.totalParagraphs - 1,
                   centerIcon: _isRetellMainPlaybackActive(state)
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
+                      ? PlaybackToggleIcon.pause
+                      : PlaybackToggleIcon.play,
                   onPrevious: _goToPreviousParagraph,
                   onNext: _goToNextParagraph,
                   onCenter: () => unawaited(_handleMainPlaybackTap()),
@@ -1796,6 +1806,12 @@ class _RetellPlayerScreenState extends ConsumerState<RetellPlayerScreen>
                     totalCount: state.settings.repeatCount,
                   ),
                   statusSuffixText: _formatSpeed(state.settings.playbackSpeed),
+                  playbackSpeed: showPlaybackSpeedButton
+                      ? state.settings.playbackSpeed
+                      : null,
+                  onPlaybackSpeedChanged: showPlaybackSpeedButton
+                      ? _handlePlaybackSpeedSelected
+                      : null,
                   l10n: l10n,
                   theme: theme,
                 ),

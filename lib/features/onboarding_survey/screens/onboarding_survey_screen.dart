@@ -18,6 +18,7 @@ import '../../../analytics/analytics_providers.dart';
 import '../../../analytics/models/event_names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../router/app_router.dart';
+import '../../../providers/learning_settings_provider.dart';
 import '../../../services/app_logger.dart';
 import '../models/onboarding_answers.dart';
 import '../models/onboarding_question.dart';
@@ -51,7 +52,6 @@ const _dailyMinutesEmoji = <String, String>{
   OnboardingDailyMinutes.m10: '🌱',
   OnboardingDailyMinutes.m20: '🌿',
   OnboardingDailyMinutes.m30: '🌳',
-  OnboardingDailyMinutes.flexible: '🎈',
 };
 
 /// 单个渠道的品牌图标 + 品牌色。
@@ -103,14 +103,15 @@ const _referralBrand = <String, _BrandToken>{
     icon: FontAwesomeIcons.xTwitter,
     color: Color(0xFF000000),
   ),
-  OnboardingReferralSource.googleSearch: (
-    icon: FontAwesomeIcons.google,
-    color: Color(0xFF4285F4),
-  ),
   // 通用渠道
   OnboardingReferralSource.github: (
     icon: FontAwesomeIcons.github,
     color: Color(0xFF181717),
+  ),
+  // 与应用内 AI 讲解的星芒图标（auto_awesome，purple.shade400）保持一致
+  OnboardingReferralSource.aiAssistant: (
+    icon: FontAwesomeIcons.wandMagicSparkles,
+    color: Color(0xFFAB47BC),
   ),
   OnboardingReferralSource.appStore: (
     icon: FontAwesomeIcons.appStore,
@@ -291,6 +292,14 @@ class _OnboardingSurveyScreenState
     }
 
     unawaited(ref.read(onboardingSyncProvider).onLocalAnswersChanged());
+
+    // Q2 答案即每日学习目标的初始值；放在屏幕层写入，避免 onboarding 模块依赖学习设置模块。
+    final goalMinutes = int.tryParse(answers.dailyMinutes!);
+    if (goalMinutes != null) {
+      await ref
+          .read(learningSettingsProvider.notifier)
+          .setDailyGoalMinutes(goalMinutes);
+    }
 
     final analytics = ref.read(analyticsServiceProvider);
     final elapsed = DateTime.now().difference(_startedAt).inSeconds;
@@ -738,14 +747,6 @@ class _OnboardingSurveyScreenState
           selected: selected == OnboardingDailyMinutes.m30,
           onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.m30),
         ),
-        SurveyChoiceTile(
-          label: l10n.onboardingQ2OptionFlexible,
-          leading: _emojiLeading(
-            _dailyMinutesEmoji[OnboardingDailyMinutes.flexible],
-          ),
-          selected: selected == OnboardingDailyMinutes.flexible,
-          onTap: () => _selectDailyMinutes(OnboardingDailyMinutes.flexible),
-        ),
       ],
     );
   }
@@ -763,11 +764,12 @@ class _OnboardingSurveyScreenState
     final selected = answers.referralSource;
     final isChinese = Localizations.localeOf(context).languageCode == 'zh';
 
-    // 中文：GitHub → 微信 → 短视频 → 朋友 → 小红书 → 搜索引擎 → 应用商店 → B 站 → 老师/学校 → 其他
-    // 英文：GitHub → 朋友 → Google 搜索 → 应用商店 → X → 短视频 → YouTube → Reddit → 老师/学校 → Other
+    // 中文：GitHub → AI 助手 → 微信 → 短视频 → 朋友 → 小红书 → 搜索引擎 → 应用商店 → B 站 → 老师/学校 → 其他
+    // 英文：GitHub → AI 助手 → 朋友 → 搜索引擎 → 应用商店 → X → 短视频 → YouTube → Reddit → 老师/学校 → Other
     final codes = isChinese
         ? const [
             OnboardingReferralSource.github,
+            OnboardingReferralSource.aiAssistant,
             OnboardingReferralSource.wechat,
             OnboardingReferralSource.shortVideo,
             OnboardingReferralSource.friend,
@@ -780,8 +782,9 @@ class _OnboardingSurveyScreenState
           ]
         : const [
             OnboardingReferralSource.github,
+            OnboardingReferralSource.aiAssistant,
             OnboardingReferralSource.friend,
-            OnboardingReferralSource.googleSearch,
+            OnboardingReferralSource.searchEngine,
             OnboardingReferralSource.appStore,
             OnboardingReferralSource.xTwitter,
             OnboardingReferralSource.shortVideo,
@@ -799,6 +802,8 @@ class _OnboardingSurveyScreenState
         const SizedBox(height: 24),
         // 双列网格让全部选项一屏可见；"其他"在最后一格，展开的补充说明在网格下方。
         SurveyChoiceGrid(
+          // 11 个选项为 6 行，行距收紧到 8，保证 iPhone SE 一屏可见"其他"
+          spacing: 8,
           children: [
             for (final code in codes)
               SurveyChoiceGridTile(
@@ -853,10 +858,10 @@ class _OnboardingSurveyScreenState
         return l10n.onboardingQ3OptionReddit;
       case OnboardingReferralSource.xTwitter:
         return l10n.onboardingQ3OptionXTwitter;
-      case OnboardingReferralSource.googleSearch:
-        return l10n.onboardingQ3OptionGoogleSearch;
       case OnboardingReferralSource.github:
         return l10n.onboardingQ3OptionGithub;
+      case OnboardingReferralSource.aiAssistant:
+        return l10n.onboardingQ3OptionAiAssistant;
       case OnboardingReferralSource.appStore:
         return l10n.onboardingQ3OptionAppStore;
       case OnboardingReferralSource.friend:

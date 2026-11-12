@@ -25,10 +25,10 @@ import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 import '../services/app_logger.dart';
 import '../services/startup_trace.dart';
-import '../widgets/speech_permission_dialog.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/learning_progress_icon.dart';
 import '../widgets/media_type_icon.dart';
+import '../widgets/study/study_streak_badge.dart';
 import '../widgets/study/study_stats_header.dart';
 
 /// 学习 Tab 待复习分组标题图标。
@@ -121,10 +121,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
     // AppBar streak chip（始终显示，可点击进入活动日历）
     final streak = statsAsync.value?.streak ?? 0;
-    final isStreakActive = streak > 0;
     final streakChip = Padding(
       padding: const EdgeInsets.only(right: AppSpacing.m),
-      child: GestureDetector(
+      child: StudyStreakBadge(
+        streak: streak,
         onTap: () {
           ref.read(analyticsServiceProvider).track(
             Events.activityCalendarViewed,
@@ -132,37 +132,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
           );
           context.push(AppRoutes.activityCalendar);
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: isStreakActive
-                ? Colors.orange.withValues(alpha: 0.1)
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.local_fire_department_rounded,
-                size: 16,
-                color: isStreakActive
-                    ? Colors.orange
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                l10n.streakDays(streak),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: isStreakActive
-                      ? Colors.orange.shade800
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
 
@@ -359,12 +328,12 @@ class _TaskSection extends StatelessWidget {
 }
 
 /// 任务和推荐材料共用的卡片布局，统一标题、阶段信息和进度展示。
+/// 整张卡片即操作入口，不再单独放置「继续 / 开始」按钮。
 class _StudyMaterialCard extends StatelessWidget {
   final String title;
   final Color accentColor;
   final Widget leading;
   final Widget subtitle;
-  final Widget action;
   final double progressPercent;
   final VoidCallback? onTap;
 
@@ -373,7 +342,6 @@ class _StudyMaterialCard extends StatelessWidget {
     required this.accentColor,
     required this.leading,
     required this.subtitle,
-    required this.action,
     required this.progressPercent,
     required this.onTap,
   });
@@ -417,8 +385,6 @@ class _StudyMaterialCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.s),
-                          action,
                         ],
                       ),
                       if (progressPercent > 0) ...[
@@ -495,11 +461,13 @@ class _RecommendedMaterialCard extends ConsumerWidget {
                 Icons.close_rounded,
                 size: 18,
                 color: theme.colorScheme.onSurfaceVariant.withValues(
-                  alpha: 0.6,
+                  alpha: 0.4,
                 ),
               ),
               tooltip: l10n.hideRecommendationTooltip,
-              visualDensity: VisualDensity.compact,
+              // 固定 32×32 方形约束，高亮区域保持圆形；不用 VisualDensity.compact
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
               onPressed: () => _confirmHide(context, ref),
             ),
           ],
@@ -532,13 +500,6 @@ class _RecommendedMaterialCard extends ConsumerWidget {
                   isInProgress: true,
                 ),
             ],
-          ),
-          action: FilledButton.tonal(
-            onPressed: () =>
-                context.push(AppRoutes.audioLearningPlan(material.id)),
-            child: Text(
-              hasRoundProgress ? l10n.continueButton : l10n.startButton,
-            ),
           ),
           progressPercent: progressPercent,
           onTap: () => context.push(AppRoutes.audioLearningPlan(material.id)),
@@ -630,7 +591,6 @@ class _TaskCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final isDisabled = task.type == StudyTaskType.reviewUpcoming;
     final stageLabel = _stageSubStageLabel(l10n, task.stage, task.subStage);
     final statusText = _statusText(context, l10n, task, now);
     final isOverdue = task.isOverdue;
@@ -680,22 +640,6 @@ class _TaskCard extends ConsumerWidget {
               isInProgress: statusText == l10n.learningInProgress,
             ),
         ],
-      ),
-      action: FilledButton.tonal(
-        onPressed: isDisabled
-            ? null
-            : () async {
-                final allowed = await ensureSpeechReadyForSubStage(
-                  context,
-                  ref,
-                  task.subStage,
-                );
-                if (!allowed || !context.mounted) return;
-                context.push(
-                  AppRoutes.audioLearningPlan(task.audioId, autoStart: true),
-                );
-              },
-        child: Text(_actionLabel(l10n, task)),
       ),
       progressPercent: progressPercent,
       onTap: () async {
@@ -1294,12 +1238,6 @@ String _stageName(AppLocalizations l10n, LearningStage stage) {
     LearningStage.review28 => l10n.reviewRound28,
     LearningStage.completed => l10n.learningCompleted,
   };
-}
-
-/// 按钮文案：本轮尚无完成记录=开始，已有完成记录=继续。
-/// 复习任务与首次学习统一按"是否已开始本轮"判定，不再区分类型。
-String _actionLabel(AppLocalizations l10n, StudyTask task) {
-  return task.hasRoundProgress ? l10n.continueButton : l10n.startButton;
 }
 
 /// 状态标签（学习中 / 逾期 / 倒计时等）

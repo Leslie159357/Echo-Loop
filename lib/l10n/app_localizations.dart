@@ -1364,6 +1364,24 @@ abstract class AppLocalizations {
   /// **'Couldn\'t complete this action. Please try again.'**
   String get sentenceMenuActionFailed;
 
+  /// No description provided for @sentenceAudioUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The audio file is unavailable, so it can\'t be played.'**
+  String get sentenceAudioUnavailable;
+
+  /// No description provided for @sentenceDetailLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the transcript. Please try again.'**
+  String get sentenceDetailLoadFailed;
+
+  /// No description provided for @sentenceDetailRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get sentenceDetailRetry;
+
   /// No description provided for @hotkeyReplay.
   ///
   /// In en, this message translates to:
@@ -2557,12 +2575,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Word not found in dictionary'**
   String get intensiveListenWordDictNotFound;
-
-  /// No description provided for @intensiveListenContinue.
-  ///
-  /// In en, this message translates to:
-  /// **'Next'**
-  String get intensiveListenContinue;
 
   /// No description provided for @intensiveListenReplayingWithSubtitle.
   ///
@@ -5720,6 +5732,12 @@ abstract class AppLocalizations {
   /// **'Speak'**
   String get stageBreakdownSpeakShort;
 
+  /// No description provided for @todayNewWordsShort.
+  ///
+  /// In en, this message translates to:
+  /// **'New words'**
+  String get todayNewWordsShort;
+
   /// No description provided for @stageBreakdownNoStageData.
   ///
   /// In en, this message translates to:
@@ -6308,6 +6326,42 @@ abstract class AppLocalizations {
   /// **'{month} Statistics'**
   String monthlySummaryTitle(String month);
 
+  /// No description provided for @unitMinute.
+  ///
+  /// In en, this message translates to:
+  /// **'min'**
+  String get unitMinute;
+
+  /// No description provided for @unitHour.
+  ///
+  /// In en, this message translates to:
+  /// **'h'**
+  String get unitHour;
+
+  /// No description provided for @unitDay.
+  ///
+  /// In en, this message translates to:
+  /// **'d'**
+  String get unitDay;
+
+  /// No description provided for @hourMinuteUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'h {minutes}m'**
+  String hourMinuteUnit(int minutes);
+
+  /// No description provided for @unitSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'s'**
+  String get unitSecond;
+
+  /// No description provided for @unitItem.
+  ///
+  /// In en, this message translates to:
+  /// **'items'**
+  String get unitItem;
+
   /// No description provided for @monthlyTotal.
   ///
   /// In en, this message translates to:
@@ -6331,18 +6385,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Best streak'**
   String get monthlyBestStreak;
-
-  /// No description provided for @daysSuffix.
-  ///
-  /// In en, this message translates to:
-  /// **'{days}d'**
-  String daysSuffix(int days);
-
-  /// No description provided for @activeDaysFraction.
-  ///
-  /// In en, this message translates to:
-  /// **'{active}/{total} days'**
-  String activeDaysFraction(int active, int total);
 
   /// No description provided for @senseGroupSplit.
   ///
@@ -7562,12 +7604,6 @@ abstract class AppLocalizations {
   /// **'30+ minutes'**
   String get onboardingQ2Option30;
 
-  /// No description provided for @onboardingQ2OptionFlexible.
-  ///
-  /// In en, this message translates to:
-  /// **'It varies'**
-  String get onboardingQ2OptionFlexible;
-
   /// No description provided for @onboardingQ3Prompt.
   ///
   /// In en, this message translates to:
@@ -7577,7 +7613,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingQ3OptionAppStore.
   ///
   /// In en, this message translates to:
-  /// **'App Store / Google Play'**
+  /// **'App Store'**
   String get onboardingQ3OptionAppStore;
 
   /// No description provided for @onboardingQ3OptionYoutube.
@@ -7616,12 +7652,6 @@ abstract class AppLocalizations {
   /// **'Bilibili'**
   String get onboardingQ3OptionBilibili;
 
-  /// No description provided for @onboardingQ3OptionGoogleSearch.
-  ///
-  /// In en, this message translates to:
-  /// **'Search Engine'**
-  String get onboardingQ3OptionGoogleSearch;
-
   /// No description provided for @onboardingQ3OptionGithub.
   ///
   /// In en, this message translates to:
@@ -7651,6 +7681,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search engine'**
   String get onboardingQ3OptionSearchEngine;
+
+  /// No description provided for @onboardingQ3OptionAiAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Assistant'**
+  String get onboardingQ3OptionAiAssistant;
 
   /// No description provided for @onboardingQ3OptionTeacherSchool.
   ///
@@ -7706,6 +7742,72 @@ abstract class AppLocalizations {
   /// **'Learning Settings'**
   String get learningSettings;
 
+  /// No description provided for @dailyGoalSetting.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily study goal'**
+  String get dailyGoalSetting;
+
+  /// No description provided for @dailyGoalSettingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How long you plan to study each day'**
+  String get dailyGoalSettingSubtitle;
+
+  /// No description provided for @dailyGoalMinutesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String dailyGoalMinutesValue(int minutes);
+
+  /// No description provided for @activityDayCheckedInSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **', daily goal completed'**
+  String get activityDayCheckedInSemantics;
+
+  /// No description provided for @dailyGoalTodayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s goal'**
+  String get dailyGoalTodayTitle;
+
+  /// No description provided for @dailyGoalStudiedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min studied'**
+  String dailyGoalStudiedLabel(int minutes);
+
+  /// No description provided for @dailyGoalTargetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Goal {minutes} min'**
+  String dailyGoalTargetLabel(int minutes);
+
+  /// No description provided for @dailyGoalTodayCheckedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked in today'**
+  String get dailyGoalTodayCheckedIn;
+
+  /// No description provided for @monthlyCheckInDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Check-in days'**
+  String get monthlyCheckInDays;
+
+  /// No description provided for @activityLegendCheckedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily goal completed'**
+  String get activityLegendCheckedIn;
+
+  /// No description provided for @dailyGoalCompletedToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s {minutes}-minute study goal is complete!'**
+  String dailyGoalCompletedToast(int minutes);
+
   /// No description provided for @showRecommendationToggle.
   ///
   /// In en, this message translates to:
@@ -7733,8 +7835,56 @@ abstract class AppLocalizations {
   /// No description provided for @hideRecommendationMessage.
   ///
   /// In en, this message translates to:
-  /// **'The Study page will stop showing recommendations. To bring it back, turn it on again in Settings › Learning › Display Settings.'**
+  /// **'The Study page will stop showing recommendations. To bring it back, turn it on again in Profile › Display Settings.'**
   String get hideRecommendationMessage;
+
+  /// No description provided for @showWeeklyChartToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show weekly study chart'**
+  String get showWeeklyChartToggle;
+
+  /// No description provided for @showWeeklyChartSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the weekly study time chart on the Study page'**
+  String get showWeeklyChartSubtitle;
+
+  /// No description provided for @showPlaybackSpeedButtonToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show playback speed button'**
+  String get showPlaybackSpeedButtonToggle;
+
+  /// No description provided for @showPlaybackSpeedButtonSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the playback speed button in the playback controls of learning tasks.'**
+  String get showPlaybackSpeedButtonSubtitle;
+
+  /// No description provided for @playbackSpeedDragHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide left or right · release to apply'**
+  String get playbackSpeedDragHint;
+
+  /// No description provided for @hideWeeklyChartTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide weekly chart'**
+  String get hideWeeklyChartTooltip;
+
+  /// No description provided for @hideWeeklyChartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide weekly study chart?'**
+  String get hideWeeklyChartTitle;
+
+  /// No description provided for @hideWeeklyChartMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The Study page will stop showing the weekly study chart. To bring it back, turn it on again in Profile › Display Settings.'**
+  String get hideWeeklyChartMessage;
 
   /// No description provided for @speakingPracticeSection.
   ///
@@ -10087,6 +10237,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'From {collections}'**
   String learningPlanFromCollection(String collections);
+
+  /// No description provided for @profileNickname.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname'**
+  String get profileNickname;
+
+  /// No description provided for @profileNicknameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'1–30 characters'**
+  String get profileNicknameHint;
+
+  /// No description provided for @profileNicknameEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname can\'t be empty'**
+  String get profileNicknameEmpty;
+
+  /// No description provided for @profileNicknameTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname can be up to 30 characters'**
+  String get profileNicknameTooLong;
+
+  /// No description provided for @profileNicknameInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname can\'t contain line breaks or control characters'**
+  String get profileNicknameInvalid;
+
+  /// No description provided for @profileSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileSection;
+
+  /// No description provided for @signInSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in'**
+  String get signInSection;
+
+  /// No description provided for @profileAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar'**
+  String get profileAvatar;
+
+  /// No description provided for @profileChangeAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Change avatar'**
+  String get profileChangeAvatar;
+
+  /// No description provided for @profileRemoveAvatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove avatar'**
+  String get profileRemoveAvatar;
+
+  /// No description provided for @profileCropTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop avatar'**
+  String get profileCropTitle;
+
+  /// No description provided for @profileSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your profile. Please try again.'**
+  String get profileSaveFailed;
+
+  /// No description provided for @profileImageUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This image can\'t be used. Try a JPEG, PNG or WebP photo.'**
+  String get profileImageUnsupported;
+
+  /// No description provided for @profileLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your profile. Tap to retry.'**
+  String get profileLoadFailed;
+
+  /// No description provided for @autoShowDailyShareToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-show Today’s Moment'**
+  String get autoShowDailyShareToggle;
+
+  /// No description provided for @autoShowDailyShareSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically show your card when returning to Study after reaching your daily goal'**
+  String get autoShowDailyShareSubtitle;
+
+  /// No description provided for @shareCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today’s Moment'**
+  String get shareCardTitle;
+
+  /// No description provided for @shareCardPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Your card is being prepared. Please try again shortly.'**
+  String get shareCardPreparing;
+
+  /// No description provided for @shareCardPreparationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not prepare your card. Retrying; please try again shortly.'**
+  String get shareCardPreparationFailed;
+
+  /// No description provided for @shareCardNoCards.
+  ///
+  /// In en, this message translates to:
+  /// **'No share cards are available right now. Please try again later.'**
+  String get shareCardNoCards;
+
+  /// No description provided for @shareCardNoAlternative.
+  ///
+  /// In en, this message translates to:
+  /// **'No other cards are available.'**
+  String get shareCardNoAlternative;
+
+  /// No description provided for @shareCardSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get shareCardSave;
+
+  /// No description provided for @shareCardSaveDesktop.
+  ///
+  /// In en, this message translates to:
+  /// **'Save image'**
+  String get shareCardSaveDesktop;
+
+  /// No description provided for @shareCardShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get shareCardShare;
+
+  /// No description provided for @shareCardChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another'**
+  String get shareCardChange;
+
+  /// No description provided for @shareCardSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Image saved'**
+  String get shareCardSaved;
+
+  /// No description provided for @shareCardActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not complete the action. Please try again.'**
+  String get shareCardActionFailed;
+
+  /// No description provided for @shareCardPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow photo access in system settings to save your card.'**
+  String get shareCardPermissionDenied;
+
+  /// No description provided for @shareCardNotSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to share your card.'**
+  String get shareCardNotSignedIn;
 }
 
 class _AppLocalizationsDelegate

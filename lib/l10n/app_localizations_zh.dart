@@ -691,6 +691,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sentenceMenuActionFailed => '操作失败，请重试。';
 
   @override
+  String get sentenceAudioUnavailable => '音频文件不可用，无法播放。';
+
+  @override
+  String get sentenceDetailLoadFailed => '字幕加载失败，请重试。';
+
+  @override
+  String get sentenceDetailRetry => '重试';
+
+  @override
   String get hotkeyReplay => 'R：重播';
 
   @override
@@ -1361,9 +1370,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get intensiveListenWordDictNotFound => '未收录该单词';
-
-  @override
-  String get intensiveListenContinue => '继续';
 
   @override
   String get intensiveListenReplayingWithSubtitle => '再听一遍，巩固记忆';
@@ -3124,6 +3130,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stageBreakdownSpeakShort => '说';
 
   @override
+  String get todayNewWordsShort => '新词';
+
+  @override
   String get stageBreakdownNoStageData => '详细分布数据从此版本开始记录';
 
   @override
@@ -3441,6 +3450,26 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get unitMinute => '分钟';
+
+  @override
+  String get unitHour => '小时';
+
+  @override
+  String get unitDay => '天';
+
+  @override
+  String hourMinuteUnit(int minutes) {
+    return '小时$minutes分';
+  }
+
+  @override
+  String get unitSecond => '秒';
+
+  @override
+  String get unitItem => '项';
+
+  @override
   String get monthlyTotal => '总计';
 
   @override
@@ -3451,16 +3480,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get monthlyBestStreak => '最长连续';
-
-  @override
-  String daysSuffix(int days) {
-    return '$days天';
-  }
-
-  @override
-  String activeDaysFraction(int active, int total) {
-    return '$active/$total天';
-  }
 
   @override
   String get senseGroupSplit => '拆分意群';
@@ -4135,9 +4154,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingQ2Option30 => '30 分钟以上';
 
   @override
-  String get onboardingQ2OptionFlexible => '不固定';
-
-  @override
   String get onboardingQ3Prompt => '你是从哪里知道我们的？';
 
   @override
@@ -4162,9 +4178,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingQ3OptionBilibili => 'B 站';
 
   @override
-  String get onboardingQ3OptionGoogleSearch => 'Google 搜索';
-
-  @override
   String get onboardingQ3OptionGithub => 'GitHub';
 
   @override
@@ -4178,6 +4191,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingQ3OptionSearchEngine => '搜索引擎';
+
+  @override
+  String get onboardingQ3OptionAiAssistant => 'AI 助手';
 
   @override
   String get onboardingQ3OptionTeacherSchool => '老师 / 学校';
@@ -4207,6 +4223,47 @@ class AppLocalizationsZh extends AppLocalizations {
   String get learningSettings => '学习设置';
 
   @override
+  String get dailyGoalSetting => '每日学习目标';
+
+  @override
+  String get dailyGoalSettingSubtitle => '每天计划学习的时长';
+
+  @override
+  String dailyGoalMinutesValue(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get activityDayCheckedInSemantics => '，已完成每日目标';
+
+  @override
+  String get dailyGoalTodayTitle => '今日目标';
+
+  @override
+  String dailyGoalStudiedLabel(int minutes) {
+    return '已学 $minutes 分钟';
+  }
+
+  @override
+  String dailyGoalTargetLabel(int minutes) {
+    return '目标 $minutes 分钟';
+  }
+
+  @override
+  String get dailyGoalTodayCheckedIn => '今日已打卡';
+
+  @override
+  String get monthlyCheckInDays => '打卡天数';
+
+  @override
+  String get activityLegendCheckedIn => '已完成每日目标';
+
+  @override
+  String dailyGoalCompletedToast(int minutes) {
+    return '今日 $minutes 分钟学习目标已完成！';
+  }
+
+  @override
   String get showRecommendationToggle => '显示推荐卡片';
 
   @override
@@ -4220,7 +4277,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get hideRecommendationMessage =>
-      '隐藏后学习页将不再显示推荐。如需恢复，可在「设置 › 学习 › 显示设置」中重新开启。';
+      '隐藏后学习页将不再显示推荐。如需恢复，可在「我的 › 显示设置」中重新开启。';
+
+  @override
+  String get showWeeklyChartToggle => '显示周学习时长';
+
+  @override
+  String get showWeeklyChartSubtitle => '在学习页显示本周学习时长图';
+
+  @override
+  String get showPlaybackSpeedButtonToggle => '显示倍速调节按钮';
+
+  @override
+  String get showPlaybackSpeedButtonSubtitle => '在学习任务中显示倍速调节按钮。';
+
+  @override
+  String get playbackSpeedDragHint => '左右滑动 · 松手应用';
+
+  @override
+  String get hideWeeklyChartTooltip => '关闭周学习时长';
+
+  @override
+  String get hideWeeklyChartTitle => '隐藏周学习时长图？';
+
+  @override
+  String get hideWeeklyChartMessage =>
+      '隐藏后学习页将不再显示周学习时长图。如需恢复，可在「我的 › 显示设置」中重新开启。';
 
   @override
   String get speakingPracticeSection => '口语练习';
@@ -5466,4 +5548,91 @@ class AppLocalizationsZh extends AppLocalizations {
   String learningPlanFromCollection(String collections) {
     return '来自：$collections';
   }
+
+  @override
+  String get profileNickname => '昵称';
+
+  @override
+  String get profileNicknameHint => '1–30 个字符';
+
+  @override
+  String get profileNicknameEmpty => '昵称不能为空';
+
+  @override
+  String get profileNicknameTooLong => '昵称最多 30 个字符';
+
+  @override
+  String get profileNicknameInvalid => '昵称不能包含换行或控制字符';
+
+  @override
+  String get profileSection => '个人资料';
+
+  @override
+  String get signInSection => '登录方式';
+
+  @override
+  String get profileAvatar => '头像';
+
+  @override
+  String get profileChangeAvatar => '更换头像';
+
+  @override
+  String get profileRemoveAvatar => '移除头像';
+
+  @override
+  String get profileCropTitle => '裁剪头像';
+
+  @override
+  String get profileSaveFailed => '保存失败，请稍后重试';
+
+  @override
+  String get profileImageUnsupported => '无法使用这张图片，请换一张 JPEG、PNG 或 WebP 格式的照片';
+
+  @override
+  String get profileLoadFailed => '资料加载失败，点击重试';
+
+  @override
+  String get autoShowDailyShareToggle => '自动显示今日一刻';
+
+  @override
+  String get autoShowDailyShareSubtitle => '完成每日目标后，返回学习页时自动展示卡片';
+
+  @override
+  String get shareCardTitle => '今日一刻';
+
+  @override
+  String get shareCardPreparing => '今日卡片正在准备中，请稍后再试';
+
+  @override
+  String get shareCardPreparationFailed => '今日卡片准备失败，正在重试，请稍后再试';
+
+  @override
+  String get shareCardNoCards => '暂时没有可用的分享卡片，请稍后再试';
+
+  @override
+  String get shareCardNoAlternative => '暂无其它卡片';
+
+  @override
+  String get shareCardSave => '保存';
+
+  @override
+  String get shareCardSaveDesktop => '保存图片';
+
+  @override
+  String get shareCardShare => '分享';
+
+  @override
+  String get shareCardChange => '换一个';
+
+  @override
+  String get shareCardSaved => '图片已保存';
+
+  @override
+  String get shareCardActionFailed => '操作失败，请稍后重试';
+
+  @override
+  String get shareCardPermissionDenied => '没有保存图片的权限，请在系统设置中允许访问相册';
+
+  @override
+  String get shareCardNotSignedIn => '请先登录后分享';
 }

@@ -1,3 +1,4 @@
+import 'package:echo_loop/features/daily_goal_check_in/providers/daily_check_in_share_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,12 +6,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/database/daos/stage_completion_dao.dart';
 import 'package:echo_loop/database/enums.dart';
+import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/audio_item.dart';
 import 'package:echo_loop/models/learning_progress.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
+import 'package:echo_loop/providers/study_stats_provider.dart';
 import 'package:echo_loop/providers/study_task_provider.dart';
 import 'package:echo_loop/screens/study_screen.dart';
 import 'package:echo_loop/widgets/learning_progress_icon.dart';
@@ -37,6 +40,7 @@ void main() {
     List<RecentCompletion>? recentCompletions,
     AudioItem? recommendedMaterial,
     AsyncValue<AudioItem?>? recommendationState,
+    StudyStats stats = const StudyStats(),
   }) {
     final router = GoRouter(
       initialLocation: '/study',
@@ -92,6 +96,8 @@ void main() {
 
     return ProviderScope(
       overrides: dedupeOverrides([
+        dailyShareUserIdProvider.overrideWithValue(null),
+        usageOverride(),
         ...learningSettingsOverrides(prefs: prefs),
         audioLibraryProvider.overrideWith(
           () => TestAudioLibrary(
@@ -101,6 +107,8 @@ void main() {
         learningProgressProvider.overrideWith(
           () => TestLearningProgressNotifier(progressState),
         ),
+        studyStatsProvider.overrideWith(() => _TestStudyStatsNotifier(stats)),
+        studyTimeServiceProvider.overrideWithValue(TestStudyTimeService()),
         if (fixedNow != null) nowProvider.overrideWithValue(() => fixedNow),
         if (recentCompletions != null)
           recentCompletionsProvider.overrideWith(
@@ -122,6 +130,21 @@ void main() {
       ),
     );
   }
+
+  testWidgets('学习首页连续学习天数 badge 使用统一高度和字号', (tester) async {
+    await tester.pumpWidget(
+      createTestWidget(
+        progressState: const LearningProgressState(isLoading: false),
+        stats: const StudyStats(streak: 5),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final streakChip = find
+        .ancestor(of: find.text('5d streak'), matching: find.byType(Container))
+        .first;
+    expect(tester.getSize(streakChip).height, 33);
+  });
 
   testWidgets('无任务时显示空状态', (tester) async {
     await tester.pumpWidget(
@@ -156,7 +179,7 @@ void main() {
 
     expect(find.text('Recommended for you'), findsOneWidget);
     expect(find.text('Recommended Audio'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Start'));
+    await tester.tap(find.text('Recommended Audio'));
     await tester.pumpAndSettle();
 
     expect(find.text('Learning Plan'), findsOneWidget);
@@ -296,51 +319,6 @@ void main() {
     expect(find.text('Existing Task Audio'), findsAtLeast(1));
   });
 
-  testWidgets('未到时间复习任务的开始按钮禁用', (tester) async {
-    final now = DateTime(2026, 2, 25, 12, 0);
-    final audioItems = [
-      AudioItem(
-        id: 'audio-1',
-        name: 'Upcoming Review Audio',
-        audioPath: 'audios/review.mp3',
-        addedDate: now,
-      ),
-    ];
-    final progressState = LearningProgressState(
-      progressMap: {
-        'audio-1': LearningProgress(
-          audioItemId: 'audio-1',
-          currentStage: LearningStage.review1,
-          currentSubStage: SubStageType.blindListen,
-          lastStageCompletedAt: now,
-          updatedAt: now,
-        ),
-      },
-      isLoading: false,
-    );
-
-    await tester.pumpWidget(
-      createTestWidget(
-        audioItems: audioItems,
-        progressState: progressState,
-        fixedNow: now,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // upcoming reviews 默认折叠，先展开
-    final expansionTile = find.byType(ExpansionTile);
-    expect(expansionTile, findsWidgets);
-    await tester.tap(expansionTile.first);
-    await tester.pumpAndSettle();
-
-    // 找到 FilledButton（任务卡片中的按钮），应该是禁用的
-    final disabledButtons = find.byWidgetPredicate(
-      (w) => w is FilledButton && w.onPressed == null,
-    );
-    expect(disabledButtons, findsAtLeast(1));
-  });
-
   testWidgets('待解锁任务（v2 首步难句补练、无完成记录）显示倒计时而非"学习中"', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
@@ -421,8 +399,8 @@ void main() {
     // 音频名称出现在任务卡片中
     expect(find.text('Review Audio'), findsAtLeast(1));
 
-    // 本轮无完成记录，按钮文案应为 Start
-    await tester.tap(find.text('Start').first);
+    // 点击任务卡片进入学习计划页
+    await tester.tap(find.text('Review Audio').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Learning Plan'), findsOneWidget);
@@ -463,9 +441,6 @@ void main() {
 
     // 新格式："Review due · Due 3h ago"
     expect(find.textContaining('Due 3h ago'), findsOneWidget);
-    // 任务卡片本轮无完成记录 → 按钮显示 Start
-    final startButtons = find.widgetWithText(FilledButton, 'Start');
-    expect(startButtons, findsAtLeast(1));
   });
 
   testWidgets('首次学习材料由推荐卡展示，不再展示阶段任务卡', (tester) async {
@@ -1037,6 +1012,15 @@ void main() {
       expect(find.text('Recommended for you'), findsNothing);
     });
   });
+}
+
+class _TestStudyStatsNotifier extends StudyStatsNotifier {
+  final StudyStats _stats;
+
+  _TestStudyStatsNotifier(this._stats);
+
+  @override
+  Future<StudyStats> build() async => _stats;
 }
 
 Finder _findSvgAsset(String assetName) {

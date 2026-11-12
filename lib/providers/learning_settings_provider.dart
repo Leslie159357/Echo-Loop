@@ -15,6 +15,8 @@ import '../utils/provider_override_error.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/onboarding_survey/data/onboarding_survey_storage.dart'
+    show OnboardingSurveyKeys;
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
 import '../services/app_logger.dart';
@@ -50,11 +52,16 @@ abstract final class LearningSettingsKeys {
       'learning_retell_auto_playback_prompt_shown';
   static const pdfExportReminderShown = 'learning_pdf_export_reminder_shown';
   static const showStudyRecommendation = 'learning_show_study_recommendation';
+  static const showWeeklyStudyChart = 'learning_show_weekly_study_chart';
+  static const showPlaybackSpeedButton =
+      'learning_show_playback_speed_button';
   static const autoSaveOnUnclear = 'learning_auto_favorite_on_cant_understand';
   static const unclearAutoSaveReminderShown =
       'learning_unclear_auto_save_reminder_shown';
   static const podcastTranscriptReminderShown =
       'learning_podcast_transcript_reminder_shown';
+  static const dailyGoalMinutes = 'learning_daily_goal_minutes';
+  static const autoShowDailyShare = 'learning_auto_show_daily_share';
 
   /// 历史 SP key，启动期会被清理。
   static const legacyOfflineAsrEnabled = 'offline_asr_enabled';
@@ -63,9 +70,25 @@ abstract final class LearningSettingsKeys {
 }
 
 /// 学习设置不可变值对象。
-///
-/// 学习设置不可变值对象。
 class LearningSettings {
+  /// 每日学习目标的默认分钟数。老用户未答过引导页 Q2 时使用，
+  /// 也是打卡首次成功时用户感知到该功能的初始值。
+  static const defaultDailyGoalMinutes = 10;
+
+  /// 设置页可选的每日目标档位（分钟）。
+  static const dailyGoalMinutesOptions = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+
+  /// 云端或本地读到的目标分钟数允许范围。比设置页档位更宽，
+  /// 以便未来新增档位时旧客户端不会把新值误判为非法而回退默认值。
+  static const dailyGoalMinutesMin = 1;
+  static const dailyGoalMinutesMax = 720;
+
+  /// 每日学习目标分钟数（参与跨设备同步）。
+  final int dailyGoalMinutes;
+
+  /// 是否自动显示今日一刻（默认开启，仅保存于当前设备）。
+  final bool autoShowDailyShare;
+
   /// 是否自动跳过复述（默认 false）。
   final bool autoSkipRetell;
 
@@ -102,6 +125,12 @@ class LearningSettings {
   /// 是否在学习页展示「为你推荐」卡片（默认 true）。
   final bool showStudyRecommendation;
 
+  /// 是否在学习页展示本周学习时长柱状图（默认 true）。
+  final bool showWeeklyStudyChart;
+
+  /// 是否在学习任务的播放控制区显示倍速调节按钮（默认 true）。
+  final bool showPlaybackSpeedButton;
+
   /// 精听点击「听不太懂」时是否自动收藏当前句（默认 true）。
   final bool autoSaveOnUnclear;
 
@@ -112,6 +141,8 @@ class LearningSettings {
   final bool podcastTranscriptReminderShown;
 
   const LearningSettings({
+    this.dailyGoalMinutes = defaultDailyGoalMinutes,
+    this.autoShowDailyShare = true,
     this.autoSkipRetell = false,
     this.autoExpandCachedAnnotation = true,
     this.autoShowAiExplanation = true,
@@ -124,6 +155,8 @@ class LearningSettings {
     this.retellAutoPlaybackPromptShown = false,
     this.pdfExportReminderShown = false,
     this.showStudyRecommendation = true,
+    this.showWeeklyStudyChart = true,
+    this.showPlaybackSpeedButton = true,
     this.autoSaveOnUnclear = true,
     this.unclearAutoSaveReminderShown = false,
     this.podcastTranscriptReminderShown = false,
@@ -132,6 +165,9 @@ class LearningSettings {
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
   factory LearningSettings.fromPrefsSync(SharedPreferences prefs) {
     return LearningSettings(
+      dailyGoalMinutes: resolveDailyGoalMinutes(prefs),
+      autoShowDailyShare:
+          prefs.getBool(LearningSettingsKeys.autoShowDailyShare) ?? true,
       autoSkipRetell:
           prefs.getBool(LearningSettingsKeys.autoSkipRetell) ?? false,
       autoExpandCachedAnnotation:
@@ -162,6 +198,10 @@ class LearningSettings {
           prefs.getBool(LearningSettingsKeys.pdfExportReminderShown) ?? false,
       showStudyRecommendation:
           prefs.getBool(LearningSettingsKeys.showStudyRecommendation) ?? true,
+      showWeeklyStudyChart:
+          prefs.getBool(LearningSettingsKeys.showWeeklyStudyChart) ?? true,
+      showPlaybackSpeedButton:
+          prefs.getBool(LearningSettingsKeys.showPlaybackSpeedButton) ?? true,
       autoSaveOnUnclear:
           prefs.getBool(LearningSettingsKeys.autoSaveOnUnclear) ?? true,
       unclearAutoSaveReminderShown:
@@ -173,7 +213,32 @@ class LearningSettings {
     );
   }
 
+  /// 读取每日目标分钟数。
+  ///
+  /// 优先取本功能自己的 key；没有时继承引导页 Q2 答案（`5/10/20/30`，
+  /// 「不固定」等非数字答案忽略），让已答过问卷的用户保持其选择。
+  /// 两者都没有时返回 [defaultDailyGoalMinutes]。
+  static int resolveDailyGoalMinutes(SharedPreferences prefs) {
+    final stored = prefs.getInt(LearningSettingsKeys.dailyGoalMinutes);
+    if (_isValidDailyGoalMinutes(stored)) return stored!;
+
+    final onboardingRaw = prefs.getString(OnboardingSurveyKeys.dailyMinutes);
+    final onboardingMinutes = onboardingRaw == null
+        ? null
+        : int.tryParse(onboardingRaw);
+    if (_isValidDailyGoalMinutes(onboardingMinutes)) return onboardingMinutes!;
+
+    return defaultDailyGoalMinutes;
+  }
+
+  static bool _isValidDailyGoalMinutes(int? minutes) =>
+      minutes != null &&
+      minutes >= dailyGoalMinutesMin &&
+      minutes <= dailyGoalMinutesMax;
+
   LearningSettings copyWith({
+    int? dailyGoalMinutes,
+    bool? autoShowDailyShare,
     bool? autoSkipRetell,
     bool? autoExpandCachedAnnotation,
     bool? autoShowAiExplanation,
@@ -186,11 +251,15 @@ class LearningSettings {
     bool? retellAutoPlaybackPromptShown,
     bool? pdfExportReminderShown,
     bool? showStudyRecommendation,
+    bool? showWeeklyStudyChart,
+    bool? showPlaybackSpeedButton,
     bool? autoSaveOnUnclear,
     bool? unclearAutoSaveReminderShown,
     bool? podcastTranscriptReminderShown,
   }) {
     return LearningSettings(
+      dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
+      autoShowDailyShare: autoShowDailyShare ?? this.autoShowDailyShare,
       autoSkipRetell: autoSkipRetell ?? this.autoSkipRetell,
       autoExpandCachedAnnotation:
           autoExpandCachedAnnotation ?? this.autoExpandCachedAnnotation,
@@ -213,6 +282,9 @@ class LearningSettings {
           pdfExportReminderShown ?? this.pdfExportReminderShown,
       showStudyRecommendation:
           showStudyRecommendation ?? this.showStudyRecommendation,
+      showWeeklyStudyChart: showWeeklyStudyChart ?? this.showWeeklyStudyChart,
+      showPlaybackSpeedButton:
+          showPlaybackSpeedButton ?? this.showPlaybackSpeedButton,
       autoSaveOnUnclear: autoSaveOnUnclear ?? this.autoSaveOnUnclear,
       unclearAutoSaveReminderShown:
           unclearAutoSaveReminderShown ?? this.unclearAutoSaveReminderShown,
@@ -226,6 +298,8 @@ class LearningSettings {
       identical(this, other) ||
       other is LearningSettings &&
           runtimeType == other.runtimeType &&
+          dailyGoalMinutes == other.dailyGoalMinutes &&
+          autoShowDailyShare == other.autoShowDailyShare &&
           autoSkipRetell == other.autoSkipRetell &&
           autoExpandCachedAnnotation == other.autoExpandCachedAnnotation &&
           autoShowAiExplanation == other.autoShowAiExplanation &&
@@ -240,6 +314,8 @@ class LearningSettings {
               other.retellAutoPlaybackPromptShown &&
           pdfExportReminderShown == other.pdfExportReminderShown &&
           showStudyRecommendation == other.showStudyRecommendation &&
+          showWeeklyStudyChart == other.showWeeklyStudyChart &&
+          showPlaybackSpeedButton == other.showPlaybackSpeedButton &&
           autoSaveOnUnclear == other.autoSaveOnUnclear &&
           unclearAutoSaveReminderShown == other.unclearAutoSaveReminderShown &&
           podcastTranscriptReminderShown ==
@@ -247,6 +323,8 @@ class LearningSettings {
 
   @override
   int get hashCode => Object.hash(
+    dailyGoalMinutes,
+    autoShowDailyShare,
     autoSkipRetell,
     autoExpandCachedAnnotation,
     autoShowAiExplanation,
@@ -259,6 +337,8 @@ class LearningSettings {
     retellAutoPlaybackPromptShown,
     pdfExportReminderShown,
     showStudyRecommendation,
+    showWeeklyStudyChart,
+    showPlaybackSpeedButton,
     autoSaveOnUnclear,
     unclearAutoSaveReminderShown,
     podcastTranscriptReminderShown,
@@ -494,6 +574,26 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
     }
   }
 
+  /// 设置每日学习目标分钟数，写 SP + 更新 state。
+  ///
+  /// 只接受设置页档位；档位外的值属于调用方错误，直接抛出而非静默忽略。
+  ///
+  /// 不做「同值不写入」短路：state 可能已由引导页答案回退得到同一数值，
+  /// 此时必须真正写入 SP，才能把引导页答案固化为学习设置自身的值。
+  Future<void> setDailyGoalMinutes(int minutes) async {
+    if (!LearningSettings.dailyGoalMinutesOptions.contains(minutes)) {
+      throw ArgumentError.value(minutes, 'minutes', '必须是设置页提供的每日目标档位');
+    }
+    state = state.copyWith(dailyGoalMinutes: minutes);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setInt(LearningSettingsKeys.dailyGoalMinutes, minutes);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setDailyGoalMinutes 写 SP 失败: $e');
+    }
+  }
+
   /// 切换学习页「为你推荐」卡片显示，写 SP + 更新 state。
   Future<void> setShowStudyRecommendation(bool enabled) async {
     if (state.showStudyRecommendation == enabled) return;
@@ -509,6 +609,51 @@ class LearningSettingsNotifier extends Notifier<LearningSettings> {
       AppLogger.log(
         'LearningSettings',
         'setShowStudyRecommendation 写 SP 失败: $e',
+      );
+    }
+  }
+
+  /// 自动弹窗属于当前设备偏好，不加入尚未定义的云端字段。
+  Future<void> setAutoShowDailyShare(bool enabled) async {
+    if (state.autoShowDailyShare == enabled) return;
+    final prefs = ref.read(sharedPreferencesProvider);
+    final saved = await prefs.setBool(
+      LearningSettingsKeys.autoShowDailyShare,
+      enabled,
+    );
+    if (!saved) throw StateError('保存今日一刻自动显示设置失败');
+    if (!ref.mounted) return;
+    state = state.copyWith(autoShowDailyShare: enabled);
+  }
+
+  /// 切换学习页「本周学习时长」柱状图显示，写 SP + 更新 state。
+  Future<void> setShowWeeklyStudyChart(bool enabled) async {
+    if (state.showWeeklyStudyChart == enabled) return;
+    state = state.copyWith(showWeeklyStudyChart: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(LearningSettingsKeys.showWeeklyStudyChart, enabled);
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log('LearningSettings', 'setShowWeeklyStudyChart 写 SP 失败: $e');
+    }
+  }
+
+  /// 切换精听播放按钮两侧的变速快捷按钮显示，写 SP + 更新 state。
+  Future<void> setShowPlaybackSpeedButton(bool enabled) async {
+    if (state.showPlaybackSpeedButton == enabled) return;
+    state = state.copyWith(showPlaybackSpeedButton: enabled);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(
+        LearningSettingsKeys.showPlaybackSpeedButton,
+        enabled,
+      );
+      userPreferencesSyncEvents.notifyLocalChange();
+    } catch (e) {
+      AppLogger.log(
+        'LearningSettings',
+        'setShowPlaybackSpeedButton 写 SP 失败: $e',
       );
     }
   }

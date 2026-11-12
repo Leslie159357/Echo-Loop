@@ -4,6 +4,10 @@ import 'package:dio/dio.dart';
 import 'package:echo_loop/widgets/selection/app_selectable_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart'
+    show sharedPreferencesProvider;
+import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/models/sense_group_result.dart';
 import 'package:echo_loop/models/sentence_ai_result.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
@@ -663,6 +667,65 @@ void main() {
       expect(rendered.contains('缓存语法'), isTrue);
       expect(rendered.contains('缓存词汇'), isTrue);
       expect(rendered.contains('缓存用法'), isTrue);
+    });
+  });
+
+  group('SentenceAnnotationCard — 学习内容字号', () {
+    cardTest('解析圆点与正文同字号同行高，首行基线对齐', (tester) async {
+      final cached = _analysis(vocabulary: const [('词汇', '解释')]);
+      await tester.pumpWidget(
+        createTestApp(
+          SentenceAnnotationCard(
+            text: 'Test',
+            cachedAnalysis: cached,
+            onRequestAnalysis: (_, __) => _stream(cached),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final bullet = tester.widget<Text>(find.text('•')).style;
+      // 标签与详解走 Text.rich，find.text 匹配不到，按纯文本谓词查找
+      // 正文样式挂在 TextSpan 上（Text.rich 的 style 为空），取 textSpan.style
+      final content = tester
+          .widget<Text>(
+            find.byWidgetPredicate(
+              (w) =>
+                  w is Text &&
+                  (w.textSpan?.toPlainText().contains('词汇') ?? false),
+            ),
+          )
+          .textSpan
+          ?.style;
+      // 字号和行高相同，两行的行框高度一致，首行基线才会对齐
+      expect(bullet?.fontSize, 14);
+      expect(bullet?.height, 1.5);
+      expect(bullet?.fontSize, content?.fontSize);
+      expect(bullet?.height, content?.height);
+    });
+
+    cardTest('解析分类标题跟随字号偏好缩放', (tester) async {
+      SharedPreferences.setMockInitialValues({'reading_font_scale': 1.5});
+      final prefs = await SharedPreferences.getInstance();
+      final cached = _analysis(vocabulary: const [('词汇', '解释')]);
+      await tester.pumpWidget(
+        createTestApp(
+          SentenceAnnotationCard(
+            text: 'Test',
+            cachedAnalysis: cached,
+            onRequestAnalysis: (_, __) => _stream(cached),
+          ),
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(SentenceAnnotationCard)),
+      )!;
+      final title = tester.widget<Text>(find.text(l10n.aiVocabulary));
+      // 标题基准 16pt，与解析正文一样乘以 150% 倍率
+      expect(title.style?.fontSize, 16 * 1.5);
     });
   });
 

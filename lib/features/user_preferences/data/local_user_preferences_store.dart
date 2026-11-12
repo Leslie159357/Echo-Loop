@@ -20,6 +20,9 @@ class LocalUserPreferencesStore {
   final SharedPreferences _preferences;
 
   static const syncMetadataKey = 'user_preferences_sync_state_v1';
+  static const dailyShareDateField = 'dailyCheckInShareShownDate';
+
+  static const dailyShareDateKey = 'daily_check_in_share_shown_date';
 
   /// 一次性提示标记。写回时只做「未展示 → 已展示」，云端 false 或缺失都不清除
   /// 本地已展示状态，否则旧客户端或新设备首次同步会让提示再次弹出。
@@ -51,16 +54,23 @@ class LocalUserPreferencesStore {
     LearningSettingsKeys.listenAndRepeatRatingEnabled: true,
     LearningSettingsKeys.retellRatingEnabled: true,
     LearningSettingsKeys.showStudyRecommendation: true,
+    LearningSettingsKeys.showWeeklyStudyChart: true,
+    LearningSettingsKeys.showPlaybackSpeedButton: true,
     LearningSettingsKeys.autoSaveOnUnclear: true,
   };
 
   UserPreferencesDocument capture() {
+    final shareDate = _preferences.getString(dailyShareDateKey);
     final appearance = <String, Object?>{
       'themeMode': _preferences.getString('theme_mode') ?? 'system',
       'locale': _preferences.getString('locale') ?? 'system',
       'nativeLanguage': _preferences.getString('native_language') ?? 'zh-CN',
     };
     final learning = <String, Object?>{
+      if (shareDate != null) dailyShareDateField: shareDate,
+      'dailyGoalMinutes': LearningSettings.resolveDailyGoalMinutes(
+        _preferences,
+      ),
       for (final entry in _learningDefaults.entries)
         _learningFieldName(entry.key):
             _preferences.getBool(entry.key) ?? entry.value,
@@ -134,6 +144,24 @@ class LocalUserPreferencesStore {
     );
 
     final learning = _group(groups, 'learning');
+    final shareDate = learning[dailyShareDateField];
+    if (shareDate is String && isValidPreferenceDate(shareDate)) {
+      await _preferences.setString(dailyShareDateKey, shareDate);
+    } else {
+      await _preferences.remove(dailyShareDateKey);
+    }
+    // 云端缺失或非法时回退到本地解析结果（含引导页答案），而不是写死默认值，
+    // 避免老版本文档同步时覆盖用户已在引导页选过的目标。
+    final dailyGoalMinutes = learning['dailyGoalMinutes'];
+    await _preferences.setInt(
+      LearningSettingsKeys.dailyGoalMinutes,
+      dailyGoalMinutes is int
+          ? dailyGoalMinutes.clamp(
+              LearningSettings.dailyGoalMinutesMin,
+              LearningSettings.dailyGoalMinutesMax,
+            )
+          : LearningSettings.resolveDailyGoalMinutes(_preferences),
+    );
     for (final entry in _learningDefaults.entries) {
       await _writeBool(
         entry.key,
@@ -221,6 +249,8 @@ class LocalUserPreferencesStore {
         'listenAndRepeatRatingEnabled',
     LearningSettingsKeys.retellRatingEnabled: 'retellRatingEnabled',
     LearningSettingsKeys.showStudyRecommendation: 'showStudyRecommendation',
+    LearningSettingsKeys.showWeeklyStudyChart: 'showWeeklyStudyChart',
+    LearningSettingsKeys.showPlaybackSpeedButton: 'showPlaybackSpeedButton',
     LearningSettingsKeys.autoSaveOnUnclear: 'autoFavoriteOnCantUnderstand',
   };
 

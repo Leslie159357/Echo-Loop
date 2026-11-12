@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/reading_text_prefs.dart';
 import '../../theme/app_theme.dart';
 import '../../models/word_highlight_binding.dart';
 import '../../utils/text_normalize.dart';
@@ -146,7 +147,10 @@ class PracticeNormalModeView extends StatelessWidget {
         child: origin != null
             ? SelectableSentenceText(
                 text: text,
-                style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  height: readingBodyLineHeight,
+                  letterSpacing: 0,
+                ),
                 origin: origin,
                 onBeforeLookup: onBeforeLookup,
                 activeWordIndex: activeWordIndex,
@@ -284,18 +288,16 @@ class PracticeNormalModeView extends StatelessWidget {
                 ),
               ),
               // 取消标记 + 听不懂按钮（并排，主次随 isDifficult 翻转）
-              SizedBox(
-                height: 48,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (alwaysShowToggleButton || isDifficult) ...[
-                      _buildToggleMarkButton(),
-                      const SizedBox(width: AppSpacing.m),
-                    ],
-                    _buildUnclearButton(),
+              // 不固定高度：按钮最小 48dp，大字号下随文字增高，避免文字被裁切
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (alwaysShowToggleButton || isDifficult) ...[
+                    _buildToggleMarkButton(),
+                    const SizedBox(width: AppSpacing.m),
                   ],
-                ),
+                  _buildUnclearButton(),
+                ],
               ),
             ],
           ),
@@ -372,9 +374,9 @@ class PracticeNormalModeView extends StatelessWidget {
     );
   }
 
-  /// 听不太懂按钮（始终为 FilledTonal 蓝色填充）
+  /// 听不太懂按钮（始终为 tonal 填充，形状与内边距来自主题）
   Widget _buildUnclearButton() {
-    final button = FilledButton.tonal(
+    return FilledButton.tonal(
       key: _unclearButtonKey,
       onPressed: onUnclear,
       style: FilledButton.styleFrom(
@@ -391,7 +393,6 @@ class PracticeNormalModeView extends StatelessWidget {
         ],
       ),
     );
-    return button;
   }
 }
 

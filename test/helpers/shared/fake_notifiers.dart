@@ -1349,18 +1349,6 @@ class FakeIntensiveListenPlayer extends IntensiveListenPlayer {
   }
 
   @override
-  Future<void> exitAnnotationMode() async {
-    state = state.copyWith(
-      isAnnotationMode: true,
-      isAnnotationReplay: true,
-      isPlaying: true,
-      annotationReplayRemaining: const Duration(seconds: 3),
-      annotationReplayDuration: const Duration(seconds: 3),
-      isCurrentSentenceAutoMarked: false,
-    );
-  }
-
-  @override
   Future<void> replayInAnnotationMode() async {
     if (!state.isAnnotationMode) return;
     state = state.copyWith(isPlaying: true);
@@ -2329,6 +2317,22 @@ class FakeOfflineAsrSettings extends OfflineAsrSettingsNotifier {
 
 /// 无操作 StudyTimeService — 所有写入静默忽略，查询返回零值
 class FakeStudyTimeService implements StudyTimeService {
+  /// 无操作 fake 不产生写入事件，打卡判定永远不会触发。
+  @override
+  Stream<DateTime> get studySessionRecorded => const Stream<DateTime>.empty();
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<bool> tryCheckInDailyGoal({
+    required int goalMinutes,
+    required DateTime date,
+  }) async => false;
+
+  @override
+  Future<bool> isDailyGoalCheckedIn(DateTime date) async => false;
+
   /// 阶段明细查询在无操作 fake 中返回空结果，避免测试夹具引入数据库副作用。
   @override
   Future<List<DailyStageStudyRecordData>> getStageBreakdownInRange(

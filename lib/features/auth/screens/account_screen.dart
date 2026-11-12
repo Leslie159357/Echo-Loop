@@ -8,6 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../router/app_router.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/app_toast.dart';
+import '../../../widgets/common/text_context_menu.dart';
+import '../../profile/widgets/profile_edit_section.dart';
 import '../providers/auth_providers.dart';
 
 enum AuthDisplayProvider { apple, google, email, unknown }
@@ -169,12 +172,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.m),
           children: [
-            _SignedInAccountCard(
+            const ProfileEditSection(),
+            const SizedBox(height: AppSpacing.l),
+            _SectionHeader(title: l10n.signInSection),
+            _SignInMethodCard(
               email: email,
               provider: authDisplayProviderForSession(session),
-              isSigningOut: _isSigningOut,
-              onSignOut: _signOut,
             ),
+            // 退出登录与账号信息分开放置，避免误触。
+            const SizedBox(height: AppSpacing.xl),
+            _SignOutCard(isSigningOut: _isSigningOut, onSignOut: _signOut),
           ],
         ),
       ),
@@ -182,18 +189,31 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   }
 }
 
-class _SignedInAccountCard extends StatelessWidget {
-  const _SignedInAccountCard({
-    required this.email,
-    required this.provider,
-    required this.isSigningOut,
-    required this.onSignOut,
-  });
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.s, 0, 0, AppSpacing.s),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.labelLarge
+            ?.copyWith(color: scheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+/// 只读的登录方式信息：不可点击，因此不显示箭头与水波纹。
+class _SignInMethodCard extends StatelessWidget {
+  const _SignInMethodCard({required this.email, required this.provider});
 
   final String? email;
   final AuthDisplayProvider provider;
-  final bool isSigningOut;
-  final Future<void> Function() onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -206,28 +226,74 @@ class _SignedInAccountCard extends StatelessWidget {
       AuthDisplayProvider.google => l10n.authGoogleAccount,
       AuthDisplayProvider.email || AuthDisplayProvider.unknown => l10n.account,
     };
+    // 没有真实邮箱时（占位文案）不提供复制菜单，避免把提示语写入剪贴板。
+    final accountEmail = email;
+    final hasCopyableEmail = accountEmail != null && accountEmail.isNotEmpty;
     return Card(
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.account_circle_outlined),
-            title: Text(title),
-            subtitle: Text(emailText),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: isSigningOut
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.logout),
-            title: Text(l10n.authSignOut),
-            enabled: !isSigningOut,
-            onTap: isSigningOut ? null : onSignOut,
-          ),
-        ],
+      child: GestureDetector(
+        // 桌面右键与移动端长按都在指针处弹出「复制」菜单，与其他文本的交互一致。
+        onSecondaryTapDown: hasCopyableEmail
+            ? (details) => _showCopyMenu(
+                context,
+                details.globalPosition,
+                accountEmail,
+              )
+            : null,
+        onLongPressStart: hasCopyableEmail
+            ? (details) => _showCopyMenu(
+                context,
+                details.globalPosition,
+                accountEmail,
+              )
+            : null,
+        child: ListTile(
+          leading: const Icon(Icons.account_circle_outlined),
+          title: Text(title),
+          subtitle: Text(emailText),
+        ),
+      ),
+    );
+  }
+
+  /// 在指针处弹出「复制」菜单；复制成功后用统一 toast 提示。
+  void _showCopyMenu(BuildContext context, Offset position, String value) {
+    final l10n = AppLocalizations.of(context)!;
+    TextContextMenu.show(
+      context,
+      position,
+      value,
+      onCopied: () => showAppToast(
+        overlayState: Overlay.of(context, rootOverlay: true),
+        message: l10n.copied,
+        icon: Icons.check,
+      ),
+    );
+  }
+}
+
+/// 退出登录是唯一的危险操作，使用错误色并独立成卡片。
+class _SignOutCard extends StatelessWidget {
+  const _SignOutCard({required this.isSigningOut, required this.onSignOut});
+
+  final bool isSigningOut;
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final errorColor = Theme.of(context).colorScheme.error;
+    return Card(
+      child: ListTile(
+        leading: isSigningOut
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(Icons.logout, color: errorColor),
+        title: Text(l10n.authSignOut, style: TextStyle(color: errorColor)),
+        enabled: !isSigningOut,
+        onTap: isSigningOut ? null : onSignOut,
       ),
     );
   }
