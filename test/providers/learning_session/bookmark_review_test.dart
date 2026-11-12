@@ -274,7 +274,9 @@ Future<void> _initializeBookmarkReview(
         EnsureMemoryScheduleCommand(
           subject: subject,
           profile: kFsrsDefaultProfileRef,
-          occurredAt: DateTime.now(),
+          // 固定时间戳：三个 schedule 的 dueAt 相同，排序才会按 key 稳定落到
+          // subject-1（否则按插入毫秒先后，首卡可能是 3，用例偶发超时）。
+          occurredAt: DateTime(2026, 1, 20),
         ),
       );
     }
