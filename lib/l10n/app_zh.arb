@@ -253,6 +253,7 @@
   "languageSystem": "跟随系统",
   "languageEnglish": "English",
   "languageChinese": "简体中文",
+  "languageThai": "泰语",
   "nativeLanguage": "母语",
   "nativeLanguageDescription": "翻译和解析使用的语言",
   "about": "关于",

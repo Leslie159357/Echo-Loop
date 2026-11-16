@@ -58,11 +58,13 @@ const supportedNativeLanguages = <String, String>{
 
 /// 根据系统 locale 匹配应用界面语言。
 ///
-/// 当前界面只支持中文 / 英文：
+/// 当前界面支持中文 / 英文 / 泰语：
 /// - 中文系列（zh）→ `Locale('zh', 'CN')`
+/// - 泰语（th）→ `Locale('th')`
 /// - 其它任何语言（含未识别）→ `Locale('en')`
 Locale matchUiLocale(Locale systemLocale) {
   if (systemLocale.languageCode == 'zh') return const Locale('zh', 'CN');
+  if (systemLocale.languageCode == 'th') return const Locale('th');
   return const Locale('en');
 }
 
@@ -230,6 +232,7 @@ Locale? readInitialUiLocaleSync(SharedPreferences prefs) {
   return switch (stored) {
     'en' => const Locale('en'),
     'zh' || 'zh-CN' => const Locale('zh', 'CN'),
+    'th' || 'th-TH' => const Locale('th'),
     _ => null, // 'system' / null / 异常 → 跟随系统
   };
 }
