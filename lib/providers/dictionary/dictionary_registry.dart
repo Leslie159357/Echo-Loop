@@ -65,11 +65,21 @@ List<WebDictionarySource> webDictionarySources(Ref ref) =>
 
 /// 全部数据源（顺序即默认排列/回退优先级，德语优先网页德语助手/Duden，其次本地离线，再次AI）
 @Riverpod(keepAlive: true)
-List<DictionarySource> dictionarySources(Ref ref) => [
-  ...ref.watch(webDictionarySourcesProvider),
-  ref.watch(localDictionarySourceProvider),
-  ref.watch(aiDictionarySourceProvider),
-];
+List<DictionarySource> dictionarySources(Ref ref) {
+  final nativeLanguage = ref.watch(
+    appSettingsProvider.select((s) => s.nativeLanguage),
+  );
+  // 泰语没有德语-泰语离线词典，dehelper/Duden 也都是中文或德语释义的网页源；
+  // 只保留 AI 词典，避免默认落到看不懂的源。
+  if (nativeLanguage.toLowerCase().startsWith('th')) {
+    return [ref.watch(aiDictionarySourceProvider)];
+  }
+  return [
+    ...ref.watch(webDictionarySourcesProvider),
+    ref.watch(localDictionarySourceProvider),
+    ref.watch(aiDictionarySourceProvider),
+  ];
+}
 
 /// id → source 查找表
 @Riverpod(keepAlive: true)

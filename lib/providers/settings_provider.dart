@@ -53,6 +53,7 @@ DateTime normalizedFutureTimeMachineDateTime(DateTime value, DateTime now) {
 const supportedNativeLanguages = <String, String>{
   'zh-CN': '简体中文',
   'zh-TW': '繁體中文',
+  'th-TH': 'ไทย',
 };
 
 /// 根据系统 locale 匹配应用界面语言。
