@@ -31,6 +31,7 @@ import '../../services/speech_completion_detector.dart';
 import '../../services/speech_practice_matcher.dart';
 import '../../services/speech_practice_platform.dart';
 import '../learning_settings_provider.dart';
+import '../offline_asr_settings_provider.dart';
 
 /// 等待开口最大时长
 const _awaitingSpeechTimeout = Duration(seconds: 60);
@@ -366,12 +367,15 @@ class SpeechRecordingController extends Notifier<SpeechRecordingState> {
     final service = RecordingService(backend);
     _recordingService = service;
     try {
+      final asrSettings = ref.read(offlineAsrSettingsProvider);
       await service.startRecording(
         promptId: promptId,
         // Apple 实时转录同时服务自动结束检测；关闭评级只跳过最终评分，
         // 不能关闭该检测通道而退化为固定静音兜底。以实际后端为准：
         // 离线包未就绪时 provider 会回落成平台引擎。
-        recognitionEnabled: backend is SpeechPracticePlatform,
+        recognitionEnabled:
+            backend is SpeechPracticePlatform ||
+            asrSettings.backend == AsrBackend.platform,
       );
       if (generation != _roundGeneration) {
         await service.cancelRecording();
