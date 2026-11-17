@@ -338,7 +338,7 @@ void main() {
       );
     });
 
-    testWidgets('点击屈折形建议 hellos 时显示 hellos 自己的词条', (tester) async {
+    testWidgets('查询屈折形 hellos 时显示 hellos 自己的词条', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
@@ -360,9 +360,10 @@ void main() {
       );
       await _settle(tester);
 
-      await _typeQuery(tester, 'hello');
+      // 德语版不显示英文词表建议，改为直接键入并提交屈折形。
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -370,7 +371,7 @@ void main() {
       expect(find.text('喂, 嘿'), findsNothing);
     });
 
-    testWidgets('重复点击屈折形建议 hellos 仍显示 hellos 自己的词条', (tester) async {
+    testWidgets('重复查询屈折形 hellos 仍显示 hellos 自己的词条', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
@@ -392,18 +393,18 @@ void main() {
       );
       await _settle(tester);
 
-      await _typeQuery(tester, 'hello');
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
       expect(find.textContaining('hello的复数形式'), findsOneWidget);
 
-      // 回到输入框，重新输入 hello，再次点击 hellos。
+      // 回到输入框，重新输入同一个屈折形并再次提交。
       await tester.tap(find.byType(TextField));
       await _settle(tester);
-      await _typeQuery(tester, 'hello');
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
 
       expect(find.textContaining('hello的复数形式'), findsOneWidget);
@@ -430,7 +431,11 @@ void main() {
       await _settle(tester);
 
       expect(find.byType(LookupDetailView), findsNothing);
-      expect(find.text('hellos'), findsOneWidget);
+      // 德语版不显示英文词表建议，此处只校验输入文本未被清空、无旧详情残留。
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'hello',
+      );
     });
 
     testWidgets('词组详情同样显示收藏按钮', (tester) async {
