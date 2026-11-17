@@ -7,8 +7,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import 'package:go_router/go_router.dart';
 
+import 'common/svg_action_icon.dart';
 import '../models/audio_item.dart';
 import '../models/collection.dart';
 import '../models/learning_progress.dart';
@@ -23,8 +25,8 @@ import '../utils/audio_item_actions.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
 import '../theme/list_item_text_styles.dart';
-import 'common/app_popup_menu.dart';
 import 'common/transcript_cc_badge.dart';
+import 'common/app_menu_style.dart';
 import '../features/collection_cover/collection_cover_store.dart';
 import '../features/community_collections/download/community_download_notifier.dart';
 import '../features/community_collections/data/community_collection_api.dart';
@@ -181,101 +183,119 @@ class AudioListTile extends ConsumerWidget {
         final Color? cardColor = selectionMode && selected
             ? selectionHighlightColor
             : (audioItem.isPinned ? pinnedHighlightColor : null);
+        final bool hasMenu = !selectionMode && showMenu;
+        final tapArea = InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: selectionMode ? onSelectToggle : () => _pushPlan(context),
+          onLongPress: onLongPress,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Padding(
+                    // 右侧留白通常由 trailing 菜单撑起，故默认为 0；
+                    // 多选态与无菜单态隐藏了菜单，需补回右内边距以保持左右对称。
+                    padding: EdgeInsets.fromLTRB(
+                      sideInset,
+                      8,
+                      hasMenu ? 0 : sideInset,
+                      8,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // 左侧图标，垂直居中
+                        _buildCollectionLeading(
+                          coverCollection,
+                          isChinaUser,
+                          dataDirectoryPath,
+                        ),
+                        // 图标与标题间距保持紧凑，给标题让出空间。
+                        const SizedBox(width: 8),
+                        // 中间标题 + 副标题
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SearchHighlightText(
+                                text: audioItem.name,
+                                searchQuery: searchQuery,
+                                style: audioTitleStyle(theme),
+                                // 标题默认最多两行，与合集详情页、搜索结果保持一致。
+                                maxLines: titleMaxLines,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (searchDescription != null) ...[
+                                const SizedBox(height: 4),
+                                searchDescription,
+                              ],
+                              const SizedBox(height: 4),
+                              _buildSubtitle(
+                                context,
+                                l10n,
+                                theme,
+                                progress,
+                                tagData,
+                                transcriptionTask,
+                                downloadProgress,
+                                downloadQueued,
+                                difficulty,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // 多选态：右侧放选中框（替代菜单按钮），垂直居中。
+                if (selectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: sideInset),
+                    child: Center(
+                      child: Checkbox(
+                        value: selected,
+                        onChanged: (_) => onSelectToggle?.call(),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  )
+                // 菜单按钮占位：真实按钮叠放在 InkWell 之外（见下方 card）。
+                else if (hasMenu)
+                  const SizedBox(width: _kTrailingButtonSize),
+              ],
+            ),
+          ),
+        );
+        // 菜单不能放在卡片 InkWell 子树内：MenuAnchor 的浮层在焦点树上挂在锚点之下，
+        // 鼠标悬停菜单项会让卡片 InkWell 因子孙获焦而显示整卡 focus 高亮；菜单关闭时
+        // 获焦的菜单项随浮层同帧销毁，FocusManager 丢失旧焦点路径，卡片收不到失焦通知，
+        // 灰底会一直残留。故把菜单与 InkWell 作为 Stack 的兄弟节点，隔离两者焦点。
         final card = Card(
           margin: EdgeInsets.zero,
           color: cardColor,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: selectionMode ? onSelectToggle : () => _pushPlan(context),
-            onLongPress: onLongPress,
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      // 右侧留白通常由 trailing 菜单撑起，故默认为 0；
-                      // 多选态与无菜单态隐藏了菜单，需补回右内边距以保持左右对称。
-                      padding: EdgeInsets.fromLTRB(
-                        sideInset,
-                        8,
-                        (selectionMode || !showMenu) ? sideInset : 0,
-                        8,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // 左侧图标，垂直居中
-                          _buildCollectionLeading(
-                            coverCollection,
-                            isChinaUser,
-                            dataDirectoryPath,
-                          ),
-                          // 图标与标题间距保持紧凑，给标题让出空间。
-                          const SizedBox(width: 8),
-                          // 中间标题 + 副标题
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SearchHighlightText(
-                                  text: audioItem.name,
-                                  searchQuery: searchQuery,
-                                  style: audioTitleStyle(theme),
-                                  // 标题默认最多两行，与合集详情页、搜索结果保持一致。
-                                  maxLines: titleMaxLines,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (searchDescription != null) ...[
-                                  const SizedBox(height: 4),
-                                  searchDescription,
-                                ],
-                                const SizedBox(height: 4),
-                                _buildSubtitle(
-                                  context,
-                                  l10n,
-                                  theme,
-                                  progress,
-                                  tagData,
-                                  transcriptionTask,
-                                  downloadProgress,
-                                  downloadQueued,
-                                  difficulty,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+          child: hasMenu
+              ? Stack(
+                  children: [
+                    tapArea,
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _buildTrailing(
+                        context,
+                        ref,
+                        l10n,
+                        theme,
+                        isDownloading: downloadProgress != null,
                       ),
                     ),
-                  ),
-                  // 多选态：右侧放选中框（替代菜单按钮），垂直居中。
-                  if (selectionMode)
-                    Padding(
-                      padding: const EdgeInsets.only(right: sideInset),
-                      child: Center(
-                        child: Checkbox(
-                          value: selected,
-                          onChanged: (_) => onSelectToggle?.call(),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    )
-                  else if (showMenu)
-                    _buildTrailing(
-                      context,
-                      ref,
-                      l10n,
-                      theme,
-                      isDownloading: downloadProgress != null,
-                    ),
-                ],
-              ),
-            ),
-          ),
+                  ],
+                )
+              : tapArea,
         );
         // 置顶项右上角常驻图钉标记，让用户一眼识别已置顶（与背景高亮呼应）。
         final decoratedCard = audioItem.isPinned
@@ -697,8 +717,8 @@ class AudioListTile extends ConsumerWidget {
   Widget _buildPinnedMenuIcon({required bool isPinned}) {
     return Transform.rotate(
       angle: 0.52,
-      child: Icon(
-        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+      child: SvgActionIcon(
+        assetName: 'assets/icon/pin.svg',
         size: 20,
         color: isPinned ? AppTheme.pinColor : null,
       ),
@@ -728,127 +748,233 @@ class AudioListTile extends ConsumerWidget {
     // guid 去重重新插回（_importEpisodes 只比对活跃音频的 guid，查不到已删行），
     // 造成「删了又回来」。故与社区合集一致隐藏删除项，移除请退订整个播客合集。
     final isPodcastEpisode = audioItem.podcastEpisodeGuid != null;
+    void onSelected(String value) {
+      if (value == 'cancelDownload') {
+        if (isPodcastEpisode) {
+          ref
+              .read(podcastDownloadControllerProvider.notifier)
+              .cancel(audioItem.id);
+        } else if (isCommunity) {
+          unawaited(
+            ref.read(communityDownloadProvider.notifier).cancel(audioItem.id),
+          );
+        }
+      } else if (value == 'togglePin') {
+        ref.read(audioLibraryProvider.notifier).togglePin(audioItem.id);
+      } else if (value == 'trim') {
+        context.push(
+          AppRoutes.mediaTrim(audioItem.id, collectionId: collectionId),
+          extra: _latestAudioItem(ref),
+        );
+      } else if (value == 'rename') {
+        _showRenameDialog(context, ref);
+      } else if (value == 'manageSubtitles') {
+        showManageSubtitlesSheet(context, ref, audioItem);
+      } else if (value == 'updateCommunitySubtitle') {
+        unawaited(_handleUpdateCommunitySubtitle(context, ref, l10n));
+      } else if (value == 'manage') {
+        onManageCollections?.call();
+      } else if (value == 'manageTags') {
+        onManageTags?.call();
+      } else if (value == 'export') {
+        exportAudioItem(context, ref, audioItem);
+      } else if (value == 'exportPdf') {
+        AppRoutes.pushNested(
+          context,
+          AppRoutes.pdfPreviewSegment,
+          extra: _latestAudioItem(ref),
+        );
+      } else if (value == 'togglePause') {
+        _handleTogglePause(context, ref, isPausedForMenu);
+      } else if (value == 'resetProgress') {
+        _showResetProgressDialog(context, ref);
+      } else if (value == 'delete') {
+        onDelete?.call();
+      } else if (value == 'deleteDownload') {
+        // 无需二次确认：item 仍在、可随时重新下载。
+        ref
+            .read(audioLibraryProvider.notifier)
+            .deleteDownloadedAudio(audioItem.id);
+      } else if (value == 'podcastEpisodeInfo') {
+        showPodcastEpisodeInfoSheet(
+          context,
+          _latestAudioItem(ref),
+          podcastImageUrl: _podcastFeedImageUrl(ref),
+        );
+      }
+    }
+
+    final menuStyle = appMenuStyle(theme);
+
+    MenuItemButton menuItem({
+      required String value,
+      required Widget icon,
+      required String label,
+      bool destructive = false,
+    }) {
+      return MenuItemButton(
+        onPressed: () => onSelected(value),
+        leadingIcon: icon,
+        style: appMenuButtonStyle(theme, destructive: destructive),
+        child: Text(label),
+      );
+    }
+
     return SizedBox.expand(
-      child: PopupMenuButton<String>(
-        key: _kMenuHitAreaKey,
-        tooltip: MaterialLocalizations.of(context).showMenuTooltip,
-        padding: EdgeInsets.zero,
-        child: Center(child: _buildMenuIcon(theme)),
-        itemBuilder: (context) => [
+      child: MenuAnchor(
+        style: menuStyle,
+        // 与旧 PopupMenuButton 的模态行为一致：菜单展开时点击外部只关闭菜单，
+        // 不穿透触发列表项或其他控件。
+        consumeOutsideTap: true,
+        builder: (context, controller, child) => IconButton(
+          key: _kMenuHitAreaKey,
+          tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+          padding: EdgeInsets.zero,
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          icon: _buildMenuIcon(theme),
+        ),
+        menuChildren: [
           if (isDownloading)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'cancelDownload',
               icon: const Icon(Icons.cancel_outlined, size: 20),
               label: l10n.cancelDownload,
             ),
-          appPopupMenuItem(
-            context,
+          menuItem(
             value: 'togglePin',
             icon: _buildPinnedMenuIcon(isPinned: audioItem.isPinned),
             label: audioItem.isPinned ? l10n.unpinAudio : l10n.pinAudio,
           ),
           if (audioItem.isAudioReady && !isDownloading)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'trim',
-              icon: const Icon(Icons.content_cut, size: 20),
+              icon: const SvgActionIcon(
+                assetName: 'assets/icon/scissor.svg',
+                size: 20,
+              ),
               label: l10n.mediaTrimMenu,
             ),
           if (!isCommunity)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'rename',
-              icon: const Icon(Icons.edit, size: 20),
+              icon: const SvgActionIcon(
+                assetName: 'assets/icon/edit.svg',
+                size: 20,
+              ),
               label: l10n.renameAudio,
             ),
           if (!isCommunity)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'manageSubtitles',
-              icon: const Icon(Icons.subtitles_outlined, size: 20),
-              label: l10n.manageSubtitles,
-            ),
-          if (!isCommunity && audioItem.hasTranscript)
-            appPopupMenuItem(
-              context,
-              value: 'editSubtitles',
-              icon: const Icon(Icons.edit_note, size: 20),
-              label: l10n.editSubtitles,
+              icon: const SvgActionIcon(
+                assetName: 'assets/icon/closed-captions.svg',
+                size: 20,
+              ),
+              label: l10n.exportSubtitleFile,
             ),
           if (isCommunity)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'updateCommunitySubtitle',
               icon: const Icon(Icons.sync, size: 20),
               label: l10n.updateCommunitySubtitle,
             ),
-          // 播客单集天然属于其 RSS 订阅合集，再加入本地自建合集属低频且易与
-          // 「管理订阅」语义混淆，故与社区音频一致隐藏此项。
-          if (!isCommunity && !isPodcastEpisode)
-            appPopupMenuItem(
-              context,
-              value: 'manage',
-              icon: const Icon(Icons.folder_outlined, size: 20),
-              label: l10n.manageCollections,
-            ),
-          if (!isCommunity)
-            appPopupMenuItem(
-              context,
-              value: 'manageTags',
-              icon: const Icon(Icons.label_outline, size: 20),
-              label: l10n.manageTags,
-            ),
-          if (!isCommunity)
-            appPopupMenuItem(
-              context,
-              value: 'export',
-              icon: const Icon(Icons.ios_share, size: 20),
-              label: audioItem.isVideo ? l10n.exportVideo : l10n.exportAudio,
-            ),
-          // 学习材料导出 PDF：只读派生内容（字幕+笔记），社区音频也可用，仅要求有字幕
-          if (audioItem.hasTranscript)
-            appPopupMenuItem(
-              context,
-              value: 'exportPdf',
-              icon: const Icon(Icons.ios_share, size: 20),
-              label: l10n.exportPdf,
-            ),
-          // 仅在已开始学习时显示「暂停 / 恢复」与「重置」
-          if (hasProgress)
-            appPopupMenuItem(
-              context,
-              value: 'togglePause',
-              icon: Icon(
-                isPausedForMenu
-                    ? Icons.play_arrow_rounded
-                    : Icons.pause_rounded,
+          if (!isCommunity || audioItem.hasTranscript)
+            SubmenuButton(
+              menuStyle: menuStyle,
+              style: appMenuButtonStyle(theme),
+              leadingIcon: const SvgActionIcon(
+                assetName: 'assets/icon/upload.svg',
                 size: 20,
               ),
-              label: isPausedForMenu ? l10n.resumeLearning : l10n.pauseLearning,
+              menuChildren: [
+                if (!isCommunity)
+                  menuItem(
+                    value: 'export',
+                    icon: audioItem.isVideo
+                        ? const SvgActionIcon(
+                            assetName: 'assets/icon/video-2.svg',
+                            size: 20,
+                          )
+                        : const Icon(Icons.audio_file_outlined, size: 20),
+                    label: audioItem.isVideo
+                        ? l10n.exportVideo
+                        : l10n.exportAudio,
+                  ),
+                // 学习材料导出 PDF：只读派生内容（字幕+笔记），社区音频也可用，仅要求有字幕
+                if (audioItem.hasTranscript)
+                  menuItem(
+                    value: 'exportPdf',
+                    icon: const Icon(Icons.description_outlined, size: 20),
+                    label: l10n.exportPdf,
+                  ),
+              ],
+              child: Text(l10n.audioMenuExport),
             ),
-          if (hasProgress)
-            appPopupMenuItem(
-              context,
-              value: 'resetProgress',
-              icon: Icon(
-                Icons.restart_alt,
-                size: 20,
-                color: theme.colorScheme.error,
-              ),
-              label: l10n.resetLearningProgress,
-              destructive: true,
+          if (!isCommunity || hasProgress || isPodcastEpisode)
+            SubmenuButton(
+              menuStyle: menuStyle,
+              style: appMenuButtonStyle(theme),
+              leadingIcon: const Icon(Icons.more_horiz, size: 20),
+              menuChildren: [
+                // 播客单集天然属于其 RSS 订阅合集，再加入本地自建合集属低频且易与
+                // 「管理订阅」语义混淆，故与社区音频一致隐藏此项。
+                if (!isCommunity && !isPodcastEpisode)
+                  menuItem(
+                    value: 'manage',
+                    icon: const Icon(Icons.folder_outlined, size: 20),
+                    label: l10n.manageCollections,
+                  ),
+                if (!isCommunity)
+                  menuItem(
+                    value: 'manageTags',
+                    icon: const SvgActionIcon(
+                      assetName: 'assets/icon/tag.svg',
+                      size: 20,
+                    ),
+                    label: l10n.manageTags,
+                  ),
+                // 仅在已开始学习时显示「暂停 / 恢复」与「重置」
+                if (hasProgress)
+                  menuItem(
+                    value: 'togglePause',
+                    icon: isPausedForMenu
+                        ? const Icon(Icons.play_arrow_rounded, size: 20)
+                        : const SvgActionIcon(
+                            assetName: 'assets/icon/pause-circle.svg',
+                            size: 20,
+                          ),
+                    label: isPausedForMenu
+                        ? l10n.resumeLearning
+                        : l10n.pauseLearning,
+                  ),
+                if (hasProgress)
+                  menuItem(
+                    value: 'resetProgress',
+                    icon: Icon(
+                      Icons.restart_alt,
+                      size: 20,
+                      color: theme.colorScheme.error,
+                    ),
+                    label: l10n.resetLearningProgress,
+                    destructive: true,
+                  ),
+                if (audioItem.podcastEpisodeGuid != null)
+                  menuItem(
+                    value: 'podcastEpisodeInfo',
+                    icon: const Icon(Icons.info_outline, size: 20),
+                    label: l10n.podcastEpisodeMeta,
+                  ),
+              ],
+              child: Text(l10n.audioMenuMoreActions),
             ),
-          if (!isCommunity && !isPodcastEpisode && hasProgress)
-            const PopupMenuDivider(height: 10),
-          if (!isCommunity && !isPodcastEpisode && !hasProgress)
-            const PopupMenuDivider(height: 10),
+          if ((!isCommunity && !isPodcastEpisode) || audioItem.isAudioReady)
+            const Divider(height: 10),
           if (!isCommunity && !isPodcastEpisode)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'delete',
-              icon: Icon(
-                Icons.delete,
+              icon: SvgActionIcon(
+                assetName: 'assets/icon/trash-bin.svg',
                 size: 20,
                 color: theme.colorScheme.error,
               ),
@@ -859,87 +985,17 @@ class AudioListTile extends ConsumerWidget {
           // 「删除音频」仅删本地音频文件、把 audioPath 置空（列表重现下载按钮），
           // 字幕/进度保留，随时可重新下载。
           if ((isCommunity || isPodcastEpisode) && audioItem.isAudioReady)
-            appPopupMenuItem(
-              context,
+            menuItem(
               value: 'deleteDownload',
-              icon: Icon(
-                Icons.delete_outline,
+              icon: SvgActionIcon(
+                assetName: 'assets/icon/trash-bin.svg',
                 size: 20,
                 color: theme.colorScheme.error,
               ),
               label: l10n.deleteAudio,
               destructive: true,
             ),
-          if (audioItem.podcastEpisodeGuid != null)
-            appPopupMenuItem(
-              context,
-              value: 'podcastEpisodeInfo',
-              icon: const Icon(Icons.info_outline, size: 20),
-              label: l10n.podcastEpisodeMeta,
-            ),
         ],
-        onSelected: (value) {
-          if (value == 'cancelDownload') {
-            if (isPodcastEpisode) {
-              ref
-                  .read(podcastDownloadControllerProvider.notifier)
-                  .cancel(audioItem.id);
-            } else if (isCommunity) {
-              unawaited(
-                ref
-                    .read(communityDownloadProvider.notifier)
-                    .cancel(audioItem.id),
-              );
-            }
-          } else if (value == 'togglePin') {
-            ref.read(audioLibraryProvider.notifier).togglePin(audioItem.id);
-          } else if (value == 'trim') {
-            context.push(
-              AppRoutes.mediaTrim(audioItem.id, collectionId: collectionId),
-              extra: _latestAudioItem(ref),
-            );
-          } else if (value == 'rename') {
-            _showRenameDialog(context, ref);
-          } else if (value == 'manageSubtitles') {
-            showManageSubtitlesSheet(context, ref, audioItem);
-          } else if (value == 'editSubtitles') {
-            context.push(
-              AppRoutes.subtitleEditor(audioItem.id),
-              extra: audioItem,
-            );
-          } else if (value == 'updateCommunitySubtitle') {
-            unawaited(_handleUpdateCommunitySubtitle(context, ref, l10n));
-          } else if (value == 'manage') {
-            onManageCollections?.call();
-          } else if (value == 'manageTags') {
-            onManageTags?.call();
-          } else if (value == 'export') {
-            exportAudioItem(context, ref, audioItem);
-          } else if (value == 'exportPdf') {
-            AppRoutes.pushNested(
-              context,
-              AppRoutes.pdfPreviewSegment,
-              extra: _latestAudioItem(ref),
-            );
-          } else if (value == 'togglePause') {
-            _handleTogglePause(context, ref, isPausedForMenu);
-          } else if (value == 'resetProgress') {
-            _showResetProgressDialog(context, ref);
-          } else if (value == 'delete') {
-            onDelete?.call();
-          } else if (value == 'deleteDownload') {
-            // 无需二次确认：item 仍在、可随时重新下载。
-            ref
-                .read(audioLibraryProvider.notifier)
-                .deleteDownloadedAudio(audioItem.id);
-          } else if (value == 'podcastEpisodeInfo') {
-            showPodcastEpisodeInfoSheet(
-              context,
-              _latestAudioItem(ref),
-              podcastImageUrl: _podcastFeedImageUrl(ref),
-            );
-          }
-        },
       ),
     );
   }
@@ -1145,7 +1201,11 @@ class _PinnedBadge extends StatelessWidget {
     return Transform.rotate(
       key: const Key('audio_list_tile_pinned_badge'),
       angle: 0.52,
-      child: const Icon(Icons.push_pin, size: 14, color: AppTheme.pinColor),
+      child: const SvgActionIcon(
+        assetName: 'assets/icon/pin.svg',
+        size: 14,
+        color: AppTheme.pinColor,
+      ),
     );
   }
 }

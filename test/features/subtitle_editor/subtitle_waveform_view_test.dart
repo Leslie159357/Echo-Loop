@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:echo_loop/analytics/analytics_providers.dart';
 import 'package:echo_loop/analytics/analytics_service.dart';
@@ -15,6 +16,7 @@ import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/widgets/guide_flow.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' as ja;
@@ -200,12 +202,12 @@ void main() {
       );
 
       final rect = tester.getRect(find.byType(SubtitleWaveformView));
-      // 末词终点竖线在 8s（x≈630）。在竖线上半部分（远离底部把手）按下并拖动，
-      // 整条竖线都应可抓取该边界。
+      // 末词终点竖线在 8s（x≈630）。在竖线上端（顶部文字行之下、远离底部把手）
+      // 按下并拖动，整条竖线都应可抓取该边界。
       final endX = rect.left + 630;
-      final gesture = await tester.startGesture(Offset(endX, rect.top + 8));
+      final gesture = await tester.startGesture(Offset(endX, rect.top + 24));
       await tester.pump();
-      await gesture.moveTo(Offset(rect.left + 500, rect.top + 8));
+      await gesture.moveTo(Offset(rect.left + 500, rect.top + 24));
       await tester.pump();
       await gesture.up();
       await tester.pump();
@@ -213,6 +215,279 @@ void main() {
       expect(wordAdjusts, isNotEmpty, reason: '线身任意处都应可抓取');
       expect(wordAdjusts.last.$1, 3);
       expect(wordAdjusts.last.$2, BoundaryEdge.end);
+    });
+
+    group('顶部单词块与播放头手柄', () {
+      // 未缩放：x = 16 + t/10s * 768。句 1 [4s,8s] 的词 aa [4,6]、bb [6,8]，
+      // 播放头停在句首 4s（x≈323），与句首边界重合。
+      const playheadX = 16 + 768 * .4;
+      const laneY = 9.0;
+      const bodyY = 50.0;
+
+      late List<Duration> scrubs;
+      late List<Duration> scrubEnds;
+      late List<int> wordTaps;
+      late List<(int, BoundaryEdge, Duration)> adjusts;
+
+      Future<Rect> pumpView(WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 240));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        scrubs = [];
+        scrubEnds = [];
+        wordTaps = [];
+        adjusts = [];
+        final sentences = _sentences();
+        await tester.pumpWidget(
+          createTestApp(
+            SubtitleWaveformView(
+              waveform: _waveform(),
+              extractionProgress: 1,
+              duration: const Duration(seconds: 10),
+              sentences: sentences,
+              activeSentence: sentences[1],
+              selectionEpoch: 0,
+              playbackPosition: const Duration(seconds: 4),
+              isPlaying: false,
+              zoomScale: 1,
+              wordBoundaries: _activeWords,
+              onAdjustWord: (i, edge, target) => adjusts.add((i, edge, target)),
+              onZoomChanged: (_) {},
+              onScrub: scrubs.add,
+              onScrubEnd: scrubEnds.add,
+              onWordTap: wordTaps.add,
+            ),
+          ),
+        );
+        return tester.getRect(find.byType(SubtitleWaveformView));
+      }
+
+      testWidgets('轻点单词块试听该词，不定位播放头', (tester) async {
+        final rect = await pumpView(tester);
+        await tester.tapAt(rect.topLeft + const Offset(16 + 768 * .7, laneY));
+        await tester.pump();
+
+        expect(wordTaps, [1]);
+        expect(scrubEnds, isEmpty);
+      });
+
+      testWidgets('在单词块之外的文字行轻点仍定位播放头', (tester) async {
+        final rect = await pumpView(tester);
+        await tester.tapAt(rect.topLeft + const Offset(16 + 768 * .9, laneY));
+        await tester.pump();
+
+        expect(wordTaps, isEmpty);
+        expect(scrubEnds.single.inMilliseconds, closeTo(9000, 60));
+      });
+
+      testWidgets('手柄与句首边界重合：从手柄拖动播放头，不动边界', (tester) async {
+        final rect = await pumpView(tester);
+        final gesture = await tester.startGesture(
+          rect.topLeft + const Offset(playheadX, laneY),
+        );
+        await tester.pump();
+        for (var i = 0; i < 4; i++) {
+          await gesture.moveBy(const Offset(-10, 0));
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pump();
+
+        expect(adjusts, isEmpty);
+        expect(wordTaps, isEmpty);
+        expect(scrubs, isNotEmpty);
+        expect(scrubEnds.single, lessThan(const Duration(seconds: 4)));
+      });
+
+      testWidgets('手柄与句首边界重合：从线身拖动的是边界', (tester) async {
+        final rect = await pumpView(tester);
+        final gesture = await tester.startGesture(
+          rect.topLeft + const Offset(playheadX, bodyY),
+        );
+        await tester.pump();
+        await gesture.moveBy(const Offset(-30, 0));
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+
+        expect(scrubs, isEmpty);
+        expect(adjusts, isNotEmpty);
+        expect(adjusts.last.$1, 2);
+        expect(adjusts.last.$2, BoundaryEdge.start);
+      });
+
+      testWidgets('轻点压在单词块上的手柄（不拖动）= 试听该词', (tester) async {
+        final rect = await pumpView(tester);
+        await tester.tapAt(rect.topLeft + const Offset(playheadX + 2, laneY));
+        await tester.pump();
+
+        expect(wordTaps, [0]);
+        expect(scrubs, isEmpty);
+        expect(scrubEnds, isEmpty);
+      });
+    });
+
+    group('整词拖动', () {
+      // 未缩放：x = 16 + t/10s * 768。词 aa [4,6]（x 323.2~476.8），线身 y=50。
+      const bodyY = 50.0;
+      const aaMidX = 16 + 768 * .5; // 5s
+
+      late List<Duration> scrubEnds;
+      late List<(int, Duration)> moves;
+      late List<(int, BoundaryEdge, Duration)> adjusts;
+      late int adjustEnds;
+
+      Future<Rect> pumpView(WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 240));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        scrubEnds = [];
+        moves = [];
+        adjusts = [];
+        adjustEnds = 0;
+        final sentences = _sentences();
+        await tester.pumpWidget(
+          createTestApp(
+            SubtitleWaveformView(
+              waveform: _waveform(),
+              extractionProgress: 1,
+              duration: const Duration(seconds: 10),
+              sentences: sentences,
+              activeSentence: sentences[1],
+              selectionEpoch: 0,
+              playbackPosition: Duration.zero,
+              isPlaying: false,
+              zoomScale: 1,
+              wordBoundaries: _activeWords,
+              onAdjustWord: (i, edge, target) => adjusts.add((i, edge, target)),
+              onMoveWord: (i, target) => moves.add((i, target)),
+              onAdjustEnd: () => adjustEnds++,
+              onZoomChanged: (_) {},
+              onScrub: (_) {},
+              onScrubEnd: scrubEnds.add,
+            ),
+          ),
+        );
+        return tester.getRect(find.byType(SubtitleWaveformView));
+      }
+
+      MouseCursor cursorOf(WidgetTester tester) => tester
+          .widget<MouseRegion>(
+            find
+                .descendant(
+                  of: find.byType(SubtitleWaveformView),
+                  matching: find.byType(MouseRegion),
+                )
+                .first,
+          )
+          .cursor;
+
+      testWidgets('鼠标悬停在词区间显示抓取手形，边界上仍是左右箭头', (tester) async {
+        final rect = await pumpView(tester);
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        addTearDown(mouse.removePointer);
+        await mouse.addPointer(location: rect.topLeft + const Offset(700, 50));
+        await mouse.moveTo(rect.topLeft + const Offset(aaMidX, bodyY));
+        await tester.pump();
+        expect(cursorOf(tester), SystemMouseCursors.grab);
+
+        await mouse.moveTo(rect.topLeft + const Offset(16 + 768 * .6, bodyY));
+        await tester.pump();
+        expect(cursorOf(tester), SystemMouseCursors.resizeLeftRight);
+      });
+
+      testWidgets('鼠标按住词区间拖动：整体移动该词，不定位播放头', (tester) async {
+        final rect = await pumpView(tester);
+        final mouse = await tester.startGesture(
+          rect.topLeft + const Offset(aaMidX, bodyY),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+        // 向左 76.8px = 1s：词起点 4s → 3s。
+        await mouse.moveBy(const Offset(-38.4, 0));
+        await tester.pump();
+        expect(cursorOf(tester), SystemMouseCursors.grabbing);
+        await mouse.moveBy(const Offset(-38.4, 0));
+        await tester.pump();
+        await mouse.up();
+        await tester.pump();
+
+        expect(adjusts, isEmpty);
+        expect(scrubEnds, isEmpty);
+        expect(moves.last.$1, 2);
+        expect(moves.last.$2.inMilliseconds, closeTo(3000, 20));
+        expect(adjustEnds, 1);
+      });
+
+      testWidgets('鼠标在词区间轻点（不移动）仍定位播放头', (tester) async {
+        final rect = await pumpView(tester);
+        await tester.tapAt(
+          rect.topLeft + const Offset(aaMidX, bodyY),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+
+        expect(moves, isEmpty);
+        expect(scrubEnds.single.inMilliseconds, closeTo(5000, 20));
+      });
+
+      testWidgets('触摸直接拖动词区间不移动词；长按后拖动才整体移动', (tester) async {
+        final rect = await pumpView(tester);
+        final swipe = await tester.startGesture(
+          rect.topLeft + const Offset(aaMidX, bodyY),
+        );
+        await tester.pump();
+        await swipe.moveBy(const Offset(-40, 0));
+        await tester.pump(kLongPressTimeout);
+        await swipe.up();
+        await tester.pump();
+        expect(moves, isEmpty, reason: '未长按的拖动是平移波形');
+
+        final hold = await tester.startGesture(
+          rect.topLeft + const Offset(aaMidX, bodyY),
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+        await hold.moveBy(const Offset(76.8, 0));
+        await tester.pump();
+        await hold.up();
+        await tester.pump();
+
+        expect(moves.last.$1, 2);
+        expect(moves.last.$2.inMilliseconds, closeTo(5000, 20));
+        expect(scrubEnds, isEmpty);
+        expect(adjustEnds, 1);
+      });
+    });
+
+    testWidgets('试听单词（不跟随）时视图不滚动，播放头出视口才居中', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      Widget view(Duration position) => createTestApp(
+        SubtitleWaveformView(
+          waveform: _waveform(),
+          extractionProgress: 1,
+          duration: const Duration(seconds: 10),
+          sentences: _sentences(),
+          activeSentence: null,
+          selectionEpoch: 0,
+          playbackPosition: position,
+          isPlaying: true,
+          followsPlayhead: false,
+          zoomScale: 4,
+          onZoomChanged: (_) {},
+          onScrub: (_) {},
+          onScrubEnd: (_) {},
+        ),
+      );
+
+      // zoom=4：可用内容宽 768×4，x = 16 + t/10s * 3072。2s 在 x≈630，仍在视口内。
+      await tester.pumpWidget(view(const Duration(seconds: 2)));
+      await tester.pump();
+      expect(_viewOffset(tester), 0);
+
+      // 3s 在 x≈938，已出视口：居中到 938 - 400。
+      await tester.pumpWidget(view(const Duration(seconds: 3)));
+      await tester.pump();
+      expect(_viewOffset(tester), closeTo(537.6, 1));
     });
 
     testWidgets('播放时让播放头红线钉在视口中线（近首尾退化为扫过）', (tester) async {
@@ -294,17 +569,17 @@ void main() {
       await tester.pump();
       // zoom=1 铺满不滚动，焦点 12s 屏幕 x = 16 + 768*0.1 = 92.8。
       expect(_viewOffset(tester), 0);
-      expect(_hasPlayhead(tester), isFalse);
+      expect(_hasPlayhead(tester), isTrue);
 
       await tester.pumpWidget(build(8));
       await tester.pump();
       // zoom=8 后内容变宽，焦点 12s 屏幕位置保持 92.8 不变。
       // 偏移 = timeToContentX_8(12s) - 92.8 = 630.4 - 92.8 = 537.6。
       expect(_viewOffset(tester), closeTo(537.6, 1));
-      expect(_hasPlayhead(tester), isFalse);
+      expect(_hasPlayhead(tester), isTrue);
     });
 
-    testWidgets('暂停和轻点定位时不显示播放头红线', (tester) async {
+    testWidgets('暂停时也显示播放头；轻点空白处定位', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 240));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -329,14 +604,67 @@ void main() {
         ),
       );
 
-      expect(_hasPlayhead(tester), isFalse);
+      expect(_hasPlayhead(tester), isTrue);
 
       final rect = tester.getRect(find.byType(SubtitleWaveformView));
       await tester.tapAt(Offset(rect.left + 400, rect.center.dy));
       await tester.pump();
 
       expect(endedAt, isNotNull);
-      expect(_hasPlayhead(tester), isFalse);
+      expect(_hasPlayhead(tester), isTrue);
+    });
+
+    testWidgets('拖动播放头连续定位，松手时结束定位', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final scrubs = <Duration>[];
+      Duration? endedAt;
+      var position = const Duration(seconds: 5);
+      late StateSetter setOuter;
+      await tester.pumpWidget(
+        createTestApp(
+          StatefulBuilder(
+            builder: (context, setState) {
+              setOuter = setState;
+              return SubtitleWaveformView(
+                waveform: _waveform(),
+                extractionProgress: 1,
+                duration: const Duration(seconds: 10),
+                sentences: _sentences(),
+                activeSentence: null,
+                selectionEpoch: 0,
+                playbackPosition: position,
+                isPlaying: false,
+                zoomScale: 1,
+                onZoomChanged: (_) {},
+                onScrub: (t) {
+                  scrubs.add(t);
+                  setOuter(() => position = t);
+                },
+                onScrubEnd: (t) => endedAt = t,
+              );
+            },
+          ),
+        ),
+      );
+      final rect = tester.getRect(find.byType(SubtitleWaveformView));
+      // 未缩放时内容区 = 视口 - 左右各 16px 内边距，5s 在正中。
+      final playheadX = rect.left + 16 + (rect.width - 32) / 2;
+
+      final gesture = await tester.startGesture(
+        Offset(playheadX, rect.top + 50),
+      );
+      for (var i = 0; i < 5; i++) {
+        await gesture.moveBy(const Offset(-20, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pump();
+
+      expect(scrubs.length, greaterThanOrEqualTo(5));
+      expect(scrubs.last, lessThan(const Duration(seconds: 5)));
+      expect(endedAt, scrubs.last);
     });
 
     testWidgets('双指张开会按指距比例放大波形', (tester) async {
@@ -672,6 +1000,139 @@ void main() {
     });
   });
 
+  group('SubtitleWaveformView 双指 / 滚轮平移', () {
+    Future<List<double>> pumpZoomed(
+      WidgetTester tester, {
+      bool isPlaying = false,
+      double zoomScale = 8,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(800, 240));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final zooms = <double>[];
+      await tester.pumpWidget(
+        createTestApp(
+          SubtitleWaveformView(
+            waveform: _waveform(),
+            extractionProgress: 1,
+            duration: const Duration(seconds: 120),
+            sentences: _sentences(duration: const Duration(seconds: 120)),
+            activeSentence: null,
+            selectionEpoch: 0,
+            playbackPosition: Duration.zero,
+            isPlaying: isPlaying,
+            zoomScale: zoomScale,
+            onZoomChanged: zooms.add,
+            onScrub: (_) {},
+            onScrubEnd: (_) {},
+            onAdjustEnd: () {},
+          ),
+        ),
+      );
+      return zooms;
+    }
+
+    testWidgets('触控板双指左滑平移到更晚的内容，不触发缩放', (tester) async {
+      final zooms = await pumpZoomed(tester);
+      final before = _viewOffset(tester);
+      final center = tester.getCenter(find.byType(SubtitleWaveformView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center);
+      await tester.pump();
+      await gesture.panZoomUpdate(center, pan: const Offset(-150, 0));
+      await tester.pump();
+      await gesture.panZoomEnd();
+      await tester.pump();
+
+      expect(_viewOffset(tester), closeTo(before + 150, 1));
+      expect(zooms, isEmpty);
+    });
+
+    testWidgets('触控板竖向滑动也映射为横向平移', (tester) async {
+      await pumpZoomed(tester);
+      final center = tester.getCenter(find.byType(SubtitleWaveformView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center);
+      await tester.pump();
+      await gesture.panZoomUpdate(center, pan: const Offset(0, -120));
+      await tester.pump();
+      await gesture.panZoomEnd();
+      await tester.pump();
+
+      expect(_viewOffset(tester), closeTo(120, 1));
+    });
+
+    testWidgets('鼠标滚轮平移，Ctrl + 滚轮缩放', (tester) async {
+      final zooms = await pumpZoomed(tester);
+      final center = tester.getCenter(find.byType(SubtitleWaveformView));
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(center));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 100)));
+      await tester.pump();
+      expect(_viewOffset(tester), closeTo(100, 1));
+      expect(zooms, isEmpty);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, -240)));
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      expect(zooms.single, closeTo(8 * math.e, 0.01));
+    });
+
+    testWidgets('触屏双指同向移动时平移波形', (tester) async {
+      await pumpZoomed(tester);
+      final rect = tester.getRect(find.byType(SubtitleWaveformView));
+      final before = _viewOffset(tester);
+      final first = await tester.startGesture(
+        Offset(rect.left + 300, rect.center.dy - 20),
+      );
+      final second = await tester.startGesture(
+        Offset(rect.left + 400, rect.center.dy + 20),
+        pointer: 2,
+      );
+      await tester.pump();
+      await first.moveBy(const Offset(-100, 0));
+      await second.moveBy(const Offset(-100, 0));
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump();
+
+      // 两指各左移 100：中点左移 100（第一指移动时中点先移 50，第二指再移 50）。
+      expect(_viewOffset(tester), closeTo(before + 100, 1));
+    });
+
+    testWidgets('播放中由跟随播放头接管，手动平移不生效', (tester) async {
+      await pumpZoomed(tester, isPlaying: true);
+      final before = _viewOffset(tester);
+      final center = tester.getCenter(find.byType(SubtitleWaveformView));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.trackpad,
+      );
+      await gesture.panZoomStart(center);
+      await tester.pump();
+      await gesture.panZoomUpdate(center, pan: const Offset(-150, 0));
+      await tester.pump();
+      await gesture.panZoomEnd();
+      await tester.pump();
+
+      expect(_viewOffset(tester), before);
+    });
+
+    testWidgets('未放大时滚轮不接管，交给外层处理', (tester) async {
+      await pumpZoomed(tester, zoomScale: 1);
+      final center = tester.getCenter(find.byType(SubtitleWaveformView));
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(center));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 100)));
+      await tester.pump();
+      expect(_viewOffset(tester), 0);
+    });
+  });
+
   group('SubtitleSimpleEditorScreen', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({
@@ -737,7 +1198,7 @@ void main() {
       audioEngine.disposeController();
     });
 
-    testWidgets('句子编号复用左侧播放区，不增加布局宽度', (tester) async {
+    testWidgets('句子编号排在播放按钮正下方，不另占横向宽度', (tester) async {
       final audioEngine = _ScreenTestAudioEngine(
         duration: const Duration(seconds: 10),
         sentences: _sentences(),
@@ -759,17 +1220,19 @@ void main() {
         expect(numberFinder, findsOneWidget);
         expect(tester.widget<Text>(numberFinder).data, '${i + 1}');
       }
-      expect(
-        tester
-            .getSize(find.byKey(const ValueKey('subtitle-sentence-play-0')))
-            .width,
-        52,
+      final playRect = tester.getRect(
+        find.byKey(const ValueKey('subtitle-sentence-play-0')),
       );
+      final numberRect = tester.getRect(
+        find.byKey(const ValueKey('subtitle-sentence-number-0')),
+      );
+      expect(numberRect.center.dx, moreOrLessEquals(playRect.center.dx));
+      expect(numberRect.top, greaterThanOrEqualTo(playRect.bottom));
 
       audioEngine.disposeController();
     });
 
-    testWidgets('波形下方显示缩放和速度控制', (tester) async {
+    testWidgets('波形上方工具条显示缩放和速度控制，音频材料不显示画面开关', (tester) async {
       final audioEngine = _ScreenTestAudioEngine(
         duration: const Duration(seconds: 10),
         sentences: _sentences(),
@@ -785,15 +1248,41 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byIcon(Icons.play_arrow), findsNothing);
-      expect(find.text('Zoom'), findsOneWidget);
-      expect(find.byIcon(Icons.zoom_out), findsNothing);
-      expect(find.byIcon(Icons.zoom_in), findsNothing);
+      expect(find.byTooltip('Zoom out'), findsOneWidget);
+      expect(find.byTooltip('Zoom in'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('subtitle-waveform-zoom-slider')),
         findsOneWidget,
       );
-      expect(find.text('Playback Speed'), findsOneWidget);
+      expect(find.text('1.0x'), findsOneWidget);
       expect(find.byTooltip('Playback Speed'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('subtitle-editor-toggle-video')),
+        findsNothing,
+      );
+      final toolbarBottom = tester
+          .getRect(find.byKey(const ValueKey('subtitle-waveform-zoom-slider')))
+          .bottom;
+      expect(
+        toolbarBottom,
+        lessThanOrEqualTo(
+          tester.getRect(find.byType(SubtitleWaveformView)).top,
+        ),
+      );
+
+      final sliderFinder = find.byKey(
+        const ValueKey('subtitle-waveform-zoom-slider'),
+      );
+      final before = tester.widget<Slider>(sliderFinder).value;
+      await tester.tap(find.byTooltip('Zoom in'));
+      await tester.pump();
+      expect(tester.widget<Slider>(sliderFinder).value, greaterThan(before));
+      await tester.tap(find.byTooltip('Zoom out'));
+      await tester.pump();
+      expect(
+        tester.widget<Slider>(sliderFinder).value,
+        moreOrLessEquals(before),
+      );
 
       await tester.tap(find.byTooltip('Playback Speed'));
       await tester.pump(const Duration(milliseconds: 300));

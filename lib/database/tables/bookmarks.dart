@@ -2,8 +2,12 @@ import 'package:drift/drift.dart';
 
 import 'audio_items.dart';
 
-/// 书签表（增强版）
-/// 存储完整句子信息，防止字幕重新解析后索引错位
+/// 收藏句表
+///
+/// 一条收藏就是「音频 + 那句话的文字与时间区间」，不记句子编号（编号随字幕
+/// 编辑变化）；当前是第几句按区间中点在当前字幕里现算（见
+/// `source_sentence_anchor.dart`）。字幕替换后文字与区间改写为当前对应的句子；
+/// 字幕合并后同一句可对应多条收藏。
 class Bookmarks extends Table {
   /// 自增主键
   IntColumn get id => integer().autoIncrement()();
@@ -15,16 +19,13 @@ class Bookmarks extends Table {
   TextColumn get audioItemId =>
       text().references(AudioItems, #id, onDelete: KeyAction.cascade)();
 
-  /// 句子索引（快速查询 + 向后兼容）
-  IntColumn get sentenceIndex => integer()();
-
-  /// 句子文本（防止索引错位时可通过文本匹配）
+  /// 句子文本（字幕替换后改写为当前对应句子的文本）
   TextColumn get sentenceText => text()();
 
-  /// 句子起始时间（秒）
+  /// 收藏区间起点（秒）
   RealColumn get startTime => real()();
 
-  /// 句子结束时间（秒）
+  /// 收藏区间终点（秒）
   RealColumn get endTime => real()();
 
   /// 创建时间
@@ -38,9 +39,4 @@ class Bookmarks extends Table {
 
   /// 同步状态
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
-
-  @override
-  List<Set<Column>> get uniqueKeys => [
-    {audioItemId, sentenceIndex},
-  ];
 }

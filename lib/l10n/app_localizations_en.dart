@@ -432,6 +432,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get waveformZoom => 'Zoom';
 
   @override
+  String get waveformZoomIn => 'Zoom in';
+
+  @override
+  String get waveformZoomOut => 'Zoom out';
+
+  @override
+  String get subtitleEditorVideoLoadFailed =>
+      'Couldn\'t load the video. You can still edit subtitles.';
+
+  @override
   String waveformLoading(int progress) {
     return 'Loading waveform $progress%';
   }
@@ -4245,9 +4255,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deleteSentence => 'Delete sentence';
 
   @override
-  String get sentenceDeleted => 'Sentence deleted';
-
-  @override
   String get playSentence => 'Play sentence';
 
   @override
@@ -4266,11 +4273,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wordSplitBeforeAction => 'Split';
 
   @override
-  String get saveSubtitleEdits => 'Save subtitle changes';
+  String get redo => 'Redo';
 
   @override
-  String get subtitleStructureChangedWarning =>
-      'This will clear learning progress and saved sentences of this audio.';
+  String get mergeWithPreviousSentence => 'Merge with previous';
+
+  @override
+  String get subtitleEditSentenceText => 'Edit text';
+
+  @override
+  String get subtitleInsertSentenceAbove => 'Insert sentence above';
+
+  @override
+  String get subtitleInsertSentenceBelow => 'Insert sentence below';
+
+  @override
+  String get subtitleInsertSentenceNoGap =>
+      'No gap here. Drag boundaries to make room first.';
+
+  @override
+  String get subtitleAddSentenceHere => 'Add sentence';
+
+  @override
+  String get subtitleNewSentenceHint => 'Type the new sentence';
+
+  @override
+  String get subtitleTextEditHint => 'Enter to save · Esc to cancel';
+
+  @override
+  String get insertWordBefore => 'Insert word before';
+
+  @override
+  String get insertWordAfter => 'Insert word after';
+
+  @override
+  String get deleteWord => 'Delete word';
+
+  @override
+  String get subtitleNewWordHint => 'New word';
 
   @override
   String get subtitleEditsSaved => 'Subtitle changes saved.';
@@ -5582,4 +5622,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mediaTrimFailureUnexpected =>
       'Something went wrong. Please try again.';
+
+  @override
+  String get audioMenuExport => 'Export';
+
+  @override
+  String get audioMenuMoreActions => 'More actions';
 }

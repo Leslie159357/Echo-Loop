@@ -34,6 +34,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/misc.dart';
 
+import '../helpers/svg_icon_finder.dart';
+
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
 
@@ -198,7 +200,7 @@ void main() {
         expect(find.byTooltip('Delete Subtitles'), findsNothing);
       });
 
-      testWidgets('有本地字幕音频：显示编辑和红色删除按钮', (tester) async {
+      testWidgets('有本地字幕音频：显示编辑和中性色删除按钮', (tester) async {
         final item = createTestAudioItem().copyWith(
           transcriptSource: TranscriptSource.local,
         );
@@ -209,7 +211,11 @@ void main() {
         await tester.pumpAndSettle();
 
         // 标题栏右侧依次显示编辑和删除按钮。
-        expect(find.byTooltip('Edit subtitles'), findsOneWidget);
+        expect(
+          find.widgetWithText(TextButton, 'Edit subtitles'),
+          findsOneWidget,
+        );
+        expect(svgIcon('assets/icon/edit.svg'), findsOneWidget);
         expect(find.byTooltip('Delete Subtitles'), findsOneWidget);
 
         final deleteButton = tester.widget<IconButton>(
@@ -221,7 +227,7 @@ void main() {
         final theme = Theme.of(
           tester.element(find.byType(ManageSubtitlesSheet)),
         );
-        expect(deleteButton.color, theme.colorScheme.error);
+        expect(deleteButton.color, theme.colorScheme.onSurfaceVariant);
       });
 
       testWidgets('有 AI(en) 字幕音频：AI 同语言禁用', (tester) async {

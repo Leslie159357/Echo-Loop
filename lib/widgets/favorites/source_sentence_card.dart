@@ -19,19 +19,18 @@ class SourceSentenceCard extends StatelessWidget {
   const SourceSentenceCard({
     required this.sentenceText,
     required this.audioItemId,
-    required this.sentenceIndex,
     required this.sentenceStartMs,
     required this.sentenceEndMs,
   });
 
   final String sentenceText;
   final String? audioItemId;
-  final int? sentenceIndex;
   final int? sentenceStartMs;
   final int? sentenceEndMs;
 
   @override
   Widget build(BuildContext context) {
+    final audioItemId = this.audioItemId;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Material(
@@ -56,7 +55,6 @@ class SourceSentenceCard extends StatelessWidget {
               ),
               origin: DictionaryLookupOrigin(
                 audioItemId: audioItemId,
-                sentenceIndex: sentenceIndex,
                 sentenceText: sentenceText,
                 sentenceStartMs: sentenceStartMs,
                 sentenceEndMs: sentenceEndMs,
@@ -65,9 +63,8 @@ class SourceSentenceCard extends StatelessWidget {
             if (audioItemId != null) ...[
               const SizedBox(height: AppSpacing.xs),
               SourceMaterialLink(
-                audioItemId: audioItemId!,
+                audioItemId: audioItemId,
                 sentenceText: sentenceText,
-                sentenceIndex: sentenceIndex,
                 sentenceStartMs: sentenceStartMs,
                 sentenceEndMs: sentenceEndMs,
               ),
@@ -84,14 +81,12 @@ class SourceMaterialLink extends ConsumerWidget {
   const SourceMaterialLink({
     required this.audioItemId,
     required this.sentenceText,
-    required this.sentenceIndex,
     required this.sentenceStartMs,
     required this.sentenceEndMs,
   });
 
   final String audioItemId;
   final String sentenceText;
-  final int? sentenceIndex;
   final int? sentenceStartMs;
   final int? sentenceEndMs;
 
@@ -118,7 +113,6 @@ class SourceMaterialLink extends ConsumerWidget {
                   ref: ref,
                   audioItemId: audioItemId,
                   sentenceText: sentenceText,
-                  sentenceIndex: sentenceIndex,
                   sentenceStartMs: sentenceStartMs,
                   sentenceEndMs: sentenceEndMs,
                 ),

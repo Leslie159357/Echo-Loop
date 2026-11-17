@@ -24,7 +24,10 @@ import 'package:echo_loop/providers/dictionary/lookup_controller.dart';
 import 'package:echo_loop/providers/favorite_review_settings_provider.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/learning_session/favorite_vocabulary_review_provider.dart';
+import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
+import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
 import 'package:echo_loop/screens/favorite_vocabulary_review_screen.dart';
+import 'package:echo_loop/services/pronunciation/local_audio_clip_player.dart';
 import 'package:echo_loop/widgets/dictionary/local_dict_result_view.dart';
 import 'package:echo_loop/widgets/dictionary/subtitle_text_scale.dart';
 import 'package:echo_loop/widgets/review/review_completion_summary.dart';
@@ -192,15 +195,80 @@ class _FakeAiDictionarySource extends AiDictionarySource {
   }
 }
 
+/// 记录后台发音预热与取消，替代真实 TTS 协调器与 CDN 查询。
+class _PrewarmRecorder {
+  /// 单词发音预热的（词，所有者）记录，用于区分页面窗口与当前卡的预热。
+  final List<({String word, Object owner})> wordPrewarms = [];
+
+  /// 被取消预热的所有者。
+  final List<Object> cancelledOwners = [];
+}
+
+class _RecordingTtsController extends TtsController {
+  _RecordingTtsController(this.recorder);
+
+  final _PrewarmRecorder recorder;
+
+  @override
+  TtsControllerState build() => const TtsControllerState();
+
+  @override
+  Future<bool> warmUpCurrentEngine() async => true;
+
+  @override
+  Future<void> prewarmTextsIncremental(
+    List<String> texts, {
+    required Object owner,
+  }) async {}
+
+  @override
+  void cancelTextsPrewarm({required Object owner}) {
+    recorder.cancelledOwners.add(owner);
+  }
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<AudioPlaybackResult> speakWithResult(
+    String text, {
+    String? key,
+    bool promptIfModelMissing = true,
+  }) async => AudioPlaybackResult.completed;
+}
+
+class _RecordingTextPlaybackController extends TextPlaybackController {
+  _RecordingTextPlaybackController(this.recorder);
+
+  final _PrewarmRecorder recorder;
+
+  @override
+  TextPlaybackState build() => const TextPlaybackState();
+
+  @override
+  Future<void> prewarmWord(String word, {required Object owner}) async {
+    recorder.wordPrewarms.add((word: word, owner: owner));
+  }
+
+  @override
+  Future<AudioPlaybackResult> speakWithResult(
+    String text, {
+    String? key,
+    bool promptIfModelMissing = true,
+  }) async => AudioPlaybackResult.completed;
+}
+
 class _TestFavoriteVocabularyReview extends FavoriteVocabularyReview {
   _TestFavoriteVocabularyReview({
     this.withSource = false,
     this.vocabulary = 'apple',
+    this.upcomingWords = const [],
     this.disposeSessionWaiter,
   });
 
   final bool withSource;
   final String vocabulary;
+  final List<String> upcomingWords;
   final Future<void> Function()? disposeSessionWaiter;
 
   @override
@@ -215,6 +283,10 @@ class _TestFavoriteVocabularyReview extends FavoriteVocabularyReview {
           sentenceText: withSource ? 'I ate an apple this morning.' : null,
         ),
       ),
+      upcomingCards: [
+        for (final word in upcomingWords)
+          FlashcardWordItem(savedWord: _word(word, memorySubjectId: 'w-$word')),
+      ],
       initialTotal: 1,
       remainingCount: 1,
       preview: MemoryRatingPreviewSet(
@@ -337,6 +409,8 @@ Widget _app({
   _WordDefinitionFixture? wordDefinition,
   bool withSource = false,
   String vocabulary = 'apple',
+  List<String> upcomingWords = const [],
+  _PrewarmRecorder? prewarmRecorder,
   GoRouter? router,
   Future<void> Function()? disposeSessionWaiter,
 }) {
@@ -371,9 +445,18 @@ Widget _app({
         () => _TestFavoriteVocabularyReview(
           withSource: withSource,
           vocabulary: vocabulary,
+          upcomingWords: upcomingWords,
           disposeSessionWaiter: disposeSessionWaiter,
         ),
       ),
+      if (prewarmRecorder != null) ...[
+        ttsControllerProvider.overrideWith(
+          () => _RecordingTtsController(prewarmRecorder),
+        ),
+        textPlaybackProvider.overrideWith(
+          () => _RecordingTextPlaybackController(prewarmRecorder),
+        ),
+      ],
       favoriteReviewSettingsProvider.overrideWith(
         () => _TestFavoriteReviewSettings(
           showNextReviewTime,
@@ -578,6 +661,81 @@ void main() {
       expect(_FakeAiDictionarySource.networkLookups, 0);
     },
   );
+
+  testWidgets('关闭自动 AI 查词时仍预热当前卡与后续卡的单词发音', (tester) async {
+    final recorder = _PrewarmRecorder();
+    await tester.pumpWidget(
+      _app(upcomingWords: const ['pear', 'banana'], prewarmRecorder: recorder),
+    );
+    await tester.pump();
+    expect(
+      recorder.wordPrewarms.map((prewarm) => prewarm.word),
+      containsAll(['apple', 'pear', 'banana']),
+    );
+  });
+
+  testWidgets('离开复习页取消后台发音预热', (tester) async {
+    final recorder = _PrewarmRecorder();
+    await tester.pumpWidget(_app(prewarmRecorder: recorder));
+    await tester.pump();
+    final cancelCountBeforeLeaving = recorder.cancelledOwners.length;
+    final prewarmCountBeforeLeaving = recorder.wordPrewarms.length;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(
+      recorder.cancelledOwners.length,
+      greaterThan(cancelCountBeforeLeaving),
+    );
+    // 会话收尾引起的状态变化不能再发起新的预热。
+    expect(recorder.wordPrewarms.length, prewarmCountBeforeLeaving);
+  });
+
+  testWidgets('正面即订阅当前卡 AI 查词，不提前查询后续卡', (tester) async {
+    _FakeBasicLookup.requests.clear();
+    await tester.pumpWidget(
+      _app(
+        autoShowAiLookup: true,
+        wordDefinition: _WordDefinitionFixture.basicHit,
+        upcomingWords: const ['pear', 'banana'],
+        prewarmRecorder: _PrewarmRecorder(),
+      ),
+    );
+    await tester.pump();
+    expect(_FakeBasicLookup.requests, contains('apple|ai'));
+    expect(_FakeBasicLookup.requests, isNot(contains('pear|ai')));
+    expect(_FakeBasicLookup.requests, isNot(contains('banana|ai')));
+  });
+
+  testWidgets('翻面不取消当前卡的预热，切到下一张才结束它', (tester) async {
+    final recorder = _PrewarmRecorder();
+    await tester.pumpWidget(
+      _app(
+        autoShowAiLookup: true,
+        wordDefinition: _WordDefinitionFixture.basicHit,
+        upcomingWords: const ['pear'],
+        prewarmRecorder: recorder,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    final screenOwner = recorder.wordPrewarms.first.owner;
+    final cardOwner = recorder.wordPrewarms
+        .firstWhere((prewarm) => !identical(prewarm.owner, screenOwner))
+        .owner;
+
+    await tester.tap(
+      find.byKey(const Key('favorite-vocabulary-review-reveal-zone')),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(recorder.cancelledOwners, isNot(contains(cardOwner)));
+
+    _TestFavoriteVocabularyReview.lastCreated!.showCard('pear');
+    await tester.pump();
+    await tester.pump();
+    expect(recorder.cancelledOwners, contains(cardOwner));
+    expect(recorder.cancelledOwners, isNot(contains(screenOwner)));
+  });
 
   testWidgets('turning on auto AI lookup prewarms the current word', (
     tester,

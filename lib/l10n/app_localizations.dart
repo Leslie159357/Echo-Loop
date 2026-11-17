@@ -838,6 +838,24 @@ abstract class AppLocalizations {
   /// **'Zoom'**
   String get waveformZoom;
 
+  /// No description provided for @waveformZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom in'**
+  String get waveformZoomIn;
+
+  /// No description provided for @waveformZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom out'**
+  String get waveformZoomOut;
+
+  /// No description provided for @subtitleEditorVideoLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the video. You can still edit subtitles.'**
+  String get subtitleEditorVideoLoadFailed;
+
   /// No description provided for @waveformLoading.
   ///
   /// In en, this message translates to:
@@ -7492,12 +7510,6 @@ abstract class AppLocalizations {
   /// **'Delete sentence'**
   String get deleteSentence;
 
-  /// No description provided for @sentenceDeleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Sentence deleted'**
-  String get sentenceDeleted;
-
   /// No description provided for @playSentence.
   ///
   /// In en, this message translates to:
@@ -7534,17 +7546,83 @@ abstract class AppLocalizations {
   /// **'Split'**
   String get wordSplitBeforeAction;
 
-  /// No description provided for @saveSubtitleEdits.
+  /// No description provided for @redo.
   ///
   /// In en, this message translates to:
-  /// **'Save subtitle changes'**
-  String get saveSubtitleEdits;
+  /// **'Redo'**
+  String get redo;
 
-  /// No description provided for @subtitleStructureChangedWarning.
+  /// No description provided for @mergeWithPreviousSentence.
   ///
   /// In en, this message translates to:
-  /// **'This will clear learning progress and saved sentences of this audio.'**
-  String get subtitleStructureChangedWarning;
+  /// **'Merge with previous'**
+  String get mergeWithPreviousSentence;
+
+  /// No description provided for @subtitleEditSentenceText.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit text'**
+  String get subtitleEditSentenceText;
+
+  /// No description provided for @subtitleInsertSentenceAbove.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert sentence above'**
+  String get subtitleInsertSentenceAbove;
+
+  /// No description provided for @subtitleInsertSentenceBelow.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert sentence below'**
+  String get subtitleInsertSentenceBelow;
+
+  /// No description provided for @subtitleInsertSentenceNoGap.
+  ///
+  /// In en, this message translates to:
+  /// **'No gap here. Drag boundaries to make room first.'**
+  String get subtitleInsertSentenceNoGap;
+
+  /// No description provided for @subtitleAddSentenceHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Add sentence'**
+  String get subtitleAddSentenceHere;
+
+  /// No description provided for @subtitleNewSentenceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the new sentence'**
+  String get subtitleNewSentenceHint;
+
+  /// No description provided for @subtitleTextEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter to save · Esc to cancel'**
+  String get subtitleTextEditHint;
+
+  /// No description provided for @insertWordBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert word before'**
+  String get insertWordBefore;
+
+  /// No description provided for @insertWordAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert word after'**
+  String get insertWordAfter;
+
+  /// No description provided for @deleteWord.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete word'**
+  String get deleteWord;
+
+  /// No description provided for @subtitleNewWordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New word'**
+  String get subtitleNewWordHint;
 
   /// No description provided for @subtitleEditsSaved.
   ///
@@ -9879,6 +9957,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Something went wrong. Please try again.'**
   String get mediaTrimFailureUnexpected;
+
+  /// No description provided for @audioMenuExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get audioMenuExport;
+
+  /// No description provided for @audioMenuMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get audioMenuMoreActions;
 }
 
 class _AppLocalizationsDelegate

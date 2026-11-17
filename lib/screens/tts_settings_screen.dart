@@ -11,6 +11,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:echo_loop/widgets/common/svg_action_icon.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/tts/kokoro_model_provider.dart';
@@ -561,7 +562,7 @@ class _ModelRow extends ConsumerWidget {
     // 正在使用的变体不显删除（不删正在用的语音）；其余已下载变体可删除回收。
     if (state.isReady && !isActive) {
       return IconButton(
-        icon: const Icon(Icons.delete_outline),
+        icon: const SvgActionIcon(assetName: 'assets/icon/trash-bin.svg'),
         tooltip: l10n.ttsDeleteModel,
         onPressed: () => _confirmDelete(context, ref),
       );
@@ -638,7 +639,7 @@ class _ModelStorageRow extends ConsumerWidget {
           style: theme.textTheme.bodySmall,
         ),
         trailing: IconButton(
-          icon: const Icon(Icons.delete_outline),
+          icon: const SvgActionIcon(assetName: 'assets/icon/trash-bin.svg'),
           tooltip: l10n.ttsDeleteModel,
           onPressed: () => _confirmDeleteAll(
             context,
@@ -1269,7 +1270,7 @@ class _PiperVoiceRow extends ConsumerWidget {
     }
     if (state.downloadStatus == AsrModelDownloadStatus.failed) {
       return IconButton(
-        icon: const Icon(Icons.refresh),
+        icon: const SvgActionIcon(assetName: 'assets/icon/refresh.svg'),
         iconSize: 20,
         color: theme.colorScheme.primary,
         tooltip: l10n.retryDownload,
@@ -1288,7 +1289,7 @@ class _PiperVoiceRow extends ConsumerWidget {
     }
     // 未下载：下载图标（点行亦可下载，图标提供明确入口）。
     return IconButton(
-      icon: const Icon(Icons.download_rounded),
+      icon: const SvgActionIcon(assetName: 'assets/icon/download.svg'),
       iconSize: 22,
       color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
       tooltip: l10n.ttsModelNotDownloaded,

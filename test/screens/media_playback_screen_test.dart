@@ -122,7 +122,12 @@ void main() {
   }) {
     final isolatedPlaybackStateDao =
         playbackStateDao ?? _MockPlaybackStateDao();
+    // 收藏按区间定位到当前字幕：替身使用与页面一致的字幕。
     final bookmarkDao = TestBookmarkDao();
+    if (withTranscript && transcriptFuture == null) {
+      bookmarkDao.transcripts[item.id] =
+          transcriptOverride ?? transcriptSentences;
+    }
     if (playbackStateDao == null) {
       when(() => isolatedPlaybackStateDao.getByAudioId(any()))
           .thenAnswer((_) async => null);
@@ -867,7 +872,10 @@ void main() {
       final mediaEngine = container.read(mediaEngineProvider.notifier);
       final source = args.wordHighlightSource;
       expect(args.mediaSession, isNull);
-      expect(args.sentenceIndex, 1);
+      expect(
+        args.startTimeMs,
+        transcriptSentences.last.startTime.inMilliseconds,
+      );
       expect(source.audioItemId, audioItem.id);
       expect(source.currentPosition, mediaEngine.currentPosition);
       expect(source.currentPosition, Duration.zero);
@@ -904,7 +912,7 @@ void main() {
     final extra = GoRouterState.of(detailContext).extra;
     expect(extra, isA<SentenceDetailArgs>());
     if (extra case final SentenceDetailArgs args) {
-      expect(args.sentenceIndex, 1);
+      expect(args.startTimeMs, transcriptSentences[1].startTime.inMilliseconds);
       expect(args.sentenceText, transcriptSentences[1].text);
       expect(args.audioItemId, item.id);
       expect(args.mediaSession, isNotNull);
@@ -2788,7 +2796,6 @@ class _TestFavoriteSentenceLifecycle extends Mock
       BookmarksCompanion(
         audioItemId: Value(audioItemId),
         memorySubjectId: Value('test-$audioItemId-${sentence.index}'),
-        sentenceIndex: Value(sentence.index),
         sentenceText: Value(sentence.text),
         startTime: Value(sentence.startTime.inMilliseconds / 1000.0),
         endTime: Value(sentence.endTime.inMilliseconds / 1000.0),
@@ -2799,8 +2806,9 @@ class _TestFavoriteSentenceLifecycle extends Mock
   }
 
   @override
-  Future<void> remove(String audioItemId, Set<int> sentenceIndices) {
-    return _bookmarkDao.removeBookmarks(audioItemId, sentenceIndices);
+  Future<void> remove(String audioItemId, Sentence sentence) async {
+    final located = await _bookmarkDao.getForSentence(audioItemId, sentence);
+    await _bookmarkDao.softDeleteByIds(located.bookmarks.map((b) => b.id));
   }
 }
 

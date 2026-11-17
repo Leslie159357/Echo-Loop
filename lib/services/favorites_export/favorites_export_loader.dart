@@ -22,6 +22,7 @@ import '../../models/favorites_export/favorites_export_data.dart';
 import '../../models/favorites_export/favorites_export_options.dart';
 import '../../models/sentence.dart';
 import '../../utils/text_normalize.dart';
+import '../source_sentence_anchor.dart';
 import '../pdf_export/common/pdf_ai_cache.dart';
 import '../pdf_export/common/pdf_transcript.dart';
 import 'favorites_export_definitions.dart';
@@ -125,7 +126,7 @@ class FavoritesExportLoader {
             for (final item in items)
               FavoriteSentence(
                 text: item.bookmark.sentenceText,
-                translation: translations[item.bookmark.sentenceIndex],
+                translation: translations[item.bookmark.id],
               ),
           ],
         ),
@@ -134,9 +135,10 @@ class FavoritesExportLoader {
     return groups;
   }
 
-  /// 读取某材料下收藏句的本地译文：键为收藏句的 sentenceIndex
+  /// 读取某材料下收藏句的本地译文：键为收藏句的主键 id
   ///
-  /// 收藏句的当前字幕位置经 [resolvePdfSentenceIndex] 解析（防字幕重解析后错位）；
+  /// 收藏句按时间区间定位到当前字幕，取该位置的译文缓存（键依赖当前句及前后句
+  /// 文本）。字幕替换后收藏已改写为对应的句子，定位结果与收藏文本一致。
   /// 解析失败或无缓存的句子不返回译文，不影响句子本身导出。
   Future<Map<int, String>> _loadTranslationsForAudio(
     String audioItemId,
@@ -148,23 +150,14 @@ class FavoritesExportLoader {
     final sentences = await compute(parsePdfTranscript, srt);
     if (sentences.isEmpty) return const {};
 
-    final textIndex = <String, int>{};
-    for (final s in sentences) {
-      textIndex.putIfAbsent(s.text.trim(), () => s.index);
-    }
-
-    // 收藏句 sentenceIndex → 字幕位置（解析失败的不入表）
+    // 收藏句 id → 字幕位置（来源句已删除的不入表）
     final resolved = <int, int>{};
     for (final item in items) {
-      final position = resolvePdfSentenceIndex(
-        storedIndex: item.bookmark.sentenceIndex,
-        storedText: item.bookmark.sentenceText,
-        sentences: sentences,
-        textIndex: textIndex,
+      final position = resolveSourceSentenceIndex(
+        anchorOfBookmark(item.bookmark),
+        sentences,
       );
-      if (position != null) {
-        resolved[item.bookmark.sentenceIndex] = position;
-      }
+      if (position != null) resolved[item.bookmark.id] = position;
     }
     if (resolved.isEmpty) return const {};
 

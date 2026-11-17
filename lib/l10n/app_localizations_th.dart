@@ -432,6 +432,16 @@ class AppLocalizationsTh extends AppLocalizations {
   String get waveformZoom => 'ซูม';
 
   @override
+  String get waveformZoomIn => 'Zoom in';
+
+  @override
+  String get waveformZoomOut => 'Zoom out';
+
+  @override
+  String get subtitleEditorVideoLoadFailed =>
+      'Couldn\'t load the video. You can still edit subtitles.';
+
+  @override
   String waveformLoading(int progress) {
     return 'กำลังโหลดรูปคลื่น $progress%';
   }
@@ -4231,9 +4241,6 @@ class AppLocalizationsTh extends AppLocalizations {
   String get deleteSentence => 'ลบประโยค';
 
   @override
-  String get sentenceDeleted => 'ลบประโยคแล้ว';
-
-  @override
   String get playSentence => 'เล่นประโยค';
 
   @override
@@ -4252,11 +4259,44 @@ class AppLocalizationsTh extends AppLocalizations {
   String get wordSplitBeforeAction => 'แยก';
 
   @override
-  String get saveSubtitleEdits => 'บันทึกการเปลี่ยนแปลงคำบรรยาย';
+  String get redo => 'Redo';
 
   @override
-  String get subtitleStructureChangedWarning =>
-      'การดำเนินการนี้จะล้างความคืบหน้าการเรียนรู้และประโยคที่บันทึกไว้ของเสียงนี้';
+  String get mergeWithPreviousSentence => 'Merge with previous';
+
+  @override
+  String get subtitleEditSentenceText => 'Edit text';
+
+  @override
+  String get subtitleInsertSentenceAbove => 'Insert sentence above';
+
+  @override
+  String get subtitleInsertSentenceBelow => 'Insert sentence below';
+
+  @override
+  String get subtitleInsertSentenceNoGap =>
+      'No gap here. Drag boundaries to make room first.';
+
+  @override
+  String get subtitleAddSentenceHere => 'Add sentence';
+
+  @override
+  String get subtitleNewSentenceHint => 'Type the new sentence';
+
+  @override
+  String get subtitleTextEditHint => 'Enter to save · Esc to cancel';
+
+  @override
+  String get insertWordBefore => 'Insert word before';
+
+  @override
+  String get insertWordAfter => 'Insert word after';
+
+  @override
+  String get deleteWord => 'Delete word';
+
+  @override
+  String get subtitleNewWordHint => 'New word';
 
   @override
   String get subtitleEditsSaved => 'บันทึกการเปลี่ยนแปลงคำบรรยายแล้ว';
@@ -5562,4 +5602,10 @@ class AppLocalizationsTh extends AppLocalizations {
   @override
   String get mediaTrimFailureUnexpected =>
       'Something went wrong. Please try again.';
+
+  @override
+  String get audioMenuExport => 'Export';
+
+  @override
+  String get audioMenuMoreActions => 'More actions';
 }
