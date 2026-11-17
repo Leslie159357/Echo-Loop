@@ -135,6 +135,10 @@ jobs:
           retention-days: 14
 
   build:
+    # macOS runner 在免费额度/可用性不足时会排队约 15 分钟后被取消（runner_name 为空），
+    # 把整条 CI 拖成 failure，掩盖 analyze/test 的真实结果。收包已由 ios.yml 负责，
+    # 这里只在手动触发时保留一次「能编译」的确认。
+    if: github.event_name == 'workflow_dispatch'
     needs: [analyze, test]
     timeout-minutes: 30
     strategy:
