@@ -10,7 +10,8 @@ import '../models/speech_practice_models.dart';
 final speechTranscriptMatcherProvider = Provider<SpeechTranscriptMatcher>((
   ref,
 ) {
-  return SpeechTranscriptMatcher();
+  // 本 fork 即德语版：恒用德语比对（跳过英文词形还原）。
+  return SpeechTranscriptMatcher(german: true);
 });
 
 class _IndexedToken {
@@ -29,10 +30,14 @@ class _IndexedToken {
 
 /// 将识别文本与目标句子做宽松词级比对。
 class SpeechTranscriptMatcher {
-  SpeechTranscriptMatcher({Lemmatizer? lemmatizer})
-    : _lemmatizer = lemmatizer ?? Lemmatizer();
+  /// [german] 为 true 时（德语版）跳过英文词形还原，只做小写归一化：
+  /// 英文 lemmatizerx 对德语变位词（gegangen、ging 等）不可靠，且可能误映射。
+  SpeechTranscriptMatcher({Lemmatizer? lemmatizer, bool german = false})
+    : _lemmatizer = lemmatizer ?? Lemmatizer(),
+      _german = german;
 
   final Lemmatizer _lemmatizer;
+  final bool _german;
 
   static final RegExp _wordPattern = RegExp(
     r"[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+(?:'[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+)?",
@@ -41,9 +46,9 @@ class SpeechTranscriptMatcher {
   /// 计算识别文本与目标文本的覆盖率，并输出 transcript 高亮片段。
   ///
   /// 规则：
-  /// - 只保留英文词
+  /// - 只保留字母词（德语版含 äöüß）
   /// - 全部小写
-  /// - 做词形还原
+  /// - 英文模式做词形还原；德语模式（german=true）跳过英文还原
   /// - 使用 token 级 LCS，保留基本词序
   SpeechMatchResult evaluate({
     required String referenceText,
@@ -115,6 +120,7 @@ class SpeechTranscriptMatcher {
   }
 
   String _lemmatize(String token) {
+    if (_german) return token;
     final candidates = _lemmatizer.lemmas(token);
     for (final candidate in candidates) {
       for (final lemma in candidate.lemmas) {

@@ -55,6 +55,35 @@ void main() {
       expect(result.totalTargetTokenCount, 5);
     });
 
+    test('德语模式：字面相同的德语词可通过（不做英文词形还原）', () {
+      final german = SpeechTranscriptMatcher(
+        lemmatizer: _StubLemmatizer(),
+        german: true,
+      );
+      final result = german.evaluate(
+        referenceText: 'Ich bin gegangen',
+        transcript: 'ich bin gegangen',
+      );
+
+      expect(result.status, SpeechPracticeAttemptStatus.passed);
+      expect(result.matchedTokenCount, 3);
+    });
+
+    test('德语模式：不会套用英文 lemmatizer（walks 不被还原为 walk）', () {
+      // _StubLemmatizer 只认识英文变位词。德语模式下 walks 与 walk 字面不同，
+      // 不应因英文还原而被判为相同——这证明德语分支绕过了英文词形还原。
+      final german = SpeechTranscriptMatcher(
+        lemmatizer: _StubLemmatizer(),
+        german: true,
+      );
+      final result = german.evaluate(
+        referenceText: 'walks',
+        transcript: 'walk',
+      );
+
+      expect(result.matchedTokenCount, 0);
+    });
+
     test('没有英文时返回 noEnglishDetected', () {
       final result = matcher.evaluate(
         referenceText: 'This is a test sentence',
