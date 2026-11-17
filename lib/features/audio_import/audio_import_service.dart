@@ -295,7 +295,9 @@ class AudioImportService {
         'Unsupported audio format',
       );
     }
-    if (!audioImportExtensions.contains(extension)) {
+    // 德语版：允许上游音频集，并保留 fork 视频扩展（mp4/mov/m4v/mkv）。
+    if (!audioImportExtensions.contains(extension) &&
+        !supportedExtensions.contains(extension)) {
       throw AudioImportException(
         AudioImportFailureCode.unsupportedFormat,
         'Unsupported audio format: .$extension',
