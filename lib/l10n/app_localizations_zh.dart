@@ -1413,7 +1413,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatRatingKeepGoing => '继续加油';
 
   @override
-  String get listenAndRepeatRecognitionNoEnglish => '未检测到英语';
+  String get listenAndRepeatRecognitionNoEnglish => '未检测到德语';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied => '需要麦克风和语音识别权限。';
@@ -1517,7 +1517,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retellBriefingTitle => '段落复述';
 
   @override
-  String get retellBriefingSubtitle => '先盲听一段，再用英语复述大意。';
+  String get retellBriefingSubtitle => '先盲听一段，再用德语复述大意。';
 
   @override
   String get retellBriefingSentenceLevel => '逐句';
@@ -1586,13 +1586,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retellPromptLanguage => '复述模式';
 
   @override
-  String get retellPromptLanguageOriginal => '看英文';
+  String get retellPromptLanguageOriginal => '看德语';
 
   @override
   String get retellPromptLanguageTranslation => '看译文';
 
   @override
-  String get retellPromptLanguageTranslationDesc => '字幕显示 AI 译文而非英文，对照译文用英文复述。';
+  String get retellPromptLanguageTranslationDesc => '字幕显示 AI 译文而非德语，对照译文用德语复述。';
 
   @override
   String get sentenceTranslationLoadFailed => '翻译失败，点击重试';
@@ -3520,7 +3520,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingSummaryEyebrow => '你知道么？';
 
   @override
-  String get onboardingSummaryHeadline => '提升英语听说，\n关键不在听得更多，\n而在练得更透';
+  String get onboardingSummaryHeadline => '提升德语听说，\n关键不在听得更多，\n而在练得更透';
 
   @override
   String get onboardingSummaryPoint1 => '选择适合你水平的音频反复练习';
@@ -3538,7 +3538,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingStart => '开始学习';
 
   @override
-  String get onboardingQ1Prompt => '你练习英语听说的主要目标是什么？';
+  String get onboardingQ1Prompt => '你练习德语听说的主要目标是什么？';
 
   @override
   String get onboardingQ1OptionExam => '应对考试';
@@ -4533,7 +4533,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lookupAutoSpeak => '自动发音';
 
   @override
-  String get lookupSearchHint => '输入英文单词或短语';
+  String get lookupSearchHint => '输入德语单词或短语';
 
   @override
   String get lookupRecentTitle => '最近查询';

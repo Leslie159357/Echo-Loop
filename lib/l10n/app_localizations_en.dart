@@ -1468,7 +1468,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get listenAndRepeatRecognitionNoEnglish =>
-      'No spoken English detected';
+      'No spoken German detected';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied =>
@@ -1581,7 +1581,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get retellBriefingSubtitle =>
-      'Listen and retell segment by segment. Follow the original transcript or use your own words. Visible words help you recall what you heard.';
+      'Listen and retell in German segment by segment. Follow the original transcript or use your own words. Visible words help you recall what you heard.';
 
   @override
   String get retellBriefingSentenceLevel => 'Per Sentence';
@@ -1651,14 +1651,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retellPromptLanguage => 'Retell with';
 
   @override
-  String get retellPromptLanguageOriginal => 'English';
+  String get retellPromptLanguageOriginal =>
+      'German';
 
   @override
   String get retellPromptLanguageTranslation => 'Translation';
 
   @override
   String get retellPromptLanguageTranslationDesc =>
-      'Shows the AI translation instead of the English text, so you can retell in English from the translation.';
+      'Shows the AI translation instead of the German text, so you can retell in German from the translation.';
 
   @override
   String get sentenceTranslationLoadFailed =>
@@ -3447,7 +3448,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideRetellSkipDescription =>
-      'Retelling builds spoken English fast. If you want to focus on listening for now, tap here to skip this step.';
+      'Retelling builds spoken German fast. If you want to focus on listening for now, tap here to skip this step.';
 
   @override
   String get learningProgressLoadFailed =>
@@ -3710,7 +3711,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingSummaryHeadline =>
-      'Improving listening & speaking\nisn\'t about practicing with more materials,\nit\'s about practicing more thoroughly.';
+      'Improving German listening & speaking\nisn\'t about practicing with more materials,\nit\'s about practicing more thoroughly.';
 
   @override
   String get onboardingSummaryPoint1 =>
@@ -3722,7 +3723,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingSummaryPoint3 =>
-      'Develop a natural feel for English through extensive close listening and repetition.';
+      'Develop a natural feel for German through extensive close listening and repetition.';
 
   @override
   String get onboardingSummaryPoint4 =>
@@ -3733,7 +3734,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingQ1Prompt =>
-      'What\'s your main goal for improving your listening and speaking?';
+      'What\'s your main goal for improving your German listening and speaking?';
 
   @override
   String get onboardingQ1OptionExam => 'For an exam';
@@ -4776,7 +4777,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lookupAutoSpeak => 'Auto-play pronunciation';
 
   @override
-  String get lookupSearchHint => 'Enter an English word or phrase';
+  String get lookupSearchHint =>
+      'Enter a German word or phrase';
 
   @override
   String get lookupRecentTitle => 'Recent';

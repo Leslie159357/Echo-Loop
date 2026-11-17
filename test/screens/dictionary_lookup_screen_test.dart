@@ -252,18 +252,23 @@ void main() {
       expect(find.byType(LookupDetailView), findsOneWidget);
     });
 
-    testWidgets('输入前缀时显示词表建议，最多 8 条且大小写不敏感', (tester) async {
+    testWidgets('德语版不显示英文拼写词表建议', (tester) async {
+      // 德语版不使用英文 SCOWL 词表做补全，输入前缀不出现英文建议。
       await tester.pumpWidget(_buildScreen());
       await _settle(tester);
 
       await _typeQuery(tester, 'APP');
       await _settle(tester);
 
-      expect(find.text('app'), findsOneWidget);
-      expect(find.text('apple'), findsOneWidget);
-      expect(find.text('application'), findsOneWidget);
-      expect(find.text('apply'), findsOneWidget);
-      expect(find.text('banana'), findsNothing);
+      // 正向：输入已生效，否则下面的 findsNothing 是空真
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'APP',
+      );
+      expect(find.text('app'), findsNothing);
+      expect(find.text('apple'), findsNothing);
+      expect(find.text('application'), findsNothing);
+      expect(find.text('apply'), findsNothing);
     });
 
     testWidgets('无建议时仍可直接回车查询输入内容', (tester) async {
@@ -279,26 +284,6 @@ void main() {
         find.byType(LookupDetailView),
       );
       expect(detail.query, 'Zyzzyva');
-    });
-
-    testWidgets('词表加载失败时提示建议不可用，但仍可回车查询', (tester) async {
-      await tester.pumpWidget(
-        _buildScreen(wordlist: (ref) => Future.error('词表缺失')),
-      );
-      await _settle(tester);
-
-      await _typeQuery(tester, 'app');
-      await _settle(tester);
-      expect(
-        find.text(
-          'Word list unavailable. You can still look up words directly.',
-        ),
-        findsOneWidget,
-      );
-
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      await _settle(tester);
-      expect(find.byType(LookupDetailView), findsOneWidget);
     });
 
     testWidgets('未收录的词提交后同样写入查词历史', (tester) async {
