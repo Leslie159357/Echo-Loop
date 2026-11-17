@@ -454,7 +454,10 @@ void main() {
       expect(c.read(ttsControllerProvider).configurationVersion, versionBefore);
     });
 
-    test('有效引擎真正变化时清空批次并递增版本', () async {
+    test('德语版切换引擎不改变生效目标，不打断在途预热', () async {
+      // 上游用例验证「有效引擎变化 → 清空批次 + 递增版本」。德语版所有引擎都
+      // 归一到 platform（本地 Kokoro/Piper 无德语模型），该场景不可达；此处
+      // 反过来锁住真正重要的不变量：切引擎不得打断在途的词典预热。
       final c = makeContainer(const TtsSettings(engine: TtsEngineKind.kokoro));
       addTearDown(c.dispose);
       final notifier = c.read(ttsControllerProvider.notifier);
@@ -467,10 +470,10 @@ void main() {
           .setEngine(TtsEngineKind.platform);
       await Future<void>(() {});
 
-      expect(notifier.isTextPrewarmBatchCurrent(_owner, batch), isFalse);
+      expect(notifier.isTextPrewarmBatchCurrent(_owner, batch), isTrue);
       expect(
         c.read(ttsControllerProvider).configurationVersion,
-        greaterThan(versionBefore),
+        versionBefore,
       );
     });
   });
