@@ -22,6 +22,7 @@ import '../utils/difficulty_from_ratio.dart';
 import '../database/providers.dart';
 import '../features/chatbot/widgets/sentence_chat_button.dart';
 import '../features/chatbot/sentence_passage.dart';
+import '../features/rating_prompt/rating_prompt_providers.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
@@ -53,8 +54,9 @@ import '../widgets/practice/sentence_explanation_view.dart';
 import '../widgets/practice/practice_play_count_label.dart';
 import '../widgets/practice/practice_normal_mode_view.dart';
 import '../widgets/practice/practice_progress_section.dart';
-import '../widgets/common/managed_media_visual_surface.dart';
+import '../widgets/common/practice_media_startup_host.dart';
 import '../widgets/common/practice_media_presentation_host.dart';
+import '../widgets/common/practice_media_split_layout.dart';
 import '../widgets/practice/practice_sentence_pager.dart';
 import '../widgets/study/study_activity_detector.dart';
 
@@ -214,19 +216,6 @@ class _IntensiveListenPlayerScreenState
   Future<void> _handleMediaStartupExit() async {
     await widget.mediaStartup?.cancel();
     if (mounted) context.pop();
-  }
-
-  Widget _wrapMediaStartup(Widget child) {
-    final startup = widget.mediaStartup;
-    if (startup == null) return child;
-    return ManagedMediaVisualSurface(
-      loadKey: startup.loadKey,
-      load: startup.load,
-      cancel: startup.cancel,
-      showVideoLoading: startup.showVideoLoading,
-      onReady: _handleMediaStartupReady,
-      child: child,
-    );
   }
 
   @override
@@ -530,6 +519,9 @@ class _IntensiveListenPlayerScreenState
                 isFreePlay: true,
               );
           await ref.read(learningSessionProvider.notifier).exitLearningMode();
+          await recordRatingTaskCompletion(
+            () => ref.read(ratingPromptTaskCompletionStoreProvider),
+          );
           if (mounted) context.pop();
         },
       );
@@ -598,6 +590,10 @@ class _IntensiveListenPlayerScreenState
           .completeIntensiveListenAndAutoCompleteShadowingIfNoDifficult(
             widget.audioItemId,
           );
+      // 仅用户确认完成对话框后的正常结束才记为任务完成，供评分提醒判断。
+      await recordRatingTaskCompletion(
+        () => ref.read(ratingPromptTaskCompletionStoreProvider),
+      );
     } catch (e) {
       debugPrint('精听完成处理出错: $e');
     }
@@ -695,6 +691,7 @@ class _IntensiveListenPlayerScreenState
               audioItemId: widget.audioItemId,
               isPlaying: playerState.isPlaying,
               onPlayPause: _handleCenter,
+              fillVisualSurface: true,
               builder: (context, presentation, mediaSurface) => Scaffold(
                 appBar: presentation.expanded
                     ? null
@@ -744,14 +741,22 @@ class _IntensiveListenPlayerScreenState
                         ],
                       ),
                 // 词典面板宿主：面板内嵌 body、非 modal（显示期间正文可继续点词）
-                body: _wrapMediaStartup(
-                  presentation.expanded
+                body: PracticeMediaStartupHost(
+                  startup: widget.mediaStartup,
+                  onReady: _handleMediaStartupReady,
+                  buildBody: (status) => presentation.expanded
                       ? mediaSurface
-                      : DictionaryPanelHost(
-                          key: _dictPanelHostKey,
-                          child: Column(
+                      : PracticeMediaSplitLayout(
+                          media: playerState.hasVideo ? mediaSurface : null,
+                          isMediaResizable: presentation.visualTrackVisible,
+                          videoAspectRatio: presentation.videoAspectRatio,
+                          startupStatus: status,
+                          panelHostBuilder: (child) => DictionaryPanelHost(
+                            key: _dictPanelHostKey,
+                            child: child,
+                          ),
+                          content: Column(
                             children: [
-                              if (playerState.hasVideo) mediaSurface,
                               PracticeProgressBar(
                                 current: playerState.currentSentenceIndex + 1,
                                 total: playerState.totalSentences,
@@ -1078,10 +1083,6 @@ class _IntensiveListenPlayerScreenState
   }
 }
 
-/// 普通模式视图（难句标记行 + 字幕区 + 偷看 + 倒计时 + 按钮行）
-///
-/// 倒计时使用固定 56px 高度占位，避免字幕区跳动。
-/// 布局参考难句补练 PracticeNormalModeView。
 /// 标注模式内容容器，与进度区共享左右边界。
 class _AnnotationContent extends StatelessWidget {
   final Widget child;

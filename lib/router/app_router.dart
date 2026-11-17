@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import '../analytics/analytics_observer.dart';
 import '../analytics/analytics_providers.dart';
+import '../features/account_usage/screens/account_usage_screen.dart';
 import '../features/auth/screens/account_screen.dart';
 import '../features/subscription/screens/paywall_screen.dart';
 import '../features/auth/screens/check_email_screen.dart';
@@ -29,12 +30,15 @@ import '../features/podcast/screens/podcast_preview_screen.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import '../features/onboarding_survey/screens/onboarding_survey_screen.dart';
 import '../features/subtitle_editor/subtitle_simple_editor_screen.dart';
+import '../features/media_trim/media_trim_screen.dart';
 import '../models/audio_item.dart';
 import '../providers/audio_library_provider.dart';
 import '../services/app_logger.dart';
 import '../screens/library_screen.dart';
 import '../screens/collection_detail_screen.dart';
 import '../screens/study_screen.dart';
+import '../models/favorites_export/favorites_export_options.dart';
+import '../screens/favorites_export_preview_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/learning_plan_screen.dart';
@@ -51,6 +55,7 @@ import '../screens/sentence_detail_screen.dart';
 import '../screens/pdf_preview_screen.dart';
 import '../screens/backup_restore_screen.dart';
 import '../screens/favorite_vocabulary_review_screen.dart';
+import '../screens/dictionary_lookup_screen.dart';
 import '../screens/activity_calendar_screen.dart';
 import '../screens/review_statistics_screen.dart';
 import 'main_shell.dart';
@@ -78,6 +83,7 @@ abstract class AppRoutes {
   /// 隐藏的邮箱密码登录入口（App Store / Google Play 审核员专用）。
   static const passwordSignIn = '/login/password';
   static const account = '/account';
+  static const accountUsage = '/account/usage';
 
   /// Podcast 搜索与订阅统一页，位于资源库主导航壳中。
   static const podcastSubscribeSegment = 'podcast-subscribe';
@@ -154,7 +160,15 @@ abstract class AppRoutes {
   /// 独立音频播放器页路径（不依赖合集）
   static String audioPlayer(String audioId) => '/audio/$audioId/player';
 
-  /// 简版字幕编辑页路径
+  /// 已下载媒体的独立剪辑页路径。
+  static String mediaTrim(String audioId, {String? collectionId}) => Uri(
+    path: '/audio/$audioId/trim',
+    queryParameters: collectionId == null
+        ? null
+        : {'collectionId': collectionId},
+  ).toString();
+
+  /// 简版字幕编辑页路径。
   static String subtitleEditor(String audioId) =>
       '/audio/$audioId/subtitles/edit';
 
@@ -167,6 +181,9 @@ abstract class AppRoutes {
   /// 学习材料 PDF 导出预览页路径段（挂在计划页 / 合集页之下的相对子路由）
   static const pdfPreviewSegment = 'pdf-preview';
 
+  /// 收藏导出预览页路径段（挂在收藏页之下的相对子路由）
+  static const favoritesExportPreviewSegment = 'favorites-export-preview';
+
   /// 音频详情页路径段（挂在计划页之下的相对子路由）
   static const audioDetailSegment = 'audio-detail';
   static const backupRestore = '/backup-restore';
@@ -176,6 +193,9 @@ abstract class AppRoutes {
 
   /// 活动日历页路径
   static const activityCalendar = '/activity-calendar';
+
+  /// 手动查词页路径（全屏）
+  static const dictionaryLookup = '/dictionary-lookup';
   static const reviewStatistics = '/review-statistics';
 
   /// 难句补练页路径
@@ -289,6 +309,17 @@ GoRoute _pdfPreviewRoute() => GoRoute(
   },
 );
 
+/// 收藏导出预览页子路由工厂。挂在收藏页之下，同 _pdfPreviewRoute 的防塌栈说明。
+GoRoute _favoritesExportPreviewRoute() => GoRoute(
+  path: AppRoutes.favoritesExportPreviewSegment,
+  parentNavigatorKey: rootNavigatorKey,
+  builder: (context, state) {
+    final request = state.extra;
+    if (request is! FavoritesExportRequest) return const _RestoredRoutePopper();
+    return FavoritesExportPreviewScreen(request: request);
+  },
+);
+
 /// 音频详情页子路由工厂。挂在计划页之下，同 _pdfPreviewRoute 的防塌栈说明。
 GoRoute _audioDetailRoute() => GoRoute(
   path: AppRoutes.audioDetailSegment,
@@ -321,7 +352,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (isAuthenticated && isAuthRoute) {
         return AppRoutes.settings;
       }
-      if (!isAuthenticated && state.uri.path == AppRoutes.account) {
+      if (!isAuthenticated &&
+          (state.uri.path == AppRoutes.account ||
+              state.uri.path == AppRoutes.accountUsage)) {
         return AppRoutes.settings;
       }
       // /onboarding/survey 自身路径必须早返，否则在拦截路径上产生死循环
@@ -529,7 +562,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/favorites',
                 builder: (context, state) => const FavoritesScreen(),
-                routes: [_sentenceDetailRoute()],
+                routes: [
+                  _sentenceDetailRoute(),
+                  _favoritesExportPreviewRoute(),
+                ],
               ),
             ],
           ),
@@ -588,6 +624,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AccountScreen(),
       ),
       GoRoute(
+        path: AppRoutes.accountUsage,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const AccountUsageScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.paywall,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const PaywallScreen(),
@@ -605,12 +646,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.favoriteVocabularyReview,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const FavoriteVocabularyReviewScreen(),
+        routes: [_sentenceDetailRoute()],
       ),
       // 活动日历（全屏）
       GoRoute(
         path: '/activity-calendar',
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const ActivityCalendarScreen(),
+      ),
+      // 手动查词（全屏）
+      GoRoute(
+        path: AppRoutes.dictionaryLookup,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const DictionaryLookupScreen(),
+        routes: [_sentenceDetailRoute()],
       ),
       GoRoute(
         path: AppRoutes.reviewStatistics,
@@ -668,6 +717,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       _audioPlayerRoute('/audio/:audioId/player'),
       _mediaPlayerRoute('/audio/:audioId/${AppRoutes.mediaPlayerSegment}'),
+      GoRoute(
+        path: '/audio/:audioId/trim',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final source = state.extra;
+          if (source is! AudioItem) return const _RestoredRoutePopper();
+          return MediaTrimScreen(
+            source: source,
+            collectionId: state.uri.queryParameters['collectionId'],
+          );
+        },
+      ),
       GoRoute(
         path: '/audio/:audioId/subtitles/edit',
         parentNavigatorKey: rootNavigatorKey,

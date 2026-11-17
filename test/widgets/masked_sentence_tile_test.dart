@@ -261,28 +261,6 @@ void main() {
       expect(find.byIcon(Icons.play_arrow), findsNothing);
     });
 
-    testWidgets('左侧讲解按钮宽度保持 32dp', (tester) async {
-      await tester.pumpWidget(
-        buildInteractiveTile(
-          sentence: _sentence('Hello world', index: 0),
-          onPlayFromTap: () {},
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // 讲解按钮的祖先 SizedBox 应为 32dp。
-      final sizedBoxes = tester.widgetList<SizedBox>(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey('$kMaskedSentenceExplanationHitAreaKeyPrefix-0'),
-          ),
-          matching: find.byType(SizedBox),
-        ),
-      );
-      final hasWidth32 = sizedBoxes.any((s) => s.width == 32);
-      expect(hasWidth32, true);
-    });
-
     testWidgets('isBookmarked=true 时右侧渲染已收藏图标', (tester) async {
       await tester.pumpWidget(
         buildInteractiveTile(
@@ -436,11 +414,11 @@ void main() {
         tester.widget<Text>(find.text(word)).style;
 
     testWidgets('按用户字号渲染，可见词与遮盖词一致（布局不跳动）', (tester) async {
-      await pumpWithPrefs(tester, {'reading_font_scale': 1.5});
+      await pumpWithPrefs(tester, {'subtitle_font_size_percent': 150});
 
-      final base = Theme.of(
-        tester.element(find.byType(MaskedSentenceTile)),
-      ).textTheme.bodyLarge;
+      final base = Theme.of(tester.element(find.byType(MaskedSentenceTile)))
+          .textTheme
+          .bodyLarge;
       final visible = styleOf(tester, 'love');
       expect(visible?.fontSize, (base?.fontSize ?? 16) * 1.5);
       // 遮盖词只改颜色，尺寸必须和可见词相同
@@ -450,16 +428,91 @@ void main() {
     testWidgets('默认偏好保持主题正文样式', (tester) async {
       await pumpWithPrefs(tester, {});
 
-      final base = Theme.of(
-        tester.element(find.byType(MaskedSentenceTile)),
-      ).textTheme.bodyLarge;
+      final base = Theme.of(tester.element(find.byType(MaskedSentenceTile)))
+          .textTheme
+          .bodyLarge;
       expect(styleOf(tester, 'love')?.fontSize, base?.fontSize);
     });
+  });
 
-    testWidgets('100% 档正文字号统一为 16pt', (tester) async {
-      await pumpWithPrefs(tester, {});
+  group('MaskedSentenceTile 正文替换', () {
+    testWidgets('提供 replacementTextBuilder 时显示替换内容而非原文，点击仍从该句播放', (
+      tester,
+    ) async {
+      var playFromCount = 0;
+      await tester.pumpWidget(
+        createTestApp(
+          MaskedSentenceTile(
+            sentence: _sentence('Hello world'),
+            displayMode: RetellDisplayMode.showAll,
+            keywordIndices: const {},
+            isPlayingSentence: false,
+            onPlayFromTap: () => playFromCount += 1,
+            replacementTextBuilder: (textStyle) =>
+                Text('你好世界', style: textStyle),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-      expect(styleOf(tester, 'love')?.fontSize, 16);
+      expect(find.text('你好世界'), findsOneWidget);
+      expect(find.text('Hello'), findsNothing);
+      expect(find.byType(Wrap), findsNothing);
+
+      await tester.tap(find.text('你好世界'));
+      await tester.pump();
+      expect(playFromCount, 1);
+    });
+
+    testWidgets('提供 secondaryTextBuilder 时在原文下方显示附加内容，点击仍从该句播放', (
+      tester,
+    ) async {
+      var playFromCount = 0;
+      await tester.pumpWidget(
+        createTestApp(
+          MaskedSentenceTile(
+            sentence: _sentence('Hello world'),
+            displayMode: RetellDisplayMode.showAll,
+            keywordIndices: const {},
+            isPlayingSentence: false,
+            onPlayFromTap: () => playFromCount += 1,
+            secondaryTextBuilder: (textStyle) => Text('你好世界', style: textStyle),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final original = tester.getRect(find.text('Hello'));
+      final secondary = tester.getRect(find.text('你好世界'));
+      expect(secondary.top, greaterThanOrEqualTo(original.bottom));
+
+      await tester.tap(find.text('你好世界'));
+      await tester.pump();
+      expect(playFromCount, 1);
+    });
+
+    testWidgets('secondaryTextBuilder 返回 null 时只显示原文', (tester) async {
+      await tester.pumpWidget(
+        createTestApp(
+          MaskedSentenceTile(
+            sentence: _sentence('Hello world'),
+            displayMode: RetellDisplayMode.showAll,
+            keywordIndices: const {},
+            isPlayingSentence: false,
+            secondaryTextBuilder: (_) => null,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hello'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(MaskedSentenceTile),
+          matching: find.byType(Column),
+        ),
+        findsNothing,
+      );
     });
   });
 }

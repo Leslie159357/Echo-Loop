@@ -20,6 +20,7 @@ import '../database/enums.dart';
 import '../models/practice_completion_result.dart';
 import '../features/chatbot/widgets/sentence_chat_button.dart';
 import '../features/chatbot/sentence_passage.dart';
+import '../features/rating_prompt/rating_prompt_providers.dart';
 import '../models/intensive_listen_settings.dart';
 import '../models/media_learning_startup.dart';
 import '../models/word_highlight_binding.dart';
@@ -38,6 +39,7 @@ import '../providers/listen_and_repeat/listen_and_repeat_session_state.dart';
 import '../providers/media_engine/media_engine_provider.dart';
 import '../providers/repeat_flow/repeat_flow_state.dart';
 import '../providers/sentence_ai_provider.dart';
+import '../providers/sentence_ai_prewarm.dart';
 import '../services/app_logger.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/bookmark_toggle_row.dart';
@@ -55,7 +57,8 @@ import '../widgets/common/recording_button.dart' show RecordingButtonMode;
 import '../widgets/common/repeat_practice_panel.dart';
 import '../widgets/practice/practice_progress_section.dart';
 import '../widgets/practice/practice_play_count_label.dart';
-import '../widgets/common/managed_media_visual_surface.dart';
+import '../widgets/common/practice_media_split_layout.dart';
+import '../widgets/common/practice_media_startup_host.dart';
 import '../widgets/common/practice_media_presentation_host.dart';
 import '../widgets/practice/practice_sentence_pager.dart';
 import '../widgets/study/study_activity_detector.dart';
@@ -175,20 +178,6 @@ class _ListenAndRepeatPlayerScreenState
   Future<void> _handleMediaStartupExit() async {
     await widget.mediaStartup?.cancel();
     if (mounted) context.pop();
-  }
-
-  /// 使用共享托管组件统一渲染媒体加载、失败重试和取消状态。
-  Widget _wrapMediaStartup(Widget child) {
-    final startup = widget.mediaStartup;
-    if (startup == null) return child;
-    return ManagedMediaVisualSurface(
-      loadKey: startup.loadKey,
-      load: startup.load,
-      cancel: startup.cancel,
-      showVideoLoading: startup.showVideoLoading,
-      onReady: _handleMediaStartupReady,
-      child: child,
-    );
   }
 
   @override
@@ -376,6 +365,9 @@ class _ListenAndRepeatPlayerScreenState
               .recordCatchUpCompletionIfAny(widget.audioItemId);
           await ctrl.clearBreakpoint(isFreePlay: true);
           await ctrl.exitLearningMode();
+          await recordRatingTaskCompletion(
+            () => ref.read(ratingPromptTaskCompletionStoreProvider),
+          );
           if (mounted) context.pop(PracticeCompletionResult.completed);
         },
       );
@@ -414,6 +406,9 @@ class _ListenAndRepeatPlayerScreenState
     _isExiting = true;
     await ctrl.clearBreakpoint(isFreePlay: false);
     await ctrl.completeSubStage();
+    await recordRatingTaskCompletion(
+      () => ref.read(ratingPromptTaskCompletionStoreProvider),
+    );
     await ctrl.exitLearningMode();
     if (!mounted) return;
 
@@ -611,6 +606,7 @@ class _ListenAndRepeatPlayerScreenState
               audioItemId: widget.audioItemId,
               isPlaying: isPlaying,
               onPlayPause: _handleCenter,
+              fillVisualSurface: true,
               builder: (context, presentation, mediaSurface) => Scaffold(
                 appBar: presentation.expanded
                     ? null
@@ -662,14 +658,22 @@ class _ListenAndRepeatPlayerScreenState
                         ],
                       ),
                 // 词典面板宿主：面板内嵌 body、非 modal（显示期间正文可继续点词）
-                body: _wrapMediaStartup(
-                  presentation.expanded
+                body: PracticeMediaStartupHost(
+                  startup: widget.mediaStartup,
+                  onReady: _handleMediaStartupReady,
+                  buildBody: (status) => presentation.expanded
                       ? mediaSurface
-                      : DictionaryPanelHost(
-                          key: _dictPanelHostKey,
-                          child: Column(
+                      : PracticeMediaSplitLayout(
+                          media: ctrlState.hasVideo ? mediaSurface : null,
+                          isMediaResizable: presentation.visualTrackVisible,
+                          videoAspectRatio: presentation.videoAspectRatio,
+                          startupStatus: status,
+                          panelHostBuilder: (child) => DictionaryPanelHost(
+                            key: _dictPanelHostKey,
+                            child: child,
+                          ),
+                          content: Column(
                             children: [
-                              if (ctrlState.hasVideo) mediaSurface,
                               PracticeProgressBar(
                                 current: ctrlState.sentenceIndex + 1,
                                 total: ctrlState.totalSentences,
@@ -751,6 +755,18 @@ class _ListenAndRepeatPlayerScreenState
                                                 : null,
                                             enableGuide: false,
                                             isActiveSentence: isActive,
+                                            explanationContext:
+                                                const SentenceExplanationContext(
+                                                  source: 'listenAndRepeat',
+                                                ),
+                                            prewarmTargets: isActive
+                                                ? upcomingSentencePrewarmTargets(
+                                                    sentences: ctrl.sentences,
+                                                    position: sentenceIndex,
+                                                    audioItemId:
+                                                        widget.audioItemId,
+                                                  )
+                                                : const [],
                                             onStopMainPlayer:
                                                 ctrl.enterWaitingForUser,
                                             onToolbarButtonTapped: () {

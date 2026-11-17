@@ -17,13 +17,10 @@ import '../database/enums.dart';
 import '../models/practice_completion_result.dart';
 import '../features/community_collections/models/community_collection_models.dart';
 import '../features/community_collections/widgets/community_difficulty_badge.dart';
-import '../features/rating_prompt/domain/rating_prompt_policy.dart';
-import '../features/rating_prompt/rating_prompt_providers.dart';
 import '../features/media_readiness/media_provisioner.dart';
 import '../features/media_readiness/media_readiness.dart';
 import '../features/media_readiness/media_readiness_provider.dart';
 import '../features/media_readiness/widgets/media_preparing_view.dart';
-import '../features/rating_prompt/rating_prompt_presentation_guard.dart';
 import '../models/audio_item.dart';
 import '../models/collection.dart';
 import '../models/learning_plan.dart';
@@ -68,6 +65,7 @@ import '../utils/audio_item_actions.dart';
 import '../utils/time_format.dart';
 import '../widgets/blind_listen_paragraph_sheet.dart';
 import '../widgets/common/app_popup_menu.dart';
+import '../widgets/common/svg_action_icon.dart';
 import '../widgets/intensive_listen/intensive_listen_briefing_sheet.dart';
 import '../widgets/listen_and_repeat/listen_and_repeat_briefing_sheet.dart';
 import '../widgets/common/paragraph_selection_sheet.dart'
@@ -79,6 +77,8 @@ import '../widgets/study/study_stage_visuals.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/manage_subtitles_sheet.dart';
 import '../widgets/audio_info_chip.dart';
+import '../widgets/audio_artwork.dart';
+import '../widgets/learning_progress_bar.dart';
 import '../providers/listening_practice/bookmark_manager.dart';
 import '../database/providers.dart';
 import '../providers/learning_session/sentence_playback_engine.dart';
@@ -147,11 +147,9 @@ Future<void> _openRetellPractice({
 }) async {
   final session = ref.read(learningSessionProvider.notifier);
   if (!context.mounted) return;
-  await _pushPracticeAndWaitForTransition(
+  await _pushPractice(
     context,
     AppRoutes.retellPlayer(collectionId, audioItem.id),
-    ref: ref,
-    event: RatingPromptEvent.retellCompleted,
     extra: MediaLearningStartup(
       loadKey: loadKey,
       showVideoLoading: audioItem.isVideo,
@@ -167,54 +165,13 @@ Future<void> _openRetellPractice({
   );
 }
 
-/// 推入练习页，等待 root 退场完成后在原计划页仍可见时检查评分资格。
-Future<void> _pushPracticeAndWaitForTransition(
+/// 推入练习页。评分提醒不在练习完成时触发，而由回到主页面时统一检查。
+Future<void> _pushPractice(
   BuildContext context,
   String route, {
   Object? extra,
-  required WidgetRef ref,
-  required RatingPromptEvent event,
 }) async {
-  final transition = rootRouteObserver.watchNextPop();
-  final presentation = RatingPromptPresentationGuard(
-    context: context,
-    isRootRouteCurrent: () => transition.returnedToPreviousRoute,
-  );
-  try {
-    final result = await context.push<PracticeCompletionResult>(
-      route,
-      extra: extra,
-    );
-    if (result == PracticeCompletionResult.completed) {
-      await transition.completed;
-      if (!context.mounted) return;
-      await _requestRatingAfterPractice(
-        ref,
-        event,
-        canPresent: () => presentation.canPresent,
-      );
-    }
-  } finally {
-    transition.cancel();
-  }
-}
-
-/// 评分邀请失败由独立协调器处理，不改变练习完成后的导航行为。
-Future<void> _requestRatingAfterPractice(
-  WidgetRef ref,
-  RatingPromptEvent event, {
-  required bool Function() canPresent,
-}) async {
-  try {
-    await ref
-        .read(ratingPromptCoordinatorProvider)
-        .maybeRequest(event, canPresent: canPresent);
-  } catch (error, stackTrace) {
-    AppLogger.log(
-      'RatingPrompt',
-      'coordinator unavailable error=$error\n$stackTrace',
-    );
-  }
+  await context.push<PracticeCompletionResult>(route, extra: extra);
 }
 
 /// 学习计划大阶段完成标记图标。
@@ -758,7 +715,7 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
         appPopupMenuItem(
           context,
           value: 'exportPdf',
-          icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+          icon: const Icon(Icons.ios_share, size: 20),
           label: l10n.exportPdf,
         ),
       // 与音频列表菜单保持一致：仅在已有实际学习进度时提供危险的重置操作。
@@ -1640,14 +1597,12 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
           );
           return;
         }
-        await _pushPracticeAndWaitForTransition(
+        await _pushPractice(
           context,
           AppRoutes.listenAndRepeatPlayer(
             widget.collectionId,
             widget.audioItemId,
           ),
-          ref: ref,
-          event: RatingPromptEvent.shadowingCompleted,
           extra: MediaLearningStartup(
             loadKey: '${audioItem.id}:listen-and-repeat:planned',
             showVideoLoading: audioItem.isVideo,
@@ -2080,7 +2035,14 @@ class _LearningPlanScreenState extends ConsumerState<LearningPlanScreen> {
   }
 }
 
-/// 顶部进度卡片 — 圆环进度 + 状态文字 + 逾期徽章 + 音频元信息
+/// 顶部进度卡片左侧方形封面的边长，与合集详情页素材列表项的图标一致。
+const double _kProgressCardIconSize = 56;
+
+/// 进度条右侧百分比文案的宽度，与合集详情页列表项、学习页卡片保持一致。
+const double _kProgressCardLabelWidth = 44;
+
+/// 顶部进度卡片：左侧方形封面，右侧标题、描述、元信息，底部为进度条与百分比。
+/// 结构与合集详情页素材列表项保持一致。
 class _ProgressCard extends ConsumerWidget {
   final AppLocalizations l10n;
   final LearningProgress? progress;
@@ -2097,11 +2059,8 @@ class _ProgressCard extends ConsumerWidget {
         : ref.watch(learningPlanForAudioProvider(audioItem!.id));
     final completedKeys = audioItem == null
         ? const <String>{}
-        : ref
-              .watch(learningProgressProvider)
-              .completionsFor(audioItem!.id);
+        : ref.watch(learningProgressProvider).completionsFor(audioItem!.id);
     final percent = progress?.progressPercent(plan, completedKeys) ?? 0.0;
-    final percentText = '${(percent * 100).round()}%';
 
     final canOpenDetail = audioItem != null;
     return Card(
@@ -2110,57 +2069,41 @@ class _ProgressCard extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: canOpenDetail ? () => _openAudioDetail(context) : null,
+          // 与合集详情页素材列表项的内边距一致。
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.m,
-              vertical: AppSpacing.m,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // 左侧：圆环进度
-                SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: CustomPaint(
-                    painter: _ProgressRingPainter(
-                      progress: percent,
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      progressColor: theme.colorScheme.primary,
-                    ),
-                    child: Center(
-                      child: Text(
-                        percentText,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
+                // 左侧：方形圆角封面（有订阅封面时显示封面，否则显示音频图标）
+                if (audioItem case final item?)
+                  AudioItemArtwork(
+                    audioId: item.id,
+                    size: _kProgressCardIconSize,
                   ),
-                ),
-                const SizedBox(width: AppSpacing.m),
-                // 右侧：三行信息
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 第一行：文件标题
+                      // 第一行：文件标题，单行，超出省略
                       if (audioItem case final item?)
                         Text(
                           item.name,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            letterSpacing: 0,
                           ),
                         ),
-                      // 第二行：文件描述，最多两行，超出省略
+                      // 第二行：文件描述，单行，超出省略
                       if (_getDescription() case final description?) ...[
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           description,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.outline,
@@ -2169,9 +2112,33 @@ class _ProgressCard extends ConsumerWidget {
                       ],
                       // 第三行：音频元信息
                       if (audioItem != null) ...[
-                        const SizedBox(height: AppSpacing.xs),
+                        const SizedBox(height: 4),
                         _buildAudioInfo(theme),
                       ],
+                      // 底部：进度条与数字百分比
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LearningProgressTrack(
+                              value: percent,
+                              color: learningProgressColor(theme, progress),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: _kProgressCardLabelWidth,
+                            child: Text(
+                              '${(percent * 100).round()}%',
+                              textAlign: TextAlign.end,
+                              maxLines: 1,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -2353,54 +2320,6 @@ class _FreePlayAppBarButton extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 圆环进度绘制器
-class _ProgressRingPainter extends CustomPainter {
-  final double progress;
-  final Color backgroundColor;
-  final Color progressColor;
-
-  _ProgressRingPainter({
-    required this.progress,
-    required this.backgroundColor,
-    required this.progressColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 4;
-    const strokeWidth = 6.0;
-
-    // 背景圆环
-    final bgPaint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, bgPaint);
-
-    // 进度圆弧
-    if (progress > 0) {
-      final progressPaint = Paint()
-        ..color = progressColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        2 * math.pi * progress,
-        false,
-        progressPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ProgressRingPainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }
 
 /// 学习计划阶段标题行。
@@ -3050,11 +2969,9 @@ class _FirstStudySection extends ConsumerWidget {
           );
           return;
         }
-        await _pushPracticeAndWaitForTransition(
+        await _pushPractice(
           context,
           AppRoutes.listenAndRepeatPlayer(collectionId, audioItemId),
-          ref: ref,
-          event: RatingPromptEvent.shadowingCompleted,
           extra: MediaLearningStartup(
             loadKey: '${audioItem.id}:listen-and-repeat:free-play',
             load: () async {
@@ -4261,7 +4178,10 @@ class _NoTranscriptBanner extends StatelessWidget {
               step: addSubtitleStep,
               child: FilledButton.icon(
                 onPressed: () => _showManageSubtitlesSheet(context),
-                icon: const Icon(Icons.add, size: 18),
+                icon: const SvgActionIcon(
+                  assetName: 'assets/icon/plus.svg',
+                  size: 18,
+                ),
                 label: Text(l10n.addSubtitle),
                 style: FilledButton.styleFrom(
                   backgroundColor: theme.colorScheme.onErrorContainer,

@@ -16,7 +16,8 @@ import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/providers/study_stats_provider.dart';
 import 'package:echo_loop/providers/study_task_provider.dart';
 import 'package:echo_loop/screens/study_screen.dart';
-import 'package:echo_loop/widgets/learning_progress_icon.dart';
+import 'package:echo_loop/widgets/audio_meta_line.dart';
+import 'package:echo_loop/widgets/media_type_icon.dart';
 import 'package:echo_loop/providers/time_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -130,21 +131,6 @@ void main() {
       ),
     );
   }
-
-  testWidgets('学习首页连续学习天数 badge 使用统一高度和字号', (tester) async {
-    await tester.pumpWidget(
-      createTestWidget(
-        progressState: const LearningProgressState(isLoading: false),
-        stats: const StudyStats(streak: 5),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final streakChip = find
-        .ancestor(of: find.text('5d streak'), matching: find.byType(Container))
-        .first;
-    expect(tester.getSize(streakChip).height, 33);
-  });
 
   testWidgets('无任务时显示空状态', (tester) async {
     await tester.pumpWidget(
@@ -482,6 +468,8 @@ void main() {
 
     expect(find.text('Recommended for you'), findsOneWidget);
     expect(find.text('First Study Audio'), findsOneWidget);
+    // 推荐卡：第二行元信息（与合集列表项一致），信息行下方为阶段文案。
+    expect(find.byType(AudioMetaLine), findsOneWidget);
     expect(find.textContaining('Listen sentence by sentence'), findsOneWidget);
   });
 
@@ -523,7 +511,7 @@ void main() {
     await tester.tap(find.textContaining('Completed Materials (1)'));
     await tester.pumpAndSettle();
     expect(find.text('Completed Audio'), findsOneWidget);
-    expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
+    expect(find.byType(MediaTypeIcon), findsOneWidget);
     expect(find.byIcon(Icons.check_circle), findsNothing);
   });
 
@@ -653,83 +641,6 @@ void main() {
     expect(_findSvgAsset('assets/icon/reading.svg'), findsNothing);
   });
 
-  testWidgets('学习社群入口保持紧凑高度并使用发现入口青蓝色系', (tester) async {
-    final now = DateTime(2026, 2, 25, 12, 0);
-    final audioItems = [
-      AudioItem(
-        id: 'audio-1',
-        name: 'First Study Audio',
-        audioPath: 'audios/test.mp3',
-        addedDate: now,
-      ),
-    ];
-
-    await tester.pumpWidget(
-      createTestWidget(
-        audioItems: audioItems,
-        progressState: const LearningProgressState(isLoading: false),
-        fixedNow: now,
-        recommendedMaterial: audioItems.first,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Join Community'), findsOneWidget);
-    expect(find.text('Learn, ask, and share'), findsOneWidget);
-
-    final communityDecoration = tester
-        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-        .map((box) => box.decoration)
-        .whereType<BoxDecoration>()
-        .firstWhere((decoration) {
-          final gradient = decoration.gradient;
-          return gradient is LinearGradient &&
-              gradient.colors.length == 2 &&
-              gradient.colors.first == const Color(0xFFEAF8FA) &&
-              gradient.colors.last == const Color(0xFFDDEFFA);
-        });
-
-    expect(communityDecoration.borderRadius, BorderRadius.circular(12));
-    expect(
-      (communityDecoration.border! as Border).top.color,
-      const Color(0xFFA9D5DF),
-    );
-    expect(tester.widget<Icon>(find.byIcon(Icons.group_rounded)).size, 20);
-    expect(tester.widget<Icon>(find.byIcon(Icons.chevron_right)).size, 20);
-  });
-
-  testWidgets('任务卡片中显示 LearningProgressIcon', (tester) async {
-    final now = DateTime(2026, 2, 25, 12, 0);
-    final audioItems = [
-      AudioItem(
-        id: 'audio-1',
-        name: 'Test Audio',
-        audioPath: 'audios/test.mp3',
-        addedDate: now,
-      ),
-    ];
-
-    await tester.pumpWidget(
-      createTestWidget(
-        audioItems: audioItems,
-        progressState: LearningProgressState(
-          progressMap: {
-            'audio-1': LearningProgress(
-              audioItemId: 'audio-1',
-              currentStage: LearningStage.review1,
-              updatedAt: now,
-            ),
-          },
-          isLoading: false,
-        ),
-        fixedNow: now,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(LearningProgressIcon), findsAtLeast(1));
-  });
-
   testWidgets('多个未学习音频时页面只显示一条推荐材料', (tester) async {
     final now = DateTime(2026, 2, 25, 12, 0);
     final audioItems = [
@@ -840,8 +751,8 @@ void main() {
 
     // 折叠区标题可见
     expect(find.textContaining('Recently Completed Tasks (2)'), findsOneWidget);
-    // 摘要文案可见
-    expect(find.text('Past 24 hours'), findsOneWidget);
+    // 折叠头只保留标题，不再显示摘要
+    expect(find.text('Past 24 hours'), findsNothing);
 
     // 默认折叠 —— 子项不可见
     expect(find.text('Listen without subtitles'), findsNothing);
@@ -853,17 +764,16 @@ void main() {
     expect(find.text('2h ago'), findsOneWidget);
     expect(find.text('30m ago'), findsOneWidget);
     // 媒体图标与「合集」item 同款圆环风格，不再叠加对钩徽标，避免被误认为整个
-    // 音频已学完；完成状态改由左侧绿色条传达。
+    // 音频已学完；左侧绿色条已删除，不再表达完成状态。
     final mediaIcon = tester.widget<SizedBox>(
       find.byKey(const ValueKey('recent_completion_media_icon')).first,
     );
-    expect(mediaIcon.width, 36);
-    expect(mediaIcon.height, 36);
+    expect(mediaIcon.width, 56);
+    expect(mediaIcon.height, 56);
     final accentBars = tester
         .widgetList<Container>(find.byType(Container))
-        .where((c) => c.color == LearningProgressIcon.completedColor)
-        .toList();
-    expect(accentBars.length, 2);
+        .where((c) => c.color == const Color(0xFF4CAF50));
+    expect(accentBars, isEmpty);
   });
 
   testWidgets('最近完成视频使用视频图标而不是完成对钩', (tester) async {

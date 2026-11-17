@@ -1,4 +1,5 @@
 import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/providers/bookmark_review_settings_provider.dart';
 import 'package:echo_loop/providers/favorite_review_settings_provider.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/bookmark_review/bookmark_review_settings_sheet.dart';
@@ -84,6 +85,26 @@ void main() {
     expect(find.text('正面显示词汇', skipOffstage: false), findsOneWidget);
   });
 
+  testWidgets('句子复习「显示视频画面」默认开启，关闭后写入句子复习设置', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      buildSheet(container, FavoriteReviewSettingsTask.sentence),
+    );
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const Key('bookmark-review-show-video'));
+    expect(find.text('显示视频画面'), findsOneWidget);
+    expect(container.read(bookmarkReviewSettingsProvider).showVideo, isTrue);
+
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(container.read(bookmarkReviewSettingsProvider).showVideo, isFalse);
+  });
+
   testWidgets('词汇专属开关写入共用复习设置', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -103,6 +124,31 @@ void main() {
 
     expect(
       container.read(favoriteReviewSettingsProvider).showVocabularyOnFront,
+      isTrue,
+    );
+  });
+
+  testWidgets('单词释义开关写入共用复习设置', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      buildSheet(container, FavoriteReviewSettingsTask.vocabulary),
+    );
+    await tester.pumpAndSettle();
+
+    final showDefinitionSwitch = find.descendant(
+      of: find.byKey(
+        const Key('favorite-review-show-word-definition-on-front'),
+      ),
+      matching: find.byType(Switch),
+    );
+    await tester.ensureVisible(showDefinitionSwitch);
+    await tester.tap(showDefinitionSwitch);
+    await tester.pump();
+
+    expect(
+      container.read(favoriteReviewSettingsProvider).showWordDefinitionOnFront,
       isTrue,
     );
   });

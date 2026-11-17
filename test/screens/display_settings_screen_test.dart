@@ -1,6 +1,7 @@
 import 'package:echo_loop/l10n/app_localizations.dart';
 import 'package:echo_loop/providers/learning_settings_provider.dart';
 import 'package:echo_loop/screens/display_settings_screen.dart';
+import 'package:echo_loop/screens/subtitle_text_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,5 +128,40 @@ void main() {
       prefs.getBool(LearningSettingsKeys.showPlaybackSpeedButton),
       isFalse,
     );
+  });
+
+  testWidgets('默认开启自动显示今日一刻，关闭后写入 SP 且不影响其他开关', (tester) async {
+    final prefs = await pumpScreen(tester);
+
+    final toggle = find.widgetWithText(
+      SwitchListTile,
+      'Auto-show Today’s Moment',
+    );
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(playbackSpeedButtonSwitchValue(tester), isTrue);
+    expect(prefs.getBool(LearningSettingsKeys.autoShowDailyShare), isFalse);
+  });
+
+  testWidgets('点击字幕文字入口进入字幕文字设置页', (tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.text('Subtitle Text'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SubtitleTextSettingsScreen), findsOneWidget);
+  });
+
+  testWidgets('字幕文字入口显示当前字号百分比', (tester) async {
+    await pumpScreen(
+      tester,
+      initialValues: {'subtitle_font_size_percent': 120},
+    );
+
+    expect(find.text('120%'), findsOneWidget);
   });
 }

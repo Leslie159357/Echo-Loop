@@ -1,3 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:echo_loop/providers/practice_media_split_provider.dart';
+import 'package:echo_loop/features/rating_prompt/data/rating_prompt_task_completion_store.dart';
+import 'package:echo_loop/features/rating_prompt/rating_prompt_providers.dart';
+
 // 全文盲听播放器页面 Widget 测试
 //
 // 验证共享段落骨架已经接入，页面底部只有一套播放控制，
@@ -86,6 +91,18 @@ List<List<Sentence>> _testParagraphs() {
   ];
 }
 
+class _RecordingCompletionStore extends RatingPromptTaskCompletionStore {
+  _RecordingCompletionStore(super.preferences);
+
+  final List<DateTime> records = [];
+
+  @override
+  Future<bool> recordCompletion(DateTime time) {
+    records.add(time);
+    return super.recordCompletion(time);
+  }
+}
+
 void main() {
   Widget createTestWidget({
     Locale locale = const Locale('en'),
@@ -95,6 +112,7 @@ void main() {
     bool showPlaybackSpeedButton = false,
     TestBlindListenPlayer Function(BlindListenPlayerState initialState)?
     playerFactory,
+    bool startAtHome = false,
   }) {
     final sentences = createTestSentences(count: 4);
     final initialState =
@@ -107,8 +125,20 @@ void main() {
         );
 
     final router = GoRouter(
-      initialLocation: '/collections/c1/a1/blind-listen',
+      initialLocation: startAtHome ? '/' : '/collections/c1/a1/blind-listen',
       routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () =>
+                    context.push('/collections/c1/a1/blind-listen'),
+                child: const Text('Open player'),
+              ),
+            ),
+          ),
+        ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/blind-listen',
           builder: (context, state) {
@@ -142,6 +172,10 @@ void main() {
         ...studyTimeOverrides(),
         ...learningSettingsOverrides(
           showPlaybackSpeedButton: showPlaybackSpeedButton,
+        ),
+        // 视频分栏只需默认尺寸；不全局注入 SharedPreferences，以免改变其他设置的读取来源。
+        practiceMediaSplitProvider.overrideWithBuild(
+          (ref, notifier) => PracticeMediaSplit.empty,
         ),
         ...extraOverrides,
       ]),
@@ -188,9 +222,7 @@ void main() {
       // 加载层只覆盖 Scaffold.body，不能像整页遮罩一样吞掉盲听的 AppBar。
       expect(find.text('Listen without subtitles'), findsOneWidget);
       final canvasTop = tester
-          .getTopLeft(
-            find.byKey(const ValueKey('managed-media-overlay-canvas')),
-          )
+          .getTopLeft(find.byKey(const ValueKey('media-startup-canvas')))
           .dy;
       expect(canvasTop, greaterThan(0));
       expect(starts, 0);
@@ -201,6 +233,68 @@ void main() {
       expect(find.byKey(const ValueKey('media-video-canvas')), findsOneWidget);
       expect(starts, 1);
     });
+
+    // 回归：段落任务共享骨架也要让加载占位按分栏排版，ready 前后布局不跳变。
+    for (final (label, size, splitKey) in [
+      ('宽屏', const Size(1200, 700), 'practice-media-split-side-by-side'),
+      ('窄屏', const Size(390, 844), 'practice-media-split-stacked'),
+    ]) {
+      testWidgets('$label视频加载中占位位于视频槽，内容区不可交互', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final load = Completer<MediaLoadResult>();
+        final session = TestLearningSession(
+          const LearningSessionState(
+            learningMode: LearningMode.blindListen,
+            playbackChain: LearningPlaybackChain.mediaEngine,
+          ),
+        );
+        await tester.pumpWidget(
+          createTestWidget(
+            mediaStartup: MediaLearningStartup(
+              loadKey: 'video-1',
+              load: () => load.future,
+              cancel: () async {},
+            ),
+            extraOverrides: [
+              learningSessionProvider.overrideWith(() => session),
+            ],
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byKey(ValueKey(splitKey)), findsOneWidget);
+        final canvas = find.byKey(const ValueKey('media-startup-canvas'));
+        final progress = find.byType(PracticeProgressBar);
+        final isSideBySide = size.width > size.height;
+        if (isSideBySide) {
+          expect(
+            tester.getTopRight(canvas).dx,
+            lessThanOrEqualTo(tester.getTopLeft(progress).dx),
+          );
+        } else {
+          expect(
+            tester.getBottomLeft(canvas).dy,
+            lessThanOrEqualTo(tester.getTopLeft(progress).dy),
+          );
+        }
+        final isProgressIgnored = tester
+            .widgetList<IgnorePointer>(
+              find.ancestor(of: progress, matching: find.byType(IgnorePointer)),
+            )
+            .any((w) => w.ignoring);
+        expect(isProgressIgnored, isTrue);
+        expect(tester.takeException(), isNull);
+
+        load.complete(MediaLoadResult.ready);
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(ValueKey(splitKey)), findsOneWidget);
+        expect(canvas, findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     testWidgets('音频启动复用加载托管层且不展示视频画布', (tester) async {
       final load = Completer<MediaLoadResult>();
@@ -483,6 +577,63 @@ void main() {
       await tester.pumpAndSettle();
 
       verifyNever(() => notificationService.canShowPrompt());
+    });
+
+    testWidgets('正常完成盲听后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = _RecordingCompletionStore(
+        await SharedPreferences.getInstance(),
+      );
+      final player = _MutableBlindListenPlayer(
+        const BlindListenPlayerState(
+          currentParagraphIndex: 0,
+          totalParagraphs: 2,
+          currentRepeatCount: 1,
+          isPlaying: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerFactory: (_) => player,
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+            // 已听满目标遍数，完成时弹出完成对话框而不是再来一遍。
+            learningSessionProvider.overrideWith(
+              () => TestLearningSession(
+                const LearningSessionState(
+                  learningMode: LearningMode.blindListen,
+                  blindListenPassCount: 1,
+                  targetBlindListenPasses: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+
+      player.emit(player.state.copyWith(stepFinished: true, isPlaying: false));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(store.records, isEmpty, reason: '未确认完成对话框前不记录');
+
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(Dialog),
+              matching: find.byType(FilledButton),
+            )
+            .last,
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
     });
 
     // 盲听页面不再支持点词查词（已移除 onWordTap）

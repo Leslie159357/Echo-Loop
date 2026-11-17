@@ -58,6 +58,7 @@ import 'package:flutter_riverpod/misc.dart';
 // 共享替身
 import '../../test/helpers/shared/fake_notifiers.dart';
 import '../../test/helpers/shared/fake_daos.dart';
+import '../../test/helpers/mock_providers.dart' show dedupeOverrides;
 import '../../test/helpers/shared/test_fixtures.dart';
 export '../../test/helpers/shared/test_fixtures.dart';
 
@@ -419,6 +420,7 @@ Widget createTestApp() {
 Widget createTestAppWithAudio({
   LearningProgress? progressOverride,
   AudioItem? audioItemOverride,
+  List<Override> extraOverrides = const [],
 }) {
   final audioItem = audioItemOverride ?? createTestAudioItem();
   final collection = createTestCollection();
@@ -427,8 +429,9 @@ Widget createTestAppWithAudio({
       progressOverride ??
       createTestLearningProgress(currentStageStartedAt: DateTime.now());
 
+  // extraOverrides 可替换默认替身（如带字幕的 audioEngineProvider），按「后者生效」去重。
   return ProviderScope(
-    overrides: [
+    overrides: dedupeOverrides([
       ...onboardingTestOverrides(),
       ...learningSettingsTestOverrides(),
       showOfflineAsrSectionProvider.overrideWithValue(false),
@@ -472,7 +475,8 @@ Widget createTestAppWithAudio({
         TestReviewReminderService(),
       ),
       savedWordDaoProvider.overrideWithValue(TestSavedWordDao()),
-    ],
+      ...extraOverrides,
+    ]),
     child: _AudioPreloadWrapper(
       audioItem: audioItem,
       collection: collection,

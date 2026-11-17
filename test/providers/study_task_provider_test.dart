@@ -1105,8 +1105,8 @@ void main() {
 
       final completed = container.read(completedAudioProvider);
       expect(completed.length, 2);
-      expect(completed[0].audioName, 'Completed');
-      expect(completed[1].audioName, 'Also Completed');
+      expect(completed[0].name, 'Completed');
+      expect(completed[1].name, 'Also Completed');
     });
 
     test('无已完成音频时返回空列表', () {
@@ -1141,12 +1141,14 @@ void main() {
   group('selectStudyRecommendation', () {
     final now = DateTime(2026, 10, 11, 12);
 
-    AudioItem material(String id, String name) => AudioItem(
-      id: id,
-      name: name,
-      audioPath: 'materials/$id.mp3',
-      addedDate: now,
-    );
+    AudioItem material(String id, String name, {bool hasSubtitle = true}) =>
+        AudioItem(
+          id: id,
+          name: name,
+          audioPath: 'materials/$id.mp3',
+          addedDate: now,
+          transcriptSource: hasSubtitle ? TranscriptSource.local : null,
+        );
 
     RecentCompletion completion(String audioId, DateTime completedAt) =>
         RecentCompletion(
@@ -1199,6 +1201,62 @@ void main() {
       );
 
       expect(result?.id, 'planned');
+    });
+
+    test('没有字幕的材料不推荐，即使它是最近学习的材料', () {
+      final result = selectStudyRecommendation(
+        materials: [
+          material('no-subtitle', 'No Subtitle', hasSubtitle: false),
+          material('with-subtitle', 'With Subtitle'),
+        ],
+        progressByAudioId: {},
+        playbackSavedAtByAudioId: {
+          'no-subtitle': now.add(const Duration(hours: 5)),
+          'with-subtitle': now.add(const Duration(hours: 1)),
+        },
+        latestCompletionAtByAudioId: const {},
+        recentCompletions: const [],
+      );
+
+      expect(result?.id, 'with-subtitle');
+    });
+
+    test('待解锁的复习材料不推荐，即使它是最近学习的材料', () {
+      final result = selectStudyRecommendation(
+        materials: [material('locked', 'Locked'), material('free', 'Free')],
+        progressByAudioId: {
+          'locked': LearningProgress(
+            audioItemId: 'locked',
+            currentStage: LearningStage.review1,
+            lastStageCompletedAt: now,
+            updatedAt: now,
+          ),
+        },
+        playbackSavedAtByAudioId: {'locked': now.add(const Duration(hours: 1))},
+        latestCompletionAtByAudioId: const {},
+        recentCompletions: const [],
+      );
+
+      expect(result?.id, 'free');
+    });
+
+    test('已到时间的待复习材料也不推荐，它已在「待复习」分组中展示', () {
+      final result = selectStudyRecommendation(
+        materials: [material('ready', 'Ready'), material('free', 'Free')],
+        progressByAudioId: {
+          'ready': LearningProgress(
+            audioItemId: 'ready',
+            currentStage: LearningStage.review1,
+            lastStageCompletedAt: now.subtract(const Duration(days: 365)),
+            updatedAt: now,
+          ),
+        },
+        playbackSavedAtByAudioId: {'ready': now.add(const Duration(hours: 1))},
+        latestCompletionAtByAudioId: const {},
+        recentCompletions: const [],
+      );
+
+      expect(result?.id, 'free');
     });
 
     test('随心听播放、两类学习断点和完成记录都能标记最近学习', () {

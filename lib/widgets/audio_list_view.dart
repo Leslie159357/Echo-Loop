@@ -1,11 +1,10 @@
 // 音频列表视图
 //
-// 展示音频列表，支持排序。同时用于资源库全局列表和合集详情页。
-// - items 为 null 时从 audioLibraryProvider 读取（全局场景）
-// - items 非 null 时使用传入的列表（合集场景）
+// 展示调用方传入的音频列表，支持排序。用于合集详情页与全局搜索结果。
 // 排序逻辑统一使用 audioListSettingsProvider。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/audio_item.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/audio_list_settings_provider.dart';
@@ -15,6 +14,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'audio_list_tile.dart';
 import 'common/app_popup_menu.dart';
+import 'common/svg_action_icon.dart';
 import 'dialogs/confirm_dialog.dart';
 import 'edit_collection_membership_sheet.dart';
 import 'edit_tag_membership_sheet.dart';
@@ -81,8 +81,8 @@ List<AudioItem> sortAudioItems(List<AudioItem> items, AudioSortType sortType) {
 
 /// 音频列表视图 — 资源库全局列表和合集详情页共用
 class AudioListView extends ConsumerStatefulWidget {
-  /// 外部传入的音频列表（合集场景），为 null 时从 provider 读取
-  final List<AudioItem>? items;
+  /// 要展示的音频列表，由调用方决定数据来源（合集或搜索结果）
+  final List<AudioItem> items;
 
   /// 合集 ID — 传递给 AudioListTile
   final String? collectionId;
@@ -122,9 +122,15 @@ class AudioListView extends ConsumerStatefulWidget {
   /// 多选模式下点击某项时回调 —— 切换该 id 选中态（由外层注入）。
   final ValueChanged<String>? onToggleSelection;
 
+  /// 合集内搜索的原始输入，透传给每个 [AudioListTile] 用于高亮。
+  final String searchQuery;
+
+  /// 外部持有的滚动控制器。合集详情页用它在进入/退出搜索时保存并恢复滚动位置。
+  final ScrollController? scrollController;
+
   const AudioListView({
     super.key,
-    this.items,
+    required this.items,
     this.collectionId,
     this.emptyState,
     this.header,
@@ -137,6 +143,8 @@ class AudioListView extends ConsumerStatefulWidget {
     this.selectedIds = const {},
     this.onEnterSelection,
     this.onToggleSelection,
+    this.searchQuery = '',
+    this.scrollController,
   });
 
   @override
@@ -152,10 +160,7 @@ class _AudioListViewState extends ConsumerState<AudioListView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    // 数据来源：外部传入 or provider
-    final List<AudioItem> audioItems =
-        widget.items ??
-        ref.watch(audioLibraryProvider.select((s) => s.audioItems));
+    final List<AudioItem> audioItems = widget.items;
 
     // 受控模式（overrideSortType 非 null）下不再 watch provider，避免全局排序
     // 变化把社区合集详情页的独立 sort state 误刷。
@@ -192,6 +197,7 @@ class _AudioListViewState extends ConsumerState<AudioListView> {
     final header = widget.header;
     final headerCount = header == null ? 0 : 1;
     final listView = ListView.builder(
+      controller: widget.scrollController,
       padding: header == null ? const EdgeInsets.all(8) : EdgeInsets.zero,
       physics: widget.scrollPhysics,
       itemCount: sortedItems.length + headerCount,
@@ -203,6 +209,7 @@ class _AudioListViewState extends ConsumerState<AudioListView> {
         final tile = AudioListTile(
           audioItem: item,
           collectionId: widget.collectionId,
+          searchQuery: widget.searchQuery,
           menuStep: (isFirst && showMenuGuide) ? stepAudioMenu : null,
           onManageCollections: () =>
               _showManageCollectionsSheet(context, item.id),
@@ -539,7 +546,7 @@ class _DefaultEmptyState extends StatelessWidget {
             onPressed: () {
               showImportAudioSheet(context);
             },
-            icon: const Icon(Icons.add),
+            icon: const SvgActionIcon(assetName: 'assets/icon/plus.svg'),
             label: Text(l10n.addAudio),
           ),
         ],
@@ -556,6 +563,9 @@ class _DefaultEmptyState extends StatelessWidget {
 /// **受控模式**（`allowedTypes` + `current` + `onChanged` 三者非 null）：
 /// 菜单内容完全由调用方决定，状态也由调用方管理，provider 不参与。
 /// 社区合集详情页用此模式避免全局 sort 被污染。
+/// 排序按钮图标（SVG，与合集搜索图标同一套线性风格）。
+const _sortIconAsset = 'assets/icon/sort.svg';
+
 class AudioSortButton extends ConsumerWidget {
   /// 受控模式：显示的选项子集（按数组顺序）。为 null 走默认模式。
   final List<AudioSortType>? allowedTypes;
@@ -575,6 +585,8 @@ class AudioSortButton extends ConsumerWidget {
 
   bool get _isControlled =>
       allowedTypes != null && current != null && onChanged != null;
+
+  Widget _sortIcon() => const SvgActionIcon(assetName: _sortIconAsset);
 
   /// 每种 SortType 对应的 i18n 标签
   String _labelFor(AudioSortType t, AppLocalizations l10n) {
@@ -604,7 +616,7 @@ class AudioSortButton extends ConsumerWidget {
       final types = allowedTypes!;
       final cur = current!;
       return PopupMenuButton<AudioSortType>(
-        icon: const Icon(Icons.sort),
+        icon: _sortIcon(),
         onSelected: (t) => onChanged!(t),
         itemBuilder: (context) => [
           for (final t in types)
@@ -615,7 +627,7 @@ class AudioSortButton extends ConsumerWidget {
 
     // 默认模式：读写全局 provider，固定 4 项
     return PopupMenuButton<AudioSortType>(
-      icon: const Icon(Icons.sort),
+      icon: _sortIcon(),
       onSelected: (type) {
         ref.read(audioListSettingsProvider.notifier).setSortType(type);
       },

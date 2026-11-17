@@ -166,6 +166,109 @@ void main() {
     expect(ratingBar.bottom - button.bottom, closeTo(0, 0.1));
   });
 
+  testWidgets('rating action height stays capped on wide layouts', (
+    tester,
+  ) async {
+    const actions = [
+      FlashcardRatingAction(
+        rating: MemoryRating.again,
+        emoji: '😕',
+        label: 'Forgot',
+        detail: '10 min',
+      ),
+      FlashcardRatingAction(
+        rating: MemoryRating.good,
+        emoji: '🙂',
+        label: 'Remembered',
+        detail: '1 day',
+      ),
+      FlashcardRatingAction(
+        rating: MemoryRating.easy,
+        emoji: '😎',
+        label: 'Easy',
+        detail: '2 days',
+      ),
+    ];
+    Future<double> buttonHeightAt(double width) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: width,
+              child: FlashcardRatingActionBar(
+                actions: actions,
+                onSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      return tester
+          .getSize(find.byKey(const Key('flashcard-rating-good')))
+          .height;
+    }
+
+    // 手机宽度保持按宽高比得到的高度，宽屏不再随宽度继续拉高。
+    expect(await buttonHeightAt(300), closeTo((300 - 16) / 3 / 1.45, 0.5));
+    expect(await buttonHeightAt(2000), 80);
+  });
+
+  testWidgets('rating actions use distinct colors per rating and theme', (
+    tester,
+  ) async {
+    const actions = [
+      FlashcardRatingAction(
+        rating: MemoryRating.again,
+        emoji: '😕',
+        label: 'Forgot',
+      ),
+      FlashcardRatingAction(
+        rating: MemoryRating.good,
+        emoji: '🙂',
+        label: 'Remembered',
+      ),
+      FlashcardRatingAction(
+        rating: MemoryRating.easy,
+        emoji: '😎',
+        label: 'Easy',
+      ),
+    ];
+    Future<List<Color?>> backgroundsFor(Brightness brightness) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: Scaffold(
+            body: FlashcardRatingActionBar(
+              actions: actions,
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+      // MaterialApp 切换主题带过渡动画，等动画结束再读取配色。
+      await tester.pumpAndSettle();
+      return [
+        for (final rating in ['again', 'good', 'easy'])
+          tester
+              .widget<OutlinedButton>(
+                find.byKey(Key('flashcard-rating-$rating')),
+              )
+              .style
+              ?.backgroundColor
+              ?.resolve({}),
+      ];
+    }
+
+    final light = await backgroundsFor(Brightness.light);
+    final dark = await backgroundsFor(Brightness.dark);
+    expect(light.toSet(), hasLength(3));
+    expect(dark.toSet(), hasLength(3));
+    for (var i = 0; i < 3; i++) {
+      expect(dark[i], isNot(light[i]));
+    }
+  });
+
   testWidgets('rating actions with details fit a compact three-action footer', (
     tester,
   ) async {
@@ -210,45 +313,6 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('8/14 17:30'), findsOneWidget);
     expect(find.byType(OutlinedButton), findsNWidgets(3));
-  });
-
-  testWidgets('rating details are subdued and absent details enlarge emoji', (
-    tester,
-  ) async {
-    const actions = [
-      FlashcardRatingAction(
-        rating: MemoryRating.again,
-        emoji: '😕',
-        label: 'Forgot',
-        detail: 'in 59 seconds',
-      ),
-      FlashcardRatingAction(
-        rating: MemoryRating.good,
-        emoji: '🙂',
-        label: 'Remembered',
-      ),
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(
-          width: 320,
-          child: FlashcardRatingActionBar(actions: actions, onSelected: (_) {}),
-        ),
-      ),
-    );
-
-    final detailText = tester.widget<Text>(find.text('in 59 seconds'));
-    final detailStyle = detailText.style;
-    expect(detailStyle?.fontSize, 11);
-    expect(
-      detailStyle?.color,
-      Theme.of(
-        tester.element(find.text('in 59 seconds')),
-      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-    );
-    expect(tester.widget<Text>(find.text('😕')).style?.fontSize, 22);
-    expect(tester.widget<Text>(find.text('🙂')).style?.fontSize, 30);
   });
 
   testWidgets('bookmark review rating labels follow the active locale', (

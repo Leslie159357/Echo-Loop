@@ -13,6 +13,7 @@ import '../database/daos/stage_completion_dao.dart';
 import '../database/enums.dart';
 import '../l10n/app_localizations.dart';
 import '../models/audio_item.dart';
+import '../models/learning_progress.dart';
 import '../providers/audio_library_provider.dart';
 import '../providers/learning_plan_provider.dart';
 import '../providers/learning_progress_provider.dart';
@@ -23,16 +24,26 @@ import '../providers/study_task_provider.dart';
 import '../providers/time_provider.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../theme/list_item_text_styles.dart';
 import '../services/app_logger.dart';
 import '../services/startup_trace.dart';
 import '../widgets/guide_flow.dart';
-import '../widgets/learning_progress_icon.dart';
-import '../widgets/media_type_icon.dart';
+import '../widgets/learning_progress_bar.dart';
+import '../widgets/audio_artwork.dart';
+import '../widgets/audio_meta_line.dart';
+import '../widgets/audio_list_tile.dart';
+import '../widgets/study/study_lookup_button.dart';
 import '../widgets/study/study_streak_badge.dart';
 import '../widgets/study/study_stats_header.dart';
 
 /// 学习 Tab 待复习分组标题图标。
 const String _studyReviewIconAsset = 'assets/icon/refresh.svg';
+
+/// 学习页任务卡与推荐卡左侧方形图标的边长。与右侧三行内容（标题、阶段、进度条）等高，与合集列表项图标一致。
+const double _kStudyCardIconSize = 56;
+
+/// 学习页卡片进度条右侧百分比文案的宽度，与合集列表项的进度文案保持一致。
+const double _kProgressLabelWidth = 44;
 
 /// 学习任务列表页
 ///
@@ -160,7 +171,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.studyTasks),
-          actions: [GuideTarget(step: stepStreakChip, child: streakChip)],
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.s),
+              child: StudyLookupButton(
+                onTap: () => context.push(AppRoutes.dictionaryLookup),
+              ),
+            ),
+            GuideTarget(step: stepStreakChip, child: streakChip),
+          ],
         ),
         // 任务或推荐尚未加载且当前无内容时显示骨架，避免冷启动闪空态。
         body:
@@ -217,12 +236,17 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                   if (upcomingReviews.isNotEmpty) ...[
                     _CollapsibleSection(
                       title: l10n.upcomingReviews(upcomingReviews.length),
-                      summary: l10n.upcomingReviewsSummary(
-                        upcomingReviews.length,
-                      ),
                       initiallyExpanded: false,
+                      expansionStorageKey: 'study-upcoming-reviews',
                       children: upcomingReviews
-                          .map((t) => _TaskCard(task: t, l10n: l10n, now: now))
+                          .map(
+                            (t) => _TaskCard(
+                              task: t,
+                              l10n: l10n,
+                              now: now,
+                              isBadgeInSubtitle: true,
+                            ),
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: AppSpacing.m),
@@ -258,7 +282,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   Widget _buildAllDoneContent(
     BuildContext context,
     AppLocalizations l10n,
-    List<({String audioId, String audioName})> completedAudios,
+    List<AudioItem> completedAudios,
     GuideStep stepStatsHeader,
   ) {
     return ListView(
@@ -310,7 +334,16 @@ class _TaskSection extends StatelessWidget {
         // 区段标题
         Row(
           children: [
-            SvgPicture.asset(iconAsset, width: 20, height: 20),
+            // 图标 SVG 未声明填充色，需跟随主题前景色着色，否则深色主题下会变成黑色不可见。
+            SvgPicture.asset(
+              iconAsset,
+              width: 20,
+              height: 20,
+              colorFilter: ColorFilter.mode(
+                theme.colorScheme.onSurface,
+                BlendMode.srcIn,
+              ),
+            ),
             const SizedBox(width: 6),
             Text(
               title,
@@ -321,7 +354,12 @@ class _TaskSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.s),
-        ...tasks.map((task) => _TaskCard(task: task, l10n: l10n, now: now)),
+        ...tasks.map(
+          (task) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.s),
+            child: _TaskCard(task: task, l10n: l10n, now: now),
+          ),
+        ),
       ],
     );
   }
@@ -331,77 +369,102 @@ class _TaskSection extends StatelessWidget {
 /// 整张卡片即操作入口，不再单独放置「继续 / 开始」按钮。
 class _StudyMaterialCard extends StatelessWidget {
   final String title;
-  final Color accentColor;
   final Widget leading;
   final Widget subtitle;
+
+  /// 状态角标（如逾期、可学习时间），为 null 时不展示。
+  final Widget? statusBadge;
+
+  /// 角标是否放在副标题行末尾（而非标题行右侧），避免挤占音频名称。
+  final bool isBadgeInSubtitle;
+  final LearningProgress? progress;
   final double progressPercent;
   final VoidCallback? onTap;
 
   const _StudyMaterialCard({
     required this.title,
-    required this.accentColor,
     required this.leading,
     required this.subtitle,
+    required this.progress,
     required this.progressPercent,
     required this.onTap,
+    this.statusBadge,
+    this.isBadgeInSubtitle = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // 卡片不自带外边距，纵向间距由调用方布局决定（折叠区末尾不留空白）。
     return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.s),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: IntrinsicHeight(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(width: 4, color: accentColor),
+              leading,
+              const SizedBox(width: 12),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, AppSpacing.m, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: audioTitleStyle(theme),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!isBadgeInSubtitle && statusBadge != null) ...[
+                          const SizedBox(width: AppSpacing.s),
+                          statusBadge!,
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    if (isBadgeInSubtitle && statusBadge != null)
                       Row(
                         children: [
-                          leading,
-                          const SizedBox(width: 10),
+                          Expanded(child: subtitle),
+                          const SizedBox(width: AppSpacing.s),
+                          statusBadge!,
+                        ],
+                      )
+                    else
+                      subtitle,
+                    if (progressPercent > 0) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 3),
-                                subtitle,
-                              ],
+                            child: LearningProgressTrack(
+                              value: progressPercent,
+                              color: learningProgressColor(theme, progress),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: _kProgressLabelWidth,
+                            child: Text(
+                              '${(progressPercent * 100).round()}%',
+                              textAlign: TextAlign.end,
+                              maxLines: 1,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      if (progressPercent > 0) ...[
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: progressPercent,
-                            minHeight: 4,
-                            color: accentColor,
-                            backgroundColor:
-                                theme.colorScheme.surfaceContainerHighest,
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
             ],
@@ -427,16 +490,9 @@ class _RecommendedMaterialCard extends ConsumerWidget {
     final stage = progress?.currentStage ?? LearningStage.firstLearn;
     final subStage = progress?.currentSubStage ?? SubStageType.blindListen;
     final completedKeys = progressState.completionsFor(material.id);
-    final hasRoundProgress = completedKeys.any(
-      (key) => key.startsWith('${stage.key}:'),
-    );
     final plan = ref.watch(learningPlanForAudioProvider(material.id));
     final progressPercent =
         progress?.progressPercent(plan, completedKeys) ?? 0.0;
-    final statusText = hasRoundProgress ? l10n.learningInProgress : '';
-    final accentColor = AppTheme.studyRecommendationAccentColor(
-      theme.brightness,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,36 +529,32 @@ class _RecommendedMaterialCard extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.s),
-        _StudyMaterialCard(
-          title: material.name,
-          accentColor: accentColor,
-          leading: LearningProgressIcon(
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.s),
+          child: _StudyMaterialCard(
+            title: material.name,
+            leading: AudioItemArtwork(
+              audioId: material.id,
+              size: _kStudyCardIconSize,
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AudioMetaLine(audio: material, showTranscriptBadge: false),
+                const SizedBox(height: 3),
+                Text(
+                  _stageSubStageLabel(l10n, stage, subStage),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
             progress: progress,
-            size: 36,
-            iconSize: 18,
-            isVideo: material.isVideo,
+            progressPercent: progressPercent,
+            onTap: () => context.push(AppRoutes.audioLearningPlan(material.id)),
           ),
-          subtitle: Wrap(
-            spacing: AppSpacing.s,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                _stageSubStageLabel(l10n, stage, subStage),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (statusText.isNotEmpty)
-                _StatusBadge(
-                  text: statusText,
-                  isOverdue: false,
-                  isInProgress: true,
-                ),
-            ],
-          ),
-          progressPercent: progressPercent,
-          onTap: () => context.push(AppRoutes.audioLearningPlan(material.id)),
         ),
       ],
     );
@@ -534,42 +586,137 @@ class _RecommendedMaterialCard extends ConsumerWidget {
   }
 }
 
-/// 可折叠区段（标题 + 摘要 + 展开后的内容）
+/// 展开后的内容区：灰色底衬托出条目卡片，条目保持自身背景色。
+/// 左右不留内边距，条目卡片占满整行宽度；条目之间与顶部用 AppSpacing.s 分隔，末尾不留空白。
+/// 条目外侧不应再自带左右或底部间距（如 AudioListTile 需传 outerPadding: zero）。
+Widget _buildExpandedArea(BuildContext context, List<Widget> items) {
+  final theme = Theme.of(context);
+  return ColoredBox(
+    color: theme.colorScheme.surfaceContainerLowest,
+    child: Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.s),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < items.length; index++) ...[
+            if (index > 0) const SizedBox(height: AppSpacing.s),
+            items[index],
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// 可折叠区段的卡片外壳：展开后在浅色主题下补细边框。
+///
+/// 浅色下白色区段落在白底上边界不明显，仅展开时加边框；折叠态沿用卡片主题。
+///
+/// 展开状态会在页面路由内记住：列表滚动或数据刷新导致条目 State 被重建时，
+/// 不应把用户已展开的区段重置回 initiallyExpanded。冷启动后仍按 initiallyExpanded 折叠。
+class _ExpansionCard extends StatefulWidget {
+  final Widget title;
+  final Widget? subtitle;
+  final bool initiallyExpanded;
+  final EdgeInsetsGeometry childrenPadding;
+  final List<Widget> children;
+
+  /// 同一页面内唯一的展开状态存储键。
+  final String expansionStorageKey;
+
+  const _ExpansionCard({
+    required this.title,
+    required this.subtitle,
+    required this.initiallyExpanded,
+    required this.childrenPadding,
+    required this.children,
+    required this.expansionStorageKey,
+  });
+
+  @override
+  State<_ExpansionCard> createState() => _ExpansionCardState();
+}
+
+class _ExpansionCardState extends State<_ExpansionCard> {
+  late bool _isExpanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = _readStoredExpansion() ?? widget.initiallyExpanded;
+  }
+
+  /// 展开状态存入路由级 PageStorage（路由存活期间有效），不会跨冷启动保留。
+  bool? _readStoredExpansion() {
+    final stored = PageStorage.maybeOf(
+      context,
+    )?.readState(context, identifier: widget.expansionStorageKey);
+    return stored is bool ? stored : null;
+  }
+
+  void _handleExpansionChanged(bool expanded) {
+    setState(() => _isExpanded = expanded);
+    PageStorage.maybeOf(context)?.writeState(
+      context,
+      expanded,
+      identifier: widget.expansionStorageKey,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showsExpandedBorder =
+        _isExpanded && Theme.of(context).brightness == Brightness.light;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: showsExpandedBorder
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(
+                color: AppTheme.lightCardBorderColor,
+                width: 1,
+              ),
+            )
+          : null,
+      child: ExpansionTile(
+        title: widget.title,
+        subtitle: widget.subtitle,
+        initiallyExpanded: _isExpanded,
+        onExpansionChanged: _handleExpansionChanged,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        childrenPadding: widget.childrenPadding,
+        children: widget.children,
+      ),
+    );
+  }
+}
+
+/// 可折叠区段（单行标题 + 展开后的灰色内容区）
 class _CollapsibleSection extends StatelessWidget {
   final String title;
-  final String summary;
   final bool initiallyExpanded;
   final List<Widget> children;
+  final String expansionStorageKey;
 
   const _CollapsibleSection({
     required this.title,
-    required this.summary,
     required this.initiallyExpanded,
     required this.children,
+    required this.expansionStorageKey,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      child: ExpansionTile(
-        title: Text(title, style: theme.textTheme.titleSmall),
-        subtitle: Text(
-          summary,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        initiallyExpanded: initiallyExpanded,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        childrenPadding: const EdgeInsets.only(
-          left: AppSpacing.m,
-          right: AppSpacing.m,
-          bottom: AppSpacing.s,
-        ),
-        children: children,
-      ),
+    return _ExpansionCard(
+      title: Text(title, style: theme.textTheme.titleSmall),
+      subtitle: null,
+      initiallyExpanded: initiallyExpanded,
+      expansionStorageKey: expansionStorageKey,
+      // 内边距由 _buildExpandedArea 提供，便于灰色底铺满整行宽度。
+      childrenPadding: EdgeInsets.zero,
+      children: [_buildExpandedArea(context, children)],
     );
   }
 }
@@ -586,61 +733,51 @@ class _TaskCard extends ConsumerWidget {
   final AppLocalizations l10n;
   final DateTime now;
 
-  const _TaskCard({required this.task, required this.l10n, required this.now});
+  /// 待解锁区段的角标（解锁倒计时）放在副标题行末尾。
+  final bool isBadgeInSubtitle;
+
+  const _TaskCard({
+    required this.task,
+    required this.l10n,
+    required this.now,
+    this.isBadgeInSubtitle = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final stageLabel = _stageSubStageLabel(l10n, task.stage, task.subStage);
     final statusText = _statusText(context, l10n, task, now);
+    final showsStatusBadge =
+        statusText.isNotEmpty && statusText != l10n.learningInProgress;
     final isOverdue = task.isOverdue;
 
     // 获取进度数据
     final progressState = ref.watch(learningProgressProvider);
     final progress = progressState.progressMap[task.audioId];
-    final audioItem = ref
-        .watch(audioLibraryProvider)
-        .audioItems
-        .where((item) => item.id == task.audioId)
-        .firstOrNull;
     final plan = ref.watch(learningPlanForAudioProvider(task.audioId));
     final completedKeys = progressState.completionsFor(task.audioId);
     final progressPercent =
         progress?.progressPercent(plan, completedKeys) ?? 0.0;
 
-    // 左侧色条颜色
-    final accentColor = isOverdue
-        ? theme.colorScheme.error
-        : theme.colorScheme.primary;
-
     return _StudyMaterialCard(
       title: task.audioName,
-      accentColor: accentColor,
-      leading: LearningProgressIcon(
-        progress: progress,
-        size: 36,
-        iconSize: 18,
-        isVideo: audioItem?.isVideo ?? false,
+      leading: AudioItemArtwork(
+        audioId: task.audioId,
+        size: _kStudyCardIconSize,
       ),
-      subtitle: Wrap(
-        spacing: AppSpacing.s,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            stageLabel,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          if (statusText.isNotEmpty)
-            _StatusBadge(
-              text: statusText,
-              isOverdue: isOverdue,
-              isInProgress: statusText == l10n.learningInProgress,
-            ),
-        ],
+      subtitle: Text(
+        stageLabel,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       ),
+      // 学习中由进度条右侧的百分比表达，不再显示徽章。
+      statusBadge: showsStatusBadge
+          ? _StatusBadge(text: statusText, isOverdue: isOverdue)
+          : null,
+      isBadgeInSubtitle: isBadgeInSubtitle,
+      progress: progress,
       progressPercent: progressPercent,
       onTap: () async {
         ref
@@ -669,53 +806,43 @@ class _TaskCard extends ConsumerWidget {
 // ============================================================
 
 /// 已完成音频折叠区
-class _CompletedSection extends ConsumerWidget {
-  final List<({String audioId, String audioName})> completedAudios;
+class _CompletedSection extends StatelessWidget {
+  final List<AudioItem> completedAudios;
 
   const _CompletedSection({required this.completedAudios});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final audioItems = ref.watch(audioLibraryProvider).audioItems;
-    return Card(
-      child: ExpansionTile(
-        title: Text(
-          l10n.completedSection(completedAudios.length),
-          style: theme.textTheme.titleSmall,
-        ),
-        initiallyExpanded: false,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        childrenPadding: const EdgeInsets.only(
-          left: AppSpacing.m,
-          right: AppSpacing.m,
-          bottom: AppSpacing.s,
-        ),
-        children: completedAudios
-            .map(
-              (audio) => ListTile(
-                dense: true,
-                leading: MediaTypeIcon(
-                  isVideo:
-                      audioItems
-                          .where((item) => item.id == audio.audioId)
-                          .firstOrNull
-                          ?.isVideo ??
-                      false,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
-                title: Text(audio.audioName),
-                contentPadding: EdgeInsets.zero,
-                onTap: () {
-                  context.push(AppRoutes.audioLearningPlan(audio.audioId));
-                },
-              ),
-            )
-            .toList(),
+    return _ExpansionCard(
+      title: Text(
+        l10n.completedSection(completedAudios.length),
+        style: theme.textTheme.titleSmall,
       ),
+      subtitle: null,
+      initiallyExpanded: false,
+      expansionStorageKey: 'study-completed-section',
+      // 内边距由 _buildExpandedArea 提供，与其他折叠区保持一致的灰色底与间距。
+      childrenPadding: EdgeInsets.zero,
+      // 复用合集详情页的列表项，只读展示，不需要菜单按钮。
+      // 列表项外侧间距由本区段统一提供，故传 zero 让条目占满宽度。
+      children: [
+        _buildExpandedArea(
+          context,
+          completedAudios
+              .map(
+                (audio) => AudioListTile(
+                  audioItem: audio,
+                  showMenu: false,
+                  showTranscriptBadge: false,
+                  titleMaxLines: 1,
+                  outerPadding: EdgeInsets.zero,
+                ),
+              )
+              .toList(),
+        ),
+      ],
     );
   }
 }
@@ -738,34 +865,15 @@ class _RecentCompletionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: ExpansionTile(
-        title: Text(
-          l10n.recentCompletions(completions.length),
-          style: theme.textTheme.titleSmall,
-        ),
-        subtitle: Text(
-          l10n.recentCompletionsSummary,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        initiallyExpanded: false,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        childrenPadding: const EdgeInsets.only(
-          left: AppSpacing.m,
-          right: AppSpacing.m,
-          bottom: AppSpacing.s,
-        ),
-        children: completions
-            .map(
-              (c) => _RecentCompletionTile(completion: c, l10n: l10n, now: now),
-            )
-            .toList(),
-      ),
+    return _CollapsibleSection(
+      title: l10n.recentCompletions(completions.length),
+      initiallyExpanded: false,
+      expansionStorageKey: 'study-recent-completions',
+      children: completions
+          .map(
+            (c) => _RecentCompletionTile(completion: c, l10n: l10n, now: now),
+          )
+          .toList(),
     );
   }
 }
@@ -785,89 +893,44 @@ class _RecentCompletionTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final audioItems = ref.watch(audioLibraryProvider).audioItems;
-    final progress = ref
-        .watch(learningProgressProvider)
-        .progressMap[completion.audioId];
-    final isVideo =
-        audioItems
-            .where((item) => item.id == completion.audioId)
-            .firstOrNull
-            ?.isVideo ??
-        false;
     final stage = LearningStage.fromKey(completion.stage);
     final subStage = SubStageType.fromKey(completion.subStage);
     final stageLabel = _stageSubStageLabel(l10n, stage, subStage);
     final timeAgo = _timeAgo(l10n, now, completion.completedAt);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.s),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          context.push(AppRoutes.audioLearningPlan(completion.audioId));
-        },
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              // 左侧绿色条标记本条子步骤已完成（不用对钩，避免误认为整个音频已学完）。
-              Container(width: 4, color: LearningProgressIcon.completedColor),
-              // 内容区
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, AppSpacing.m, 10),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        key: const ValueKey('recent_completion_media_icon'),
-                        width: 36,
-                        height: 36,
-                        child: LearningProgressIcon(
-                          progress: progress,
-                          isVideo: isVideo,
-                          size: 36,
-                          iconSize: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              completion.audioName,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              stageLabel,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.s),
-                      _StatusBadge(
-                        text: timeAgo,
-                        isOverdue: false,
-                        isInProgress: false,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+    // 与任务卡一致：展示进度条与百分比
+    final progressState = ref.watch(learningProgressProvider);
+    final progress = progressState.progressMap[completion.audioId];
+    final plan = ref.watch(learningPlanForAudioProvider(completion.audioId));
+    final completedKeys = progressState.completionsFor(completion.audioId);
+    final progressPercent =
+        progress?.progressPercent(plan, completedKeys) ?? 0.0;
+
+    return _StudyMaterialCard(
+      title: completion.audioName,
+      leading: SizedBox(
+        key: const ValueKey('recent_completion_media_icon'),
+        width: _kStudyCardIconSize,
+        height: _kStudyCardIconSize,
+        child: AudioItemArtwork(
+          audioId: completion.audioId,
+          size: _kStudyCardIconSize,
         ),
       ),
+      subtitle: Text(
+        stageLabel,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      // 完成时间放在第二行末尾，避免挤占标题行的音频名称。
+      statusBadge: _StatusBadge(text: timeAgo, isOverdue: false),
+      isBadgeInSubtitle: true,
+      progress: progress,
+      progressPercent: progressPercent,
+      onTap: () {
+        context.push(AppRoutes.audioLearningPlan(completion.audioId));
+      },
     );
   }
 }
@@ -927,10 +990,7 @@ class _CommunityInviteCard extends ConsumerWidget {
               await launchUrl(uri);
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.m,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
                   Icon(Icons.group_rounded, size: 20, color: palette.icon),
@@ -1246,19 +1306,13 @@ String _stageName(AppLocalizations l10n, LearningStage stage) {
 class _StatusBadge extends StatelessWidget {
   final String text;
   final bool isOverdue;
-  final bool isInProgress;
 
-  const _StatusBadge({
-    required this.text,
-    required this.isOverdue,
-    required this.isInProgress,
-  });
+  const _StatusBadge({required this.text, required this.isOverdue});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // "学习中"统一使用中性色，不受逾期影响
-    final useErrorStyle = isOverdue && !isInProgress;
+    final useErrorStyle = isOverdue;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(

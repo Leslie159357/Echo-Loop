@@ -1,3 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:echo_loop/features/rating_prompt/data/rating_prompt_task_completion_store.dart';
+import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
+import 'package:echo_loop/features/rating_prompt/rating_prompt_providers.dart';
+
 // 精听播放器页面测试
 import 'dart:async';
 
@@ -14,6 +19,7 @@ import 'package:echo_loop/models/media_intensive_listen_startup.dart';
 import 'package:echo_loop/models/media_load_result.dart';
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/screens/intensive_listen_player_screen.dart';
+import 'package:echo_loop/providers/practice_media_split_provider.dart';
 import 'package:echo_loop/providers/listening_practice/listening_practice_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/learning_progress_provider.dart';
@@ -42,6 +48,17 @@ import 'package:flutter_riverpod/misc.dart';
 import '../helpers/mock_providers.dart';
 
 class _MockApiClient extends Mock implements SentenceAiApiClient {}
+
+/// 返回 [finder] 唯一命中节点的祖先中处于 ignoring 状态的 IgnorePointer。
+List<IgnorePointer> _ignoringAncestors(WidgetTester tester, Finder finder) {
+  final result = <IgnorePointer>[];
+  tester.element(finder).visitAncestorElements((ancestor) {
+    final widget = ancestor.widget;
+    if (widget is IgnorePointer && widget.ignoring) result.add(widget);
+    return true;
+  });
+  return result;
+}
 
 /// 测试用 BookmarkDao
 class _TestBookmarkDao implements BookmarkDao {
@@ -163,6 +180,18 @@ class _MutableIntensiveListenPlayer extends TestIntensiveListenPlayer {
 
   void emit(IntensiveListenState nextState) {
     state = nextState;
+  }
+}
+
+class _RecordingCompletionStore extends RatingPromptTaskCompletionStore {
+  _RecordingCompletionStore(super.preferences);
+
+  final List<DateTime> records = [];
+
+  @override
+  Future<bool> recordCompletion(DateTime time) {
+    records.add(time);
+    return super.recordCompletion(time);
   }
 }
 
@@ -299,6 +328,10 @@ void main() {
             apiClient: _MockApiClient(),
           ),
         ),
+        // 视频分栏只需默认尺寸；不全局注入 SharedPreferences，以免改变其他设置的读取来源。
+        practiceMediaSplitProvider.overrideWithBuild(
+          (ref, notifier) => PracticeMediaSplit.empty,
+        ),
         ...extraOverrides,
       ]),
       child: MaterialApp.router(
@@ -330,6 +363,77 @@ void main() {
 
       expect(find.text('Open player'), findsOneWidget);
       expect(find.byType(IntensiveListenPlayerScreen), findsNothing);
+    });
+
+    // 回归：加载期间会话尚未 initialize（hasVideo 仍为 false），加载占位也必须按
+    // 分栏布局排版，而不是顶部通栏遮罩。
+    testWidgets('宽屏视频加载中保持左右分栏，占位在左侧且内容区不可交互', (tester) async {
+      tester.view.physicalSize = const Size(1200, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final load = Completer<MediaLoadResult>();
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(),
+          mediaStartup: MediaIntensiveListenStartup(
+            loadKey: 'video-1',
+            load: () => load.future,
+            cancel: () async {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final canvas = find.byKey(const ValueKey('media-startup-canvas'));
+      final pageView = find.byKey(
+        const ValueKey('intensive-sentence-page-view'),
+      );
+      expect(
+        find.byKey(const ValueKey('practice-media-split-side-by-side')),
+        findsOneWidget,
+      );
+      expect(canvas, findsOneWidget);
+      expect(
+        tester.getTopLeft(canvas).dx,
+        lessThan(tester.getTopLeft(pageView).dx),
+      );
+      expect(_ignoringAncestors(tester, pageView), isNotEmpty);
+
+      load.complete(MediaLoadResult.ready);
+      await tester.pumpAndSettle();
+
+      expect(_ignoringAncestors(tester, pageView), isEmpty);
+    });
+
+    testWidgets('窄屏视频加载中保持上下分栏，占位在上方', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final load = Completer<MediaLoadResult>();
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(),
+          mediaStartup: MediaIntensiveListenStartup(
+            loadKey: 'video-1',
+            load: () => load.future,
+            cancel: () async {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final canvas = find.byKey(const ValueKey('media-startup-canvas'));
+      final pageView = find.byKey(
+        const ValueKey('intensive-sentence-page-view'),
+      );
+      expect(
+        find.byKey(const ValueKey('practice-media-split-stacked')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(canvas).dy,
+        lessThan(tester.getTopLeft(pageView).dy),
+      );
     });
 
     testWidgets('视频启动任务未完成时立即显示精听页加载动画', (tester) async {
@@ -417,6 +521,39 @@ void main() {
       expect(find.text('Open player'), findsOneWidget);
       expect(cancelCalls, greaterThanOrEqualTo(1));
     });
+
+    // 回归：视频被拉到最大时，学习区剩余高度仍需完整容纳盲听与讲解内容。
+    for (final isAnnotationMode in [false, true]) {
+      testWidgets('视频拉到最大时学习区不溢出（${isAnnotationMode ? '讲解' : '盲听'}）', (
+        tester,
+      ) async {
+        // 宽高比不足以切到左右布局，且学习区下限而非视频比例决定视频高度。
+        tester.view.physicalSize = const Size(700, 700);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          createTestWidget(
+            playerState: createPlayerState(
+              hasVideo: true,
+              isAnnotationMode: isAnnotationMode,
+            ),
+            extraOverrides: [
+              practiceMediaSplitProvider.overrideWithBuild(
+                (ref, notifier) =>
+                    const PracticeMediaSplit(stackedVideoFraction: 0.95),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        final contentHeight = tester
+            .getSize(find.byKey(const ValueKey('intensive-sentence-page-view')))
+            .height;
+        expect(contentHeight, greaterThan(0));
+      });
+    }
 
     testWidgets('视频会话显示共享画面', (tester) async {
       await tester.pumpWidget(
@@ -764,7 +901,10 @@ void main() {
       expect(find.byIcon(Icons.skip_previous_rounded), findsOneWidget);
       expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
       // 播放中显示暂停图标
-      expect(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)), findsOneWidget);
+      expect(
+        find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('讲解页开启速度按钮后同样显示速度按钮', (tester) async {
@@ -790,9 +930,7 @@ void main() {
     });
 
     testWidgets('轻点速度按钮选择 1.2x 后应用，播放状态不变且不弹出提示', (tester) async {
-      await tester.pumpWidget(
-        createTestWidget(showPlaybackSpeedButton: true),
-      );
+      await tester.pumpWidget(createTestWidget(showPlaybackSpeedButton: true));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('1.0x'));
@@ -810,9 +948,7 @@ void main() {
     });
 
     testWidgets('长按速度按钮后滑动到 1.5x 松手即应用', (tester) async {
-      await tester.pumpWidget(
-        createTestWidget(showPlaybackSpeedButton: true),
-      );
+      await tester.pumpWidget(createTestWidget(showPlaybackSpeedButton: true));
       await tester.pumpAndSettle();
 
       final gesture = await tester.startGesture(
@@ -830,9 +966,7 @@ void main() {
       expect(find.text('Auto · Round 1/1 · 1.5x'), findsOneWidget);
     });
 
-    testWidgets('速度按钮与上一句、播放、下一句四个按钮中心等距，360 宽度下不溢出', (
-      tester,
-    ) async {
+    testWidgets('速度按钮与上一句、播放、下一句四个按钮中心等距，360 宽度下不溢出', (tester) async {
       tester.view.physicalSize = const Size(360 * 3, 800 * 3);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -861,9 +995,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('宽屏下速度按钮与各按钮间距拉开到标准中心距 104，播放按钮仍居中', (
-      tester,
-    ) async {
+    testWidgets('宽屏下速度按钮与各按钮间距拉开到标准中心距 104，播放按钮仍居中', (tester) async {
       await tester.pumpWidget(createTestWidget(showPlaybackSpeedButton: true));
       await tester.pumpAndSettle();
 
@@ -908,6 +1040,86 @@ void main() {
             .first,
       );
       expect(opacity.opacity, 0.15);
+    });
+
+    testWidgets('正常完成精听后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = _RecordingCompletionStore(prefs);
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            currentSentenceIndex: 4,
+            totalSentences: 5,
+          ),
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+      expect(store.records, isEmpty);
+
+      // 最后一句点击完成图标，触发完成对话框。
+      await tester.tap(find.byIcon(Icons.check_circle_rounded));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(store.records, isEmpty, reason: '未确认完成对话框前不记录');
+
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(Dialog),
+              matching: find.byType(FilledButton),
+            )
+            .last,
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
+    });
+
+    testWidgets('自由练习完成后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = _RecordingCompletionStore(prefs);
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: createPlayerState(
+            currentSentenceIndex: 4,
+            totalSentences: 5,
+          ),
+          sessionState: const LearningSessionState(isFreePlay: true),
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+      expect(store.records, isEmpty);
+
+      // 最后一句点击完成图标，触发完成对话框。
+      await tester.tap(find.byIcon(Icons.check_circle_rounded));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(store.records, isEmpty, reason: '未确认完成对话框前不记录');
+
+      await tester.tap(find.text('Done'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
     });
 
     testWidgets('最后一句时下一句按钮变为完成图标且可点击', (tester) async {
@@ -1611,7 +1823,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)));
+      await tester.tap(
+        find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)),
+      );
       await tester.pumpAndSettle();
 
       expect(player.pauseCalls, 1);
@@ -1636,7 +1850,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+      await tester.tap(
+        find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+      );
       await tester.pumpAndSettle();
 
       expect(player.resumeCalls, 1);
@@ -1659,7 +1875,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+      await tester.tap(
+        find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+      );
       await tester.pumpAndSettle();
 
       expect(player.replayInDetailsCalls, 1);
@@ -1687,7 +1905,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+      await tester.tap(
+        find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+      );
       await tester.pumpAndSettle();
 
       expect(player.replayDuringCountdownCalls, 1);

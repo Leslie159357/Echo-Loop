@@ -14,11 +14,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../l10n/app_localizations.dart';
 import '../../models/retell_settings.dart';
 import '../../models/sentence.dart';
 import '../../models/word_highlight_binding.dart';
-import '../../providers/reading_text_prefs_provider.dart';
+import '../../providers/subtitle_text_prefs_provider.dart';
 import '../../providers/saved_word_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/keyword_extraction.dart';
@@ -89,6 +90,17 @@ class MaskedSentenceTile extends ConsumerWidget {
   /// 新手引导：主体区 GuideStep（非空时包 GuideTarget 高亮可播放文本区）
   final GuideStep? bodyAreaGuideStep;
 
+  /// 替换原文正文的构建器（如复述「看译文」时的译文），参数为正文样式。
+  ///
+  /// 非空时不渲染原文、遮盖与逐词高亮，点击/收藏/讲解等交互保持不变。
+  final Widget Function(TextStyle textStyle)? replacementTextBuilder;
+
+  /// 正文下方的附加文本构建器（如复述「看译文」原文档时的弱化译文），参数为正文样式。
+  ///
+  /// 与正文同在主体点击区内，点击仍从该句播放；附加文本自身可拦截点击（如订阅入口）。
+  /// 返回 null 时不显示附加文本（如仅收藏句显示译文）。
+  final Widget? Function(TextStyle textStyle)? secondaryTextBuilder;
+
   const MaskedSentenceTile({
     super.key,
     required this.sentence,
@@ -103,6 +115,8 @@ class MaskedSentenceTile extends ConsumerWidget {
     this.onBookmarkTap,
     this.explanationAreaGuideStep,
     this.bodyAreaGuideStep,
+    this.replacementTextBuilder,
+    this.secondaryTextBuilder,
   });
 
   @override
@@ -115,17 +129,20 @@ class MaskedSentenceTile extends ConsumerWidget {
     );
     // 字幕正文样式：主题正文 + 用户的学习内容字号/字体偏好（每句只算一次）
     final textStyle = ref
-        .watch(readingTextPrefsProvider)
+        .watch(subtitleTextPrefsProvider)
         .applyTo(
           theme.textTheme.bodyLarge?.copyWith(
-                height: readingBodyLineHeight,
+                height: subtitleBodyLineHeight,
                 letterSpacing: 0,
               ) ??
               const TextStyle(),
         );
     final words = tokenize(sentence.text);
     final binding = wordHighlightBinding;
-    final Widget sentenceText = binding == null
+    final replacementTextBuilder = this.replacementTextBuilder;
+    final Widget primaryText = replacementTextBuilder != null
+        ? replacementTextBuilder(textStyle)
+        : binding == null
         ? _buildMaskedText(theme, textStyle, words, savedSegments, null)
         : WordHighlightBuilder(
             text: sentence.text,
@@ -137,6 +154,14 @@ class MaskedSentenceTile extends ConsumerWidget {
               savedSegments,
               activeWordIndex,
             ),
+          );
+    final secondaryText = secondaryTextBuilder?.call(textStyle);
+    final Widget sentenceText = secondaryText == null
+        ? primaryText
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [primaryText, const SizedBox(height: 4), secondaryText],
           );
 
     return AnimatedContainer(

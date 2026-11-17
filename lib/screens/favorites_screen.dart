@@ -16,15 +16,10 @@ import '../analytics/models/event_names.dart';
 import '../features/usage/usage_event.dart';
 import '../features/usage/usage_providers.dart';
 import '../database/app_database.dart';
-import '../database/daos/audio_item_dao.dart';
 import '../database/daos/bookmark_dao.dart';
 import '../database/providers.dart';
 import '../l10n/app_localizations.dart';
 import '../models/dict_entry.dart';
-import '../models/sentence.dart';
-import '../models/word_highlight_binding.dart';
-import '../screens/sentence_detail_screen.dart';
-import '../providers/audio_engine/audio_engine_provider.dart';
 import '../providers/short_audio_player_provider.dart';
 import '../providers/tts/tts_controller_provider.dart';
 import '../providers/pronunciation/pronunciation_providers.dart';
@@ -37,18 +32,24 @@ import '../providers/new_user_guide_provider.dart';
 import '../providers/saved_sense_group_provider.dart';
 import '../providers/saved_word_provider.dart';
 import '../providers/dictionary/dictionary_registry.dart';
+import '../providers/dictionary/visible_sources_provider.dart';
 import '../services/app_logger.dart';
+import '../services/dictionary/ai_dictionary_source.dart';
 import '../services/pronunciation/local_audio_clip_player.dart';
 import '../services/pronunciation/local_audio_range_player.dart';
 import '../services/pronunciation/source_sentence_player.dart';
-import '../services/subtitle_parser.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
+import '../models/favorites_export/favorites_export_options.dart';
+import '../widgets/favorites/favorites_export_dialog.dart';
 import '../widgets/favorites/sentence_recycle_bin_sheet.dart';
+import '../widgets/favorites/source_sentence_detail_navigation.dart';
 import '../widgets/favorites/vocabulary_recycle_bin_sheet.dart';
 import '../widgets/bookmark_review/bookmark_review_settings_sheet.dart';
 import '../widgets/common/app_popup_menu.dart';
 import '../widgets/common/prewarm_visibility.dart';
+import '../widgets/dictionary/source_switcher.dart';
+import '../widgets/dictionary/dictionary_panel_host.dart';
 import '../widgets/guide_flow.dart';
 
 /// 判断 tile 是否真实位于最近滚动视口内；`cacheExtent` 保留的离屏 widget 不预热。
@@ -195,7 +196,7 @@ class _FavoritesSegment extends StatelessWidget {
 }
 
 /// 收藏页 AppBar 的更多操作。
-enum _FavoritesMoreAction { recycleBin, reviewSettings }
+enum _FavoritesMoreAction { recycleBin, reviewSettings, export }
 
 Future<AudioPlaybackResult> _playSourceSentence(
   WidgetRef ref, {
@@ -275,6 +276,30 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
       ),
       builder: (context) => BookmarkReviewSettingsSheet(
         task: FavoriteReviewSettingsTask.favorites,
+      ),
+    );
+  }
+
+  /// 导出收藏：先在弹窗中选择内容（句子 / 词汇），确认后进入预览页生成 PDF。
+  ///
+  /// 数量取自全部收藏（不区分当前子 tab），两类都可单独或同时导出。
+  Future<void> _exportFavorites() async {
+    final sentenceCount = ref.read(bookmarkListProvider).value?.length ?? 0;
+    final wordCount =
+        (ref.read(savedWordListProvider).value?.length ?? 0) +
+        (ref.read(savedSenseGroupListProvider).value?.length ?? 0);
+    final options = await showFavoritesExportDialog(
+      context,
+      sentenceCount: sentenceCount,
+      wordCount: wordCount,
+    );
+    if (options == null || !mounted) return;
+    await AppRoutes.pushNested<void>(
+      context,
+      AppRoutes.favoritesExportPreviewSegment,
+      extra: FavoritesExportRequest(
+        options: options,
+        format: FavoritesExportFormat.pdf,
       ),
     );
   }
@@ -369,6 +394,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                     unawaited(_openRecycleBin());
                   case _FavoritesMoreAction.reviewSettings:
                     unawaited(_openReviewSettings());
+                  case _FavoritesMoreAction.export:
+                    unawaited(_exportFavorites());
                 }
               },
               itemBuilder: (context) => [
@@ -377,6 +404,12 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                   value: _FavoritesMoreAction.reviewSettings,
                   icon: const Icon(Icons.tune),
                   label: l10n.bookmarkReviewSettingsTitle,
+                ),
+                appPopupMenuItem(
+                  context,
+                  value: _FavoritesMoreAction.export,
+                  icon: const Icon(Icons.ios_share),
+                  label: l10n.favoritesExportMenu,
                 ),
                 appPopupMenuItem(
                   context,
@@ -445,30 +478,34 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             ),
 
             // 内容区域（Stack：列表 + 底部悬浮按钮）
+            // 词汇列表的 AI 查词面板挂在这里，层级高于底部悬浮按钮
             Expanded(
-              child: Stack(
-                children: [
-                  // 列表（IndexedStack 保留两个 tab 的状态，切换不重建）
-                  IndexedStack(
-                    index: _currentView.index,
-                    children: [
-                      const _SentencesView(),
-                      _WordsView(
-                        // 仅词汇 tab 激活时才预热（IndexedStack 会同时构建两个 tab，
-                        // 不门控则停在句子 tab 也会为词汇起引擎合成、浪费 CPU）。
-                        isActive:
-                            isMainTabActive &&
-                            _currentView == _FavoritesView.words,
-                      ),
-                    ],
-                  ),
+              child: DictionaryPanelHost(
+                handleBackButton: true,
+                child: Stack(
+                  children: [
+                    // 列表（IndexedStack 保留两个 tab 的状态，切换不重建）
+                    IndexedStack(
+                      index: _currentView.index,
+                      children: [
+                        const _SentencesView(),
+                        _WordsView(
+                          // 仅词汇 tab 激活时才预热（IndexedStack 会同时构建两个 tab，
+                          // 不门控则停在句子 tab 也会为词汇起引擎合成、浪费 CPU）。
+                          isActive:
+                              isMainTabActive &&
+                              _currentView == _FavoritesView.words,
+                        ),
+                      ],
+                    ),
 
-                  // 底部悬浮复习按钮
-                  if (_currentView == _FavoritesView.sentences)
-                    const _FloatingSentenceReviewButton()
-                  else if (_currentView == _FavoritesView.words)
-                    const _FloatingFlashcardButton(),
-                ],
+                    // 底部悬浮复习按钮
+                    if (_currentView == _FavoritesView.sentences)
+                      const _FloatingSentenceReviewButton()
+                    else if (_currentView == _FavoritesView.words)
+                      const _FloatingFlashcardButton(),
+                  ],
+                ),
               ),
             ),
           ],
@@ -860,23 +897,18 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
     }
   }
 
-  /// 跳转到句子详情页（单句精听）
+  /// 跳转到句子详情页（单句精听）；视频材料会先加载画面再进入讲解页。
   void _openDetail() {
     final bm = widget.bookmark;
-    AppRoutes.pushNested(
-      context,
-      AppRoutes.sentenceDetailSegment,
-      extra: SentenceDetailArgs(
+    unawaited(
+      openFavoriteSentenceDetail(
+        context: context,
+        ref: ref,
         audioItemId: widget.audioId,
-        audioName: widget.audioName,
         sentenceText: bm.sentenceText,
         sentenceIndex: bm.sentenceIndex,
-        startTimeMs: (bm.startTime * 1000).round(),
-        endTimeMs: (bm.endTime * 1000).round(),
-        wordHighlightSource: _audioEngineWordHighlightSource(
-          ref,
-          widget.audioId,
-        ),
+        sentenceStartMs: (bm.startTime * 1000).round(),
+        sentenceEndMs: (bm.endTime * 1000).round(),
       ),
     );
   }
@@ -1013,109 +1045,6 @@ class _FavoriteSourceSentenceTile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 解析收藏词汇来源句进入讲解页所需的位置。
-///
-/// 新数据直接使用持久化的句序和时间；旧数据缺少其中任一字段时，改从当前
-/// 材料字幕按句序或文本恢复，避免把错误的时间范围传给讲解页。
-Future<void> _openFavoriteSourceSentenceDetail({
-  required BuildContext context,
-  required WidgetRef ref,
-  required String audioItemId,
-  required String sentenceText,
-  required int? sentenceIndex,
-  required int? sentenceStartMs,
-  required int? sentenceEndMs,
-}) async {
-  final audioItemDao = ref.read(audioItemDaoProvider);
-  final audio = await audioItemDao.getById(audioItemId);
-  if (audio == null) return;
-
-  final storedRangeIsValid =
-      sentenceStartMs != null &&
-      sentenceEndMs != null &&
-      sentenceEndMs - sentenceStartMs >= 200;
-  final storedIndexIsValid = sentenceIndex != null && sentenceIndex >= 0;
-  final storedLocation = storedRangeIsValid && storedIndexIsValid
-      ? (
-          sentenceIndex: sentenceIndex,
-          startTimeMs: sentenceStartMs,
-          endTimeMs: sentenceEndMs,
-        )
-      : null;
-  final location =
-      storedLocation ??
-      await _resolveSourceSentenceLocation(
-        audioItemDao: audioItemDao,
-        audioItemId: audioItemId,
-        sentenceText: sentenceText,
-        preferredSentenceIndex: sentenceIndex,
-      );
-  if (location == null || !context.mounted) return;
-
-  AppRoutes.pushNested(
-    context,
-    AppRoutes.sentenceDetailSegment,
-    extra: SentenceDetailArgs(
-      audioItemId: audioItemId,
-      audioName: audio.name,
-      sentenceText: sentenceText,
-      sentenceIndex: location.sentenceIndex,
-      startTimeMs: location.startTimeMs,
-      endTimeMs: location.endTimeMs,
-      wordHighlightSource: _audioEngineWordHighlightSource(ref, audioItemId),
-    ),
-  );
-}
-
-/// 收藏详情页的句子试听由全局音频引擎播放，因此显式绑定该引擎的时间轴。
-WordHighlightSource _audioEngineWordHighlightSource(
-  WidgetRef ref,
-  String audioItemId,
-) {
-  final engine = ref.read(audioEngineProvider.notifier);
-  return WordHighlightSource(
-    audioItemId: audioItemId,
-    positionStream: engine.absolutePositionStream,
-    currentPosition: engine.absoluteCurrentPosition,
-    playbackStatus: engine.wordHighlightPlaybackStatus,
-    playbackStatusStream: engine.wordHighlightPlaybackStatusStream,
-  );
-}
-
-/// 从材料字幕恢复来源句的位置；优先信任仍与文本一致的原句序。
-Future<({int sentenceIndex, int startTimeMs, int endTimeMs})?>
-_resolveSourceSentenceLocation({
-  required AudioItemDao audioItemDao,
-  required String audioItemId,
-  required String sentenceText,
-  required int? preferredSentenceIndex,
-}) async {
-  final srt = await audioItemDao.getTranscriptSrt(audioItemId);
-  if (srt == null || srt.isEmpty) return null;
-  final sentences = await SubtitleParser.parseSubtitleString(srt);
-  final normalizedText = sentenceText.trim();
-  if (normalizedText.isEmpty) return null;
-
-  final preferred =
-      preferredSentenceIndex != null &&
-          preferredSentenceIndex >= 0 &&
-          preferredSentenceIndex < sentences.length
-      ? sentences[preferredSentenceIndex]
-      : null;
-  final resolved = preferred?.text.trim() == normalizedText
-      ? preferred
-      : sentences.cast<Sentence?>().firstWhere(
-          (candidate) => candidate?.text.trim() == normalizedText,
-          orElse: () => null,
-        );
-  if (resolved == null) return null;
-  return (
-    sentenceIndex: resolved.index,
-    startTimeMs: resolved.startTime.inMilliseconds,
-    endTimeMs: resolved.endTime.inMilliseconds,
-  );
 }
 
 // ============================================================
@@ -1354,6 +1283,7 @@ class _FavoritePronunciationRow extends StatelessWidget {
     required this.text,
     this.phonetic,
     this.speakKey,
+    this.trailing,
   });
 
   final Key rowKey;
@@ -1361,6 +1291,9 @@ class _FavoritePronunciationRow extends StatelessWidget {
   final String text;
   final String? phonetic;
   final String? speakKey;
+
+  /// 行右侧的操作按钮（如 AI 查词），与发音行同高、靠右对齐
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1379,32 +1312,60 @@ class _FavoritePronunciationRow extends StatelessWidget {
       ),
     );
 
+    final pronunciation = Align(
+      alignment: Alignment.centerLeft,
+      child: normalizedPhonetic == null || normalizedPhonetic.isEmpty
+          ? speakButton
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    '/$normalizedPhonetic/',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                speakButton,
+              ],
+            ),
+    );
+
     return SizedBox(
       key: rowKey,
       width: double.infinity,
       height: 44,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: normalizedPhonetic == null || normalizedPhonetic.isEmpty
-            ? speakButton
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      '/$normalizedPhonetic/',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  speakButton,
-                ],
-              ),
+      child: Row(
+        children: [
+          Expanded(child: pronunciation),
+          if (trailing != null) trailing!,
+        ],
       ),
+    );
+  }
+}
+
+/// 词汇列表项的 AI 查词入口：直接复用查词面板的 [AiSourceButton]，样式保持一致。
+/// 点击在收藏页内打开查词面板并预选 AI 源；按钮本身不表达选中态，故 selectedId 传空。
+class _FavoriteAiLookupButton extends StatelessWidget {
+  const _FavoriteAiLookupButton({
+    required this.buttonKey,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AiSourceButton(
+      key: buttonKey,
+      selectedId: '',
+      onSelected: (_) => onPressed(),
     );
   }
 }
@@ -1498,13 +1459,30 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
     }
   }
 
+  /// 以意群类型打开 AI 查词面板；来源句随查询传入，便于面板内再次收藏时保留出处。
+  void _lookupWithAi() {
+    final phrase = widget.savedPhrase;
+    DictionaryPanelHost.of(context).show(
+      DictionaryPanelQuery(
+        word: phrase.displayText,
+        preferredSourceId: AiDictionarySource.sourceId,
+        bookmarkKind: DictionaryBookmarkKind.senseGroup,
+        audioItemId: phrase.audioItemId,
+        sentenceIndex: phrase.sentenceIndex,
+        sentenceText: phrase.sentenceText,
+        sentenceStartMs: phrase.sentenceStartMs,
+        sentenceEndMs: phrase.sentenceEndMs,
+      ),
+    );
+  }
+
   /// 打开来源句讲解；历史收藏缺少定位字段时由共享解析器回填。
   Future<void> _openSourceSentenceDetail() {
     final phrase = widget.savedPhrase;
     final audioItemId = phrase.audioItemId;
     final sentenceText = phrase.sentenceText;
     if (audioItemId == null || sentenceText == null) return Future.value();
-    return _openFavoriteSourceSentenceDetail(
+    return openFavoriteSentenceDetail(
       context: context,
       ref: ref,
       audioItemId: audioItemId,
@@ -1555,6 +1533,9 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final phrase = widget.savedPhrase;
+    final aiLookupEnabled = ref
+        .watch(visibleDictionarySourcesProvider)
+        .any((source) => source.id == AiDictionarySource.sourceId);
 
     return Dismissible(
       key: ValueKey('phrase_${phrase.id}'),
@@ -1626,6 +1607,12 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
                       buttonKey: const Key('favorite_phrase_speak'),
                       text: phrase.displayText,
                       speakKey: 'favorite-phrase:${phrase.id}',
+                      trailing: aiLookupEnabled
+                          ? _FavoriteAiLookupButton(
+                              buttonKey: const Key('favorite_phrase_ai_lookup'),
+                              onPressed: _lookupWithAi,
+                            )
+                          : null,
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     // 来源句复用收藏句行：正文试听，箭头打开讲解。
@@ -1768,7 +1755,7 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
     final audioItemId = word.audioItemId;
     final sentenceText = word.sentenceText;
     if (audioItemId == null || sentenceText == null) return Future.value();
-    return _openFavoriteSourceSentenceDetail(
+    return openFavoriteSentenceDetail(
       context: context,
       ref: ref,
       audioItemId: audioItemId,
@@ -1776,6 +1763,22 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       sentenceIndex: word.sentenceIndex,
       sentenceStartMs: word.sentenceStartMs,
       sentenceEndMs: word.sentenceEndMs,
+    );
+  }
+
+  /// 以单词类型打开 AI 查词面板；来源句随查询传入，便于面板内再次收藏时保留出处。
+  void _lookupWithAi() {
+    final word = widget.savedWord;
+    DictionaryPanelHost.of(context).show(
+      DictionaryPanelQuery(
+        word: word.word,
+        preferredSourceId: AiDictionarySource.sourceId,
+        audioItemId: word.audioItemId,
+        sentenceIndex: word.sentenceIndex,
+        sentenceText: word.sentenceText,
+        sentenceStartMs: word.sentenceStartMs,
+        sentenceEndMs: word.sentenceEndMs,
+      ),
     );
   }
 
@@ -1817,6 +1820,9 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
     final l10n = AppLocalizations.of(context)!;
     final word = widget.savedWord;
     final previewText = _collapsedPreviewText(word, widget.dictEntry);
+    final aiLookupEnabled = ref
+        .watch(visibleDictionarySourcesProvider)
+        .any((source) => source.id == AiDictionarySource.sourceId);
     return Dismissible(
       key: ValueKey('word_${word.id}'),
       direction: DismissDirection.endToStart,
@@ -1885,6 +1891,12 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
                       buttonKey: const Key('favorite_speak'),
                       text: word.word,
                       phonetic: widget.dictEntry?.phonetic,
+                      trailing: aiLookupEnabled
+                          ? _FavoriteAiLookupButton(
+                              buttonKey: const Key('favorite_word_ai_lookup'),
+                              onPressed: _lookupWithAi,
+                            )
+                          : null,
                     ),
                     // 完整释义仅在在线词典精确命中时展示。
                     if (widget.dictEntry != null) ...[

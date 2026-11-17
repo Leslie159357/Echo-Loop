@@ -25,12 +25,16 @@ import '../config/paddle_config.dart' as paddle_config;
 import '../config/revenuecat_config.dart' as revenuecat_config;
 import '../database/app_database.dart';
 import '../database/providers.dart';
+import '../features/auth/supabase_session_storage.dart';
 import '../features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
 import '../features/user_region/user_region_providers.dart';
 import '../features/community_collections/download/community_download_notifier.dart';
 import '../firebase_options.dart';
 import '../services/app_logger.dart';
+import '../features/media_trim/media_trim_exporter.dart';
+import '../features/media_trim/media_trim_processor.dart';
+import '../features/media_trim/media_trim_repository.dart';
 import '../services/asr/asr_model_manager.dart';
 import '../services/background_audio_handler.dart';
 import '../services/bundled_example_installer.dart';
@@ -280,6 +284,15 @@ class DefaultStartupBootstrapper implements StartupBootstrapper {
     );
     if (selectedSupabaseUrl != null &&
         auth_config.isAuthConfiguredForUrl(selectedSupabaseUrl)) {
+      // 迁移失败时不会恢复任何旧会话，启动为未登录；绝不回退到其他端点的会话。
+      await _runBestEffort(
+        issues,
+        'supabase_session_storage_migration',
+        () => migrateSupabaseSessionStorage(
+          prefs: _prefs,
+          currentUrl: selectedSupabaseUrl,
+        ),
+      );
       AppLogger.log(
         'Supabase',
         'initialize start endpoint=$supabaseEndpointLabel',
@@ -289,6 +302,7 @@ class DefaultStartupBootstrapper implements StartupBootstrapper {
           return Supabase.initialize(
             url: selectedSupabaseUrl,
             publishableKey: auth_config.supabasePublishableKey,
+            authOptions: supabaseAuthClientOptions(),
           );
         });
         supabaseReady = true;
@@ -411,7 +425,20 @@ class DefaultStartupBootstrapper implements StartupBootstrapper {
     }
   }
 
+  /// 清理上次进程中断时留下的未发布剪辑产物。
+  Future<void> _cleanupTrimFiles() async {
+    try {
+      await MediaTrimExporter(
+        repository: MediaTrimRepository(_database),
+        processor: const MediaTrimProcessor(),
+      ).cleanupUncommitted();
+    } on Object catch (error, stackTrace) {
+      AppLogger.log('MediaTrim', '启动清理失败：$error\n$stackTrace');
+    }
+  }
+
   void _scheduleMaintenance() {
+    unawaited(_cleanupTrimFiles());
     unawaited(cleanupRecordingTempFiles());
     unawaited(cleanupStalePdfExportTemp());
     unawaited(cleanupStaleBaiduNetdiskTemp());

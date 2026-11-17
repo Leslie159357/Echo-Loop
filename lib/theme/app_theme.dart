@@ -29,11 +29,14 @@ class AppTheme {
   /// 导航栏选中态颜色：明亮蓝
   static const Color navActiveColor = Color(0xFF3AA0FF);
 
-  /// 视频类型图标的紫色强调色；深色主题下提亮，维持可辨识度。
+  /// 视频类型图标的青绿色强调色；深色主题下提亮，维持可辨识度。
   static Color videoMediaTypeColor(Brightness brightness) =>
       brightness == Brightness.dark
-      ? const Color(0xFFB39DDB)
-      : const Color(0xFF7655A6);
+      ? const Color(0xFF2DD4BF)
+      : const Color(0xFF0D9488);
+
+  /// 音频类型的紫色强调色，与 `assets/icon/waveform.svg` 的填充色一致；音频默认图标的底色由它派生。
+  static const Color audioMediaTypeColor = Color(0xFF924FF7);
 
   /// 学习页「为你推荐」区段的蓝紫强调色。
   static Color studyRecommendationAccentColor(Brightness brightness) =>
@@ -68,6 +71,28 @@ class AppTheme {
 
   /// 语义色：成功/完成（用于完成对话框的勾选徽章，清新绿）
   static const Color successColor = Color(0xFF2E9E5B);
+
+  /// 语义色：下载中（列表项下载进度环与文案，与品牌选中蓝区分）。
+  /// 深色卡片上 #3066E3 对比度约 3.9:1，文案不达 AA，故深色模式提亮到约 6:1。
+  static Color downloadingColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFF5B8DEF)
+      : const Color(0xFF3066E3);
+
+  /// 语义色：学习中进度条（取自设计稿的蓝色，深色模式提亮）
+  static Color learningInProgressColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFF5B8DEF)
+      : const Color(0xFF5C87D2);
+
+  /// 语义色：学习已完成的进度条与文案（取自设计稿的绿色，浅深色均可读）
+  static const Color learningCompletedColor = Color(0xFF4CA054);
+
+  /// 学习进度条轨道底色
+  static Color progressTrackColor(Brightness brightness) =>
+      brightness == Brightness.dark
+      ? const Color(0xFF2C2C2E)
+      : const Color(0xFFE5E7EB);
 
   /// 语义色：女声标签（国际通用粉/玫瑰，浅深色均可读）
   static const Color femaleVoiceColor = Color(0xFFE0709F);
@@ -166,6 +191,9 @@ class AppTheme {
       brightness == Brightness.dark
       ? Colors.transparent
       : const Color(0xFFF2F3F7);
+
+  /// 浅色卡片描边色，用于白卡片落在灰底上、需要边界时（如学习页展开区内的卡片）。
+  static const Color lightCardBorderColor = Color(0xFFDFE2EA);
 
   /// 设置类底部弹窗中，展开态的可折叠分组标题行背景色。
   ///

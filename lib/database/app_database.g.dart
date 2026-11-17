@@ -2146,6 +2146,17 @@ class $CollectionsTable extends Collections
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _localCoverPathMeta = const VerificationMeta(
+    'localCoverPath',
+  );
+  @override
+  late final GeneratedColumn<String> localCoverPath = GeneratedColumn<String>(
+    'local_cover_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _descriptionMeta = const VerificationMeta(
     'description',
   );
@@ -2258,6 +2269,7 @@ class $CollectionsTable extends Collections
     remoteId,
     coverUrl,
     coverUrlChina,
+    localCoverPath,
     description,
     authorNickname,
     publishedAt,
@@ -2354,6 +2366,15 @@ class $CollectionsTable extends Collections
         coverUrlChina.isAcceptableOrUnknown(
           data['cover_url_china']!,
           _coverUrlChinaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('local_cover_path')) {
+      context.handle(
+        _localCoverPathMeta,
+        localCoverPath.isAcceptableOrUnknown(
+          data['local_cover_path']!,
+          _localCoverPathMeta,
         ),
       );
     }
@@ -2491,6 +2512,10 @@ class $CollectionsTable extends Collections
         DriftSqlType.string,
         data['${effectivePrefix}cover_url_china'],
       ),
+      localCoverPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_cover_path'],
+      ),
       description: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}description'],
@@ -2574,6 +2599,12 @@ class Collection extends DataClass implements Insertable<Collection> {
   /// 已同步到中国 CDN 的社区合集封面图 URL。
   final String? coverUrlChina;
 
+  /// 本地合集的自定义封面，相对应用数据目录的路径（如 `collection_covers/x.jpg`）。
+  ///
+  /// 只对 source='local' 有效；存相对路径是因为 iOS 容器绝对路径会随安装变化。
+  /// 文件仅存本机，不同步后端，随本地备份一起导出。
+  final String? localCoverPath;
+
   /// 社区合集描述；用户自建合集目前为 null。
   final String? description;
 
@@ -2613,6 +2644,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     this.remoteId,
     this.coverUrl,
     this.coverUrlChina,
+    this.localCoverPath,
     this.description,
     this.authorNickname,
     this.publishedAt,
@@ -2644,6 +2676,9 @@ class Collection extends DataClass implements Insertable<Collection> {
     }
     if (!nullToAbsent || coverUrlChina != null) {
       map['cover_url_china'] = Variable<String>(coverUrlChina);
+    }
+    if (!nullToAbsent || localCoverPath != null) {
+      map['local_cover_path'] = Variable<String>(localCoverPath);
     }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
@@ -2700,6 +2735,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       coverUrlChina: coverUrlChina == null && nullToAbsent
           ? const Value.absent()
           : Value(coverUrlChina),
+      localCoverPath: localCoverPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localCoverPath),
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
@@ -2747,6 +2785,7 @@ class Collection extends DataClass implements Insertable<Collection> {
       remoteId: serializer.fromJson<String?>(json['remoteId']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       coverUrlChina: serializer.fromJson<String?>(json['coverUrlChina']),
+      localCoverPath: serializer.fromJson<String?>(json['localCoverPath']),
       description: serializer.fromJson<String?>(json['description']),
       authorNickname: serializer.fromJson<String?>(json['authorNickname']),
       publishedAt: serializer.fromJson<DateTime?>(json['publishedAt']),
@@ -2777,6 +2816,7 @@ class Collection extends DataClass implements Insertable<Collection> {
       'remoteId': serializer.toJson<String?>(remoteId),
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'coverUrlChina': serializer.toJson<String?>(coverUrlChina),
+      'localCoverPath': serializer.toJson<String?>(localCoverPath),
       'description': serializer.toJson<String?>(description),
       'authorNickname': serializer.toJson<String?>(authorNickname),
       'publishedAt': serializer.toJson<DateTime?>(publishedAt),
@@ -2805,6 +2845,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     Value<String?> remoteId = const Value.absent(),
     Value<String?> coverUrl = const Value.absent(),
     Value<String?> coverUrlChina = const Value.absent(),
+    Value<String?> localCoverPath = const Value.absent(),
     Value<String?> description = const Value.absent(),
     Value<String?> authorNickname = const Value.absent(),
     Value<DateTime?> publishedAt = const Value.absent(),
@@ -2828,6 +2869,9 @@ class Collection extends DataClass implements Insertable<Collection> {
     coverUrlChina: coverUrlChina.present
         ? coverUrlChina.value
         : this.coverUrlChina,
+    localCoverPath: localCoverPath.present
+        ? localCoverPath.value
+        : this.localCoverPath,
     description: description.present ? description.value : this.description,
     authorNickname: authorNickname.present
         ? authorNickname.value
@@ -2869,6 +2913,9 @@ class Collection extends DataClass implements Insertable<Collection> {
       coverUrlChina: data.coverUrlChina.present
           ? data.coverUrlChina.value
           : this.coverUrlChina,
+      localCoverPath: data.localCoverPath.present
+          ? data.localCoverPath.value
+          : this.localCoverPath,
       description: data.description.present
           ? data.description.value
           : this.description,
@@ -2913,6 +2960,7 @@ class Collection extends DataClass implements Insertable<Collection> {
           ..write('remoteId: $remoteId, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('coverUrlChina: $coverUrlChina, ')
+          ..write('localCoverPath: $localCoverPath, ')
           ..write('description: $description, ')
           ..write('authorNickname: $authorNickname, ')
           ..write('publishedAt: $publishedAt, ')
@@ -2927,7 +2975,7 @@ class Collection extends DataClass implements Insertable<Collection> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     name,
     createdDate,
@@ -2939,6 +2987,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     remoteId,
     coverUrl,
     coverUrlChina,
+    localCoverPath,
     description,
     authorNickname,
     publishedAt,
@@ -2948,7 +2997,7 @@ class Collection extends DataClass implements Insertable<Collection> {
     podcastMetaJson,
     podcastLastRefreshedAt,
     podcastLastRefreshError,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2964,6 +3013,7 @@ class Collection extends DataClass implements Insertable<Collection> {
           other.remoteId == this.remoteId &&
           other.coverUrl == this.coverUrl &&
           other.coverUrlChina == this.coverUrlChina &&
+          other.localCoverPath == this.localCoverPath &&
           other.description == this.description &&
           other.authorNickname == this.authorNickname &&
           other.publishedAt == this.publishedAt &&
@@ -2987,6 +3037,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
   final Value<String?> remoteId;
   final Value<String?> coverUrl;
   final Value<String?> coverUrlChina;
+  final Value<String?> localCoverPath;
   final Value<String?> description;
   final Value<String?> authorNickname;
   final Value<DateTime?> publishedAt;
@@ -3009,6 +3060,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.remoteId = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.coverUrlChina = const Value.absent(),
+    this.localCoverPath = const Value.absent(),
     this.description = const Value.absent(),
     this.authorNickname = const Value.absent(),
     this.publishedAt = const Value.absent(),
@@ -3032,6 +3084,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.remoteId = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.coverUrlChina = const Value.absent(),
+    this.localCoverPath = const Value.absent(),
     this.description = const Value.absent(),
     this.authorNickname = const Value.absent(),
     this.publishedAt = const Value.absent(),
@@ -3058,6 +3111,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Expression<String>? remoteId,
     Expression<String>? coverUrl,
     Expression<String>? coverUrlChina,
+    Expression<String>? localCoverPath,
     Expression<String>? description,
     Expression<String>? authorNickname,
     Expression<DateTime>? publishedAt,
@@ -3081,6 +3135,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       if (remoteId != null) 'remote_id': remoteId,
       if (coverUrl != null) 'cover_url': coverUrl,
       if (coverUrlChina != null) 'cover_url_china': coverUrlChina,
+      if (localCoverPath != null) 'local_cover_path': localCoverPath,
       if (description != null) 'description': description,
       if (authorNickname != null) 'author_nickname': authorNickname,
       if (publishedAt != null) 'published_at': publishedAt,
@@ -3108,6 +3163,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Value<String?>? remoteId,
     Value<String?>? coverUrl,
     Value<String?>? coverUrlChina,
+    Value<String?>? localCoverPath,
     Value<String?>? description,
     Value<String?>? authorNickname,
     Value<DateTime?>? publishedAt,
@@ -3131,6 +3187,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       remoteId: remoteId ?? this.remoteId,
       coverUrl: coverUrl ?? this.coverUrl,
       coverUrlChina: coverUrlChina ?? this.coverUrlChina,
+      localCoverPath: localCoverPath ?? this.localCoverPath,
       description: description ?? this.description,
       authorNickname: authorNickname ?? this.authorNickname,
       publishedAt: publishedAt ?? this.publishedAt,
@@ -3181,6 +3238,9 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     }
     if (coverUrlChina.present) {
       map['cover_url_china'] = Variable<String>(coverUrlChina.value);
+    }
+    if (localCoverPath.present) {
+      map['local_cover_path'] = Variable<String>(localCoverPath.value);
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
@@ -3233,6 +3293,7 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
           ..write('remoteId: $remoteId, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('coverUrlChina: $coverUrlChina, ')
+          ..write('localCoverPath: $localCoverPath, ')
           ..write('description: $description, ')
           ..write('authorNickname: $authorNickname, ')
           ..write('publishedAt: $publishedAt, ')
@@ -13287,6 +13348,266 @@ class DictionaryCacheCompanion extends UpdateCompanion<DictionaryCacheData> {
   }
 }
 
+class $LookupHistoriesTable extends LookupHistories
+    with TableInfo<$LookupHistoriesTable, LookupHistory> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LookupHistoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _wordMeta = const VerificationMeta('word');
+  @override
+  late final GeneratedColumn<String> word = GeneratedColumn<String>(
+    'word',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _lookedUpAtMeta = const VerificationMeta(
+    'lookedUpAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lookedUpAt = GeneratedColumn<DateTime>(
+    'looked_up_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, word, lookedUpAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'lookup_histories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LookupHistory> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('word')) {
+      context.handle(
+        _wordMeta,
+        word.isAcceptableOrUnknown(data['word']!, _wordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_wordMeta);
+    }
+    if (data.containsKey('looked_up_at')) {
+      context.handle(
+        _lookedUpAtMeta,
+        lookedUpAt.isAcceptableOrUnknown(
+          data['looked_up_at']!,
+          _lookedUpAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lookedUpAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LookupHistory map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LookupHistory(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      word: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}word'],
+      )!,
+      lookedUpAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}looked_up_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LookupHistoriesTable createAlias(String alias) {
+    return $LookupHistoriesTable(attachedDatabase, alias);
+  }
+}
+
+class LookupHistory extends DataClass implements Insertable<LookupHistory> {
+  /// 自增主键
+  final int id;
+
+  /// 归一化后的查询词（小写），同一词只保留一条
+  final String word;
+
+  /// 最近一次成功查询的时间
+  final DateTime lookedUpAt;
+  const LookupHistory({
+    required this.id,
+    required this.word,
+    required this.lookedUpAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['word'] = Variable<String>(word);
+    map['looked_up_at'] = Variable<DateTime>(lookedUpAt);
+    return map;
+  }
+
+  LookupHistoriesCompanion toCompanion(bool nullToAbsent) {
+    return LookupHistoriesCompanion(
+      id: Value(id),
+      word: Value(word),
+      lookedUpAt: Value(lookedUpAt),
+    );
+  }
+
+  factory LookupHistory.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LookupHistory(
+      id: serializer.fromJson<int>(json['id']),
+      word: serializer.fromJson<String>(json['word']),
+      lookedUpAt: serializer.fromJson<DateTime>(json['lookedUpAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'word': serializer.toJson<String>(word),
+      'lookedUpAt': serializer.toJson<DateTime>(lookedUpAt),
+    };
+  }
+
+  LookupHistory copyWith({int? id, String? word, DateTime? lookedUpAt}) =>
+      LookupHistory(
+        id: id ?? this.id,
+        word: word ?? this.word,
+        lookedUpAt: lookedUpAt ?? this.lookedUpAt,
+      );
+  LookupHistory copyWithCompanion(LookupHistoriesCompanion data) {
+    return LookupHistory(
+      id: data.id.present ? data.id.value : this.id,
+      word: data.word.present ? data.word.value : this.word,
+      lookedUpAt: data.lookedUpAt.present
+          ? data.lookedUpAt.value
+          : this.lookedUpAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LookupHistory(')
+          ..write('id: $id, ')
+          ..write('word: $word, ')
+          ..write('lookedUpAt: $lookedUpAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, word, lookedUpAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LookupHistory &&
+          other.id == this.id &&
+          other.word == this.word &&
+          other.lookedUpAt == this.lookedUpAt);
+}
+
+class LookupHistoriesCompanion extends UpdateCompanion<LookupHistory> {
+  final Value<int> id;
+  final Value<String> word;
+  final Value<DateTime> lookedUpAt;
+  const LookupHistoriesCompanion({
+    this.id = const Value.absent(),
+    this.word = const Value.absent(),
+    this.lookedUpAt = const Value.absent(),
+  });
+  LookupHistoriesCompanion.insert({
+    this.id = const Value.absent(),
+    required String word,
+    required DateTime lookedUpAt,
+  }) : word = Value(word),
+       lookedUpAt = Value(lookedUpAt);
+  static Insertable<LookupHistory> custom({
+    Expression<int>? id,
+    Expression<String>? word,
+    Expression<DateTime>? lookedUpAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (word != null) 'word': word,
+      if (lookedUpAt != null) 'looked_up_at': lookedUpAt,
+    });
+  }
+
+  LookupHistoriesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? word,
+    Value<DateTime>? lookedUpAt,
+  }) {
+    return LookupHistoriesCompanion(
+      id: id ?? this.id,
+      word: word ?? this.word,
+      lookedUpAt: lookedUpAt ?? this.lookedUpAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (word.present) {
+      map['word'] = Variable<String>(word.value);
+    }
+    if (lookedUpAt.present) {
+      map['looked_up_at'] = Variable<DateTime>(lookedUpAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LookupHistoriesCompanion(')
+          ..write('id: $id, ')
+          ..write('word: $word, ')
+          ..write('lookedUpAt: $lookedUpAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MemorySchedulesTable extends MemorySchedules
     with TableInfo<$MemorySchedulesTable, MemorySchedule> {
   @override
@@ -15609,6 +15930,500 @@ class MemoryReviewQueueEntriesCompanion
   }
 }
 
+class $VideoSubtitleMasksTable extends VideoSubtitleMasks
+    with TableInfo<$VideoSubtitleMasksTable, VideoSubtitleMaskRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VideoSubtitleMasksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _audioItemIdMeta = const VerificationMeta(
+    'audioItemId',
+  );
+  @override
+  late final GeneratedColumn<String> audioItemId = GeneratedColumn<String>(
+    'audio_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES audio_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _rectLeftMeta = const VerificationMeta(
+    'rectLeft',
+  );
+  @override
+  late final GeneratedColumn<double> rectLeft = GeneratedColumn<double>(
+    'rect_left',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rectTopMeta = const VerificationMeta(
+    'rectTop',
+  );
+  @override
+  late final GeneratedColumn<double> rectTop = GeneratedColumn<double>(
+    'rect_top',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rectWidthMeta = const VerificationMeta(
+    'rectWidth',
+  );
+  @override
+  late final GeneratedColumn<double> rectWidth = GeneratedColumn<double>(
+    'rect_width',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rectHeightMeta = const VerificationMeta(
+    'rectHeight',
+  );
+  @override
+  late final GeneratedColumn<double> rectHeight = GeneratedColumn<double>(
+    'rect_height',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    audioItemId,
+    enabled,
+    rectLeft,
+    rectTop,
+    rectWidth,
+    rectHeight,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'video_subtitle_masks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VideoSubtitleMaskRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('audio_item_id')) {
+      context.handle(
+        _audioItemIdMeta,
+        audioItemId.isAcceptableOrUnknown(
+          data['audio_item_id']!,
+          _audioItemIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_audioItemIdMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_enabledMeta);
+    }
+    if (data.containsKey('rect_left')) {
+      context.handle(
+        _rectLeftMeta,
+        rectLeft.isAcceptableOrUnknown(data['rect_left']!, _rectLeftMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rectLeftMeta);
+    }
+    if (data.containsKey('rect_top')) {
+      context.handle(
+        _rectTopMeta,
+        rectTop.isAcceptableOrUnknown(data['rect_top']!, _rectTopMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rectTopMeta);
+    }
+    if (data.containsKey('rect_width')) {
+      context.handle(
+        _rectWidthMeta,
+        rectWidth.isAcceptableOrUnknown(data['rect_width']!, _rectWidthMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rectWidthMeta);
+    }
+    if (data.containsKey('rect_height')) {
+      context.handle(
+        _rectHeightMeta,
+        rectHeight.isAcceptableOrUnknown(data['rect_height']!, _rectHeightMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rectHeightMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {audioItemId};
+  @override
+  VideoSubtitleMaskRecord map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VideoSubtitleMaskRecord(
+      audioItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}audio_item_id'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      rectLeft: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rect_left'],
+      )!,
+      rectTop: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rect_top'],
+      )!,
+      rectWidth: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rect_width'],
+      )!,
+      rectHeight: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rect_height'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VideoSubtitleMasksTable createAlias(String alias) {
+    return $VideoSubtitleMasksTable(attachedDatabase, alias);
+  }
+}
+
+class VideoSubtitleMaskRecord extends DataClass
+    implements Insertable<VideoSubtitleMaskRecord> {
+  /// 视频 ID，主键 + 外键关联 audio_items.id
+  final String audioItemId;
+
+  /// 遮罩是否开启
+  final bool enabled;
+
+  /// 遮罩位置与大小：相对去黑边后实际画面的归一化坐标（0~1）
+  final double rectLeft;
+  final double rectTop;
+  final double rectWidth;
+  final double rectHeight;
+
+  /// 最近一次用户修改时间
+  final DateTime updatedAt;
+  const VideoSubtitleMaskRecord({
+    required this.audioItemId,
+    required this.enabled,
+    required this.rectLeft,
+    required this.rectTop,
+    required this.rectWidth,
+    required this.rectHeight,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['audio_item_id'] = Variable<String>(audioItemId);
+    map['enabled'] = Variable<bool>(enabled);
+    map['rect_left'] = Variable<double>(rectLeft);
+    map['rect_top'] = Variable<double>(rectTop);
+    map['rect_width'] = Variable<double>(rectWidth);
+    map['rect_height'] = Variable<double>(rectHeight);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  VideoSubtitleMasksCompanion toCompanion(bool nullToAbsent) {
+    return VideoSubtitleMasksCompanion(
+      audioItemId: Value(audioItemId),
+      enabled: Value(enabled),
+      rectLeft: Value(rectLeft),
+      rectTop: Value(rectTop),
+      rectWidth: Value(rectWidth),
+      rectHeight: Value(rectHeight),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory VideoSubtitleMaskRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VideoSubtitleMaskRecord(
+      audioItemId: serializer.fromJson<String>(json['audioItemId']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      rectLeft: serializer.fromJson<double>(json['rectLeft']),
+      rectTop: serializer.fromJson<double>(json['rectTop']),
+      rectWidth: serializer.fromJson<double>(json['rectWidth']),
+      rectHeight: serializer.fromJson<double>(json['rectHeight']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'audioItemId': serializer.toJson<String>(audioItemId),
+      'enabled': serializer.toJson<bool>(enabled),
+      'rectLeft': serializer.toJson<double>(rectLeft),
+      'rectTop': serializer.toJson<double>(rectTop),
+      'rectWidth': serializer.toJson<double>(rectWidth),
+      'rectHeight': serializer.toJson<double>(rectHeight),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  VideoSubtitleMaskRecord copyWith({
+    String? audioItemId,
+    bool? enabled,
+    double? rectLeft,
+    double? rectTop,
+    double? rectWidth,
+    double? rectHeight,
+    DateTime? updatedAt,
+  }) => VideoSubtitleMaskRecord(
+    audioItemId: audioItemId ?? this.audioItemId,
+    enabled: enabled ?? this.enabled,
+    rectLeft: rectLeft ?? this.rectLeft,
+    rectTop: rectTop ?? this.rectTop,
+    rectWidth: rectWidth ?? this.rectWidth,
+    rectHeight: rectHeight ?? this.rectHeight,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  VideoSubtitleMaskRecord copyWithCompanion(VideoSubtitleMasksCompanion data) {
+    return VideoSubtitleMaskRecord(
+      audioItemId: data.audioItemId.present
+          ? data.audioItemId.value
+          : this.audioItemId,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      rectLeft: data.rectLeft.present ? data.rectLeft.value : this.rectLeft,
+      rectTop: data.rectTop.present ? data.rectTop.value : this.rectTop,
+      rectWidth: data.rectWidth.present ? data.rectWidth.value : this.rectWidth,
+      rectHeight: data.rectHeight.present
+          ? data.rectHeight.value
+          : this.rectHeight,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VideoSubtitleMaskRecord(')
+          ..write('audioItemId: $audioItemId, ')
+          ..write('enabled: $enabled, ')
+          ..write('rectLeft: $rectLeft, ')
+          ..write('rectTop: $rectTop, ')
+          ..write('rectWidth: $rectWidth, ')
+          ..write('rectHeight: $rectHeight, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    audioItemId,
+    enabled,
+    rectLeft,
+    rectTop,
+    rectWidth,
+    rectHeight,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VideoSubtitleMaskRecord &&
+          other.audioItemId == this.audioItemId &&
+          other.enabled == this.enabled &&
+          other.rectLeft == this.rectLeft &&
+          other.rectTop == this.rectTop &&
+          other.rectWidth == this.rectWidth &&
+          other.rectHeight == this.rectHeight &&
+          other.updatedAt == this.updatedAt);
+}
+
+class VideoSubtitleMasksCompanion
+    extends UpdateCompanion<VideoSubtitleMaskRecord> {
+  final Value<String> audioItemId;
+  final Value<bool> enabled;
+  final Value<double> rectLeft;
+  final Value<double> rectTop;
+  final Value<double> rectWidth;
+  final Value<double> rectHeight;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const VideoSubtitleMasksCompanion({
+    this.audioItemId = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.rectLeft = const Value.absent(),
+    this.rectTop = const Value.absent(),
+    this.rectWidth = const Value.absent(),
+    this.rectHeight = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  VideoSubtitleMasksCompanion.insert({
+    required String audioItemId,
+    required bool enabled,
+    required double rectLeft,
+    required double rectTop,
+    required double rectWidth,
+    required double rectHeight,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : audioItemId = Value(audioItemId),
+       enabled = Value(enabled),
+       rectLeft = Value(rectLeft),
+       rectTop = Value(rectTop),
+       rectWidth = Value(rectWidth),
+       rectHeight = Value(rectHeight),
+       updatedAt = Value(updatedAt);
+  static Insertable<VideoSubtitleMaskRecord> custom({
+    Expression<String>? audioItemId,
+    Expression<bool>? enabled,
+    Expression<double>? rectLeft,
+    Expression<double>? rectTop,
+    Expression<double>? rectWidth,
+    Expression<double>? rectHeight,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (audioItemId != null) 'audio_item_id': audioItemId,
+      if (enabled != null) 'enabled': enabled,
+      if (rectLeft != null) 'rect_left': rectLeft,
+      if (rectTop != null) 'rect_top': rectTop,
+      if (rectWidth != null) 'rect_width': rectWidth,
+      if (rectHeight != null) 'rect_height': rectHeight,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  VideoSubtitleMasksCompanion copyWith({
+    Value<String>? audioItemId,
+    Value<bool>? enabled,
+    Value<double>? rectLeft,
+    Value<double>? rectTop,
+    Value<double>? rectWidth,
+    Value<double>? rectHeight,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return VideoSubtitleMasksCompanion(
+      audioItemId: audioItemId ?? this.audioItemId,
+      enabled: enabled ?? this.enabled,
+      rectLeft: rectLeft ?? this.rectLeft,
+      rectTop: rectTop ?? this.rectTop,
+      rectWidth: rectWidth ?? this.rectWidth,
+      rectHeight: rectHeight ?? this.rectHeight,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (audioItemId.present) {
+      map['audio_item_id'] = Variable<String>(audioItemId.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (rectLeft.present) {
+      map['rect_left'] = Variable<double>(rectLeft.value);
+    }
+    if (rectTop.present) {
+      map['rect_top'] = Variable<double>(rectTop.value);
+    }
+    if (rectWidth.present) {
+      map['rect_width'] = Variable<double>(rectWidth.value);
+    }
+    if (rectHeight.present) {
+      map['rect_height'] = Variable<double>(rectHeight.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VideoSubtitleMasksCompanion(')
+          ..write('audioItemId: $audioItemId, ')
+          ..write('enabled: $enabled, ')
+          ..write('rectLeft: $rectLeft, ')
+          ..write('rectTop: $rectTop, ')
+          ..write('rectWidth: $rectWidth, ')
+          ..write('rectHeight: $rectHeight, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -15643,6 +16458,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DictionaryCacheTable dictionaryCache = $DictionaryCacheTable(
     this,
   );
+  late final $LookupHistoriesTable lookupHistories = $LookupHistoriesTable(
+    this,
+  );
   late final $MemorySchedulesTable memorySchedules = $MemorySchedulesTable(
     this,
   );
@@ -15650,6 +16468,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $MemoryReviewEventsTable(this);
   late final $MemoryReviewQueueEntriesTable memoryReviewQueueEntries =
       $MemoryReviewQueueEntriesTable(this);
+  late final $VideoSubtitleMasksTable videoSubtitleMasks =
+      $VideoSubtitleMasksTable(this);
   late final AudioItemDao audioItemDao = AudioItemDao(this as AppDatabase);
   late final CollectionDao collectionDao = CollectionDao(this as AppDatabase);
   late final BookmarkDao bookmarkDao = BookmarkDao(this as AppDatabase);
@@ -15685,10 +16505,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final DictionaryCacheDao dictionaryCacheDao = DictionaryCacheDao(
     this as AppDatabase,
   );
+  late final LookupHistoryDao lookupHistoryDao = LookupHistoryDao(
+    this as AppDatabase,
+  );
   late final MemoryScheduleDao memoryScheduleDao = MemoryScheduleDao(
     this as AppDatabase,
   );
   late final FavoriteReviewDao favoriteReviewDao = FavoriteReviewDao(
+    this as AppDatabase,
+  );
+  late final VideoSubtitleMaskDao videoSubtitleMaskDao = VideoSubtitleMaskDao(
     this as AppDatabase,
   );
   @override
@@ -15713,9 +16539,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dailyStageStudyRecords,
     ttsCache,
     dictionaryCache,
+    lookupHistories,
     memorySchedules,
     memoryReviewEvents,
     memoryReviewQueueEntries,
+    videoSubtitleMasks,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -15795,6 +16623,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('memory_review_events', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'audio_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('video_subtitle_masks', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -16031,6 +16866,30 @@ final class $$AudioItemsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _savedSenseGroupsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $VideoSubtitleMasksTable,
+    List<VideoSubtitleMaskRecord>
+  >
+  _videoSubtitleMasksRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.videoSubtitleMasks,
+        aliasName: 'audio_items__id__video_subtitle_masks__audio_item_id',
+      );
+
+  $$VideoSubtitleMasksTableProcessedTableManager get videoSubtitleMasksRefs {
+    final manager = $$VideoSubtitleMasksTableTableManager(
+      $_db,
+      $_db.videoSubtitleMasks,
+    ).filter((f) => f.audioItemId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _videoSubtitleMasksRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -16403,6 +17262,31 @@ class $$AudioItemsTableFilterComposer
           }) => $$SavedSenseGroupsTableFilterComposer(
             $db: $db,
             $table: $db.savedSenseGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> videoSubtitleMasksRefs(
+    Expression<bool> Function($$VideoSubtitleMasksTableFilterComposer f) f,
+  ) {
+    final $$VideoSubtitleMasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.videoSubtitleMasks,
+      getReferencedColumn: (t) => t.audioItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$VideoSubtitleMasksTableFilterComposer(
+            $db: $db,
+            $table: $db.videoSubtitleMasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -16947,6 +17831,32 @@ class $$AudioItemsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> videoSubtitleMasksRefs<T extends Object>(
+    Expression<T> Function($$VideoSubtitleMasksTableAnnotationComposer a) f,
+  ) {
+    final $$VideoSubtitleMasksTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.videoSubtitleMasks,
+          getReferencedColumn: (t) => t.audioItemId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$VideoSubtitleMasksTableAnnotationComposer(
+                $db: $db,
+                $table: $db.videoSubtitleMasks,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$AudioItemsTableTableManager
@@ -16971,6 +17881,7 @@ class $$AudioItemsTableTableManager
             bool audioItemTagsRefs,
             bool savedWordsRefs,
             bool savedSenseGroupsRefs,
+            bool videoSubtitleMasksRefs,
           })
         > {
   $$AudioItemsTableTableManager(_$AppDatabase db, $AudioItemsTable table)
@@ -17146,6 +18057,7 @@ class $$AudioItemsTableTableManager
                 audioItemTagsRefs = false,
                 savedWordsRefs = false,
                 savedSenseGroupsRefs = false,
+                videoSubtitleMasksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -17158,6 +18070,7 @@ class $$AudioItemsTableTableManager
                     if (audioItemTagsRefs) db.audioItemTags,
                     if (savedWordsRefs) db.savedWords,
                     if (savedSenseGroupsRefs) db.savedSenseGroups,
+                    if (videoSubtitleMasksRefs) db.videoSubtitleMasks,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -17322,6 +18235,26 @@ class $$AudioItemsTableTableManager
                           referencedColumn: 'audio_item_id',
                           typedResults: items,
                         ),
+                      if (videoSubtitleMasksRefs)
+                        await $_getPrefetchedDataByColumns<
+                          AudioItem,
+                          $AudioItemsTable,
+                          VideoSubtitleMaskRecord,
+                          $VideoSubtitleMasksTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AudioItemsTableReferences
+                              ._videoSubtitleMasksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AudioItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).videoSubtitleMasksRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'audio_item_id',
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -17351,6 +18284,7 @@ typedef $$AudioItemsTableProcessedTableManager =
         bool audioItemTagsRefs,
         bool savedWordsRefs,
         bool savedSenseGroupsRefs,
+        bool videoSubtitleMasksRefs,
       })
     >;
 typedef $$CollectionsTableCreateCompanionBuilder =
@@ -17366,6 +18300,7 @@ typedef $$CollectionsTableCreateCompanionBuilder =
       Value<String?> remoteId,
       Value<String?> coverUrl,
       Value<String?> coverUrlChina,
+      Value<String?> localCoverPath,
       Value<String?> description,
       Value<String?> authorNickname,
       Value<DateTime?> publishedAt,
@@ -17390,6 +18325,7 @@ typedef $$CollectionsTableUpdateCompanionBuilder =
       Value<String?> remoteId,
       Value<String?> coverUrl,
       Value<String?> coverUrlChina,
+      Value<String?> localCoverPath,
       Value<String?> description,
       Value<String?> authorNickname,
       Value<DateTime?> publishedAt,
@@ -17493,6 +18429,11 @@ class $$CollectionsTableFilterComposer
 
   ColumnFilters<String> get coverUrlChina => $composableBuilder(
     column: $table.coverUrlChina,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localCoverPath => $composableBuilder(
+    column: $table.localCoverPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -17631,6 +18572,11 @@ class $$CollectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get localCoverPath => $composableBuilder(
+    column: $table.localCoverPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get description => $composableBuilder(
     column: $table.description,
     builder: (column) => ColumnOrderings(column),
@@ -17722,6 +18668,11 @@ class $$CollectionsTableAnnotationComposer
 
   GeneratedColumn<String> get coverUrlChina => $composableBuilder(
     column: $table.coverUrlChina,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get localCoverPath => $composableBuilder(
+    column: $table.localCoverPath,
     builder: (column) => column,
   );
 
@@ -17836,6 +18787,7 @@ class $$CollectionsTableTableManager
                 Value<String?> remoteId = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> coverUrlChina = const Value.absent(),
+                Value<String?> localCoverPath = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> authorNickname = const Value.absent(),
                 Value<DateTime?> publishedAt = const Value.absent(),
@@ -17858,6 +18810,7 @@ class $$CollectionsTableTableManager
                 remoteId: remoteId,
                 coverUrl: coverUrl,
                 coverUrlChina: coverUrlChina,
+                localCoverPath: localCoverPath,
                 description: description,
                 authorNickname: authorNickname,
                 publishedAt: publishedAt,
@@ -17882,6 +18835,7 @@ class $$CollectionsTableTableManager
                 Value<String?> remoteId = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> coverUrlChina = const Value.absent(),
+                Value<String?> localCoverPath = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> authorNickname = const Value.absent(),
                 Value<DateTime?> publishedAt = const Value.absent(),
@@ -17904,6 +18858,7 @@ class $$CollectionsTableTableManager
                 remoteId: remoteId,
                 coverUrl: coverUrl,
                 coverUrlChina: coverUrlChina,
+                localCoverPath: localCoverPath,
                 description: description,
                 authorNickname: authorNickname,
                 publishedAt: publishedAt,
@@ -23876,6 +24831,175 @@ typedef $$DictionaryCacheTableProcessedTableManager =
       DictionaryCacheData,
       PrefetchHooks Function()
     >;
+typedef $$LookupHistoriesTableCreateCompanionBuilder =
+    LookupHistoriesCompanion Function({
+      Value<int> id,
+      required String word,
+      required DateTime lookedUpAt,
+    });
+typedef $$LookupHistoriesTableUpdateCompanionBuilder =
+    LookupHistoriesCompanion Function({
+      Value<int> id,
+      Value<String> word,
+      Value<DateTime> lookedUpAt,
+    });
+
+class $$LookupHistoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $LookupHistoriesTable> {
+  $$LookupHistoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get word => $composableBuilder(
+    column: $table.word,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lookedUpAt => $composableBuilder(
+    column: $table.lookedUpAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LookupHistoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LookupHistoriesTable> {
+  $$LookupHistoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get word => $composableBuilder(
+    column: $table.word,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lookedUpAt => $composableBuilder(
+    column: $table.lookedUpAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LookupHistoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LookupHistoriesTable> {
+  $$LookupHistoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get word =>
+      $composableBuilder(column: $table.word, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lookedUpAt => $composableBuilder(
+    column: $table.lookedUpAt,
+    builder: (column) => column,
+  );
+}
+
+class $$LookupHistoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LookupHistoriesTable,
+          LookupHistory,
+          $$LookupHistoriesTableFilterComposer,
+          $$LookupHistoriesTableOrderingComposer,
+          $$LookupHistoriesTableAnnotationComposer,
+          $$LookupHistoriesTableCreateCompanionBuilder,
+          $$LookupHistoriesTableUpdateCompanionBuilder,
+          (
+            LookupHistory,
+            BaseReferences<_$AppDatabase, $LookupHistoriesTable, LookupHistory>,
+          ),
+          LookupHistory,
+          PrefetchHooks Function()
+        > {
+  $$LookupHistoriesTableTableManager(
+    _$AppDatabase db,
+    $LookupHistoriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LookupHistoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LookupHistoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LookupHistoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> word = const Value.absent(),
+                Value<DateTime> lookedUpAt = const Value.absent(),
+              }) => LookupHistoriesCompanion(
+                id: id,
+                word: word,
+                lookedUpAt: lookedUpAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String word,
+                required DateTime lookedUpAt,
+              }) => LookupHistoriesCompanion.insert(
+                id: id,
+                word: word,
+                lookedUpAt: lookedUpAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LookupHistoriesTable, LookupHistory>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LookupHistoriesTable,
+                    LookupHistory
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LookupHistoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LookupHistoriesTable,
+      LookupHistory,
+      $$LookupHistoriesTableFilterComposer,
+      $$LookupHistoriesTableOrderingComposer,
+      $$LookupHistoriesTableAnnotationComposer,
+      $$LookupHistoriesTableCreateCompanionBuilder,
+      $$LookupHistoriesTableUpdateCompanionBuilder,
+      (
+        LookupHistory,
+        BaseReferences<_$AppDatabase, $LookupHistoriesTable, LookupHistory>,
+      ),
+      LookupHistory,
+      PrefetchHooks Function()
+    >;
 typedef $$MemorySchedulesTableCreateCompanionBuilder =
     MemorySchedulesCompanion Function({
       required String id,
@@ -25232,6 +26356,378 @@ typedef $$MemoryReviewQueueEntriesTableProcessedTableManager =
       MemoryReviewQueueEntry,
       PrefetchHooks Function()
     >;
+typedef $$VideoSubtitleMasksTableCreateCompanionBuilder =
+    VideoSubtitleMasksCompanion Function({
+      required String audioItemId,
+      required bool enabled,
+      required double rectLeft,
+      required double rectTop,
+      required double rectWidth,
+      required double rectHeight,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$VideoSubtitleMasksTableUpdateCompanionBuilder =
+    VideoSubtitleMasksCompanion Function({
+      Value<String> audioItemId,
+      Value<bool> enabled,
+      Value<double> rectLeft,
+      Value<double> rectTop,
+      Value<double> rectWidth,
+      Value<double> rectHeight,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$VideoSubtitleMasksTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $VideoSubtitleMasksTable,
+          VideoSubtitleMaskRecord
+        > {
+  $$VideoSubtitleMasksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $AudioItemsTable _audioItemIdTable(_$AppDatabase db) => db.audioItems
+      .createAlias('video_subtitle_masks__audio_item_id__audio_items__id');
+
+  $$AudioItemsTableProcessedTableManager get audioItemId {
+    final $_column = $_itemColumn<String>('audio_item_id')!;
+
+    final manager = $$AudioItemsTableTableManager(
+      $_db,
+      $_db.audioItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_audioItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$VideoSubtitleMasksTableFilterComposer
+    extends Composer<_$AppDatabase, $VideoSubtitleMasksTable> {
+  $$VideoSubtitleMasksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rectLeft => $composableBuilder(
+    column: $table.rectLeft,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rectTop => $composableBuilder(
+    column: $table.rectTop,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rectWidth => $composableBuilder(
+    column: $table.rectWidth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rectHeight => $composableBuilder(
+    column: $table.rectHeight,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AudioItemsTableFilterComposer get audioItemId {
+    final $$AudioItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.audioItemId,
+      referencedTable: $db.audioItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AudioItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.audioItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VideoSubtitleMasksTableOrderingComposer
+    extends Composer<_$AppDatabase, $VideoSubtitleMasksTable> {
+  $$VideoSubtitleMasksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rectLeft => $composableBuilder(
+    column: $table.rectLeft,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rectTop => $composableBuilder(
+    column: $table.rectTop,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rectWidth => $composableBuilder(
+    column: $table.rectWidth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rectHeight => $composableBuilder(
+    column: $table.rectHeight,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AudioItemsTableOrderingComposer get audioItemId {
+    final $$AudioItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.audioItemId,
+      referencedTable: $db.audioItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AudioItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.audioItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VideoSubtitleMasksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VideoSubtitleMasksTable> {
+  $$VideoSubtitleMasksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<double> get rectLeft =>
+      $composableBuilder(column: $table.rectLeft, builder: (column) => column);
+
+  GeneratedColumn<double> get rectTop =>
+      $composableBuilder(column: $table.rectTop, builder: (column) => column);
+
+  GeneratedColumn<double> get rectWidth =>
+      $composableBuilder(column: $table.rectWidth, builder: (column) => column);
+
+  GeneratedColumn<double> get rectHeight => $composableBuilder(
+    column: $table.rectHeight,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$AudioItemsTableAnnotationComposer get audioItemId {
+    final $$AudioItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.audioItemId,
+      referencedTable: $db.audioItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AudioItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.audioItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$VideoSubtitleMasksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VideoSubtitleMasksTable,
+          VideoSubtitleMaskRecord,
+          $$VideoSubtitleMasksTableFilterComposer,
+          $$VideoSubtitleMasksTableOrderingComposer,
+          $$VideoSubtitleMasksTableAnnotationComposer,
+          $$VideoSubtitleMasksTableCreateCompanionBuilder,
+          $$VideoSubtitleMasksTableUpdateCompanionBuilder,
+          (VideoSubtitleMaskRecord, $$VideoSubtitleMasksTableReferences),
+          VideoSubtitleMaskRecord,
+          PrefetchHooks Function({bool audioItemId})
+        > {
+  $$VideoSubtitleMasksTableTableManager(
+    _$AppDatabase db,
+    $VideoSubtitleMasksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VideoSubtitleMasksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VideoSubtitleMasksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$VideoSubtitleMasksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> audioItemId = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<double> rectLeft = const Value.absent(),
+                Value<double> rectTop = const Value.absent(),
+                Value<double> rectWidth = const Value.absent(),
+                Value<double> rectHeight = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => VideoSubtitleMasksCompanion(
+                audioItemId: audioItemId,
+                enabled: enabled,
+                rectLeft: rectLeft,
+                rectTop: rectTop,
+                rectWidth: rectWidth,
+                rectHeight: rectHeight,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String audioItemId,
+                required bool enabled,
+                required double rectLeft,
+                required double rectTop,
+                required double rectWidth,
+                required double rectHeight,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => VideoSubtitleMasksCompanion.insert(
+                audioItemId: audioItemId,
+                enabled: enabled,
+                rectLeft: rectLeft,
+                rectTop: rectTop,
+                rectWidth: rectWidth,
+                rectHeight: rectHeight,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $VideoSubtitleMasksTable,
+                    VideoSubtitleMaskRecord
+                  >(table),
+                  $$VideoSubtitleMasksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({audioItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (audioItemId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.audioItemId,
+                        referencedTable: $$VideoSubtitleMasksTableReferences
+                            ._audioItemIdTable(db),
+                        referencedColumn: $$VideoSubtitleMasksTableReferences
+                            ._audioItemIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$VideoSubtitleMasksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VideoSubtitleMasksTable,
+      VideoSubtitleMaskRecord,
+      $$VideoSubtitleMasksTableFilterComposer,
+      $$VideoSubtitleMasksTableOrderingComposer,
+      $$VideoSubtitleMasksTableAnnotationComposer,
+      $$VideoSubtitleMasksTableCreateCompanionBuilder,
+      $$VideoSubtitleMasksTableUpdateCompanionBuilder,
+      (VideoSubtitleMaskRecord, $$VideoSubtitleMasksTableReferences),
+      VideoSubtitleMaskRecord,
+      PrefetchHooks Function({bool audioItemId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -25272,6 +26768,8 @@ class $AppDatabaseManager {
       $$TtsCacheTableTableManager(_db, _db.ttsCache);
   $$DictionaryCacheTableTableManager get dictionaryCache =>
       $$DictionaryCacheTableTableManager(_db, _db.dictionaryCache);
+  $$LookupHistoriesTableTableManager get lookupHistories =>
+      $$LookupHistoriesTableTableManager(_db, _db.lookupHistories);
   $$MemorySchedulesTableTableManager get memorySchedules =>
       $$MemorySchedulesTableTableManager(_db, _db.memorySchedules);
   $$MemoryReviewEventsTableTableManager get memoryReviewEvents =>
@@ -25281,4 +26779,6 @@ class $AppDatabaseManager {
         _db,
         _db.memoryReviewQueueEntries,
       );
+  $$VideoSubtitleMasksTableTableManager get videoSubtitleMasks =>
+      $$VideoSubtitleMasksTableTableManager(_db, _db.videoSubtitleMasks);
 }

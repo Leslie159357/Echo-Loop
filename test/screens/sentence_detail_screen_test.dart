@@ -11,14 +11,14 @@ import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/screens/sentence_detail_screen.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
-import 'package:echo_loop/theme/app_theme.dart';
-import 'package:echo_loop/widgets/common/bookmark_toggle_row.dart';
+import 'package:echo_loop/widgets/common/practice_media_presentation_host.dart';
 import 'package:echo_loop/widgets/practice/sentence_explanation_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/widgets/common/playback_controls.dart'
     show PlaybackNavButton, PlaybackToggleIcon, playbackCenterIconKey;
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../helpers/mock_providers.dart';
@@ -171,12 +171,55 @@ SentenceDetailScreen _detailScreen({
   );
 }
 
+/// 视频讲解页：注入媒体会话，画面由 [_VideoViewMediaEngine] 渲染。
+SentenceDetailScreen _videoDetailScreen({
+  required _RecordingRangePlayback rangePlayback,
+  required _TestMediaPlayback mediaPlayback,
+  Future<void> Function(bool expanded)? setFullscreen,
+  Future<void> Function(Duration position)? previewPosition,
+}) {
+  return SentenceDetailScreen(
+    args: SentenceDetailArgs(
+      audioItemId: 'media-item',
+      audioName: 'Media item',
+      sentenceText: 'A sentence for media playback.',
+      sentenceIndex: 0,
+      startTimeMs: 1000,
+      endTimeMs: 3000,
+      rangePlaybackBuilder: (_) => rangePlayback,
+      wordHighlightSource: const WordHighlightSource(
+        audioItemId: 'media-item',
+        positionStream: Stream<Duration>.empty(),
+        currentPosition: Duration.zero,
+        playbackStatus: WordHighlightPlaybackStatus.idle,
+        playbackStatusStream: Stream<WordHighlightPlaybackStatus>.empty(),
+      ),
+      mediaSession: PracticeMediaPresentationSession(
+        readState: () => const PracticeMediaPresentationState(
+          enabled: true,
+          visualTrackVisible: true,
+          expanded: false,
+          subtitleVisible: false,
+          videoAspectRatio: null,
+        ),
+        setVisible: mediaPlayback.setVisualTrackVisible,
+        setSubtitleVisible: mediaPlayback.setVideoSubtitleVisible,
+        setFullscreen: setFullscreen ?? (_) async {},
+        previewPosition: previewPosition ?? (_) async {},
+        buildVideoView: (size) =>
+            _VideoViewMediaEngine().buildVideoView(viewportSize: size),
+      ),
+    ),
+  );
+}
+
 void main() {
   /// [entryText] 为字幕第 0 句；页面入口句需与之一致才会按序号定位。
   List<Override> detailOverrides({
     String entryText = 'A sentence for media playback.',
     bool showPlaybackSpeedButton = false,
     FakeAudioItemDao? audioItemDao,
+    SharedPreferences? prefs,
   }) {
     audioItemDao ??= FakeAudioItemDao();
     final srt = _transcriptSrt(_transcriptTexts(entryText));
@@ -194,6 +237,7 @@ void main() {
       ),
       ...learningSettingsOverrides(
         showPlaybackSpeedButton: showPlaybackSpeedButton,
+        prefs: prefs,
       ),
     ];
   }
@@ -217,13 +261,17 @@ void main() {
     );
     expect(annotation.senseGroupRangePlayback, same(rangePlayback));
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
 
     expect(rangePlayback.start, const Duration(seconds: 1));
     expect(rangePlayback.end, const Duration(seconds: 3));
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.playStarts, [
       const Duration(seconds: 1),
@@ -246,16 +294,22 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.start, const Duration(seconds: 1));
 
     rangePlayback.currentPosition = const Duration(milliseconds: 1840);
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)),
+    );
     await tester.pump();
     expect(rangePlayback.cancelCalls, 1);
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.resumedPositions, [
       const Duration(milliseconds: 1840),
@@ -287,14 +341,20 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
 
     rangePlayback.currentPosition = const Duration(milliseconds: 1840);
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.pause)),
+    );
     await tester.pump();
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.start, const Duration(seconds: 1));
     expect(rangePlayback.end, const Duration(seconds: 3));
@@ -339,86 +399,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('详情页顶部信息行与讲解区使用相同水平边距', (tester) async {
-    await tester.pumpWidget(
-      createTestApp(
-        _detailScreen(sentenceText: 'A sentence for alignment.'),
-        overrides: detailOverrides(entryText: 'A sentence for alignment.'),
-      ),
-    );
-    await tester.pump();
-
-    final progress = find.text('第 1/10 句');
-    final annotation = find.byType(SentenceExplanationView);
-    expect(progress, findsOneWidget);
-    expect(annotation, findsOneWidget);
-    expect(tester.getRect(annotation).left, closeTo(AppSpacing.m, 1));
-    expect(tester.getRect(progress).left, closeTo(AppSpacing.m, 1));
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  });
-
-  testWidgets('详情页收藏行贴齐信息区右侧内边距', (tester) async {
-    await tester.pumpWidget(
-      createTestApp(
-        _detailScreen(
-          audioItemId: 'audio-item',
-          sentenceText: 'A sentence for alignment.',
-        ),
-        overrides: detailOverrides(entryText: 'A sentence for alignment.'),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    final bookmark = find.byType(BookmarkToggleRow);
-    expect(bookmark, findsOneWidget);
-    final bookmarkIcon = find.byIcon(Icons.bookmark_border);
-    expect(bookmarkIcon, findsOneWidget);
-    final annotation = find.byType(SentenceExplanationView);
-    expect(
-      tester.getRect(bookmarkIcon).right,
-      closeTo(tester.getRect(annotation).right, 1),
-    );
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  });
-
   testWidgets('视频讲解页复用 media_kit 画面并提供完整统一控制', (tester) async {
     final rangePlayback = _RecordingRangePlayback();
     final mediaPlayback = _TestMediaPlayback();
     var fullscreen = false;
+    // 手机竖屏：分栏为上下布局，视频在进度信息上方。
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(
       createTestApp(
-        SentenceDetailScreen(
-          args: SentenceDetailArgs(
-            audioItemId: 'media-item',
-            audioName: 'Media item',
-            sentenceText: 'A sentence for media playback.',
-            sentenceIndex: 0,
-            startTimeMs: 1000,
-            endTimeMs: 3000,
-            rangePlaybackBuilder: (_) => rangePlayback,
-            wordHighlightSource: const WordHighlightSource(
-              audioItemId: 'media-item',
-              positionStream: Stream<Duration>.empty(),
-              currentPosition: Duration.zero,
-              playbackStatus: WordHighlightPlaybackStatus.idle,
-              playbackStatusStream: Stream<WordHighlightPlaybackStatus>.empty(),
-            ),
-            mediaSession: SentenceDetailMediaSession(
-              readState: () => const MediaPlaybackState(),
-              setVisible: mediaPlayback.setVisualTrackVisible,
-              setSubtitleVisible: mediaPlayback.setVideoSubtitleVisible,
-              setFullscreen: (expanded) async => fullscreen = expanded,
-              buildVideoView: (size) =>
-                  _VideoViewMediaEngine().buildVideoView(viewportSize: size),
-            ),
-          ),
+        _videoDetailScreen(
+          rangePlayback: rangePlayback,
+          mediaPlayback: mediaPlayback,
+          setFullscreen: (expanded) async => fullscreen = expanded,
         ),
         overrides: dedupeOverrides([
-          ...detailOverrides(),
+          ...detailOverrides(prefs: prefs),
           mediaPlaybackProvider.overrideWith(() => mediaPlayback),
           mediaEngineProvider.overrideWith(_VideoViewMediaEngine.new),
         ]),
@@ -471,6 +470,76 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('视频讲解页进入与切句时把暂停画面移到该句起点', (tester) async {
+    final rangePlayback = _RecordingRangePlayback();
+    final mediaPlayback = _TestMediaPlayback();
+    final previewedPositions = <Duration>[];
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      createTestApp(
+        _videoDetailScreen(
+          rangePlayback: rangePlayback,
+          mediaPlayback: mediaPlayback,
+          previewPosition: (position) async => previewedPositions.add(position),
+        ),
+        overrides: dedupeOverrides([
+          ...detailOverrides(prefs: prefs),
+          mediaPlaybackProvider.overrideWith(() => mediaPlayback),
+          mediaEngineProvider.overrideWith(_VideoViewMediaEngine.new),
+        ]),
+      ),
+    );
+    await tester.pump();
+
+    // 入口句为第 0 句，起点 1000ms：画面应定位到入口句而不是停留在原播放位置。
+    expect(previewedPositions, [const Duration(seconds: 1)]);
+
+    await tester.tap(find.byIcon(Icons.skip_next_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第 2/10 句'), findsOneWidget);
+    expect(previewedPositions.last, const Duration(seconds: 4));
+    expect(rangePlayback.playStarts, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('宽屏视频讲解页与学习任务页一致改为左右分栏', (tester) async {
+    tester.view.physicalSize = const Size(1200, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      createTestApp(
+        _videoDetailScreen(
+          rangePlayback: _RecordingRangePlayback(),
+          mediaPlayback: _TestMediaPlayback(),
+        ),
+        overrides: dedupeOverrides([
+          ...detailOverrides(prefs: prefs),
+          mediaEngineProvider.overrideWith(_VideoViewMediaEngine.new),
+        ]),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('practice-media-split-side-by-side')),
+      findsOneWidget,
+    );
+    final videoRight = tester
+        .getTopRight(find.byKey(const ValueKey('media-visual-surface')))
+        .dx;
+    final pageLeft = tester
+        .getTopLeft(find.byKey(const ValueKey('sentence-detail-page-view')))
+        .dx;
+    expect(videoRight, lessThanOrEqualTo(pageLeft));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('普通音频讲解页不创建视频画面', (tester) async {
     await tester.pumpWidget(
       createTestApp(
@@ -503,7 +572,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.cancelCalls, 0);
 
@@ -531,8 +602,18 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first).enabled, isFalse);
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last).enabled, isTrue);
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first)
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last)
+          .enabled,
+      isTrue,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(
@@ -547,8 +628,18 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first).enabled, isTrue);
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last).enabled, isFalse);
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first)
+          .enabled,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last)
+          .enabled,
+      isFalse,
+    );
     expect(find.text('第 10/10 句'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -583,8 +674,18 @@ void main() {
 
     expect(find.text('第 1/1 句'), findsOneWidget);
     expect(find.byType(Slider), findsNothing);
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first).enabled, isFalse);
-    expect(tester.widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last).enabled, isFalse);
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).first)
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<PlaybackNavButton>(find.byType(PlaybackNavButton).last)
+          .enabled,
+      isFalse,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
@@ -630,7 +731,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)));
+    await tester.tap(
+      find.byKey(playbackCenterIconKey(PlaybackToggleIcon.play)),
+    );
     await tester.pump();
     expect(rangePlayback.liveSpeeds, isEmpty);
 

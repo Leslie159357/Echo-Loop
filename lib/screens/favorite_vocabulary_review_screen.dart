@@ -15,29 +15,35 @@ import '../features/subscription/widgets/feature_gate.dart';
 import '../features/memory_scheduler/domain/memory_rating.dart';
 import '../features/memory_scheduler/domain/memory_scheduler_results.dart';
 import '../features/scheduled_flashcard/widgets/flashcard_rating_action_bar.dart';
+import '../features/rating_prompt/rating_prompt_providers.dart';
 import '../providers/learning_session/favorite_vocabulary_review_provider.dart';
 import '../providers/favorite_review_settings_provider.dart';
 import '../providers/dictionary/lookup_controller.dart';
 import '../providers/dictionary/dictionary_registry.dart';
 import '../providers/pronunciation/pronunciation_providers.dart';
 import '../providers/tts/tts_controller_provider.dart';
-import '../database/providers.dart';
+import '../models/dictionary/dictionary_entry.dart';
 import '../models/dictionary/dictionary_lookup_result.dart';
 import '../models/dictionary/dict_speakable_texts.dart';
 import '../models/flashcard_item.dart';
 import '../router/app_router.dart';
 import '../widgets/dictionary/ai_dict_result_view.dart';
 import '../widgets/dictionary/local_dict_result_view.dart';
-import '../widgets/dictionary/reading_text_scale.dart';
+import '../widgets/dictionary/subtitle_text_scale.dart';
 import '../widgets/dictionary/dictionary_panel_host.dart';
-import '../widgets/practice/selectable_sentence_text.dart';
+import '../services/app_logger.dart';
+import '../services/dictionary/ai_dictionary_source.dart';
 import '../services/dictionary/dictionary_source.dart';
+import '../services/dictionary/local_dictionary_source.dart';
 import '../theme/app_theme.dart';
 import '../utils/time_format.dart';
 import '../utils/wakelock_mixin.dart';
 import '../widgets/bookmark_review/bookmark_review_settings_sheet.dart';
+import '../widgets/favorites/ai_lookup_toggle.dart';
+import '../widgets/favorites/source_sentence_card.dart';
 import '../widgets/review/review_status_bar.dart';
 import '../widgets/review/review_completion_summary.dart';
+import '../widgets/review/review_front_layout.dart';
 import '../widgets/study/study_activity_detector.dart';
 
 class FavoriteVocabularyReviewScreen extends ConsumerStatefulWidget {
@@ -58,15 +64,130 @@ class _FavoriteVocabularyReviewScreenState
   final GlobalKey<DictionaryPanelHostState> _dictionaryHostKey =
       GlobalKey<DictionaryPanelHostState>();
 
+  /// AI 查词预热订阅（按卡片文本）。
+  ///
+  /// 持有当前卡及后续卡的 AI 查词 controller，使请求在卡片翻到背面前完成并写入缓存；
+  /// 背面 watch 同一 provider，直接复用进行中或已完成的结果，不会重复请求。
+  final Map<String, ProviderSubscription<DictionaryLookupState>>
+  _aiLookupPrewarms = {};
+
+  /// 当前预热窗口内的词；不在窗口内但仍在订阅中的词表示正在等待请求完成后释放。
+  Set<String> _aiLookupWindow = const {};
+
   @override
   void initState() {
     super.initState();
     _review = ref.read(favoriteVocabularyReviewProvider.notifier);
+    // 只有显式完成摘要才代表本次复习正常结束，中途退出不记为任务完成。
+    ref.listenManual(
+      favoriteVocabularyReviewProvider.select(
+        (state) => state.completionSummary,
+      ),
+      (_, next) {
+        if (next == null) return;
+        unawaited(
+          recordRatingTaskCompletion(
+            () => ref.read(ratingPromptTaskCompletionStoreProvider),
+          ),
+        );
+      },
+    );
+    ref.listenManual(
+      favoriteVocabularyReviewProvider.select(
+        (state) => (state.currentCard, state.upcomingCards),
+      ),
+      (_, _) => _syncAiLookupPrewarms(),
+    );
+    ref.listenManual(
+      favoriteReviewSettingsProvider.select(
+        (settings) => settings.autoShowAiLookup,
+      ),
+      (_, _) => _syncAiLookupPrewarms(),
+    );
+    _syncAiLookupPrewarms();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_review.startCurrentCard());
       }
     });
+  }
+
+  /// 按当前卡与后续卡同步 AI 查词预热：新进入窗口的词开始查询，离开窗口的词释放。
+  ///
+  /// 仅在开启「自动显示 AI 查词」时预热，与背面自动展开 AI 结果的条件一致。
+  /// 离开窗口时请求若仍在进行（用户快速评分划过、或评完最后一张进入完成页），
+  /// 等它完成并写入缓存后再释放，避免已消耗的请求被取消白费；用户关闭开关则立即释放。
+  /// 退出页面时订阅随页面销毁，仍在进行的请求会被取消。
+  void _syncAiLookupPrewarms() {
+    final state = ref.read(favoriteVocabularyReviewProvider);
+    final isAutoShowEnabled = ref
+        .read(favoriteReviewSettingsProvider)
+        .autoShowAiLookup;
+    final isCompleted = state.completionSummary != null;
+    final currentCard = state.currentCard;
+    final words = isAutoShowEnabled && !isCompleted
+        ? {
+            if (currentCard != null) currentCard.displayText,
+            for (final card in state.upcomingCards) card.displayText,
+          }
+        : const <String>{};
+    final leavingWords = _aiLookupWindow
+        .where((word) => !words.contains(word))
+        .toList();
+    _aiLookupWindow = words;
+    final releasedWords = <String>[];
+    final drainingWords = <String>[];
+    for (final word in leavingWords) {
+      final subscription = _aiLookupPrewarms[word];
+      if (subscription == null) continue;
+      if (isAutoShowEnabled && !_isAiLookupSettled(subscription.read())) {
+        drainingWords.add(word);
+        continue;
+      }
+      _aiLookupPrewarms.remove(word)!.close();
+      releasedWords.add(word);
+    }
+    final newWords = words
+        .where((word) => !_aiLookupPrewarms.containsKey(word))
+        .toList();
+    if (leavingWords.isEmpty && newWords.isEmpty) return;
+    AppLogger.log(
+      'FavoriteVocabularyReview',
+      'AI 查词预热窗口 autoShow=$isAutoShowEnabled completed=$isCompleted '
+          'current=${currentCard?.displayText} '
+          'start=${newWords.join('|')} release=${releasedWords.join('|')} '
+          'drainBeforeRelease=${drainingWords.join('|')} window=${words.length}',
+    );
+    for (final word in newWords) {
+      _aiLookupPrewarms[word] = ref.listenManual(
+        dictionaryLookupControllerProvider(
+          word,
+          preferredSourceId: AiDictionarySource.sourceId,
+        ),
+        (_, next) => _releaseDrainedAiLookup(word, next),
+      );
+    }
+  }
+
+  /// 已离开窗口的词在请求结束后释放订阅。
+  void _releaseDrainedAiLookup(String word, DictionaryLookupState lookup) {
+    if (_aiLookupWindow.contains(word) || !_isAiLookupSettled(lookup)) return;
+    final subscription = _aiLookupPrewarms.remove(word);
+    if (subscription == null) return;
+    subscription.close();
+    AppLogger.log(
+      'FavoriteVocabularyReview',
+      'AI 查词预热请求结束后释放 word=$word '
+          'status=${lookup.current.runtimeType}',
+    );
+  }
+
+  /// 查询已结束（成功、未收录或失败），不再有在途请求。
+  bool _isAiLookupSettled(DictionaryLookupState lookup) {
+    final current = lookup.current;
+    return current != null &&
+        current is! LookupLoading &&
+        current is! LookupStreaming;
   }
 
   /// 页面生命周期内只启动一次会话收尾，避免返回回调与 dispose 兜底重复刷统计。
@@ -204,68 +325,91 @@ class _FavoriteVocabularyReviewScreenState
                 : DictionaryPanelHost(
                     key: _dictionaryHostKey,
                     onOpenStateChanged: _handleDictionaryPanelOpenStateChanged,
-                    child: Column(
-                      children: [
-                        _ReviewProgress(progress: state.progress),
-                        Expanded(
-                          child:
-                              state.face == FavoriteVocabularyReviewFace.front
-                              ? _VocabularyFront(
-                                  vocabulary: card.displayText,
-                                  showVocabulary: ref.watch(
-                                    favoriteReviewSettingsProvider.select(
-                                      (settings) =>
-                                          settings.showVocabularyOnFront,
+                    // 宽屏下整页（进度条、卡面、评分栏、状态栏）限宽居中，避免正文与评分按钮被拉满整窗。
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: Column(
+                          children: [
+                            _ReviewProgress(progress: state.progress),
+                            Expanded(
+                              child:
+                                  state.face ==
+                                      FavoriteVocabularyReviewFace.front
+                                  ? _VocabularyFront(
+                                      vocabulary: card.displayText,
+                                      showVocabulary: ref.watch(
+                                        favoriteReviewSettingsProvider.select(
+                                          (settings) =>
+                                              settings.showVocabularyOnFront,
+                                        ),
+                                      ),
+                                      showWordDefinition:
+                                          _isSingleWordCard(card) &&
+                                          ref.watch(
+                                            favoriteReviewSettingsProvider
+                                                .select(
+                                                  (settings) => settings
+                                                      .showWordDefinitionOnFront,
+                                                ),
+                                          ),
+                                      playbackState: state.wordPlaybackState,
+                                      hasError: state.mediaError != null,
+                                      onReplay: () =>
+                                          unawaited(player.replayCurrent()),
+                                      onReveal: () =>
+                                          unawaited(player.revealBack()),
+                                    )
+                                  : _VocabularyBack(
+                                      key: ValueKey(card.dbKey),
+                                      card: card,
+                                      preview: state.preview,
+                                      showNextReviewTime: ref.watch(
+                                        favoriteReviewSettingsProvider.select(
+                                          (settings) =>
+                                              settings.showNextReviewTime,
+                                        ),
+                                      ),
+                                      autoShowAiLookup: ref.watch(
+                                        favoriteReviewSettingsProvider.select(
+                                          (settings) =>
+                                              settings.autoShowAiLookup,
+                                        ),
+                                      ),
+                                      isSubmitting: state.isSubmittingRating,
+                                      isRemoving: state.isRemoving,
+                                      onRating: (rating) => unawaited(
+                                        player.selectRating(rating),
+                                      ),
+                                      onRemove: () =>
+                                          unawaited(_removeCurrent()),
                                     ),
-                                  ),
-                                  playbackState: state.wordPlaybackState,
-                                  hasError: state.mediaError != null,
-                                  onReplay: () =>
-                                      unawaited(player.replayCurrent()),
-                                  onReveal: () =>
-                                      unawaited(player.revealBack()),
-                                )
-                              : _VocabularyBack(
-                                  key: ValueKey(card.dbKey),
-                                  card: card,
-                                  preview: state.preview,
-                                  showNextReviewTime: ref.watch(
-                                    favoriteReviewSettingsProvider.select(
-                                      (settings) => settings.showNextReviewTime,
-                                    ),
-                                  ),
-                                  autoShowAiLookup: ref.watch(
-                                    favoriteReviewSettingsProvider.select(
-                                      (settings) => settings.autoShowAiLookup,
-                                    ),
-                                  ),
-                                  isSubmitting: state.isSubmittingRating,
-                                  isRemoving: state.isRemoving,
-                                  onRating: (rating) =>
-                                      unawaited(player.selectRating(rating)),
-                                  onRemove: () => unawaited(_removeCurrent()),
-                                ),
+                            ),
+                            ReviewStatusBar(
+                              key: const Key(
+                                'favorite-vocabulary-review-status-bar',
+                              ),
+                              elapsed: () => player.elapsed,
+                              reviewedCount: state.reviewedCount,
+                              remainingCount: state.remainingCount,
+                              elapsedLabel:
+                                  Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'zh'
+                                  ? '学习时长'
+                                  : 'Study time',
+                              reviewedLabel:
+                                  Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'zh'
+                                  ? '已复习'
+                                  : 'Reviewed',
+                              remainingLabel: l10n.reviewStatusRemaining,
+                            ),
+                          ],
                         ),
-                        ReviewStatusBar(
-                          key: const Key(
-                            'favorite-vocabulary-review-status-bar',
-                          ),
-                          elapsed: () => player.elapsed,
-                          reviewedCount: state.reviewedCount,
-                          remainingCount: state.remainingCount,
-                          elapsedLabel:
-                              Localizations.localeOf(context).languageCode ==
-                                  'zh'
-                              ? '学习时长'
-                              : 'Study time',
-                          reviewedLabel:
-                              Localizations.localeOf(context).languageCode ==
-                                  'zh'
-                              ? '已复习'
-                              : 'Reviewed',
-                          remainingLabel: l10n.reviewStatusRemaining,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
           ),
@@ -299,10 +443,16 @@ class _ReviewProgress extends StatelessWidget {
   }
 }
 
+/// 收藏卡是否为单词（非词组）。词组判定与背面 AI 查词一致：文本含空白即为词组。
+bool _isSingleWordCard(FlashcardItem card) =>
+    card is FlashcardWordItem &&
+    !card.displayText.trim().contains(RegExp(r'\s'));
+
 class _VocabularyFront extends StatelessWidget {
   const _VocabularyFront({
     required this.vocabulary,
     required this.showVocabulary,
+    required this.showWordDefinition,
     required this.playbackState,
     required this.hasError,
     required this.onReplay,
@@ -311,6 +461,7 @@ class _VocabularyFront extends StatelessWidget {
 
   final String vocabulary;
   final bool showVocabulary;
+  final bool showWordDefinition;
   final FavoriteVocabularyReviewPlaybackState playbackState;
   final bool hasError;
   final VoidCallback onReplay;
@@ -333,158 +484,178 @@ class _VocabularyFront extends StatelessWidget {
       FavoriteVocabularyReviewPlaybackState.idle =>
         l10n.favoriteVocabularyReviewTapReplay,
     };
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.m,
-            AppSpacing.xs,
-            AppSpacing.m,
-            AppSpacing.xs,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(32),
-            child: Column(
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: Material(
-                    key: const Key('favorite-vocabulary-review-listen-zone'),
-                    color: theme.colorScheme.primaryContainer.withValues(
-                      alpha: theme.brightness == Brightness.dark ? 0.2 : 0.42,
-                    ),
-                    borderRadius: BorderRadius.circular(28),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: onReplay,
-                      child: SizedBox.expand(
-                        child: _CenteredPrompt(
-                          vocabulary: showVocabulary ? vocabulary : null,
-                          icon: hasError
-                              ? Icons.refresh_rounded
-                              : Icons.volume_up_rounded,
-                          title: status,
-                          body: hasError
-                              ? l10n.favoriteVocabularyReviewAudioSkipped
-                              : '',
-                          accent: hasError
-                              ? theme.colorScheme.error
-                              : isPlaybackActive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.s),
-                Expanded(
-                  flex: 1,
-                  child: Material(
-                    key: const Key('favorite-vocabulary-review-reveal-zone'),
-                    color: theme.colorScheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(28),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: onReveal,
-                      child: SizedBox.expand(
-                        child: _CenteredPrompt(
-                          icon: Icons.visibility_outlined,
-                          title: l10n.favoriteVocabularyReviewReadyTitle,
-                          body: l10n.favoriteVocabularyReviewRevealHint,
-                          accent: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.8,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    final visibleVocabulary = showVocabulary ? vocabulary.trim() : '';
+    final hasVisibleVocabulary = visibleVocabulary.isNotEmpty;
+    return ReviewFrontLayout(
+      listenZoneKey: const Key('favorite-vocabulary-review-listen-zone'),
+      revealZoneKey: const Key('favorite-vocabulary-review-reveal-zone'),
+      revealLabel: l10n.favoriteVocabularyReviewReadyTitle,
+      onReplay: onReplay,
+      onReveal: onReveal,
+      listenContent: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasVisibleVocabulary) ...[
+            Text(
+              visibleVocabulary,
+              key: const Key('favorite-vocabulary-review-front-word'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
+            const SizedBox(height: AppSpacing.s),
+          ],
+          if (showWordDefinition)
+            _FrontWordDefinition(
+              word: vocabulary,
+              // 单词隐藏时释义就是要回忆的主体，用主文字层级展示。
+              isProminent: !hasVisibleVocabulary,
+            ),
+          if (hasVisibleVocabulary || showWordDefinition)
+            const SizedBox(height: AppSpacing.m),
+          ReviewPlaybackPrompt(
+            icon: hasError ? Icons.refresh_rounded : Icons.volume_up_rounded,
+            tone: hasError
+                ? ReviewPlaybackTone.error
+                : isPlaybackActive
+                ? ReviewPlaybackTone.active
+                : ReviewPlaybackTone.idle,
+            status: status,
+            detail: hasError ? l10n.favoriteVocabularyReviewAudioSkipped : null,
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _CenteredPrompt extends StatelessWidget {
-  const _CenteredPrompt({
-    this.vocabulary,
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.accent,
+/// 收藏单词正面的释义，按顺序取：基础在线词典（本地缓存 → API），未查到时只读 AI 查词缓存。
+/// AI 只读缓存未命中也不发起请求；两者都没有则不占位，释义只是辅助信息，不阻断复习。
+class _FrontWordDefinition extends ConsumerWidget {
+  const _FrontWordDefinition({required this.word, required this.isProminent});
+
+  final String word;
+  final bool isProminent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lookup = ref.watch(
+      dictionaryLookupControllerProvider(
+        word,
+        preferredSourceId: LocalDictionarySource.sourceId,
+      ),
+    );
+    final current = lookup.current;
+    if (current is LookupLoaded) {
+      final translation = _basicTranslation(current.result);
+      return translation == null
+          ? const SizedBox.shrink()
+          : _DefinitionText(translation, isProminent: isProminent);
+    }
+    if (current is LookupNotFound || current is LookupError) {
+      // 按词区分 State：卡片切换时复用同一 State 会沿用上一张词的缓存结果。
+      return _AiCachedDefinition(
+        key: ValueKey(word),
+        word: word,
+        isProminent: isProminent,
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+/// 基础词典的中文释义（每个义项一行，原样展示）。
+String? _basicTranslation(DictionaryLookupResult result) {
+  if (result is! LocalDictResult) return null;
+  final translation = result.entry.translation?.trim();
+  return translation == null || translation.isEmpty ? null : translation;
+}
+
+/// 读取 AI 查词的本地缓存（只读，绝不请求 AI）并取第一项释义。
+class _AiCachedDefinition extends ConsumerStatefulWidget {
+  const _AiCachedDefinition({
+    super.key,
+    required this.word,
+    required this.isProminent,
   });
-  final String? vocabulary;
-  final IconData icon;
-  final String title;
-  final String body;
-  final Color accent;
+
+  final String word;
+  final bool isProminent;
+
+  @override
+  ConsumerState<_AiCachedDefinition> createState() =>
+      _AiCachedDefinitionState();
+}
+
+class _AiCachedDefinitionState extends ConsumerState<_AiCachedDefinition> {
+  late final Future<String?> _definition = _readDefinition();
+
+  Future<String?> _readDefinition() async {
+    final entry = await ref
+        .read(aiDictionarySourceProvider)
+        .readCachedEntry(
+          widget.word,
+          targetLanguage: ref
+              .read(dictionaryLookupContextProvider)
+              .targetLanguage,
+        );
+    return _aiFirstMeaningText(entry);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final visibleVocabulary = vocabulary?.trim();
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(AppSpacing.m),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: (constraints.maxHeight - AppSpacing.m * 2).clamp(
-              0,
-              double.infinity,
+    return FutureBuilder<String?>(
+      future: _definition,
+      builder: (context, snapshot) {
+        final definition = snapshot.data;
+        return definition == null
+            ? const SizedBox.shrink()
+            : _DefinitionText(definition, isProminent: widget.isProminent);
+      },
+    );
+  }
+}
+
+/// AI 单词结果的第一项释义：词性 + 目标语言对译，无对译时回退英文释义。
+String? _aiFirstMeaningText(AiDictionaryEntry? entry) {
+  if (entry is! DictionaryEntry || entry.meanings.isEmpty) return null;
+  final meaning = entry.meanings.first;
+  final gloss = meaning.translation.isNotEmpty
+      ? meaning.translation.join('；')
+      : meaning.definition;
+  final text = [
+    meaning.partOfSpeech,
+    gloss,
+  ].where((part) => part.trim().isNotEmpty).join(' ');
+  return text.isEmpty ? null : text;
+}
+
+/// 正面释义文本。单词隐藏时作为主内容放大加深，单词可见时作为辅助说明弱化。
+class _DefinitionText extends StatelessWidget {
+  const _DefinitionText(this.text, {required this.isProminent});
+
+  final String text;
+  final bool isProminent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      text,
+      key: const Key('favorite-vocabulary-review-front-definition'),
+      textAlign: TextAlign.center,
+      style: isProminent
+          ? theme.textTheme.titleLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            )
+          : theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (visibleVocabulary != null &&
-                  visibleVocabulary.isNotEmpty) ...[
-                Text(
-                  visibleVocabulary,
-                  key: const Key('favorite-vocabulary-review-front-word'),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.m),
-              ],
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Icon(icon, size: 28, color: accent),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.m),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              if (body.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.s),
-                Text(
-                  body,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -532,9 +703,33 @@ class _VocabularyBackState extends ConsumerState<_VocabularyBack> {
     }
   }
 
-  bool get _isSingleWord =>
-      !widget.card.displayText.trim().contains(RegExp(r'\s')) &&
-      widget.card is FlashcardWordItem;
+  @override
+  void initState() {
+    super.initState();
+    if (_showAi) _logAiLookupReadiness();
+  }
+
+  /// 翻到背面时记录 AI 查词是否已由预热就绪：loaded 为预期；streaming 说明预热未完成
+  /// 但已复用同一请求；notPrewarmed 说明预热窗口未覆盖该卡，属于异常。
+  void _logAiLookupReadiness() {
+    final word = widget.card.displayText;
+    final provider = dictionaryLookupControllerProvider(
+      word,
+      preferredSourceId: AiDictionarySource.sourceId,
+    );
+    final status = ref.exists(provider)
+        ? switch (ref.read(provider).current) {
+            LookupLoaded() => 'loaded',
+            LookupStreaming() => 'streaming',
+            LookupLoading() || null => 'loading',
+            final other => other.runtimeType.toString(),
+          }
+        : 'notPrewarmed';
+    AppLogger.log(
+      'FavoriteVocabularyReview',
+      '翻面 AI 查词状态 word=$word status=$status',
+    );
+  }
 
   Future<void> _toggleSourcePlayback() async {
     await ref
@@ -676,14 +871,14 @@ class _VocabularyBackState extends ConsumerState<_VocabularyBack> {
                     ),
                   ],
                 ),
-                if (_isSingleWord) ...[
+                if (_isSingleWordCard(widget.card)) ...[
                   const SizedBox(height: AppSpacing.s),
                   _LocalDictionarySection(word: card.displayText),
                 ],
                 if (sourceSentenceText != null &&
                     sourceSentenceText.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.m),
-                  _SourceSentenceCard(
+                  SourceSentenceCard(
                     sentenceText: sourceSentenceText,
                     audioItemId: card.audioItemId,
                     sentenceIndex: card.sentenceIndex,
@@ -692,7 +887,7 @@ class _VocabularyBackState extends ConsumerState<_VocabularyBack> {
                   ),
                 ],
                 const SizedBox(height: AppSpacing.m),
-                _AiLookupToggle(
+                AiLookupToggle(
                   key: const Key('favorite-vocabulary-review-ai-toggle'),
                   expanded: _showAi,
                   onTap: () {
@@ -705,7 +900,7 @@ class _VocabularyBackState extends ConsumerState<_VocabularyBack> {
                 if (_showAi) ...[
                   const SizedBox(height: AppSpacing.s),
                   // AI 查词结果同样随学习内容字号缩放
-                  ReadingTextScale(
+                  SubtitleTextScale(
                     child: AiDictResultView(
                       state: aiLookup?.current,
                       onRetry: () => ref
@@ -804,135 +999,6 @@ class _VocabularyBackState extends ConsumerState<_VocabularyBack> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// 来源句卡片：把可播放句子与学习语境标签组合成一个明确的内容入口。
-class _SourceSentenceCard extends StatelessWidget {
-  const _SourceSentenceCard({
-    required this.sentenceText,
-    required this.audioItemId,
-    required this.sentenceIndex,
-    required this.sentenceStartMs,
-    required this.sentenceEndMs,
-  });
-
-  final String sentenceText;
-  final String? audioItemId;
-  final int? sentenceIndex;
-  final int? sentenceStartMs;
-  final int? sentenceEndMs;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Material(
-      key: const Key('favorite-vocabulary-review-source'),
-      color: colors.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.55)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.s, 8, AppSpacing.s, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SelectableSentenceText(
-              text: sentenceText,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontSize: 16,
-                height: 1.35,
-                fontWeight: FontWeight.w400,
-              ),
-              origin: DictionaryLookupOrigin(
-                audioItemId: audioItemId,
-                sentenceIndex: sentenceIndex,
-                sentenceText: sentenceText,
-                sentenceStartMs: sentenceStartMs,
-                sentenceEndMs: sentenceEndMs,
-              ),
-            ),
-            if (audioItemId != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              _SourceMaterialLink(audioItemId: audioItemId!),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// AI 查词主入口：以整行卡片表达可展开内容，而不是普通次级按钮。
-class _AiLookupToggle extends StatelessWidget {
-  const _AiLookupToggle({
-    super.key,
-    required this.expanded,
-    required this.onTap,
-  });
-
-  final bool expanded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Semantics(
-      button: true,
-      toggled: expanded,
-      label: expanded ? '收起 AI 查词' : '显示 AI 查词',
-      child: Material(
-        color: colors.primaryContainer.withValues(alpha: 0.55),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: colors.primary.withValues(alpha: 0.35)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.m,
-              vertical: 9,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  expanded ? Icons.auto_awesome : Icons.auto_awesome_outlined,
-                  color: colors.primary,
-                  size: 22,
-                ),
-                const SizedBox(width: AppSpacing.s),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI 查词',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  expanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.chevron_right_rounded,
-                  color: colors.primary,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1089,7 +1155,7 @@ class _LocalDictionarySectionState
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ReadingTextScale(
+              SubtitleTextScale(
                 child: LocalDictResultView(
                   state: LookupLoaded(result),
                   word: widget.word,
@@ -1102,72 +1168,4 @@ class _LocalDictionarySectionState
       },
     );
   }
-}
-
-/// 来源材料入口只读取标题；播放仍由来源句统一播放编排负责。
-class _SourceMaterialLink extends ConsumerWidget {
-  const _SourceMaterialLink({required this.audioItemId});
-
-  final String audioItemId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => FutureBuilder(
-    future: ref.read(audioItemDaoProvider).getById(audioItemId),
-    builder: (context, snapshot) {
-      final title = snapshot.data?.name ?? '来源材料';
-      final l10n = AppLocalizations.of(context)!;
-      final theme = Theme.of(context);
-      final colors = theme.colorScheme;
-      return Semantics(
-        button: true,
-        label: '打开来源材料 $title',
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              key: const Key('favorite-vocabulary-review-source-material'),
-              onTap: () =>
-                  context.push(AppRoutes.audioLearningPlan(audioItemId)),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: 3,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.headphones_rounded,
-                      size: 16,
-                      color: colors.primary,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 220),
-                      child: Text(
-                        l10n.bookmarkReviewFromAudio(title),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }

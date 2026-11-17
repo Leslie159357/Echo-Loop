@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:echo_loop/database/daos/bookmark_dao.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/features/rating_prompt/data/rating_prompt_task_completion_store.dart';
+import 'package:echo_loop/features/rating_prompt/rating_prompt_providers.dart';
 import 'package:echo_loop/features/remote_config/remote_config.dart';
 import 'package:echo_loop/features/user_region/user_region_bootstrapper.dart';
 import 'package:echo_loop/features/user_region/user_region_providers.dart';
@@ -204,6 +206,21 @@ class _TestDao implements BookmarkDao {
 }
 
 late final SharedPreferences _sharedPreferences;
+
+/// 记录任务完成写入，用于断言“正常完成复习才记为任务完成”。
+class _RecordingCompletionStore extends RatingPromptTaskCompletionStore {
+  _RecordingCompletionStore(super.preferences);
+
+  final List<DateTime> records = [];
+
+  @override
+  Future<bool> recordCompletion(DateTime time) {
+    records.add(time);
+    return super.recordCompletion(time);
+  }
+}
+
+_RecordingCompletionStore? _lastCompletionStore;
 final _dictionarySource = _EchoDictionarySource();
 
 Finder get _bookmarkReviewPopScope =>
@@ -256,6 +273,9 @@ Widget _app({
       analyticsOverride(),
       dictionaryServiceOverride(),
       sharedPreferencesProvider.overrideWithValue(_sharedPreferences),
+      ratingPromptTaskCompletionStoreProvider.overrideWithValue(
+        _lastCompletionStore = _RecordingCompletionStore(_sharedPreferences),
+      ),
       userRegionBootstrapProvider.overrideWith(
         (ref) async => const UserRegionBootstrapResult(
           isChinaUser: false,
@@ -361,6 +381,8 @@ void main() {
 
     expect(find.byType(ReviewCompletionSummary), findsOneWidget);
     expect(find.text('本次复习已没有收藏句。'), findsNothing);
+    // 正常完成复习（含取消最后一张收藏）记为任务完成，供评分提醒判断。
+    expect(_lastCompletionStore!.records, hasLength(1));
   });
 
   testWidgets(
@@ -397,6 +419,8 @@ void main() {
       await tester.pump();
 
       expect(find.byType(ReviewCompletionSummary), findsNothing);
+      // 中途退出不算完成，不记录任务完成。
+      expect(_lastCompletionStore!.records, isEmpty);
 
       disposeGate.complete();
       await tester.pumpAndSettle();
@@ -436,16 +460,20 @@ void main() {
     );
   });
 
-  testWidgets('front uses an equal listening and reveal split', (tester) async {
+  testWidgets('front places the reveal button below the listening area', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app());
     await tester.pump();
-    final listen = tester.getSize(
+    final listen = tester.getRect(
       find.byKey(const Key('bookmark-review-listen-zone')),
     );
-    final reveal = tester.getSize(
+    final reveal = tester.getRect(
       find.byKey(const Key('bookmark-review-reveal-zone')),
     );
-    expect(reveal.height / listen.height, closeTo(1, 0.02));
+    expect(reveal.top, greaterThan(listen.bottom));
+    expect(reveal.width, closeTo(listen.width, 0.1));
+    expect(reveal.height, 52);
   });
 
   testWidgets('upper zone replays and lower zone reveals explanation back', (
@@ -468,7 +496,7 @@ void main() {
     expect(find.byType(AnimatedSwitcher), findsNothing);
   });
 
-  testWidgets('front playback icon uses neutral and active colors', (
+  testWidgets('front playback icon uses brand color and fills while playing', (
     tester,
   ) async {
     await tester.pumpWidget(_app());
@@ -479,14 +507,14 @@ void main() {
     );
     expect(
       tester.widget<Icon>(find.byIcon(Icons.headphones_rounded)).color,
-      theme.colorScheme.onSurfaceVariant,
+      theme.colorScheme.onPrimaryContainer,
     );
 
     await tester.tap(find.byKey(const Key('bookmark-review-listen-zone')));
     await tester.pump();
     expect(
       tester.widget<Icon>(find.byIcon(Icons.headphones_rounded)).color,
-      theme.colorScheme.primary,
+      theme.colorScheme.onPrimary,
     );
   });
 
@@ -883,27 +911,5 @@ void main() {
     expect(source.top, greaterThan(progress.bottom));
     expect((source.center.dy - unsave.center.dy).abs(), lessThan(2));
     expect(unsave.right, greaterThan(source.right));
-  });
-
-  testWidgets('unsave uses a plain label and filled bookmark icon', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_app());
-    await tester.pump();
-
-    final action = find.byKey(const Key('bookmark-review-unsave'));
-    final bookmark = find.descendant(
-      of: action,
-      matching: find.byIcon(Icons.bookmark),
-    );
-    expect(bookmark, findsOneWidget);
-    expect(
-      find.descendant(of: action, matching: find.byType(TextButton)),
-      findsNothing,
-    );
-    final label = tester.widget<Text>(find.text('取消收藏'));
-    expect(label.style?.fontWeight, FontWeight.normal);
-    expect(label.style?.fontSize, 14);
-    expect(tester.widget<Icon>(bookmark).color, AppTheme.bookmarkColor);
   });
 }

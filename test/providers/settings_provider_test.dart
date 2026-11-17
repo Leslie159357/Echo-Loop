@@ -199,6 +199,20 @@ void main() {
       expect(prefs.getBool('word_highlight_enabled'), isFalse);
     });
 
+    test('音效默认关闭并可持久化开启选择', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(appSettingsProvider.notifier);
+      expect(container.read(appSettingsProvider).soundEffectsEnabled, isFalse);
+
+      await notifier.setSoundEffectsEnabled(true);
+
+      expect(container.read(appSettingsProvider).soundEffectsEnabled, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('sound_effects_enabled'), isTrue);
+    });
+
     test('暂停后从句首继续默认关闭并可持久化开启选择', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

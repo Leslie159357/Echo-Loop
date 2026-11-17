@@ -23,6 +23,7 @@ const _aiTranscriptionAutoMergeEnabledKey =
     'ai_transcription_auto_merge_enabled';
 const _wordHighlightEnabledKey = 'word_highlight_enabled';
 const _resumeFromSentenceStartEnabledKey = 'resume_from_sentence_start_enabled';
+const _soundEffectsEnabledKey = 'sound_effects_enabled';
 
 /// 静音阈值合法范围（秒）
 const silenceThresholdMinSeconds = 1;
@@ -152,6 +153,11 @@ class AppSettingsState {
   /// 关闭时各播放入口从暂停的精确位置继续；开启时从暂停所在句的句首重新播放。
   final bool resumeFromSentenceStartEnabled;
 
+  /// 全局界面音效开关（默认关闭），控制达成目标等提示音。
+  ///
+  /// 仅保存在本机：云端偏好文档尚未定义该字段。
+  final bool soundEffectsEnabled;
+
   const AppSettingsState({
     this.themeMode = ThemeMode.system,
     this.locale,
@@ -164,6 +170,7 @@ class AppSettingsState {
     this.aiTranscriptionAutoMergeEnabled = true,
     this.wordHighlightEnabled = true,
     this.resumeFromSentenceStartEnabled = false,
+    this.soundEffectsEnabled = false,
   });
 
   AppSettingsState copyWith({
@@ -180,6 +187,7 @@ class AppSettingsState {
     bool? aiTranscriptionAutoMergeEnabled,
     bool? wordHighlightEnabled,
     bool? resumeFromSentenceStartEnabled,
+    bool? soundEffectsEnabled,
   }) {
     return AppSettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -199,6 +207,7 @@ class AppSettingsState {
       wordHighlightEnabled: wordHighlightEnabled ?? this.wordHighlightEnabled,
       resumeFromSentenceStartEnabled:
           resumeFromSentenceStartEnabled ?? this.resumeFromSentenceStartEnabled,
+      soundEffectsEnabled: soundEffectsEnabled ?? this.soundEffectsEnabled,
     );
   }
 }
@@ -301,6 +310,7 @@ class AppSettings extends _$AppSettings {
         prefs.getBool(_wordHighlightEnabledKey) ?? true;
     final resumeFromSentenceStartEnabled =
         prefs.getBool(_resumeFromSentenceStartEnabledKey) ?? false;
+    final soundEffectsEnabled = prefs.getBool(_soundEffectsEnabledKey) ?? false;
 
     // 异步间隙后 notifier 可能已销毁或被新一轮加载取代，过期则丢弃。
     if (!ref.mounted || generation != _settingsLoadGeneration) return;
@@ -316,6 +326,7 @@ class AppSettings extends _$AppSettings {
       aiTranscriptionAutoMergeEnabled: aiTranscriptionAutoMergeEnabled,
       wordHighlightEnabled: wordHighlightEnabled,
       resumeFromSentenceStartEnabled: resumeFromSentenceStartEnabled,
+      soundEffectsEnabled: soundEffectsEnabled,
     );
   }
 
@@ -484,6 +495,15 @@ class AppSettings extends _$AppSettings {
       (prefs) => prefs.setBool(_resumeFromSentenceStartEnabledKey, enabled),
     );
     userPreferencesSyncEvents.notifyLocalChange();
+  }
+
+  /// 设置全局界面音效开关（默认关闭）。仅存本机，不触发云端偏好同步。
+  Future<void> setSoundEffectsEnabled(bool enabled) async {
+    state = state.copyWith(soundEffectsEnabled: enabled);
+
+    await _writePreference(
+      (prefs) => prefs.setBool(_soundEffectsEnabledKey, enabled),
+    );
   }
 
   /// 设置播放原音时的字幕逐词高亮（默认开启）。

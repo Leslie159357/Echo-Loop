@@ -4,6 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/video_subtitle_mask.dart';
+import 'svg_action_icon.dart';
+import 'video_subtitle_mask_overlay.dart';
 
 /// 视频画面的纯展示状态，供随心听与学习任务共享同一套视觉组件。
 class MediaVisualSurfaceState {
@@ -12,12 +15,20 @@ class MediaVisualSurfaceState {
     required this.expanded,
     required this.isPlaying,
     required this.subtitleVisible,
+    required this.subtitleMask,
+    required this.videoAspectRatio,
   });
 
   final bool visible;
   final bool expanded;
   final bool isPlaying;
   final bool subtitleVisible;
+
+  /// 当前视频的字幕遮罩设置；尚未从数据库读出时为 null，此时不显示遮罩。
+  final VideoSubtitleMask? subtitleMask;
+
+  /// 视频实际宽高比，用于把遮罩定位到去掉黑边后的画面；未知时为 null。
+  final double? videoAspectRatio;
 }
 
 /// 视频画面产生的业务动作；组件本身不直接依赖任何 Provider。
@@ -28,6 +39,8 @@ class MediaVisualSurfaceActions {
     required this.onPlayPause,
     required this.onSubtitleToggle,
     required this.onFullscreenToggle,
+    required this.onSubtitleMaskToggle,
+    required this.onSubtitleMaskRectChanged,
   });
 
   final VoidCallback onShow;
@@ -35,6 +48,21 @@ class MediaVisualSurfaceActions {
   final VoidCallback onPlayPause;
   final VoidCallback onSubtitleToggle;
   final VoidCallback onFullscreenToggle;
+  final VoidCallback onSubtitleMaskToggle;
+
+  /// 遮罩拖动 / 缩放结束后提交的归一化位置。
+  final ValueChanged<Rect> onSubtitleMaskRectChanged;
+}
+
+/// 画面右上角可用的控件；默认全部可用，个别页面按需收起。
+class MediaVisualControls {
+  const MediaVisualControls({
+    this.showSubtitleTrackButton = true,
+    this.showFullscreenButton = true,
+  });
+
+  final bool showSubtitleTrackButton;
+  final bool showFullscreenButton;
 }
 
 /// media_kit 视频画面的共享外壳。
@@ -48,12 +76,14 @@ class MediaVisualSurface extends StatefulWidget {
     required this.actions,
     required this.buildVideoView,
     this.fillAvailableHeight = false,
+    this.controls = const MediaVisualControls(),
   });
 
   final MediaVisualSurfaceState state;
   final MediaVisualSurfaceActions actions;
   final Widget Function(Size viewportSize) buildVideoView;
   final bool fillAvailableHeight;
+  final MediaVisualControls controls;
 
   @override
   State<MediaVisualSurface> createState() => _MediaVisualSurfaceState();
@@ -68,6 +98,19 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
   void dispose() {
     _hideTimer?.cancel();
     super.dispose();
+  }
+
+  void _hideControls() {
+    _hideTimer?.cancel();
+    if (_controlsVisible) setState(() => _controlsVisible = false);
+  }
+
+  /// 开启遮罩时收起控件，让遮罩手柄提示不被播放按钮遮挡。
+  void _toggleSubtitleMask() {
+    final subtitleMask = widget.state.subtitleMask;
+    if (subtitleMask == null) return;
+    if (!subtitleMask.enabled) _hideControls();
+    widget.actions.onSubtitleMaskToggle();
   }
 
   void _showControlsTemporarily() {
@@ -113,6 +156,9 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final controlsVisible = state.expanded || _controlsVisible;
+        final subtitleMask = state.subtitleMask;
+        final isSubtitleMaskEnabled = subtitleMask?.enabled ?? false;
+        final controls = widget.controls;
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
@@ -143,6 +189,22 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
                       color: Colors.black,
                       child: widget.buildVideoView(Size(width, height)),
                     ),
+                    // 数据加载后即挂载，开关只改变 isEnabled：开启才会激发手柄，
+                    // 挂载本身（打开视频、布局切换）不会。
+                    if (subtitleMask != null)
+                      Positioned.fill(
+                        child: VideoSubtitleMaskOverlay(
+                          normalizedRect: subtitleMask.rect,
+                          isEnabled: subtitleMask.enabled,
+                          contentRect: videoContentRect(
+                            Size(width, height),
+                            state.videoAspectRatio,
+                          ),
+                          onRectChanged:
+                              widget.actions.onSubtitleMaskRectChanged,
+                          onInteractionStart: _hideControls,
+                        ),
+                      ),
                     Center(
                       child: AnimatedOpacity(
                         opacity: controlsVisible ? 1 : 0,
@@ -187,43 +249,57 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
                           ignoring: !controlsVisible,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
+                            children: _spaced([
                               _VisualControlButton(
                                 key: const ValueKey(
-                                  'media-subtitle-track-button',
+                                  'media-subtitle-mask-button',
                                 ),
-                                icon: _CcTrackIcon(
-                                  enabled: state.subtitleVisible,
+                                icon: _SubtitleMaskIcon(
+                                  enabled: isSubtitleMaskEnabled,
                                 ),
-                                active: state.subtitleVisible,
-                                tooltip: state.subtitleVisible
-                                    ? AppLocalizations.of(
-                                        context,
-                                      )!.mediaHideVideoSubtitles
-                                    : AppLocalizations.of(
-                                        context,
-                                      )!.mediaShowVideoSubtitles,
-                                onPressed: widget.actions.onSubtitleToggle,
+                                active: isSubtitleMaskEnabled,
+                                tooltip: isSubtitleMaskEnabled
+                                    ? AppLocalizations.of(context)!
+                                          .mediaHideSubtitleMask
+                                    : AppLocalizations.of(context)!
+                                          .mediaShowSubtitleMask,
+                                onPressed: _toggleSubtitleMask,
                               ),
-                              const SizedBox(width: 8),
-                              _VisualControlButton(
-                                key: const ValueKey('media-fullscreen-button'),
-                                icon: Icon(
-                                  state.expanded
-                                      ? Icons.fullscreen_exit
-                                      : Icons.fullscreen,
+                              if (controls.showSubtitleTrackButton)
+                                _VisualControlButton(
+                                  key: const ValueKey(
+                                    'media-subtitle-track-button',
+                                  ),
+                                  icon: _CcTrackIcon(
+                                    enabled: state.subtitleVisible,
+                                  ),
+                                  active: state.subtitleVisible,
+                                  tooltip: state.subtitleVisible
+                                      ? AppLocalizations.of(context)!
+                                            .mediaHideVideoSubtitles
+                                      : AppLocalizations.of(context)!
+                                            .mediaShowVideoSubtitles,
+                                  onPressed: widget.actions.onSubtitleToggle,
                                 ),
-                                active: true,
-                                tooltip: state.expanded
-                                    ? AppLocalizations.of(
-                                        context,
-                                      )!.mediaExitFullscreen
-                                    : AppLocalizations.of(
-                                        context,
-                                      )!.mediaEnterFullscreen,
-                                onPressed: widget.actions.onFullscreenToggle,
-                              ),
-                            ],
+                              if (controls.showFullscreenButton)
+                                _VisualControlButton(
+                                  key: const ValueKey(
+                                    'media-fullscreen-button',
+                                  ),
+                                  icon: Icon(
+                                    state.expanded
+                                        ? Icons.fullscreen_exit
+                                        : Icons.fullscreen,
+                                  ),
+                                  active: true,
+                                  tooltip: state.expanded
+                                      ? AppLocalizations.of(context)!
+                                            .mediaExitFullscreen
+                                      : AppLocalizations.of(context)!
+                                            .mediaEnterFullscreen,
+                                  onPressed: widget.actions.onFullscreenToggle,
+                                ),
+                            ]),
                           ),
                         ),
                       ),
@@ -242,9 +318,8 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
                               key: const ValueKey('media-hide-visual-button'),
                               icon: const Icon(Icons.visibility_off),
                               active: true,
-                              tooltip: AppLocalizations.of(
-                                context,
-                              )!.videoHideTrack,
+                              tooltip: AppLocalizations.of(context)!
+                                  .videoHideTrack,
                               onPressed: widget.actions.onHide,
                             ),
                           ),
@@ -261,6 +336,14 @@ class _MediaVisualSurfaceState extends State<MediaVisualSurface> {
     );
   }
 }
+
+/// 在按钮之间插入固定间距，个别按钮被收起时不残留多余空隙。
+List<Widget> _spaced(List<Widget> buttons) => [
+  for (var i = 0; i < buttons.length; i++) ...[
+    if (i > 0) const SizedBox(width: 8),
+    buttons[i],
+  ],
+];
 
 class _VisualControlButton extends StatelessWidget {
   const _VisualControlButton({
@@ -310,37 +393,68 @@ class _CcTrackIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _TrackToggleIcon(
+      enabled: enabled,
+      glyphBuilder: (color) => Container(
+        width: 20,
+        height: 15,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: color, width: 1.8),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          'CC',
+          style: TextStyle(
+            color: color,
+            fontSize: 9,
+            height: 1,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 字幕遮罩开关图标：外框底部横条表示遮住字幕区。
+class _SubtitleMaskIcon extends StatelessWidget {
+  const _SubtitleMaskIcon({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TrackToggleIcon(
+      enabled: enabled,
+      glyphBuilder: (color) => SvgActionIcon(
+        assetName: 'assets/icon/subtitle_mask.svg',
+        color: color,
+      ),
+    );
+  }
+}
+
+/// 画面开关类图标的共用外观：关闭时图形变暗、叠加纯白斜线。
+///
+/// 斜线保持纯白，保证在视频画面上依然清晰可辨；CC 与字幕遮罩共用这一份，
+/// 避免两个按钮的关闭态风格不一致。
+class _TrackToggleIcon extends StatelessWidget {
+  const _TrackToggleIcon({required this.enabled, required this.glyphBuilder});
+
+  final bool enabled;
+  final Widget Function(Color color) glyphBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? Colors.white : Colors.white.withValues(alpha: 0.68);
     return SizedBox(
       width: 24,
       height: 24,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Container(
-            width: 20,
-            height: 15,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: enabled
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.68),
-                width: 1.8,
-              ),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Text(
-              'CC',
-              style: TextStyle(
-                color: enabled
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.68),
-                fontSize: 9,
-                height: 1,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
+          glyphBuilder(color),
           if (!enabled)
             Transform.rotate(
               angle: -0.72,

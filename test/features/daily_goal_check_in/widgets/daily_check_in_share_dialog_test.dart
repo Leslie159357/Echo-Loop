@@ -9,6 +9,7 @@ import 'package:echo_loop/features/user_preferences/data/local_user_preferences_
 import 'package:echo_loop/features/user_preferences/data/user_preferences_sync_service.dart';
 import 'package:echo_loop/features/user_preferences/providers/user_preferences_sync_providers.dart';
 import 'package:echo_loop/l10n/app_localizations.dart';
+import 'package:echo_loop/services/sound_effect_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../helpers/fake_sound_effect_player.dart';
 import '../share_test_support.dart';
 
 class _Sync extends Mock implements UserPreferencesSyncService {}
@@ -117,6 +119,7 @@ void main() {
         userPreferencesSyncServiceProvider.overrideWithValue(sync),
         dailyShareActionsProvider.overrideWithValue(actions),
         shareCardApiProvider.overrideWithValue(api),
+        soundEffectPlayerProvider.overrideWithValue(FakeSoundEffectPlayer()),
       ],
     );
     addTearDown(container.dispose);
@@ -181,6 +184,43 @@ void main() {
       await drain(tester);
     });
   }
+
+  testWidgets('自动弹出先播放庆祝动画，手动入口不播放', (tester) async {
+    await mount(tester, ready: await card(tester));
+    await tester.tap(find.text('automatic'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('今日目标达成！'), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+
+    await tester.pumpAndSettle();
+    expect(find.text('今日目标达成！'), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    // 手动入口直接打开卡片，不播放庆祝动画。
+    await tester.tap(find.text('manual'));
+    await tester.pumpAndSettle();
+    expect(find.text('今日目标达成！'), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.close));
+    await drain(tester);
+  });
+
+  testWidgets('庆祝期间页面离开则不弹卡片也不写展示标记', (tester) async {
+    await mount(tester, ready: await card(tester));
+    await tester.tap(find.text('automatic'));
+    await tester.pump(const Duration(milliseconds: 100));
+    visible = false;
+    await tester.pumpAndSettle();
+
+    expect(find.text('今日目标达成！'), findsNothing);
+    expect(find.byType(Dialog), findsNothing);
+    expect(
+      prefs.getString(LocalUserPreferencesStore.dailyShareDateKey),
+      isNull,
+    );
+  });
 
   testWidgets('未就绪自动跳过，手动只 toast，准备完成不会补弹', (tester) async {
     final share = await mount(tester);

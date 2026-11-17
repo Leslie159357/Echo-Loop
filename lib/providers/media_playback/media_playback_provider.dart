@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../database/providers.dart';
 import '../../database/daos/playback_state_dao.dart';
+import '../../features/rating_prompt/domain/rating_prompt_policy.dart';
+import '../../features/rating_prompt/rating_prompt_providers.dart';
 import '../../models/audio_item.dart';
 import '../../models/listening_practice_state.dart';
 import '../../models/media_load_result.dart';
@@ -184,6 +186,14 @@ class MediaPlayback extends Notifier<MediaPlaybackState> {
   Future<void> _endActiveStudyPage() async {
     final generation = _activeStudyPageGeneration;
     final timer = _studySessionTimer;
+    // 释放计时器前读取本次页面累计的有效学习时长，超过阈值记为一次任务完成。
+    if (timer != null && timer.elapsed > ratingFreeListenMinimumDuration) {
+      unawaited(
+        recordRatingTaskCompletion(
+          () => ref.read(ratingPromptTaskCompletionStoreProvider),
+        ),
+      );
+    }
     try {
       if (timer != null) await timer.dispose();
     } catch (error, stackTrace) {
@@ -939,6 +949,18 @@ class MediaPlayback extends Notifier<MediaPlaybackState> {
       'sentence detail paused position=${position.inMilliseconds}ms',
     );
     return position;
+  }
+
+  /// 讲解页切到某句时，把暂停中的视频画面移到该句起点。
+  ///
+  /// 画面取自共享引擎的当前位置；只移动画面，不改变随心听焦点，返回时由
+  /// [restoreAfterSentenceDetail] 还原原位置。
+  Future<void> previewSentenceDetailPosition(Duration position) {
+    AppLogger.log(
+      'MediaPlayback',
+      'sentence detail preview frame position=${position.inMilliseconds}ms',
+    );
+    return _engine.seekForPreview(position);
   }
 
   /// 从句子讲解返回后同步收藏，并在讲解播放改变位置时恢复原播放位置。

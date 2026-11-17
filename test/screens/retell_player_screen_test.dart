@@ -1,3 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:echo_loop/providers/practice_media_split_provider.dart';
+import 'package:echo_loop/features/rating_prompt/data/rating_prompt_task_completion_store.dart';
+import 'package:echo_loop/features/rating_prompt/rating_prompt_providers.dart';
+
 // 复述播放器页面 Widget 测试
 //
 // 验证 SegmentedButton 位置和显示模式切换功能。
@@ -14,6 +19,11 @@ import 'package:echo_loop/models/intensive_listen_settings.dart'
     show ShadowingControlMode;
 import 'package:echo_loop/models/sentence.dart';
 import 'package:echo_loop/models/retell_settings.dart';
+import 'package:echo_loop/widgets/common/shimmer_placeholder.dart';
+import 'package:echo_loop/features/auth/providers/auth_providers.dart';
+import 'package:echo_loop/features/subscription/providers/feature_access_provider.dart';
+import 'package:echo_loop/providers/sentence_translation_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Session, User;
 import 'package:echo_loop/models/speech_practice_models.dart';
 import 'package:echo_loop/screens/retell_player_screen.dart';
 import 'package:echo_loop/screens/sentence_detail_screen.dart';
@@ -36,6 +46,7 @@ import 'package:echo_loop/providers/retell_recording_controller_provider.dart';
 import 'package:echo_loop/providers/retell_review_evaluation_provider.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
 import 'package:echo_loop/services/notification_permission_service.dart';
+import 'package:echo_loop/services/speech_permission_service.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
 import 'package:echo_loop/services/audio_playback_service.dart';
 import 'package:echo_loop/services/audio_preview_controller.dart';
@@ -71,6 +82,35 @@ class _TestBookmarkDao implements BookmarkDao {
   dynamic noSuchMethod(Invocation invocation) {
     return Future<void>.value();
   }
+}
+
+/// 录音权限替身：固定为支持录音，不依赖宿主系统。
+///
+/// 默认实现的 `isSupported` 只认 iOS / macOS / Android，Linux CI 上为 false，
+/// 会让页面在 initState 后直接 pop，导致弹窗相关用例找不到控件。
+class _FakeSpeechPermissionService implements SpeechPermissionService {
+  const _FakeSpeechPermissionService();
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<SpeechPracticePermissionState> getStatus() async =>
+      const SpeechPracticePermissionState(
+        microphone: SpeechPracticePermissionStatus.granted,
+        speech: SpeechPracticePermissionStatus.granted,
+      );
+
+  @override
+  Future<SpeechPracticePermissionState> request({
+    required bool onlyMic,
+  }) async => const SpeechPracticePermissionState(
+    microphone: SpeechPracticePermissionStatus.granted,
+    speech: SpeechPracticePermissionStatus.granted,
+  );
+
+  @override
+  Future<void> openAppSettings() async {}
 }
 
 class _StaticRetellPlayer extends TestRetellPlayer {
@@ -243,6 +283,54 @@ class _ManualRetellReviewController extends RetellReviewEvaluationController {
   }
 }
 
+/// 看译文模式、复述阶段（系统已自动切到提示档）的播放器状态。
+const _translationRetellingState = RetellPlayerState(
+  currentParagraphIndex: 0,
+  totalParagraphs: 1,
+  phase: RetellPhase.retelling,
+  displayMode: RetellDisplayMode.keywordsOnly,
+  settings: RetellSettings(
+    keywordMethod: KeywordMethod.random,
+    promptLanguage: RetellPromptLanguage.translation,
+  ),
+);
+
+Session _session() => Session(
+  accessToken: 't',
+  tokenType: 'bearer',
+  user: const User(
+    id: 'u',
+    appMetadata: {},
+    userMetadata: {},
+    aud: 'authenticated',
+    createdAt: '2026-07-13T00:00:00.000Z',
+  ),
+);
+
+/// 已登录且 AI 翻译已解锁。
+Future<List<Override>> _translationAvailableOverrides() async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  return [
+    sharedPreferencesProvider.overrideWithValue(prefs),
+    isAuthenticatedProvider.overrideWithValue(true),
+    supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(_session())),
+    featureAccessProvider.overrideWith((ref, feature) => true),
+  ];
+}
+
+class _RecordingCompletionStore extends RatingPromptTaskCompletionStore {
+  _RecordingCompletionStore(super.preferences);
+
+  final List<DateTime> records = [];
+
+  @override
+  Future<bool> recordCompletion(DateTime time) {
+    records.add(time);
+    return super.recordCompletion(time);
+  }
+}
+
 void main() {
   /// 创建测试段落
   List<List<Sentence>> createTestParagraphs() {
@@ -262,6 +350,7 @@ void main() {
     )?
     playerFactory,
     List<Override> extraOverrides = const [],
+    bool startAtHome = false,
   }) {
     final testParagraphs = paragraphs ?? createTestParagraphs();
     final testKeywords = keywords ?? {};
@@ -277,8 +366,19 @@ void main() {
         );
 
     final router = GoRouter(
-      initialLocation: '/collections/c1/a1/retell',
+      initialLocation: startAtHome ? '/' : '/collections/c1/a1/retell',
       routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => context.push('/collections/c1/a1/retell'),
+                child: const Text('Open player'),
+              ),
+            ),
+          ),
+        ),
         GoRoute(
           path: '/collections/:collectionId/:audioId/retell',
           builder: (context, state) {
@@ -338,11 +438,18 @@ void main() {
           ),
         ),
         bookmarkDaoProvider.overrideWithValue(_TestBookmarkDao()),
+        speechPermissionServiceProvider.overrideWithValue(
+          const _FakeSpeechPermissionService(),
+        ),
         sentenceAiNotifierProvider.overrideWithValue(
           SentenceAiNotifier(
             cacheDao: _MockCacheDao(),
             apiClient: _MockApiClient(),
           ),
+        ),
+        // 视频分栏只需默认尺寸；不全局注入 SharedPreferences，以免改变其他设置的读取来源。
+        practiceMediaSplitProvider.overrideWithBuild(
+          (ref, notifier) => PracticeMediaSplit.empty,
         ),
         ...extraOverrides,
       ]),
@@ -446,6 +553,223 @@ void main() {
       );
     });
 
+    testWidgets('看译文模式：隐藏/译文/原文三档，复述阶段默认显示译文，原文档附译文', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: _translationRetellingState,
+          extraOverrides: [
+            ...await _translationAvailableOverrides(),
+            sentenceTranslationProvider.overrideWith(
+              (ref, target) => Stream.value('译文 ${target.sentenceIndex}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Partial'), findsNothing);
+      expect(
+        tester
+            .widget<SegmentedButton<RetellDisplayMode>>(
+              find.byType(SegmentedButton<RetellDisplayMode>),
+            )
+            .segments
+            .map((segment) => segment.value),
+        [
+          RetellDisplayMode.hideAll,
+          RetellDisplayMode.keywordsOnly,
+          RetellDisplayMode.showAll,
+        ],
+      );
+      expect(find.text('Original'), findsOneWidget);
+      expect(find.text('Translation'), findsOneWidget);
+      expect(find.text('译文 0'), findsOneWidget);
+      expect(find.text('sentence'), findsNothing);
+
+      // 原文档：英文正文 + 下方弱化译文。
+      await tester.tap(find.text('Original'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('sentence'), findsWidgets);
+      expect(find.text('译文 0'), findsOneWidget);
+
+      await tester.tap(find.text('Hidden'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('译文 0'), findsNothing);
+      expect(
+        tester
+            .widget<SegmentedButton<RetellDisplayMode>>(
+              find.byType(SegmentedButton<RetellDisplayMode>),
+            )
+            .selected,
+        {RetellDisplayMode.hideAll},
+      );
+    });
+
+    testWidgets('看英文且可见词关闭：保留全部隐藏/全部显示两档', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: const RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.retelling,
+            displayMode: RetellDisplayMode.keywordsOnly,
+            settings: RetellSettings(keywordMethod: KeywordMethod.off),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      SegmentedButton<RetellDisplayMode> segmented() =>
+          tester.widget<SegmentedButton<RetellDisplayMode>>(
+            find.byType(SegmentedButton<RetellDisplayMode>),
+          );
+      expect(find.text('Partial'), findsNothing);
+      // 复述阶段系统自动切到的提示档，无可见词时按全部隐藏显示。
+      expect(segmented().selected, {RetellDisplayMode.hideAll});
+
+      await tester.tap(find.text('Visible'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(segmented().selected, {RetellDisplayMode.showAll});
+    });
+
+    testWidgets('看英文全部显示：仅收藏句附译文，隐藏时不显示', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: const RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.retelling,
+            displayMode: RetellDisplayMode.showAll,
+            bookmarkedSentenceIndices: {1},
+          ),
+          extraOverrides: [
+            ...await _translationAvailableOverrides(),
+            sentenceTranslationProvider.overrideWith(
+              (ref, target) => Stream.value('译文 ${target.sentenceIndex}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('译文 1'), findsOneWidget);
+      expect(find.text('译文 0'), findsNothing);
+      expect(find.text('译文 2'), findsNothing);
+
+      await tester.tap(find.text('Hidden'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('译文 1'), findsNothing);
+    });
+
+    testWidgets('看英文全部显示且未登录：收藏句不附译文', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: const RetellPlayerState(
+            currentParagraphIndex: 0,
+            totalParagraphs: 1,
+            phase: RetellPhase.retelling,
+            displayMode: RetellDisplayMode.showAll,
+            bookmarkedSentenceIndices: {1},
+          ),
+          extraOverrides: [
+            isAuthenticatedProvider.overrideWithValue(false),
+            supabaseSessionProvider.overrideWithValue(
+              const AsyncData<Session?>(null),
+            ),
+            sentenceTranslationProvider.overrideWith(
+              (ref, target) => Stream.value('译文 ${target.sentenceIndex}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('译文 1'), findsNothing);
+      expect(find.text('Sign In'), findsNothing);
+    });
+
+    testWidgets('看译文模式：原文切回译文时直接显示译文，不闪骨架', (tester) async {
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: _translationRetellingState,
+          extraOverrides: [
+            ...await _translationAvailableOverrides(),
+            sentenceTranslationProvider.overrideWith(
+              (ref, target) => Stream.value('译文 ${target.sentenceIndex}'),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('译文 0'), findsOneWidget);
+
+      await tester.tap(find.text('Original'));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('Translation'));
+      await tester.pump();
+
+      // 切回后同一帧即显示译文：译文流在看译文期间保持存活，不重新加载。
+      expect(find.byType(ShimmerPlaceholder), findsNothing);
+      expect(find.text('译文 0'), findsOneWidget);
+    });
+
+    testWidgets('看译文模式未登录：回退看德语（自建模式免登录）', (tester) async {
+      late TestRetellPlayer player;
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: _translationRetellingState,
+          playerFactory: (state, paragraphs, keywords) =>
+              player = TestRetellPlayer(state, paragraphs, keywords),
+          extraOverrides: [
+            isAuthenticatedProvider.overrideWithValue(false),
+            supabaseSessionProvider.overrideWithValue(
+              const AsyncData<Session?>(null),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        player.state.settings.promptLanguage,
+        RetellPromptLanguage.original,
+      );
+      // 德语版为自建服务：ensureSignedInForAction 直接放行，不再弹登录引导。
+      expect(find.text('Sign In'), findsNothing);
+    });
+
+    testWidgets('看译文额度用尽：保持看译文，字幕位置提示订阅', (tester) async {
+      late TestRetellPlayer player;
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: _translationRetellingState,
+          playerFactory: (state, paragraphs, keywords) =>
+              player = TestRetellPlayer(state, paragraphs, keywords),
+          extraOverrides: [
+            ...await _translationAvailableOverrides(),
+            sentenceTranslationProvider.overrideWith(
+              (ref, target) =>
+                  Stream.error(const AiFeatureQuotaExceededException()),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        player.state.settings.promptLanguage,
+        RetellPromptLanguage.translation,
+      );
+      expect(
+        find.text('AI translation quota used up. Tap to subscribe.'),
+        findsNWidgets(3),
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
     testWidgets('页面接入学习统计活动检测器', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -516,6 +840,122 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
 
       verifyNever(() => notificationService.canShowPrompt());
+    });
+
+    testWidgets('正常完成复述后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = _RecordingCompletionStore(
+        await SharedPreferences.getInstance(),
+      );
+      final testParagraphs = createTestParagraphs();
+      final initialState = RetellPlayerState(
+        currentParagraphIndex: 0,
+        totalParagraphs: testParagraphs.length,
+        phase: RetellPhase.listening,
+        isPlaying: true,
+        playingSentenceIndex: 0,
+        displayMode: RetellDisplayMode.showAll,
+        settings: const RetellSettings(keywordMethod: KeywordMethod.random),
+      );
+      final trackingPlayer = _TrackingRetellPlayer(
+        initialState,
+        testParagraphs,
+        const {},
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: initialState,
+          paragraphs: testParagraphs,
+          playerFactory: (_, __, ___) => trackingPlayer,
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+
+      trackingPlayer.emit(
+        trackingPlayer.state.copyWith(stepFinished: true, isPlaying: false),
+      );
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(store.records, isEmpty, reason: '未确认完成对话框前不记录');
+
+      // 步骤完成对话框的主按钮（末步骤为唯一的 FilledButton）。
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(Dialog),
+              matching: find.byType(FilledButton),
+            )
+            .last,
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
+    });
+
+    testWidgets('自由练习完成后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = _RecordingCompletionStore(
+        await SharedPreferences.getInstance(),
+      );
+      final testParagraphs = createTestParagraphs();
+      final initialState = RetellPlayerState(
+        currentParagraphIndex: 0,
+        totalParagraphs: testParagraphs.length,
+        phase: RetellPhase.listening,
+        isPlaying: true,
+        playingSentenceIndex: 0,
+        displayMode: RetellDisplayMode.showAll,
+        settings: const RetellSettings(keywordMethod: KeywordMethod.random),
+      );
+      final trackingPlayer = _TrackingRetellPlayer(
+        initialState,
+        testParagraphs,
+        const {},
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          playerState: initialState,
+          paragraphs: testParagraphs,
+          playerFactory: (_, __, ___) => trackingPlayer,
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+            learningSessionProvider.overrideWith(
+              () => TestLearningSession(
+                const LearningSessionState(isFreePlay: true),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+
+      trackingPlayer.emit(
+        trackingPlayer.state.copyWith(stepFinished: true, isPlaying: false),
+      );
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(store.records, isEmpty, reason: '未确认完成对话框前不记录');
+
+      // 步骤完成对话框的主按钮（末步骤为唯一的 FilledButton）。
+      await tester.tap(find.text('Done'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
     });
 
     testWidgets('不同选中态下 SegmentedButton 总宽度保持不变', (tester) async {

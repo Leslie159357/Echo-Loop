@@ -9,16 +9,19 @@
 library;
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../features/auth/providers/auth_providers.dart';
+import '../features/rating_prompt/rating_prompt_providers.dart';
 import '../router/app_router.dart';
 import '../database/enums.dart';
 import '../utils/playback_speed.dart';
 import '../utils/wakelock_mixin.dart';
 import '../l10n/app_localizations.dart';
 import '../models/media_learning_startup.dart';
-import '../models/media_playback_state.dart';
 import '../models/retell_settings.dart';
 import '../models/sentence.dart';
 import '../models/word_highlight_binding.dart';
@@ -42,11 +45,11 @@ import '../widgets/common/countdown_chip.dart';
 import '../widgets/common/paragraph_practice_scaffold.dart';
 import '../widgets/common/playback_controls.dart';
 import '../widgets/common/paragraph_sentence_list_card.dart';
+import '../widgets/common/sentence_translation_text.dart';
 import '../widgets/dialogs/free_play_complete_dialog.dart';
 import '../widgets/guide_flow.dart';
 import '../widgets/player_hotkey_scope.dart';
 import '../widgets/practice/practice_play_count_label.dart';
-import '../widgets/common/managed_media_visual_surface.dart';
 import '../widgets/common/practice_media_presentation_host.dart';
 import '../widgets/study/study_activity_detector.dart';
 
@@ -148,19 +151,6 @@ class _BlindListenPlayerScreenState
     if (mounted) context.pop();
   }
 
-  Widget _wrapMediaStartup(Widget child) {
-    final startup = widget.mediaStartup;
-    if (startup == null) return child;
-    return ManagedMediaVisualSurface(
-      loadKey: startup.loadKey,
-      load: startup.load,
-      cancel: startup.cancel,
-      onReady: _handleMediaStartupReady,
-      showVideoLoading: startup.showVideoLoading,
-      child: child,
-    );
-  }
-
   @override
   void dispose() {
     _playerSubscription?.close();
@@ -233,7 +223,7 @@ class _BlindListenPlayerScreenState
         endTimeMs: sentence.endTime.inMilliseconds,
         rangePlaybackBuilder: mediaReady ? _buildMediaRangePlayback : null,
         wordHighlightSource: _wordHighlightSource(),
-        mediaSession: usesVideo ? _buildMediaSession() : null,
+        mediaSession: usesVideo ? _mediaPresentationSession : null,
       ),
     );
 
@@ -261,25 +251,6 @@ class _BlindListenPlayerScreenState
       currentPosition: engine.wordHighlightPosition,
       playbackStatus: engine.wordHighlightPlaybackStatus,
       playbackStatusStream: engine.wordHighlightPlaybackStatusStream,
-    );
-  }
-
-  SentenceDetailMediaSession? _buildMediaSession() {
-    final session = _mediaPresentationSession;
-    if (session == null) return null;
-    return SentenceDetailMediaSession(
-      readState: () {
-        final state = session.readState();
-        return MediaPlaybackState(
-          visualTrackVisible: state.visualTrackVisible,
-          visualTrackExpanded: state.expanded,
-          videoSubtitleVisible: state.subtitleVisible,
-        );
-      },
-      setVisible: session.setVisible,
-      setSubtitleVisible: session.setSubtitleVisible,
-      setFullscreen: session.setFullscreen,
-      buildVideoView: session.buildVideoView,
     );
   }
 
@@ -375,6 +346,10 @@ class _BlindListenPlayerScreenState
       await ref
           .read(learningProgressProvider.notifier)
           .completeCurrentSubStage(widget.audioItemId);
+      // 仅用户确认完成对话框后的正常结束才记为任务完成，供评分提醒判断。
+      await recordRatingTaskCompletion(
+        () => ref.read(ratingPromptTaskCompletionStoreProvider),
+      );
     } catch (e) {
       debugPrint('盲听完成处理出错: $e');
     }
@@ -615,14 +590,16 @@ class _BlindListenPlayerScreenState
                 : unawaited(player.resume());
           },
           onSessionChanged: (session) => _mediaPresentationSession = session,
+          fillVisualSurface: true,
           builder: (context, presentation, mediaSurface) => _buildParagraphMode(
             context,
             l10n,
             theme,
             playerState,
             showPlaybackSpeedButton: showPlaybackSpeedButton,
-            topContent: presentation.enabled ? mediaSurface : null,
-            bodyWrapper: _wrapMediaStartup,
+            media: presentation.enabled ? mediaSurface : null,
+            isMediaResizable: presentation.visualTrackVisible,
+            videoAspectRatio: presentation.videoAspectRatio,
             fullscreenBody: presentation.expanded ? mediaSurface : null,
           ),
         ),
@@ -671,8 +648,9 @@ class _BlindListenPlayerScreenState
     ThemeData theme,
     BlindListenPlayerState playerState, {
     required bool showPlaybackSpeedButton,
-    Widget? topContent,
-    Widget Function(Widget child)? bodyWrapper,
+    Widget? media,
+    bool isMediaResizable = false,
+    double? videoAspectRatio,
     Widget? fullscreenBody,
   }) {
     final player = ref.read(blindListenPlayerProvider.notifier);
@@ -789,12 +767,26 @@ class _BlindListenPlayerScreenState
               onSentenceBookmarkToggle: (sentence) => ref
                   .read(blindListenPlayerProvider.notifier)
                   .toggleBookmark(widget.audioItemId, sentence),
+              // 显示字幕时，收藏句原文下方附弱化译文；未登录不显示。
+              sentenceSecondaryTextBuilder:
+                  playerState.displayMode == BlindListenDisplayMode.showAll &&
+                      ref.watch(isAuthenticatedProvider)
+                  ? bookmarkedSentenceTranslationBuilder(
+                      theme: theme,
+                      audioItemId: widget.audioItemId,
+                      bookmarkedSentenceIndices:
+                          playerState.bookmarkedSentenceIndices,
+                    )
+                  : null,
               guideTargetLocalIdx: guideTargetLocalIdx,
               explanationAreaGuideStep: explanationStep,
               bodyAreaGuideStep: bodyStep,
             ),
-            topContent: topContent,
-            bodyWrapper: bodyWrapper,
+            media: media,
+            isMediaResizable: isMediaResizable,
+            videoAspectRatio: videoAspectRatio,
+            mediaStartup: widget.mediaStartup,
+            onMediaStartupReady: _handleMediaStartupReady,
             fullscreenBody: fullscreenBody,
             contentControls: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 36),

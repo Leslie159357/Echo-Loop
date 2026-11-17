@@ -73,13 +73,14 @@ import 'tts_settings_screen.dart';
 import 'learning_settings_screen.dart';
 import 'log_viewer_screen.dart';
 import 'playback_settings_screen.dart';
-import 'reading_text_settings_screen.dart';
+import 'sound_settings_screen.dart';
 import 'preferences_viewer_screen.dart';
 import 'storage_browser_screen.dart';
 import 'download_tasks_screen.dart';
 import 'reminder_settings_screen.dart';
 import '../services/runtime_endpoint_router.dart';
 import '../widgets/app_update_dialog.dart';
+import '../widgets/common/svg_action_icon.dart';
 
 const double _settingsLeadingIconExtent = 32;
 const double _settingsSvgIconExtent = 26;
@@ -135,7 +136,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               _buildThemeModeTile(context, l10n, settings, settingsController),
               _buildLanguageTile(context, l10n, settings, settingsController),
-              _buildReadingTextTile(context, l10n),
+              _buildDisplaySettingsTile(context, l10n),
+              _buildSoundSettingsTile(context, l10n),
             ],
           ),
           const SizedBox(height: AppSpacing.m),
@@ -392,16 +394,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const LearningSettingsScreen(),
-            ),
-          ),
-        ),
-        ListTile(
-          leading: _settingsThemedSvgIcon(context, 'assets/icon/eye.svg'),
-          title: Text(l10n.displaySettings),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const DisplaySettingsScreen(),
             ),
           ),
         ),
@@ -1385,15 +1377,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  /// 学习内容「文字大小与字体」入口。
-  Widget _buildReadingTextTile(BuildContext context, AppLocalizations l10n) {
+  /// 「声效」入口：音效等声音类设置。
+  Widget _buildSoundSettingsTile(BuildContext context, AppLocalizations l10n) {
     return ListTile(
-      leading: _settingsThemedSvgIcon(context, 'assets/icon/text-size.svg'),
-      title: Text(l10n.readingTextSettings),
+      leading: _settingsThemedSvgIcon(context, 'assets/icon/waveform.svg'),
+      title: Text(l10n.soundSettings),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const SoundSettingsScreen()),
+      ),
+    );
+  }
+
+  Widget _buildDisplaySettingsTile(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return ListTile(
+      leading: _settingsThemedSvgIcon(context, 'assets/icon/eye.svg'),
+      title: Text(l10n.displaySettings),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const ReadingTextSettingsScreen(),
+          builder: (_) => const DisplaySettingsScreen(),
         ),
       ),
     );
@@ -1800,7 +1806,7 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
               decoration: InputDecoration(
                 hintText: '输入单词...',
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
+                  icon: const SvgActionIcon(assetName: 'assets/icon/search.svg'),
                   onPressed: _lookup,
                 ),
               ),

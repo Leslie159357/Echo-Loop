@@ -1,6 +1,6 @@
 # Echo Loop 项目规划
 
-> 最后更新：2026-09-21（本地数据启动失败降级到首页并保留日志入口）
+> 最后更新：2026-11-14（收藏导出 PDF）
 > 当前焦点：录音 + 识别功能；首要阻塞为 Android 离线 ASR 结束录音闪退
 
 ## 产品目标
@@ -18,9 +18,9 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 - 音频导入、字幕管理、字幕编辑、自由播放器。
 - 首次学习主流程：全文盲听、逐句精听、难句跟读、段落复述。
 - 收藏体系：句子、单词、意群、收藏复习。
-- 词典体系：在线词典（后端 API + 本地缓存表）、AI 词典、网页词典、多源切换、非 modal 面板。
+- 词典体系：在线词典（后端 API + 本地缓存表）、AI 词典、网页词典、多源切换、非 modal 面板、手动查词页（本地词表前缀建议 + 本地查询历史，学习页入口）。
 - AI 能力：翻译、句子解析、单词深度解析、转录。
-- PDF 导出：学习材料导出为可打印 PDF。
+- PDF 导出：学习材料与收藏（句子 / 词汇）导出为可打印 PDF，共用渲染底层。
 - 订阅体系：平台/渠道识别、native RevenueCat、direct Paddle 后端结账、AI 配额后端裁决。
 
 当前主要风险：
@@ -61,7 +61,7 @@ Echo Loop 是一个围绕“音频输入 + 句子级学习 + 间隔复习 + AI �
 
 当前状态：
 
-- 已完成：客户端 RevenueCat 接入、订阅页、平台/渠道识别、direct Paddle Checkout 与 Customer Portal、AI 配额后端裁决、release 渠道注入、权益单一来源重构 P0（后端 `/api/entitlements` 唯一权威 + forceReconcile 成交收敛，见 [docs/subscription-single-source-plan.md](./docs/subscription-single-source-plan.md)）。
+- 已完成：客户端 RevenueCat 接入、订阅页、平台/渠道识别、direct Paddle Checkout 与 Customer Portal、AI 配额后端裁决、release 渠道注入、权益单一来源重构 P0（后端 `/api/entitlements` 唯一权威 + forceReconcile 成交收敛，见 [docs/subscription-single-source-plan.md](./docs/subscription-single-source-plan.md)）、账户页「用量与额度」进度条（后端 `/api/v1/me/usage`，2026-11-13）。
 - 待继续：真实生产环境验证（Paddle 会员在商店包手动回归，见 plan §11；P0+P1 需后端同步部署）、退款/撤销回退、多设备/换机验证、更多渠道回归。P1 智能刷新（E7/E6/E8）已全部完成（2026-07-23）；E9 Realtime 推送为可选项未实现。
 
 参考文档：

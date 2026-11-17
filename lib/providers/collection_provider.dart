@@ -1,10 +1,13 @@
 import 'package:drift/drift.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../analytics/analytics_providers.dart';
 import '../analytics/models/event_names.dart';
 import '../database/app_database.dart' as db;
 import '../database/providers.dart';
+import '../features/collection_cover/collection_cover_edit.dart';
+import '../features/collection_cover/collection_cover_store.dart';
 import '../models/collection.dart';
 import '../services/app_logger.dart';
 import 'audio_library_provider.dart';
@@ -64,6 +67,43 @@ class CollectionState {
       }
     }
     return result;
+  }
+
+  /// 素材所在的第一个已订阅合集（社区 / 播客），用于选取封面。
+  /// 用户自建合集不参与封面选择，返回 null。
+  Collection? subscribedCollectionForAudio(String audioId) {
+    final collectionIds = audioToCollectionsMap[audioId];
+    if (collectionIds == null) return null;
+    for (final collectionId in collectionIds) {
+      final collection = rawCollections
+          .where((c) => c.id == collectionId)
+          .firstOrNull;
+      if (collection != null &&
+          (collection.isCommunity || collection.isPodcast)) {
+        return collection;
+      }
+    }
+    return null;
+  }
+
+  /// 素材图标取封面的合集：已订阅合集（社区 / 播客）优先，
+  /// 其次是设置了自定义封面的本地合集；都没有时返回 null，显示默认媒体图标。
+  Collection? coverCollectionForAudio(String audioId) {
+    final subscribed = subscribedCollectionForAudio(audioId);
+    if (subscribed != null) return subscribed;
+    final collectionIds = audioToCollectionsMap[audioId];
+    if (collectionIds == null) return null;
+    for (final collectionId in collectionIds) {
+      final collection = rawCollections
+          .where((c) => c.id == collectionId)
+          .firstOrNull;
+      if (collection != null &&
+          collection.isLocal &&
+          collection.localCoverPath != null) {
+        return collection;
+      }
+    }
+    return null;
   }
 
   /// 排序后的合集列表（置顶项始终在前）
@@ -154,6 +194,7 @@ class CollectionList extends _$CollectionList {
               authorNickname: row.authorNickname,
               publishedAt: row.publishedAt,
               deprecatedAt: row.deprecatedAt,
+              localCoverPath: row.localCoverPath,
               podcastInputUrl: row.podcastInputUrl,
               podcastFeedUrl: row.podcastFeedUrl,
               podcastMetaJson: row.podcastMetaJson,
@@ -196,18 +237,106 @@ class CollectionList extends _$CollectionList {
     }
   }
 
-  Future<void> createCollection(String name) async {
+  /// 创建本地合集；[coverJpeg] 为可选的自定义封面（已裁剪编码的 JPEG）。
+  ///
+  /// 先写封面文件再写库，写库失败时删除刚写的文件，保证数据库不会引用不存在的封面，
+  /// 也不留下孤儿文件。持久化成功后才加入列表状态。
+  Future<void> createCollection(String name, {Uint8List? coverJpeg}) async {
     final now = DateTime.now();
+    final id = now.millisecondsSinceEpoch.toString();
+    final coverStore = ref.read(collectionCoverStoreProvider);
+    final coverPath = coverJpeg == null
+        ? null
+        : await coverStore.save(collectionId: id, jpegBytes: coverJpeg);
     final collection = Collection(
-      id: now.millisecondsSinceEpoch.toString(),
+      id: id,
       name: name,
       createdDate: now,
+      localCoverPath: coverPath,
     );
+    try {
+      await _upsertCollection(collection);
+    } catch (error) {
+      AppLogger.log(
+        'CollectionCover',
+        'create collection write failed: id=$id error=$error',
+      );
+      if (coverPath != null) await coverStore.delete(coverPath);
+      rethrow;
+    }
     state = state.copyWith(
       rawCollections: [...state.rawCollections, collection],
     );
-    await _upsertCollection(collection);
+    AppLogger.log(
+      'CollectionCover',
+      'collection created: id=$id hasCover=${coverPath != null}',
+    );
     ref.read(analyticsServiceProvider).track(Events.collectionCreate);
+  }
+
+  /// 编辑本地合集的名称与封面（合集菜单「编辑」）。
+  ///
+  /// 换图时新文件写入成功且数据库更新后才删除旧文件；写库失败则删除新文件、保留旧封面。
+  /// 名称与封面都未变化时不写库，也不刷新「更新于」时间。
+  Future<void> updateLocalCollection(
+    String id, {
+    required String name,
+    required CollectionCoverEdit cover,
+  }) async {
+    final current = state.rawCollections.where((c) => c.id == id).firstOrNull;
+    if (current == null) {
+      throw StateError('合集不存在: $id');
+    }
+    if (!current.isLocal) {
+      throw ArgumentError.value(id, 'id', '只有本地合集可以编辑封面');
+    }
+    if (name == current.name && cover is CollectionCoverUnchanged) {
+      AppLogger.log('CollectionCover', 'update skipped, unchanged: id=$id');
+      return;
+    }
+
+    final coverStore = ref.read(collectionCoverStoreProvider);
+    final previousCoverPath = current.localCoverPath;
+    final String? nextCoverPath = switch (cover) {
+      CollectionCoverUnchanged() => previousCoverPath,
+      CollectionCoverRemoved() => null,
+      CollectionCoverReplaced(:final jpegBytes) => await coverStore.save(
+        collectionId: id,
+        jpegBytes: jpegBytes,
+      ),
+    };
+    final updated = current.copyWith(
+      name: name,
+      localCoverPath: nextCoverPath,
+      clearLocalCoverPath: nextCoverPath == null,
+      updatedAt: DateTime.now(),
+    );
+    try {
+      await _upsertCollection(updated);
+    } catch (error) {
+      AppLogger.log(
+        'CollectionCover',
+        'update collection write failed: id=$id error=$error',
+      );
+      if (cover is CollectionCoverReplaced && nextCoverPath != null) {
+        await coverStore.delete(nextCoverPath);
+      }
+      rethrow;
+    }
+    // await 期间列表可能已变化，按 id 重新定位后替换。
+    state = state.copyWith(
+      rawCollections: [
+        for (final c in state.rawCollections) c.id == id ? updated : c,
+      ],
+    );
+    AppLogger.log(
+      'CollectionCover',
+      'collection updated: id=$id renamed=${name != current.name} '
+          'cover=${cover.runtimeType} from=$previousCoverPath to=$nextCoverPath',
+    );
+    if (previousCoverPath != null && previousCoverPath != nextCoverPath) {
+      await coverStore.delete(previousCoverPath);
+    }
   }
 
   Future<void> deleteCollection(String id) async {
@@ -230,17 +359,27 @@ class CollectionList extends _$CollectionList {
     );
     final dao = ref.read(collectionDaoProvider);
     await dao.hardDelete(id);
+    final coverPath = collection?.localCoverPath;
+    if (coverPath != null) {
+      await ref.read(collectionCoverStoreProvider).delete(coverPath);
+    }
   }
 
-  /// 删除合集并彻底删除其中的音频（DB 记录 + 文件 + 关联数据）。
+  /// 删除合集，并清理没有被其它合集引用的音频。
   ///
-  /// 用于「我的合集」列表删除时用户勾选「同时删除音频文件」的分支。音频可能被多个
-  /// 合集共享，故通过 [AudioLibrary.removeAudioItems] 逐条按引用检查删文件，避免误删
-  /// 仍被其它条目使用的资源；最后调用 [deleteCollection] 删合集行。
+  /// 被其它合集引用的音频仍保留在音频库中；其余音频通过
+  /// [AudioLibrary.removeAudioItems] 清理记录、文件和关联数据。
   Future<void> deleteCollectionWithAudios(String id) async {
     final audioIds = state.getAudioIds(id).toSet();
-    if (audioIds.isNotEmpty) {
-      await ref.read(audioLibraryProvider.notifier).removeAudioItems(audioIds);
+    final audioIdsInOtherCollections = state.audioIdsMap.entries
+        .where((entry) => entry.key != id)
+        .expand((entry) => entry.value)
+        .toSet();
+    final unsharedAudioIds = audioIds.difference(audioIdsInOtherCollections);
+    if (unsharedAudioIds.isNotEmpty) {
+      await ref
+          .read(audioLibraryProvider.notifier)
+          .removeAudioItems(unsharedAudioIds);
     }
     await deleteCollection(id);
   }
@@ -423,6 +562,7 @@ class CollectionList extends _$CollectionList {
         authorNickname: Value(collection.authorNickname),
         publishedAt: Value(collection.publishedAt),
         deprecatedAt: Value(collection.deprecatedAt),
+        localCoverPath: Value(collection.localCoverPath),
         podcastInputUrl: Value(collection.podcastInputUrl),
         podcastFeedUrl: Value(collection.podcastFeedUrl),
         podcastMetaJson: Value(collection.podcastMetaJson),

@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:echo_loop/providers/practice_media_split_provider.dart';
+import 'package:echo_loop/features/rating_prompt/data/rating_prompt_task_completion_store.dart';
+import 'package:echo_loop/features/rating_prompt/rating_prompt_providers.dart';
 import 'package:echo_loop/database/daos/audio_item_dao.dart';
 import 'package:echo_loop/database/providers.dart';
 import 'package:echo_loop/models/speech_practice_models.dart';
@@ -235,6 +240,7 @@ Widget _createTestWidget({
   bool startAtHome = false,
   bool listenAndRepeatRatingEnabled = true,
   MediaLearningStartup? mediaStartup,
+  PracticeMediaSplit mediaSplit = PracticeMediaSplit.empty,
 }) {
   var usePassedController = true;
   final audioItemDao = _MockAudioItemDao();
@@ -322,6 +328,10 @@ Widget _createTestWidget({
         createTestTranscriptionApiClient(),
       ),
       audioItemDaoProvider.overrideWithValue(audioItemDao),
+      // 视频分栏只需默认尺寸；不全局注入 SharedPreferences，以免改变其他设置的读取来源。
+      practiceMediaSplitProvider.overrideWithBuild(
+        (ref, notifier) => mediaSplit,
+      ),
       ...extraOverrides,
     ]),
     child: MaterialApp.router(
@@ -373,6 +383,18 @@ class _StaticSpeechRecordingController extends SpeechRecordingController {
   void setRecordingCompletionHandler(
     void Function(Duration duration)? handler,
   ) {}
+}
+
+class _RecordingCompletionStore extends RatingPromptTaskCompletionStore {
+  _RecordingCompletionStore(super.preferences);
+
+  final List<DateTime> records = [];
+
+  @override
+  Future<bool> recordCompletion(DateTime time) {
+    records.add(time);
+    return super.recordCompletion(time);
+  }
 }
 
 void main() {
@@ -490,7 +512,10 @@ void main() {
       expect(find.byKey(const ValueKey('media-video-canvas')), findsNothing);
     });
 
-    testWidgets('视频画面位于进度条上方', (tester) async {
+    testWidgets('窄屏视频画面位于进度条上方', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final controller = _TestListenAndRepeatController(
         createState(hasVideo: true),
         createTestSentences(count: 5),
@@ -506,6 +531,32 @@ void main() {
       );
       final progressTop = tester.getTopLeft(find.text('Sentence 1/5'));
       expect(videoTop.dy, lessThan(progressTop.dy));
+    });
+
+    testWidgets('宽屏视频画面位于学习内容左侧', (tester) async {
+      tester.view.physicalSize = const Size(1200, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = _TestListenAndRepeatController(
+        createState(hasVideo: true),
+        createTestSentences(count: 5),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(_createTestWidget(controller: controller));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(
+        find.byKey(const ValueKey('practice-media-split-side-by-side')),
+        findsOneWidget,
+      );
+      final videoRight = tester.getTopRight(
+        find.byKey(const ValueKey('media-visual-surface')),
+      );
+      final progressLeft = tester.getTopLeft(find.text('Sentence 1/5'));
+      expect(videoRight.dx, lessThanOrEqualTo(progressLeft.dx));
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('正文左滑和右滑分别切换下一句与上一句', (tester) async {
@@ -646,6 +697,50 @@ void main() {
       );
       expect(controlSizedBoxes, findsAtLeast(2));
     });
+
+    // 回归：跟读的录音区比精听盲听区高，视频拉到最大时学习区仍不能溢出。
+    for (final (label, recordingState) in [
+      ('待录音', const SpeechRecordingState()),
+      (
+        '已有评分',
+        const SpeechRecordingState(
+          currentAttempt: SpeechPracticeAttempt(
+            promptId: 'lar:test-audio:0',
+            filePath: '/tmp/test.m4a',
+            status: SpeechPracticeAttemptStatus.passed,
+            score: 0.8,
+          ),
+        ),
+      ),
+    ]) {
+      testWidgets('视频拉到最大时学习区不溢出（$label）', (tester) async {
+        // 宽高比不足以切到左右布局，且学习区下限而非视频比例决定视频高度。
+        tester.view.physicalSize = const Size(700, 700);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final controller = _TestListenAndRepeatController(
+          createState(hasVideo: true),
+          createTestSentences(count: 3),
+          startPlayingNoop: true,
+        );
+
+        await tester.pumpWidget(
+          _createTestWidget(
+            controller: controller,
+            recordingState: recordingState,
+            mediaSplit: const PracticeMediaSplit(stackedVideoFraction: 0.95),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(
+          find.byKey(const ValueKey('practice-media-split-stacked')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     testWidgets('停顿态显示录音按钮', (tester) async {
       final controller = _TestListenAndRepeatController(
@@ -791,6 +886,44 @@ void main() {
       expect(find.byType(RecordingButton), findsOneWidget);
     });
 
+    testWidgets('自由练习完成后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = _RecordingCompletionStore(
+        await SharedPreferences.getInstance(),
+      );
+      final controller = _TestListenAndRepeatController(
+        createState(sentenceIndex: 2, totalSentences: 3, isFreePlay: true),
+        createTestSentences(count: 3),
+        startPlayingNoop: true,
+      );
+
+      await tester.pumpWidget(
+        _createTestWidget(
+          controller: controller,
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open player'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.check_circle_rounded));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(store.records, isEmpty, reason: '未确认完成弹窗前不记录');
+
+      await tester.tap(find.text('Done'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        // 测试环境收尾阶段的 pop 会抛出 GoError，与本断言无关。
+        tester.takeException();
+      }
+      expect(store.records, hasLength(1));
+    });
+
     testWidgets('完成后不再检查学习版通知提示', (tester) async {
       final notificationService = _MockNotificationPermissionService();
       when(
@@ -824,7 +957,11 @@ void main() {
       verifyNever(() => notificationService.canShowPrompt());
     });
 
-    testWidgets('点完成返回后不触发退出确认且主界面仍可点击', (tester) async {
+    testWidgets('点完成返回后记录任务完成，供评分提醒判断', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final store = _RecordingCompletionStore(
+        await SharedPreferences.getInstance(),
+      );
       final controller = _TestListenAndRepeatController(
         createState(),
         createTestSentences(count: 3),
@@ -832,7 +969,13 @@ void main() {
       );
 
       await tester.pumpWidget(
-        _createTestWidget(controller: controller, startAtHome: true),
+        _createTestWidget(
+          controller: controller,
+          startAtHome: true,
+          extraOverrides: [
+            ratingPromptTaskCompletionStoreProvider.overrideWithValue(store),
+          ],
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -853,6 +996,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ListenAndRepeatPlayerScreen), findsOneWidget);
+      expect(store.records, hasLength(1));
     });
 
     testWidgets('修改重复次数后当前句遍数标签立即刷新', (tester) async {

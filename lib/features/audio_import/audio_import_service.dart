@@ -18,6 +18,7 @@ import 'audio_import_models.dart';
 import 'podcast_audio_uri.dart';
 import 'audio_registration_service.dart';
 import 'audio_transcode_service.dart';
+import 'subtitle_pairing.dart';
 
 typedef AudioImportProgressCallback =
     void Function(int receivedBytes, int? totalBytes);
@@ -294,7 +295,9 @@ class AudioImportService {
         'Unsupported audio format',
       );
     }
-    if (!supportedExtensions.contains(extension)) {
+    // 德语版：允许上游音频集，并保留 fork 视频扩展（mp4/mov/m4v/mkv）。
+    if (!audioImportExtensions.contains(extension) &&
+        !supportedExtensions.contains(extension)) {
       throw AudioImportException(
         AudioImportFailureCode.unsupportedFormat,
         'Unsupported audio format: .$extension',
@@ -443,6 +446,8 @@ class AudioImportService {
       'audio/mp4' || 'audio/x-m4a' => 'm4a',
       'audio/aac' => 'aac',
       'audio/flac' || 'audio/x-flac' => 'flac',
+      'audio/opus' => 'opus',
+      'audio/ogg' => 'ogg',
       _ => null,
     };
   }

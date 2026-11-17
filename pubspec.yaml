@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.47
+version: 1.0.48
 
 environment:
   sdk: ^3.13.0
@@ -109,14 +109,14 @@ dependencies:
   # 认证：复用 fluency-frontend 的 Supabase 项目（auth.users 共享），
   # mobile 端走 native ID Token 流（Apple/Google）+ 邮箱密码。详见 docs / plan。
   supabase_flutter: ^2.18.0
-  sign_in_with_apple: ^7.0.1
+  sign_in_with_apple: ^8.2.0
   google_sign_in: ^7.2.0
   just_waveform: ^0.0.7
   # 注意：该插件的 ProGuard keep 规则用的是 proguardFiles 而非 consumerProguardFiles，
   # 不会传播到宿主 app。release（R8）构建必须在 android/app/proguard-rules.pro 保留
   # com.antonkarpenko.ffmpegkit.**，否则 R8 会裁掉仅由 JNI_OnLoad 注册的 native 方法
   # （AbiDetect.getNativeCpuAbi 等），导致插件注册整体失败、App 卡在启动 splash。
-  ffmpeg_kit_flutter_new_min: ^3.1.0
+  ffmpeg_kit_flutter_new_min: 3.6.7
   xml: ^6.5.0
   # PDF 导出：Dart 端生成结构化 PDF（学习材料导出 PDF，见 lib/services/pdf_export/）。
   # 注意：3.13.0 起要求 Dart >=3.12，当前 SDK 下固定解析到 3.12.0
@@ -202,15 +202,18 @@ flutter:
     - assets/icon/check-circle-3.svg
     - assets/icon/calendar-2.svg
     - assets/icon/china_flag.svg
+    - assets/icon/cloud-download.svg
     - assets/icon/diamond.svg
     - assets/icon/diskette.svg
     - assets/icon/documents.svg
+    - assets/icon/file-input.svg
     - assets/icon/eye.svg
     - assets/icon/feedback.svg
     - assets/icon/help.svg
     - assets/icon/group.svg
     - assets/icon/locale-1.svg
     - assets/icon/locale.svg
+    - assets/icon/link.svg
     - assets/icon/lock.svg
     - assets/icon/microphone.svg
     - assets/icon/account-1.svg
@@ -221,24 +224,44 @@ flutter:
     - assets/icon/speaker.svg
     - assets/icon/text-decrease.svg
     - assets/icon/text-increase.svg
-    - assets/icon/text-size.svg
     - assets/icon/trash-bin.svg
     - assets/icon/unlock.svg
-    # 视频条目左侧媒体图标（资源库卡片区分音/视频）
+    # 媒体类型图标（音频默认图标 / 视频条目图标，资源库卡片区分音/视频）
+    - assets/icon/waveform.svg
     - assets/icon/video-2.svg
     # 今日一刻分享弹窗图标（currentColor 随 colorFilter 着色）
     - assets/icon/shuffle.svg
     - assets/icon/download.svg
+    # 列表项字幕徽章（TranscriptCcBadge）
+    - assets/icon/closed-captions.svg
+    # 视频画面字幕遮罩开关图标（currentColor 由开关态着色，关闭态叠加斜线）
+    - assets/icon/subtitle_mask.svg
     - assets/icon/share.svg
     - assets/icon/share-android.svg
+    - assets/icon/search.svg
+    # 学习页查词入口图标（currentColor 随主题着色）
+    - assets/icon/book-search.svg
+    # 手动查词最近查询图标（fill 未指定，由 SvgActionIcon 着色）
+    - assets/icon/history.svg
+    # 手动查词的本地英文词表（查词页按需加载，离开页面即释放引用）
+    - assets/dictionary/wordlist-en_US.txt
+    - assets/icon/sort.svg
+    - assets/icon/plus.svg
+    - assets/icon/split.svg
+    - assets/icon/arrow-range.svg
+    # 账户页用量入口图标（currentColor 由 colorFilter 按 IconTheme 着色）
+    - assets/icon/gauge.svg
     # PDF 导出品牌角标（96px 小图，1024 原图 190KB 直接嵌会撑大每份 PDF）
     - assets/icon/app-icon-96.png
     # chatbot 气泡操作栏图标（复刻 ChatGPT 线条风格，currentColor 随主题着色）
     - assets/icon/chat/
     - assets/animation/confetti.lottie
     - assets/animation/done-check.lottie
+    - assets/animation/confetti-2.lottie
     # 后台静音保活轨：停顿期间循环播放以保持 iOS 音频会话活跃（见 background_audio_handler）
     - assets/audio/silence_2s.m4a
+    # 界面音效（见 lib/services/sound_effect_player.dart）
+    - assets/sound_effects/achievement_bell.m4a
     # PDF 导出内嵌字体（TrueType 轮廓；pdf 包不支持 CFF/OTF，也无法读系统 CJK 字体）。
     # 不注册进 fonts: 段——仅经 rootBundle 读原始字节喂 pw.Font.ttf，生成时自动子集化。
     - assets/fonts/pdf/

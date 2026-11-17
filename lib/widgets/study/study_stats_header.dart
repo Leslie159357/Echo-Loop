@@ -125,10 +125,7 @@ class _TodayCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.m,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             // 第一行：今日时长（点击弹出阶段总览）
@@ -400,10 +397,10 @@ class _DailyGoalBar extends StatelessWidget {
         : (studiedSeconds / goalSeconds).clamp(0.0, 1.0);
     final palette = learningProgressPalette(theme.brightness);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(2),
       child: LinearProgressIndicator(
         value: isCheckedIn ? 1 : progress,
-        minHeight: 6,
+        minHeight: 4,
         color: isCheckedIn ? palette.completed : palette.active,
         backgroundColor: palette.track,
       ),
@@ -641,7 +638,7 @@ class _WeeklyBarChartState extends State<_WeeklyBarChart> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.m, 12, AppSpacing.m, 12),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             // 标题行：本周累计

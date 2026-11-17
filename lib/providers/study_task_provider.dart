@@ -142,22 +142,21 @@ final pendingStudyTaskCountProvider = Provider<int>((ref) {
 });
 
 /// 已完成音频（LearningStage.completed）列表
-final completedAudioProvider =
-    Provider<List<({String audioId, String audioName})>>((ref) {
-      final audioState = ref.watch(audioLibraryProvider);
-      final progressMap = ref.watch(
-        learningProgressProvider.select((s) => s.progressMap),
-      );
+final completedAudioProvider = Provider<List<AudioItem>>((ref) {
+  final audioState = ref.watch(audioLibraryProvider);
+  final progressMap = ref.watch(
+    learningProgressProvider.select((s) => s.progressMap),
+  );
 
-      final completed = <({String audioId, String audioName})>[];
-      for (final item in audioState.audioItems) {
-        final progress = progressMap[item.id];
-        if (progress != null && progress.isCompleted) {
-          completed.add((audioId: item.id, audioName: item.name));
-        }
-      }
-      return completed;
-    });
+  final completed = <AudioItem>[];
+  for (final item in audioState.audioItems) {
+    final progress = progressMap[item.id];
+    if (progress != null && progress.isCompleted) {
+      completed.add(item);
+    }
+  }
+  return completed;
+});
 
 StudyTask? _buildTaskForAudio({
   required String audioId,
@@ -378,6 +377,9 @@ final studyRecommendationProvider = Provider<AsyncValue<AudioItem?>>((ref) {
 });
 
 /// 按学习活动时间和最近完成记录选择学习页推荐材料。
+///
+/// 处于复习阶段的材料不推荐：无论已到时间（「待复习」）还是未到时间（「待解锁」），
+/// 学习页都已在对应分组中展示，推荐卡重复出现会造成同一材料两处入口。
 @visibleForTesting
 AudioItem? selectStudyRecommendation({
   required List<AudioItem> materials,
@@ -389,9 +391,14 @@ AudioItem? selectStudyRecommendation({
   final recentCompletionIds = recentCompletions
       .map((completion) => completion.audioId)
       .toSet();
-  bool isEligibleForRecommendation(AudioItem material) =>
-      !recentCompletionIds.contains(material.id) &&
-      progressByAudioId[material.id]?.isCompleted != true;
+  // 推荐的材料必须有字幕，否则学习页推荐的入口无法进入逐句学习。
+  bool isEligibleForRecommendation(AudioItem material) {
+    final progress = progressByAudioId[material.id];
+    return material.hasTranscript &&
+        !recentCompletionIds.contains(material.id) &&
+        progress?.isCompleted != true &&
+        progress?.isInReviewStage != true;
+  }
 
   AudioItem? mostRecentlyStudied;
   DateTime? mostRecentActivityAt;

@@ -660,3 +660,155 @@
 - 规则：固定尺寸容器内的文字不能假设单行或固定宽度；需要撑满的图形用 `Expanded` / `LayoutBuilder` 承接剩余空间，不用写死的高度。
 - 测试约定：`study_duration_chart_test.dart` 「2 倍字号下周标签单行且图表不溢出」，先在未修复代码上复现 `RenderFlex OVERFLOWING`。
 - 修复时间：2026-11-10。
+
+### 7.44 社区合集音频下载失败后重试永久被拒，只能杀进程恢复
+
+- 现象：弱网下音频下载失败，页面停在「下载失败，请重试」，点重试无效；开发者模式下载队列里也没有该任务。杀进程重启后同一条目可以正常下载。
+- 日志特征：失败后每次重试都打出 `start rejected: already running`，`MediaEnsure` 返回 `result=alreadyRunning`，但没有任何网络请求；同一时段其他条目下载正常，说明网络并非持续故障。
+- 根因：`CommunityDownload.start()` 的重入判断用 `state.containsKey(audioItemId)`。`state` 中的 `DownloadFailed` 只用于展示失败，不代表仍在下载，却被当作「进行中」，失败记录只在取消或进程重启时清除。失败发生在获取文件详情阶段（尚未入队后台下载），因此队列里也看不到任务。
+- 解法：重入判断改为 `_active.containsKey`（`_runDownload` 的 finally 会在任务结束时移除），与 `_starting` 共同防止并发重复启动。
+- 规则：区分「展示状态」与「运行状态」。用于拦截并发的判断必须读取真实的运行登记表，不能复用面向 UI 的状态 map。
+- 测试约定：`community_download_notifier_test.dart`「下载失败后重试会重新开始，不被残留的失败状态拦截」，先在未修复代码上复现 `StartResult.alreadyRunning`。
+- 相关代码：`lib/features/community_collections/download/community_download_notifier.dart`（`start`）。
+- 修复时间：2026-11-11。
+
+### 7.45 retell 播放器用例仅在 Linux CI 失败：录音权限默认实现的 `isSupported` 依赖宿主系统
+
+- 现象：GitHub CI（Ubuntu）上 `retell_player_screen_test.dart` 的「看译文模式未登录」「正常完成复述后记录任务完成」「自由练习完成后记录任务完成」三个用例稳定失败（`Found 0 widgets with text "Sign In"`、`Bad state: No element`、`Found 0 widgets with text "Done"`）；本机 macOS 全部通过。
+- 根因：`PermissionHandlerSpeechPermissionService.isSupported` 只认 iOS / macOS / Android。retell 页面 `initState` 的 post-frame 回调会调用 `ensureSpeechReadyForSubStage`，`isSupported` 为 false 时直接返回 false，随后 `context.pop()` 把页面弹掉，弹窗与「Done」按钮随之消失。测试文件未覆盖该 provider，结果取决于测试宿主系统。
+- 复现：在本机临时把替身的 `isSupported` 改为 false，同样三个用例得到与 CI 完全一致的异常。
+- 解法：测试文件注入 `_FakeSpeechPermissionService`（`isSupported => true`），与同类播放器测试（如 `listen_and_repeat_player_screen_test.dart`）保持一致。
+- 规则：测试里凡是读取 `Platform.*` 决定分支的依赖（权限、ASR、平台通道），都要在测试中显式替换，不能依赖运行测试的操作系统。
+- 相关代码：`lib/services/speech_permission_service.dart`（`isSupported`）、`lib/screens/retell_player_screen.dart`（`initState` post-frame）、`lib/widgets/speech_permission_dialog.dart`。
+- 修复时间：2026-11-13。
+
+### 7.46 视频字幕遮罩拖动发卡：Scale 手势默认 36px 判定阈值，与外层点按竞争时才生效
+
+- 现象：Android 低端机（Galaxy A06）上拖动 / 缩放字幕遮罩手感发卡，按住要拖一段才开始跟手；右下角手柄也有类似滞后。
+- 根因：`ScaleGestureRecognizer` 在触屏下需焦点移动超过 `kPanSlop`（= 2 × `kTouchSlop` = 36 逻辑像素）才接受手势，`onScaleStart` 给出的是判定通过时的当前焦点，这段位移直接丢失；视频画面只有约 200px 高，36px 接近画面的 1/5。手柄的 Pan 手势同理有 18px 死区。阈值只在竞技场里有其他成员（外层画面的 `onTap`）时生效，单独测试遮罩时竞技场只有一个成员会立即胜出，测不出问题。
+- 排查：profile 包 + VM timeline 对比。把遮罩换成纯色（完全不做模糊）后拖动掉帧与模糊版本相当，说明 `BackdropFilter` 不是瓶颈；拖动时页面按 vsync 满帧率出帧，该机型播放页每帧光栅约 10ms，GPU 满载时偶发掉帧，属于播放页基础开销。
+- 解法：遮罩子树用 `MediaQuery.gestureSettings` 设 `DeviceGestureSettings(touchSlop: 4)`（Scale 阈值降到 8px）；手柄 Pan 手势用 `DragStartBehavior.down`，越过阈值的位移也计入。
+- 规则：小面积可拖动控件要显式调低触摸阈值；手势测试需带上与真实页面相同的外层竞争手势，否则阈值相关问题测不出来。
+- 相关代码：`lib/widgets/common/video_subtitle_mask_overlay.dart`、`test/widgets/common/video_subtitle_mask_overlay_test.dart`。
+- 修复时间：2026-11-15。
+
+### 7.47 字幕遮罩手柄拖动抛 ArgumentError：clamp 下限随画面尺寸变化后大于上限
+
+- 现象：竖屏视频在全屏时把遮罩缩窄并贴边，退出全屏后拖动该侧手柄，手势抛 `ArgumentError` 失效。
+- 根因：遮罩最小尺寸按像素换算成归一化值（`56px / 画面宽`）。小窗口里竖屏视频画面只有约 114px 宽，下限 ≈ 0.49，已大于全屏里调出的遮罩宽度；`(left + dx).clamp(0, right - minWidth)` 的上限变成负数，`num.clamp` 在下限大于上限时直接抛错。
+- 解法：最小尺寸取“规则下限”和“当前尺寸”中的较小者（只能放大、不能再缩小），保证 clamp 区间始终有效。
+- 规则：凡是由运行时尺寸推导出的 clamp 上下限，都要确认不会出现下限大于上限；回归测试要让手柄互不重叠，否则拖动会落到别的手柄上，测不出问题。
+- 相关代码：`lib/widgets/common/video_subtitle_mask_overlay.dart`（`_minNormalizedSizeFor`）、`test/widgets/common/video_subtitle_mask_overlay_test.dart`。
+- 修复时间：2026-11-15。
+
+### 7.48 打开视频时先闪现上一个视频的画面：原生纹理跨视频复用，`video-params` 早于原生出帧
+
+- 现象：打开视频 A 后退出，再打开视频 B，加载遮罩消失后先显示 A 的画面，随后才切到 B。
+- 根因：`MediaKitPlayerBackend` 跨视频复用同一个 `Player` / `VideoController`，原生纹理也随之复用。打开新文件时原生端在 `video-out-params` 不可用前不绘制，纹理保留上一视频的最后一帧；而页面 ready 只等时长，早于新视频出帧，遮罩一撤就露出旧帧。画面没有其他缓存来源。
+- 踩坑：第一次用 `video-params`（解码器输出参数）作为出帧信号无效。日志显示它比 `TextureGL: resize`（原生实际绘制）早 100~400ms，且先后不稳定。`VideoController.waitUntilFirstFrameRendered` 只完成一次，controller 复用后无效。
+- 排查：临时观察 mpv `vo-configured`、`video-out-params` 与纹理 `rect`，对照原生 `TextureGL: resize` 时间戳，`vo-configured=yes` 与纹理尺寸变化都在原生出帧前后 30ms 内。
+- 解法：`VideoFrameGate`：本次 open 后 `vo-configured=yes` 且纹理尺寸等于新视频显示尺寸（尺寸不同时原生先重建纹理再绘制）才绘制纹理，此前露出黑色画布；无法观察 mpv 属性时退回直接显示，避免永久黑屏。
+- 规则：判断"画面已是新媒体"必须以原生绘制相关的信号为准，并用原生日志时间戳对照验证；解码层信号不等于已上屏。
+- 相关代码：`lib/services/video_frame_gate.dart`、`lib/services/media_kit_player_backend.dart`（`_startVideoFrameGate`）、`test/services/video_frame_gate_test.dart`；日志标签 `[VideoFrame]`。
+- 修复时间：2026-11-15。
+
+### 7.49 字幕遮罩手柄在挂载时自动弹出：激发态绑在组件生命周期上，布局切换与打开视频都会重建
+
+- 现象：打开视频、窗口宽高比跨过 1、进出全屏时，已开启的遮罩自动显示边框与手柄约 2 秒；鼠标悬浮遮罩时反而不显示。
+- 根因：`initState` 无条件设置“保持显示 2 秒”。遮罩在数据库读出后才挂载（provider 为 autoDispose，每次进入都重新读库）；`media_playback_screen.dart` 的单列 / 双列布局是带不同 key 的 `Column` / `Row`，跨过 `width / height > 1` 时整个画面子树被替换，全屏分支也会换父节点。两种情况都会让遮罩 `State` 重建，于是每次都被当成“刚开启”。悬浮显示此前并未实现，`MouseRegion` 只设置了光标。
+- 解法：挂载不激发；遮罩组件在数据加载后常驻，由 `isEnabled` 驱动，只有 `didUpdateWidget` 中从关到开才保持 2 秒；悬浮用覆盖整个组件的 `MouseRegion(opaque: false)`，判定区域取遮罩外扩手柄触控区的范围，鼠标从遮罩移到手柄上不会丢失激发态。
+- 排查：日志标签 `[VideoSubtitleMask]`。`遮罩组件挂载` 后紧跟 `遮罩激发态开启 原因=…` 且原因不是用户操作（点按 / 开始拖动 / 鼠标悬浮 / 遮罩开启），即为重建误弹出。正常路径下激发开启的原因只能是这四种之一，关闭的原因是 `保持时间结束` 或 `鼠标移出`。
+- 规则：激发类 UI 状态只能由用户操作或状态切换触发，不能放在 `initState`；与重建无关的显示状态要么提升到不会因布局切换而重建的父级，要么像这里一样由“变化”触发而不是由“挂载”触发。
+- 相关代码：`lib/widgets/common/video_subtitle_mask_overlay.dart`、`lib/widgets/common/media_visual_surface.dart`、`test/widgets/common/video_subtitle_mask_overlay_test.dart`。
+- 修复时间：2026-11-15。
+
+### 7.50 宽屏视频加载中仍是上下结构：全页加载遮罩硬编码顶部通栏，且会话未初始化时分栏无视频槽
+
+- 现象：宽屏进入视频精听，ready 前是顶部通栏的黑色加载块加全页遮罩，ready 后才变成左右分栏。
+- 根因：两层叠加。其一，`ManagedMediaVisualSurface` 在整个 body 外盖一层不透明遮罩，`_MediaOverlayFrame` 把画布固定为顶部 16:9 通栏，不感知分栏布局。其二，startup 模式下 `hasVideo` 在 `load()` 内的 `initialize` 才置为 true，加载期间 `PracticeMediaSplitLayout.media` 为 null、`visualTrackVisible` 为 false，于是分栏退回无视频的固定高度单栏。只改遮罩位置而不处理第二点，加载态仍无法左右排布。
+- 解法：托管组件新增 `builder` 用法，把启动状态交给使用方，加载占位画在视频槽内（`MediaStartupCanvas`），加载期间 `isMediaResizable` 强制为 true，视频槽由占位撑起；内容区用 `_StartupContentGate` 淡化并 `IgnorePointer`。全页遮罩路径保留给音频任务与其他页面。
+- 规则：加载占位属于布局的一部分，应由布局决定位置，不应由托管层用全页遮罩覆盖；“是否有视频”要区分会话状态与加载状态，布局判断不能只依赖会话已初始化的字段。
+- 相关代码：`lib/widgets/common/managed_media_visual_surface.dart`、`lib/widgets/common/media_startup_canvas.dart`、`lib/widgets/common/media_startup_status.dart`、`lib/screens/intensive_listen_player_screen.dart`（`_wrapMediaStartup`）。
+- 修复时间：2026-11-15。
+
+### 7.51 macOS 集成测试卡在首个用例：测试窗口被遮挡或隐藏后不再出帧
+
+- 现象：`flutter test integration_test/practice_media_split_test.dart -d macos` 编译启动后停在第一个用例，几分钟无任何 App 日志；上一轮在末尾用例出现 `[Lifecycle] state=hidden` 后同样停住。
+- 根因：macOS 窗口被最小化、切到其他桌面或完全遮挡时进入 hidden，引擎不再调度帧，`tester.pump` 一直等不到下一帧。
+- 解法：运行期间保持测试窗口在前台、不要最小化；已卡住时可用 `osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is <pid>) to true'` 把窗口切回前台，测试会继续。
+- 规则：Maestro 不支持 macOS 桌面应用，macOS 上的点按测试用 integration_test。冷启动期间立即 `push` 可能丢失，进入页面要按页面类型有界重试（见 `_openTask`）。
+- 相关代码：`integration_test/practice_media_split_test.dart`。
+- 记录时间：2026-11-15。
+
+### 7.52 剪辑视频在部分 Mac 上无法创建 VideoToolbox 编码会话
+
+- 现象：音频剪辑成功，H.264 视频剪辑失败，日志出现 `Cannot create compression session: -12903` 和 `Try -allow_sw 1`。
+- 根因：声明了 VideoToolbox 编码器并不代表当时一定有可用硬件编码会话；硬件可能不可用或被占用。
+- 解法：Apple 的 H.264 精确裁剪设置 `-allow_sw 1`，允许 VideoToolbox 使用系统软件编码；不回退为关键帧流复制。Android 仍用 MediaCodec。
+- 验证：macOS 的音频/视频、有/无字幕四种真实媒体裁剪测试通过，Android 真机对应四种场景也通过。
+- 相关代码：`lib/features/media_trim/media_trim_processor.dart`、`integration_test/media_trim_integration_test.dart`。
+- 记录时间：2026-11-16。
+
+### 7.53 保存弹窗关闭时 TextEditingController 提前释放
+
+- 现象：`showDialog` 返回后立即释放 controller，关闭动画期间 TextField 继续构建，抛 `A TextEditingController was used after being disposed`，继而触发布局与 Overlay 断言。
+- 根因：弹窗的返回值先于反向过渡结束到达，外部方法的结束不等于弹窗子树已销毁。
+- 解法：仅需读取输入时采用表单初始值与 `onChanged` 保存字符串，不让外部异步方法持有弹窗输入控制器；复杂输入则由独立 StatefulWidget 在自身 dispose 中释放。
+- 相关代码：`lib/features/media_trim/widgets/media_trim_dialogs.dart`。
+- 记录时间：2026-11-16。
+
+### 7.54 just_waveform 16 位波形错位，波形被压成一条线
+
+- 现象：剪辑页时间轴的波形几乎是一条细线，正常音量的音频也看不出起伏。
+- 根因：just_waveform 0.0.7 的 `JustWaveform.parse` 对 16 位数据用 `Int16List.view(bytes, headerLength ~/ 2)`，偏移是 10 字节而非规范的 20 字节头。`getPixelMin/Max` 整体错位 5 个采样，开头还混入头部字段（采样率 44100 被读成 -21436），按峰值归一化时真实波形被压扁。另外它的头部视图按 20 个 uint32 读取，文件小于 80 字节会抛 RangeError。
+- 解法：用 `WaveformSamples` 从原始 buffer 第 20 字节重新建立 16 位视图；8 位数据偏移本身正确。不修改插件源码。字幕编辑器的波形同样受影响，尚未切换。
+- 验证：`test/utils/waveform_samples_test.dart` 构造带头部的波形文件，确认 min/max 与峰值正确；macOS 集成测试截图中波形恢复正常高度。
+- 相关代码：`lib/utils/waveform_samples.dart`、`lib/features/media_trim/widgets/media_trim_timeline.dart`。
+- 记录时间：2026-11-16。
+
+### 7.55 时间轴把手在触屏上拖不动
+
+- 现象：鼠标能拖动片段把手，集成测试（触摸指针）和触屏拖动把手时却变成平移，日志没有「拖动结束」。
+- 根因：`ScaleGestureRecognizer` 要越过拖动阈值才回调 `onScaleStart`，此时 `localFocalPoint` 已离开按下位置；触摸阈值较大，按它判断命中会错过把手。
+- 解法：在 `Listener.onPointerDown` 记录按下位置，`onScaleStart` 用按下位置判断是否命中把手。
+- 验证：`test/features/media_trim/media_trim_timeline_test.dart` 覆盖触摸与鼠标拖动把手；macOS 集成测试拖动终点后日志为 `拖动结束 … range=1350-3750ms`。
+- 相关代码：`lib/features/media_trim/widgets/media_trim_timeline.dart`。
+- 记录时间：2026-11-16。
+
+### 7.56 macOS 集成测试里快捷键偶发无效：窗口失去前台后焦点被暂存到根节点
+
+- 现象：剪辑页集成测试里 Esc / I 等快捷键偶发无响应，`sendKeyEvent` 返回未处理；同一用例重跑又通过。一度误以为是顶部 toast 导致（改成 SnackBar 那次恰好通过）。
+- 根因：测试窗口失去前台（运行期间切到其它应用或窗口）时 App 进入 inactive，`FocusManager._appLifecycleChange` 把 primaryFocus 暂存并移到 Root Focus Scope，恢复 resumed 后才还原。期间页面 `Focus(autofocus)` 下的 `CallbackShortcuts` 收不到按键。用焦点监听在失败时刻看到 primaryFocus 变为 `Root Focus Scope`，与 toast 显示 / 消失时刻无关；最小复现里 toast 出现和移除都不改变焦点。
+- 解法：集成测试发快捷键前先 `handleAppLifecycleStateChanged(AppLifecycleState.resumed)`（`_UiHarness.sendKey`），不依赖窗口是否在前台。窗口被完全遮挡或最小化导致不出帧仍按 7.51 处理。
+- 相关代码：`integration_test/media_trim_integration_test.dart`。
+- 记录时间：2026-11-16。
+
+### 7.57 剪辑页布局切换后时间轴缩放被重置
+
+- 现象：放大时间轴后，拖动窗口跨过宽 / 窄 / 矮布局阈值，或展开收起视频画面，缩放回到 1 倍、平移位置丢失。
+- 根因：缩放与平移是时间轴 `State` 的局部状态；三种布局把时间轴放在不同父节点下，展开画面又在它前面插入一项，没有 key 时按位置和类型匹配失败，`State` 被销毁重建。
+- 解法：`_TimelineSection` 挂屏幕持有的 `GlobalKey`，换位置时整体搬移而不重建。
+- 验证：集成测试「剪辑页面视频」放大后切矮窗口、切回、收起 / 展开画面都检查缩放按钮仍可用；去掉 GlobalKey 时该用例在「切到矮窗口布局不重置缩放」处失败。
+- 相关代码：`lib/features/media_trim/media_trim_screen.dart`。
+- 关联问题：保住状态后又暴露宽度变化时的锚点偏差——旧代码取视口 x=0 处的时间、却恢复到留白之后（x=14），放大平移后每次布局变化波形整体右移 14px，看起来像左边距变宽，连续拖窗口会累积。取点与恢复点统一为留白后第一个像素；`media_trim_timeline_test.dart`「视口宽度变化」用例覆盖。
+- 记录时间：2026-11-16。
+
+### 7.58 连续点「新片段」产生重叠片段：播放头在末段内时绕回前面的空白仍按播放头句子取段
+
+- 现象：有字幕时，播放头落在某段内（该段已延伸到材料末尾，后面没有空白），连续点两次「新片段」，第二段与第一段重叠（如 0:47–1:01 与 0:37–1:01），而左侧仍有大片空白。
+- 根因：`MediaTrimBoundaries._sentenceRangeInGap` 从播放头所在句往后找空白；后面没有空白时绕回到前面的空白，但仍把起点钳到播放头所在句（`fromSpan`），于是从已被占用的句子开始向后取段。
+- 解法：只有排在播放头之后的空白才从播放头所在句开始，绕回时从空白自身起点算。
+- 验证：`media_trim_clip_test.dart`「播放头在片段内且片段之后没有空白」与「任意播放头位置…都不与现有片段重叠」（有字幕 / 无字幕多种布局，每 500ms 一个播放头）；`media_trim_editor_controller_test.dart`「连续两次新片段在同一播放头处不重叠」。三条在修复前均失败。
+- 相关代码：`lib/features/media_trim/media_trim_clip.dart`。
+- 记录时间：2026-11-16。
+
+### 7.21 离线 ASR 模型归档：多语种权重由网关本地托管（2026-11-17）
+
+- **现象**：`/model/asr/whisper-{tiny,base,small}-int8-v1.zip` 全部 404（`silero-vad-v1.zip` 正常 206），德语版离线识别无法下载模型；且 app 侧 `language: 'de'` 与「英文模型」的命名冲突，容易误判成「只有英文权重」。
+- **真相**：catalog 里的 `whisper-*-en-int8` 是**历史 id**，归档内容一直是 sherpa-onnx 的**多语种** int8 权重（`sherpa-onnx-whisper-{tiny,base,small}`，非 `.en` 版）。三个归档解压后的字节数（60,745,245 / 94,464,537 / 232,673,926）与 catalog 的 `estimatedDownloadBytes` 完全一致，可反证同源。
+- **解法**：
+  1. 按官方 tar.bz2 只取 `*-encoder.int8.onnx` / `*-decoder.int8.onnx` / `*-tokens.txt` 三个文件重新打包成 zip（归档内是单一顶层目录，安装器会扁平化）。
+  2. 归档放 `<gateway>/data/static/model/asr/`，网关 `/model/*` 新增「本地文件优先 + Range 206 断点续传 + HEAD 探测」；本地缺失才回落 `cdn.echo-loop.top` 的 302。
+  3. catalog 的 `sha256` 换成实际归档摘要（zip 头信息不同，字节数与旧值相同但哈希不同），`asr_model_manager_test.dart` 里钉的摘要同步更新。
+- **验证**：公网 `https://echoloop.1122275.xyz/model/asr/whisper-*-int8-v1.zip` HEAD 200 带正确 Content-Length、`Range: bytes=0-31` 返回 206、整包下载后 sha256 与 catalog 一致。
+- **相关文件**：`lib/services/asr/asr_model_catalog.dart`、`workspace/echoloop-gateway/server_std.py`（`_serve_file_range` / `do_HEAD`）。

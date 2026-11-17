@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
@@ -22,16 +23,23 @@ import 'package:echo_loop/database/daos/saved_word_dao.dart';
 import 'package:echo_loop/database/daos/sentence_ai_cache_dao.dart';
 import 'package:echo_loop/database/app_database.dart';
 import 'package:echo_loop/database/providers.dart';
+import 'package:echo_loop/models/audio_item.dart' as model;
 import 'package:echo_loop/models/dict_entry.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
 import 'package:echo_loop/providers/learning_session/bookmark_review_provider.dart';
+import 'package:echo_loop/providers/media_engine/media_engine_provider.dart';
 import 'package:echo_loop/providers/learning_session/favorite_review_due_count_provider.dart';
 import 'package:echo_loop/providers/new_user_guide_provider.dart';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart'
     show sharedPreferencesProvider;
+import 'package:echo_loop/providers/dictionary/visible_sources_provider.dart';
 import 'package:echo_loop/providers/sentence_ai_provider.dart';
+import 'package:echo_loop/services/dictionary/ai_dictionary_source.dart';
+import 'package:echo_loop/services/dictionary/dictionary_source.dart';
 import 'package:echo_loop/services/sentence_ai_api_client.dart';
 import 'package:echo_loop/services/dictionary_service.dart';
+import 'package:echo_loop/widgets/dictionary/dictionary_panel.dart';
+import 'package:echo_loop/widgets/dictionary/source_switcher.dart';
 import 'package:echo_loop/theme/app_theme.dart';
 
 import '../helpers/mock_providers.dart';
@@ -42,6 +50,7 @@ class _MockCacheDao extends Mock implements SentenceAiCacheDao {}
 
 class _MockApiClient extends Mock implements SentenceAiApiClient {}
 
+class _MockAiDictionarySource extends Mock implements AiDictionarySource {}
 
 class _MockAudioItemDao extends Mock implements AudioItemDao {
   _MockAudioItemDao({AudioItem? audioItem, String? transcriptSrt}) {
@@ -200,6 +209,31 @@ SavedSenseGroup _createSavedPhrase({
   );
 }
 
+/// 视频来源句的媒体引擎替身：立即完成加载并记录定位位置。
+class _LoadRecordingMediaEngine extends MediaEngine {
+  final loadedInitialPositions = <Duration>[];
+
+  @override
+  Future<Duration?> loadMedia(
+    model.AudioItem item,
+    double speed, {
+    Duration initialPosition = Duration.zero,
+    bool publishToSystemMediaSession = true,
+  }) async {
+    loadedInitialPositions.add(initialPosition);
+    return const Duration(minutes: 1);
+  }
+
+  @override
+  Future<void> releaseFromScreen() async {}
+
+  @override
+  Future<void> setVideoTrackEnabled(bool enabled) async {}
+
+  @override
+  Future<void> setSubtitleTrackData(String? srt) async {}
+}
+
 void main() {
   late StreamController<List<BookmarkWithAudio>> bookmarkController;
   late StreamController<List<SavedWord>> wordController;
@@ -232,6 +266,8 @@ void main() {
     Future<int>? vocabularyDueFuture,
     SharedPreferences? guidePrefs,
     DictionaryService? dictionaryService,
+    List<DictionarySource> visibleDictionarySources = const [],
+    Override? mediaEngineOverride,
   }) {
     final router = GoRouter(
       initialLocation: '/favorites',
@@ -270,6 +306,9 @@ void main() {
         analyticsOverride(),
         ...studyTimeOverrides(),
         dictionaryServiceOverride(dictionaryService),
+        visibleDictionarySourcesProvider.overrideWithValue(
+          visibleDictionarySources,
+        ),
         bookmarkDaoProvider.overrideWithValue(
           _TestBookmarkDao(bookmarkController),
         ),
@@ -286,6 +325,7 @@ void main() {
           ),
         ),
         audioEngineProvider.overrideWith(() => TestAudioEngine()),
+        if (mediaEngineOverride != null) mediaEngineOverride,
         if (bookmarkReview != null)
           bookmarkReviewProvider.overrideWith(() => bookmarkReview),
         if (sentenceDueCount != null)
@@ -1088,7 +1128,9 @@ void main() {
           },
         );
 
-        await tester.pumpWidget(createTestWidget(dictionaryService: dictionary));
+        await tester.pumpWidget(
+          createTestWidget(dictionaryService: dictionary),
+        );
         await tester.pump();
         await tester.tap(find.text('Vocabulary'));
         await tester.pump();
@@ -1328,6 +1370,62 @@ void main() {
       expect(openedSentenceDetailArgs?.endTimeMs, 3600);
     });
 
+    testWidgets('视频来源句先加载画面到句首，并把媒体会话交给讲解页', (tester) async {
+      final sourceAudio = AudioItem(
+        id: 'audio-1',
+        name: 'A source video',
+        audioPath: 'videos/source.mp4',
+        addedDate: DateTime(2026, 1, 1),
+        totalDuration: 60,
+        sentenceCount: 1,
+        wordCount: 5,
+        isPinned: false,
+        updatedAt: DateTime(2026, 1, 1),
+        syncStatus: 0,
+      );
+      final mediaEngine = _LoadRecordingMediaEngine();
+      await tester.pumpWidget(
+        createTestWidget(
+          sourceAudio: sourceAudio,
+          mediaEngineOverride: mediaEngineProvider.overrideWith(
+            () => mediaEngine,
+          ),
+        ),
+      );
+      await tester.tap(find.text('Vocabulary'));
+      await tester.pump();
+      bookmarkController.add([]);
+      wordController.add([
+        _createSavedWord(
+          id: 1,
+          word: 'researcher',
+          audioItemId: 'audio-1',
+          sentenceIndex: 2,
+          sentenceText: 'A researcher studies inherited traits.',
+          sentenceStartMs: 1200,
+          sentenceEndMs: 3600,
+        ),
+      ]);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('researcher'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const Key('favorite-word-source-sentence')),
+          matching: find.byIcon(Icons.arrow_forward_ios),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sentence detail destination'), findsOneWidget);
+      expect(mediaEngine.loadedInitialPositions, [
+        const Duration(milliseconds: 1200),
+      ]);
+      expect(openedSentenceDetailArgs?.mediaSession, isNotNull);
+      expect(openedSentenceDetailArgs?.rangePlaybackBuilder, isNotNull);
+    });
+
     testWidgets('单词来源句右侧整块区域均可进入讲解页', (tester) async {
       final sourceAudio = AudioItem(
         id: 'audio-1',
@@ -1391,8 +1489,7 @@ void main() {
       await tester.pumpWidget(
         createTestWidget(
           sourceAudio: sourceAudio,
-          sourceTranscriptSrt:
-              '1\n00:00:01,200 --> 00:00:03,600\nA researcher studies inherited traits.\n',
+          sourceTranscriptSrt: '1\n00:00:01,200 --> 00:00:03,600\nA researcher studies inherited traits.\n',
         ),
       );
       await tester.tap(find.text('Vocabulary'));
@@ -1515,6 +1612,52 @@ void main() {
       // 验证例句 Text widget 没有 maxLines 限制
       final textWidget = tester.widget<Text>(find.text(longSentence));
       expect(textWidget.maxLines, isNull, reason: '展开后的例句不应有 maxLines 限制');
+    });
+
+    testWidgets('单词 AI 查词按钮在收藏页内打开查词面板并走 AI 源', (tester) async {
+      final aiSource = _MockAiDictionarySource();
+      when(() => aiSource.id).thenReturn(AiDictionarySource.sourceId);
+      when(() => aiSource.canBeDisabled).thenReturn(true);
+      when(() => aiSource.requiresNetwork).thenReturn(true);
+      when(() => aiSource.icon).thenReturn(Icons.auto_awesome);
+
+      // 关闭新手引导，避免引导遮罩拦截点击
+      SharedPreferences.setMockInitialValues({'guide_enabled': false});
+      final prefs = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        createTestWidget(
+          guidePrefs: prefs,
+          visibleDictionarySources: [aiSource],
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Vocabulary'));
+      await tester.pump();
+      bookmarkController.add([]);
+      wordController.add([_createSavedWord(id: 1, word: 'encountered')]);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.tap(find.text('encountered'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DictionaryPanel), findsNothing);
+
+      await tester.tap(find.byKey(const Key('favorite_word_ai_lookup')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(DictionaryPanel), findsOneWidget);
+      expect(
+        tester
+            .widget<AiSourceButton>(
+              find.descendant(
+                of: find.byType(DictionaryPanel),
+                matching: find.byType(AiSourceButton),
+              ),
+            )
+            .selectedId,
+        AiDictionarySource.sourceId,
+      );
     });
   });
 

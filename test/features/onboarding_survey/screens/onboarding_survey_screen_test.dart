@@ -150,7 +150,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习德语听说的主要目标是什么？'), findsOneWidget);
 
     // 选"工作沟通" → 等待自动前进
     await tester.tap(find.text('工作沟通'));
@@ -181,7 +181,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
 
     // summary 页：headline + 4 要点 + 权限预告 + 开始学习 按钮，仍未提交
-    expect(find.textContaining('提升英语听说'), findsOneWidget);
+    expect(find.textContaining('提升德语听说'), findsOneWidget);
     expect(find.text('选择适合你水平的音频反复练习'), findsOneWidget);
     expect(find.text('通过复述练习口语，把听懂变成会说'), findsOneWidget);
     // 权限预告：纯展示 label，无交互
@@ -223,7 +223,7 @@ void main() {
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, isNull);
     expect(
-      tester.widget<Text>(find.text('你练习英语听说的主要目标是什么？')).style?.color,
+      tester.widget<Text>(find.text('你练习德语听说的主要目标是什么？')).style?.color,
       colors.onSurface,
     );
 
@@ -260,7 +260,7 @@ void main() {
     await tester.tap(find.text('朋友推荐'));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
     expect(
-      tester.widget<Text>(find.textContaining('提升英语听说')).style?.color,
+      tester.widget<Text>(find.textContaining('提升德语听说')).style?.color,
       colors.onSurface,
     );
     expect(
@@ -400,7 +400,7 @@ void main() {
     await tester.tap(find.text('上一步'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
-    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习德语听说的主要目标是什么？'), findsOneWidget);
   });
 
   testWidgets('物理返回键被 PopScope 拦截', (tester) async {
@@ -416,7 +416,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('你练习英语听说的主要目标是什么？'), findsOneWidget);
+    expect(find.text('你练习德语听说的主要目标是什么？'), findsOneWidget);
   });
 
   testWidgets('无跳过按钮渲染', (tester) async {
@@ -611,7 +611,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '继续'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
-    expect(find.textContaining('提升英语听说'), findsOneWidget);
+    expect(find.textContaining('提升德语听说'), findsOneWidget);
     await tester.tap(find.text('开始学习'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 

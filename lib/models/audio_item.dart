@@ -1,4 +1,5 @@
 import '../utils/app_data_dir.dart';
+
 import 'package:path/path.dart' as path;
 
 /// copyWith 用于区分"未传参"与"显式传 null"的哨兵值
@@ -51,7 +52,9 @@ enum AudioContentStatus {
 
 /// 支持导入的视频扩展名（小写、不含点）。是 mediaType 判定的唯一依据，
 /// 其他文件（如 subtitle_pairing.dart）复用这个常量，不要另外定义一份。
-const videoFileExtensions = {'mp4', 'mov', 'm4v', 'mkv'};
+///
+/// webm（matroska）与 avi 的解封装在 media_kit 与 ffmpeg-kit 两端的构建中均已编入。
+const videoFileExtensions = {'mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi'};
 
 /// 媒体类型：按文件扩展名派生，不落库。
 enum MediaType { audio, video }
@@ -80,13 +83,17 @@ enum AudioImportSourceType {
   directUrl,
 
   /// 从网盘来源导入。当前预留，后续接入网盘解析时使用。
-  cloudDrive;
+  cloudDrive,
+
+  /// 从已有媒体剪辑生成的独立材料。
+  trimmed;
 
   String get storageValue {
     return switch (this) {
       AudioImportSourceType.local => 'local',
       AudioImportSourceType.directUrl => 'direct_url',
       AudioImportSourceType.cloudDrive => 'cloud_drive',
+      AudioImportSourceType.trimmed => 'trimmed',
     };
   }
 
@@ -95,6 +102,7 @@ enum AudioImportSourceType {
       'local' => AudioImportSourceType.local,
       'direct_url' => AudioImportSourceType.directUrl,
       'cloud_drive' => AudioImportSourceType.cloudDrive,
+      'trimmed' => AudioImportSourceType.trimmed,
       _ => null,
     };
   }

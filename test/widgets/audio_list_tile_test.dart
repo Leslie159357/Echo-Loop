@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/database/enums.dart';
 import 'package:echo_loop/models/audio_item.dart';
+import 'package:echo_loop/models/collection.dart';
 import 'package:echo_loop/models/learning_progress.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/audio_engine/audio_engine_provider.dart';
@@ -20,8 +19,9 @@ import 'package:echo_loop/features/audio_import/audio_import_provider.dart';
 import 'package:echo_loop/features/community_collections/download/download_progress.dart';
 import 'package:echo_loop/features/community_collections/download/community_download_notifier.dart';
 import 'package:echo_loop/features/auth/providers/auth_providers.dart';
-import 'package:echo_loop/theme/app_theme.dart';
 import 'package:echo_loop/widgets/audio_list_tile.dart';
+import 'package:echo_loop/widgets/learning_progress_bar.dart';
+import 'package:echo_loop/widgets/media_type_icon.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -142,29 +142,31 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(Icons.subtitles_outlined), findsNothing);
-      expect(find.text('CC'), findsOneWidget);
+      expect(find.text('CC'), findsNothing);
       expect(find.text('subtitles'), findsNothing);
 
-      final badge = tester.widget<Container>(
+      final badge = tester.widget<SvgPicture>(
         find.byKey(const Key('audio_list_tile_transcript_badge')),
       );
-      switch (badge.decoration) {
-        case BoxDecoration(:final color, :final border):
-          expect(color, isNotNull);
-          expect(border, isNotNull);
-        default:
-          fail('字幕标签应使用 BoxDecoration');
-      }
+      expect(badge.bytesLoader, isA<SvgAssetLoader>());
+      expect(
+        (badge.bytesLoader as SvgAssetLoader).assetName,
+        'assets/icon/closed-captions.svg',
+      );
 
       final titleY = tester.getTopLeft(find.text('Audio with transcript')).dy;
       final metadataY = tester
           .getTopLeft(find.byKey(const Key('audio_list_tile_metadata_row')))
           .dy;
-      final badgeY = tester
-          .getTopLeft(find.byKey(const Key('audio_list_tile_transcript_badge')))
+      // 字幕图标比元信息行高，二者在行内垂直居中对齐。
+      final metadataCenterY = tester
+          .getCenter(find.byKey(const Key('audio_list_tile_metadata_row')))
+          .dy;
+      final badgeCenterY = tester
+          .getCenter(find.byKey(const Key('audio_list_tile_transcript_badge')))
           .dy;
       expect(metadataY, greaterThan(titleY));
-      expect((badgeY - metadataY).abs(), lessThan(2));
+      expect((badgeCenterY - metadataCenterY).abs(), lessThan(2));
     });
 
     testWidgets('无任何 badge 时只显示标题和元数据两行', (tester) async {
@@ -189,8 +191,7 @@ void main() {
 
     testWidgets('合集社区材料显示 CEFR 难度，窄屏长标题仍可布局', (tester) async {
       final item = createTestAudioItem(
-        name:
-            'A very long community lesson title that needs to fit on a narrow screen',
+        name: 'A very long community lesson title that needs to fit on a narrow screen',
       ).copyWith(remoteAudioId: 'remote-1', difficulty: 'B1');
 
       await tester.pumpWidget(
@@ -217,7 +218,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('资源库全局列表不显示合集专属难度徽章', (tester) async {
+    testWidgets('全局列表（搜索结果、已完成列表）同样显示社区难度徽章', (tester) async {
       final item = createTestAudioItem().copyWith(
         remoteAudioId: 'remote-1',
         difficulty: 'B1',
@@ -226,10 +227,25 @@ void main() {
       await tester.pumpWidget(buildTile(item));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('community_difficulty_badge')), findsNothing);
+      expect(
+        find.byKey(const Key('community_difficulty_badge')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('资源库全局列表长标题仍可自然换行', (tester) async {
+    testWidgets('已解除社区关联的本地音频保留难度并显示徽章', (tester) async {
+      final item = createTestAudioItem().copyWith(difficulty: 'B1');
+
+      await tester.pumpWidget(buildTile(item));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('community_difficulty_badge')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('全局搜索结果长标题同样最多显示两行', (tester) async {
       const title =
           'A very long community lesson title that should keep wrapping naturally';
       final item = createTestAudioItem(name: title);
@@ -237,8 +253,239 @@ void main() {
       await tester.pumpWidget(buildTile(item, width: 300));
       await tester.pumpAndSettle();
 
-      expect(tester.widget<Text>(find.text(title)).maxLines, isNull);
+      expect(tester.widget<Text>(find.text(title)).maxLines, 2);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('合集内长标题最多显示两行并省略', (tester) async {
+      const title =
+          'A very long collection material title that should be clamped to two lines';
+      final item = createTestAudioItem(name: title);
+
+      await tester.pumpWidget(buildTile(item, collectionId: 'collection-1'));
+      await tester.pumpAndSettle();
+
+      final titleText = tester.widget<Text>(find.text(title));
+      expect(titleText.maxLines, 2);
+      expect(titleText.overflow, TextOverflow.ellipsis);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('AudioListTile 已订阅合集图标', () {
+    Widget buildTileInCollection(AudioItem item, Collection collection) {
+      return createTestApp(
+        Center(
+          child: SizedBox(
+            width: 360,
+            child: AudioListTile(audioItem: item, collectionId: collection.id),
+          ),
+        ),
+        overrides: dedupeOverrides([
+          audioLibraryProvider.overrideWith(
+            () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+          ),
+          collectionListProvider.overrideWith(
+            () => TestCollectionList(
+              CollectionState(
+                rawCollections: [collection],
+                audioIdsMap: {
+                  collection.id: [item.id],
+                },
+              ),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    Collection subscribedCollection(CollectionSource source) {
+      return Collection(
+        id: 'subscribed-1',
+        name: 'Subscribed',
+        createdDate: DateTime(2026, 1, 1),
+        source: source,
+      );
+    }
+
+    testWidgets('已订阅合集无封面时显示音频图标，且不显示学习进度图标', (tester) async {
+      final item = createTestAudioItem(name: 'Subscribed audio');
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.community),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final glyph = tester.widget<MediaTypeIcon>(find.byType(MediaTypeIcon));
+      expect(glyph.isVideo, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('已订阅合集无封面的视频条目显示视频图标', (tester) async {
+      final item = createTestAudioItem(
+        name: 'Subscribed video',
+        audioPath: 'videos/clip.mp4',
+      );
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.podcast),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final glyph = tester.widget<MediaTypeIcon>(find.byType(MediaTypeIcon));
+      expect(glyph.isVideo, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('已订阅合集有封面时显示封面而非默认图标', (tester) async {
+      final item = createTestAudioItem(name: 'Covered audio');
+      final collection = Collection(
+        id: 'subscribed-1',
+        name: 'Subscribed',
+        createdDate: DateTime(2026, 1, 1),
+        source: CollectionSource.community,
+        coverUrl: 'https://example.com/cover.png',
+      );
+
+      await tester.pumpWidget(buildTileInCollection(item, collection));
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_subscribed_artwork')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('已订阅素材未下载时元信息行显示未下载状态', (tester) async {
+      final item = createTestAudioItem(name: 'Remote audio')
+          .copyWith(audioPath: null, remoteAudioId: 'remote-1');
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.community),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
+      expect(
+        find.descendant(of: status, matching: find.text('Not downloaded')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: status, matching: find.byType(SvgPicture)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('已订阅素材已下载时元信息行显示已下载状态', (tester) async {
+      final item = createTestAudioItem(name: 'Downloaded audio')
+          .copyWith(remoteAudioId: 'remote-1');
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.community),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
+      expect(
+        find.descendant(of: status, matching: find.text('Downloaded')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('已订阅素材下载中显示进度环和下载中状态', (tester) async {
+      final item = createTestAudioItem(name: 'Downloading audio')
+          .copyWith(audioPath: null, remoteAudioId: 'remote-1');
+      final collection = subscribedCollection(CollectionSource.community);
+
+      await tester.pumpWidget(
+        createTestApp(
+          Center(
+            child: SizedBox(
+              width: 360,
+              child: AudioListTile(
+                audioItem: item,
+                collectionId: collection.id,
+              ),
+            ),
+          ),
+          overrides: dedupeOverrides([
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
+            ),
+            collectionListProvider.overrideWith(
+              () => TestCollectionList(
+                CollectionState(
+                  rawCollections: [collection],
+                  audioIdsMap: {
+                    collection.id: [item.id],
+                  },
+                ),
+              ),
+            ),
+            communityDownloadProvider.overrideWith(
+              () => _DownloadingCommunity(item.id),
+            ),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
+      expect(
+        find.descendant(
+          of: status,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: status, matching: find.text('Downloading')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('本地合集素材不显示下载状态', (tester) async {
+      final item = createTestAudioItem(name: 'Local audio');
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.local),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('audio_list_tile_download_status')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('用户自建合集左侧不显示进度环，改为下方进度条', (tester) async {
+      final item = createTestAudioItem(name: 'Local audio');
+
+      await tester.pumpWidget(
+        buildTileInCollection(
+          item,
+          subscribedCollection(CollectionSource.local),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LearningProgressBar), findsOneWidget);
     });
   });
 
@@ -354,9 +601,8 @@ void main() {
     }
 
     testWidgets('社区已下载音频菜单含「删除下载」', (tester) async {
-      final item = createTestAudioItem(
-        name: 'Official Audio',
-      ).copyWith(remoteAudioId: 'remote-1');
+      final item = createTestAudioItem(name: 'Official Audio')
+          .copyWith(remoteAudioId: 'remote-1');
 
       await tester.pumpWidget(buildTile(item));
       await tester.pumpAndSettle();
@@ -369,9 +615,8 @@ void main() {
     });
 
     testWidgets('社区未下载音频菜单不含「删除下载」', (tester) async {
-      final item = createTestAudioItem(
-        name: 'Official Audio',
-      ).copyWith(remoteAudioId: 'remote-1', audioPath: null);
+      final item = createTestAudioItem(name: 'Official Audio')
+          .copyWith(remoteAudioId: 'remote-1', audioPath: null);
 
       await tester.pumpWidget(buildTile(item));
       await tester.pumpAndSettle();
@@ -418,9 +663,8 @@ void main() {
     });
 
     testWidgets('社区音频下载中菜单显示并支持取消下载', (tester) async {
-      final item = createTestAudioItem(
-        name: 'Official Audio',
-      ).copyWith(audioPath: null, remoteAudioId: 'remote-1');
+      final item = createTestAudioItem(name: 'Official Audio')
+          .copyWith(audioPath: null, remoteAudioId: 'remote-1');
 
       await tester.pumpWidget(
         createTestApp(
@@ -451,9 +695,8 @@ void main() {
     });
 
     testWidgets('播客已下载单集菜单含「删除下载」', (tester) async {
-      final item = createTestAudioItem(
-        name: 'Podcast Episode',
-      ).copyWith(podcastEpisodeGuid: 'guid-1');
+      final item = createTestAudioItem(name: 'Podcast Episode')
+          .copyWith(podcastEpisodeGuid: 'guid-1');
 
       await tester.pumpWidget(buildTile(item));
       await tester.pumpAndSettle();
@@ -476,9 +719,8 @@ void main() {
     });
 
     testWidgets('点「删除下载」清空 audioPath', (tester) async {
-      final item = createTestAudioItem(
-        name: 'Official Audio',
-      ).copyWith(remoteAudioId: 'remote-1');
+      final item = createTestAudioItem(name: 'Official Audio')
+          .copyWith(remoteAudioId: 'remote-1');
       final library = TestAudioLibrary(AudioLibraryState(audioItems: [item]));
 
       await tester.pumpWidget(
@@ -710,7 +952,7 @@ void main() {
   });
 
   group('AudioListTile Podcast 单集', () {
-    testWidgets('未下载单集显示对应的懒下载进度', (tester) async {
+    testWidgets('未下载单集元信息行显示下载中状态', (tester) async {
       final item =
           createTestAudioItem(
             name: 'Podcast Episode',
@@ -740,11 +982,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_download_progress')),
+        find.descendant(
+          of: status,
+          matching: find.byType(CircularProgressIndicator),
+        ),
         findsOneWidget,
       );
-      expect(find.textContaining('Downloading 42%'), findsOneWidget);
+      expect(
+        find.descendant(of: status, matching: find.text('Downloading')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('未下载单集点击只进入计划页，不在列表行发起下载', (tester) async {
@@ -784,7 +1033,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('未下载单集左侧显示下载图标而非进度环', (tester) async {
+    testWidgets('未下载单集元信息行显示未下载状态，左侧不显示进度环', (tester) async {
       final item =
           createTestAudioItem(
             name: 'Podcast Episode',
@@ -811,17 +1060,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
+        find.descendant(of: status, matching: find.text('Not downloaded')),
         findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
-        findsNothing,
       );
     });
 
-    testWidgets('单集下载中时左侧显示下载进度环', (tester) async {
+    testWidgets('单集下载中时元信息行显示下载进度环与下载中状态', (tester) async {
       final item =
           createTestAudioItem(
             name: 'Podcast Episode',
@@ -851,17 +1097,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        find.descendant(
+          of: status,
+          matching: find.byType(CircularProgressIndicator),
+        ),
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
-        findsNothing,
+        find.descendant(of: status, matching: find.text('Downloading')),
+        findsOneWidget,
       );
     });
 
-    testWidgets('已下载单集左侧显示学习进度图标而非下载图标', (tester) async {
+    testWidgets('已下载单集元信息行显示已下载状态', (tester) async {
       final item =
           createTestAudioItem(
             name: 'Podcast Episode',
@@ -888,17 +1138,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
-        findsNothing,
+        find.descendant(of: status, matching: find.text('Downloaded')),
+        findsOneWidget,
       );
     });
 
-    testWidgets('未下载社区音频左侧显示下载图标而非进度环', (tester) async {
+    testWidgets('未下载社区音频元信息行显示未下载状态，左侧不显示进度环', (tester) async {
       final item = createTestAudioItem(
         name: 'Official Audio',
         transcriptPath: null,
@@ -919,17 +1166,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
+        find.descendant(of: status, matching: find.text('Not downloaded')),
         findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
-        findsNothing,
       );
     });
 
-    testWidgets('社区音频下载中时左侧显示下载进度环', (tester) async {
+    testWidgets('社区音频下载中时元信息行显示下载进度环与下载中状态', (tester) async {
       final item = createTestAudioItem(
         name: 'Official Audio',
         transcriptPath: null,
@@ -953,23 +1197,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
+        find.descendant(
+          of: status,
+          matching: find.byType(CircularProgressIndicator),
+        ),
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
-        findsNothing,
-      );
-      // 社区下载与播客一致：行内进度条（无弹窗）。
-      expect(
-        find.byKey(const Key('audio_list_tile_download_progress')),
+        find.descendant(of: status, matching: find.text('Downloading')),
         findsOneWidget,
       );
-      expect(find.textContaining('Downloading 42%'), findsOneWidget);
     });
 
-    testWidgets('已下载社区音频左侧显示学习进度图标而非下载图标', (tester) async {
+    testWidgets('已下载社区音频元信息行显示已下载状态', (tester) async {
       final item =
           createTestAudioItem(
             name: 'Official Audio',
@@ -994,13 +1236,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      final status = find.byKey(const Key('audio_list_tile_download_status'));
       expect(
-        find.byKey(const Key('audio_list_tile_download_icon')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const Key('audio_list_tile_downloading_icon')),
-        findsNothing,
+        find.descendant(of: status, matching: find.text('Downloaded')),
+        findsOneWidget,
       );
     });
 
@@ -1019,7 +1258,9 @@ void main() {
             audioLibraryProvider.overrideWith(
               () => TestAudioLibrary(AudioLibraryState(audioItems: [item])),
             ),
-            supabaseSessionProvider.overrideWithValue(AsyncData<Session?>(_signedInSession())),
+            supabaseSessionProvider.overrideWithValue(
+              AsyncData<Session?>(_signedInSession()),
+            ),
             // 已登录用户视为已解锁（Pro），转录机制测试不被额度闸拦截。
             subscriptionEntitlementOverride(),
           ]),
@@ -1215,19 +1456,6 @@ void main() {
 
       final card = tester.widget<Card>(find.byType(Card).first);
       expect(card.color, isNull);
-    });
-
-    testWidgets('已置顶时 leading 音频图标颜色不受置顶影响（显示进度状态）', (tester) async {
-      final pinnedItem = baseItem.copyWith(isPinned: true);
-      await tester.pumpWidget(
-        buildTile(AudioLibraryState(audioItems: [pinnedItem])),
-      );
-      await tester.pumpAndSettle();
-
-      // leading 图标现在显示进度状态，不再根据置顶变色
-      final audioIcon = tester.widget<Icon>(find.byIcon(Icons.graphic_eq));
-      expect(audioIcon.color, isNotNull);
-      expect(audioIcon.color, isNot(AppTheme.bookmarkColor));
     });
 
     testWidgets('菜单内点击置顶触发 togglePin 并更新背景', (tester) async {

@@ -98,7 +98,7 @@ void main() {
     );
     expect(
       asrModelResourceCatalog['whisper-base-en-int8']!.sha256,
-      '2599a592259c6332ee17492caf4e4f39692364efcee0d61318596ede238b2755',
+      'ce4a9956456cca43b6013e050cc04c0cd16a55373bf39cb11154dc24c3df7a47',
     );
   });
 

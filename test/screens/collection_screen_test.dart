@@ -3,9 +3,11 @@
 // 测试资源库页面的合集视图渲染和交互。
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/models/collection.dart';
 import 'package:echo_loop/screens/library_screen.dart';
+import 'package:echo_loop/widgets/common/svg_action_icon.dart';
 import 'package:echo_loop/providers/settings_provider.dart';
 import 'package:echo_loop/providers/audio_library_provider.dart';
 import 'package:echo_loop/providers/collection_provider.dart';
@@ -15,6 +17,11 @@ import 'package:echo_loop/features/user_region/user_region_providers.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
+
+/// 按 SVG 资源名查找图标（图标已从 Material 切换为 SvgActionIcon）。
+Finder svgIcon(String assetName) => find.byWidgetPredicate(
+  (widget) => widget is SvgActionIcon && widget.assetName == assetName,
+);
 
 void main() {
   group('LibraryScreen（合集视图）', () {
@@ -39,81 +46,19 @@ void main() {
         expect(find.text('Audio'), findsNothing);
       });
 
-      testWidgets('连续点击标题五次后显示全部音频入口', (tester) async {
-        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
-        await tester.pumpAndSettle();
-
-        final title = find.byKey(const Key('library_title'));
-        expect(find.byKey(const Key('library_all_audio_button')), findsNothing);
-
-        for (var i = 0; i < 4; i++) {
-          await tester.tap(title);
-        }
-        await tester.pump();
-        expect(find.byKey(const Key('library_all_audio_button')), findsNothing);
-
-        await tester.tap(title);
-        await tester.pump();
-        expect(find.text('All'), findsOneWidget);
-      });
-
-      testWidgets('点击全部后进入原音频列表视图', (tester) async {
-        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
-        await tester.pumpAndSettle();
-
-        final title = find.byKey(const Key('library_title'));
-        for (var i = 0; i < 5; i++) {
-          await tester.tap(title);
-        }
-        await tester.pump();
-        await tester.tap(find.byKey(const Key('library_all_audio_button')));
-        await tester.pumpAndSettle();
-
-        expect(find.text('No audio files yet'), findsOneWidget);
-        expect(find.byIcon(Icons.sort), findsOneWidget);
-      });
-
-      testWidgets('全部入口仅保存在当前页面内存中', (tester) async {
-        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
-        await tester.pumpAndSettle();
-
-        for (var i = 0; i < 5; i++) {
-          await tester.tap(find.byKey(const Key('library_title')));
-        }
-        await tester.pump();
-        expect(find.text('All'), findsOneWidget);
-
-        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
-        await tester.pumpAndSettle();
-        expect(find.text('All'), findsNothing);
-      });
-
-      testWidgets('中文环境显示全部按钮', (tester) async {
-        await tester.pumpWidget(
-          createTestScreen(const LibraryScreen(), locale: const Locale('zh')),
-        );
-        await tester.pumpAndSettle();
-
-        for (var i = 0; i < 5; i++) {
-          await tester.tap(find.byKey(const Key('library_title')));
-        }
-        await tester.pump();
-        expect(find.text('全部'), findsOneWidget);
-      });
-
       testWidgets('显示创建按钮', (tester) async {
         await tester.pumpWidget(createTestScreen(const LibraryScreen()));
         await tester.pumpAndSettle();
 
         // AppBar 中的 + 按钮和空状态 CTA 中都有 add 图标
-        expect(find.byIcon(Icons.add), findsNWidgets(2));
+        expect(svgIcon('assets/icon/plus.svg'), findsNWidgets(2));
       });
 
       testWidgets('显示排序按钮', (tester) async {
         await tester.pumpWidget(createTestScreen(const LibraryScreen()));
         await tester.pumpAndSettle();
 
-        expect(find.byIcon(Icons.sort), findsOneWidget);
+        expect(svgIcon('assets/icon/sort.svg'), findsOneWidget);
       });
 
       testWidgets('列表视图模式下合集列表正确显示', (tester) async {
@@ -373,7 +318,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击 AppBar 中的创建按钮（第一个 add 图标）
-        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.tap(svgIcon('assets/icon/plus.svg').first);
         await tester.pumpAndSettle();
 
         // 先进入统一底部 sheet 的类型选择页
@@ -397,51 +342,12 @@ void main() {
         expect(find.text('Collection Name'), findsOneWidget);
       });
 
-      testWidgets('创建本地合集表单弱化输入提示样式', (tester) async {
-        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.byIcon(Icons.add).first);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('collection-option-local')));
-        await tester.pumpAndSettle();
-
-        final localField = tester.widget<TextField>(find.byType(TextField));
-        final localContext = tester.element(find.byType(TextField));
-        final localTheme = Theme.of(localContext);
-
-        expect(
-          localField.style?.fontSize,
-          localTheme.textTheme.bodyMedium?.fontSize,
-        );
-        expect(
-          localField.decoration?.hintStyle?.fontSize,
-          localTheme.textTheme.bodyMedium?.fontSize,
-        );
-        expect(
-          localField.decoration?.hintStyle?.color,
-          localTheme.colorScheme.onSurfaceVariant.withValues(alpha: 0.52),
-        );
-        expect(
-          localField.decoration?.labelStyle?.fontSize,
-          localTheme.textTheme.bodySmall?.fontSize,
-        );
-        expect(
-          localField.decoration?.floatingLabelStyle?.color,
-          localTheme.colorScheme.primary.withValues(alpha: 0.78),
-        );
-        expect(
-          localField.decoration?.contentPadding,
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        );
-      });
-
       testWidgets('创建合集时空名称时 Add 按钮禁用', (tester) async {
         await tester.pumpWidget(createTestScreen(const LibraryScreen()));
         await tester.pumpAndSettle();
 
         // 打开创建对话框（AppBar 中的 + 按钮）
-        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.tap(svgIcon('assets/icon/plus.svg').first);
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('collection-option-local')));
         await tester.pumpAndSettle();
@@ -466,7 +372,7 @@ void main() {
         await tester.pumpWidget(createTestScreen(const LibraryScreen()));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.tap(svgIcon('assets/icon/plus.svg').first);
         await tester.pumpAndSettle();
         await tester.tap(
           find.byKey(const ValueKey('collection-option-podcast')),
@@ -486,7 +392,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 点击排序按钮
-        await tester.tap(find.byIcon(Icons.sort));
+        await tester.tap(svgIcon('assets/icon/sort.svg'));
         await tester.pumpAndSettle();
 
         // 应显示排序选项
@@ -536,19 +442,22 @@ void main() {
         expect(card.color, isNotNull);
       });
 
-      testWidgets('删除合集弹窗默认勾选删音频并显示文件数，取消勾选则保留', (tester) async {
+      testWidgets('删除合集时删除独占音频并保留其他合集引用的音频', (tester) async {
         final c = createTestCollection(id: '1', name: 'test');
-        final audio = createTestAudioItem(id: 'a1');
+        final otherCollection = createTestCollection(id: '2', name: 'other');
+        final sharedAudio = createTestAudioItem(id: 'a1');
+        final unsharedAudio = createTestAudioItem(id: 'a2');
         final collectionList = TestCollectionList(
           CollectionState(
-            rawCollections: [c],
+            rawCollections: [c, otherCollection],
             audioIdsMap: {
-              '1': ['a1'],
+              '1': ['a1', 'a2'],
+              '2': ['a1'],
             },
           ),
         );
         final audioLib = TestAudioLibrary(
-          AudioLibraryState(audioItems: [audio]),
+          AudioLibraryState(audioItems: [sharedAudio, unsharedAudio]),
         );
 
         await tester.pumpWidget(
@@ -568,79 +477,37 @@ void main() {
         await tester.pumpAndSettle();
 
         await tester.tap(
-          find.byKey(const Key('collection_list_menu_hit_area')),
+          find.byKey(const Key('collection_list_menu_hit_area')).first,
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Delete'));
         await tester.pumpAndSettle();
 
-        // 默认勾选：提示一并删除并带文件数，选项文案为纯文本。
         expect(
-          find.text('1 audio file(s) in this collection will also be deleted.'),
+          find.text(
+            "Materials in this collection and their learning records will also be deleted. Materials that are also in other collections won't be affected.",
+          ),
           findsOneWidget,
         );
-        expect(find.text('Also delete audio file(s)?'), findsOneWidget);
+        expect(find.text('Also delete audio file(s)?'), findsNothing);
 
-        // 取消勾选 → 提示切换为保留。
-        await tester.tap(find.text('Also delete audio file(s)?'));
-        await tester.pumpAndSettle();
-        expect(
-          find.text('1 audio file(s) in this collection will be kept.'),
-          findsOneWidget,
+        // 资源库页面不再监听音频库，显式保持 provider 存活，才能断言删除后的最终状态。
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(LibraryScreen)),
+        );
+        final keepAudioLibraryAlive = container.listen(
+          audioLibraryProvider,
+          (_, __) {},
         );
 
-        // 删除 → 合集删除，音频保留。
+        // 独占音频被删除；共享音频和其他合集关联保留。
         await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
         await tester.pumpAndSettle();
 
-        expect(collectionList.state.rawCollections, isEmpty);
-        expect(audioLib.state.audioItems, hasLength(1));
-      });
-
-      testWidgets('删除合集默认勾选时一并删除音频文件', (tester) async {
-        final c = createTestCollection(id: '1', name: 'test');
-        final audio = createTestAudioItem(id: 'a1');
-        final collectionList = TestCollectionList(
-          CollectionState(
-            rawCollections: [c],
-            audioIdsMap: {
-              '1': ['a1'],
-            },
-          ),
-        );
-        final audioLib = TestAudioLibrary(
-          AudioLibraryState(audioItems: [audio]),
-        );
-
-        await tester.pumpWidget(
-          createTestScreen(
-            const LibraryScreen(),
-            overrides: dedupeOverrides([
-              appSettingsProvider.overrideWith(() => TestAppSettings()),
-              audioLibraryProvider.overrideWith(() => audioLib),
-              collectionListProvider.overrideWith(() => collectionList),
-              listeningPracticeProvider.overrideWith(
-                () => TestListeningPractice(),
-              ),
-              audioEngineProvider.overrideWith(() => TestAudioEngine()),
-            ]),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        await tester.tap(
-          find.byKey(const Key('collection_list_menu_hit_area')),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Delete'));
-        await tester.pumpAndSettle();
-
-        // 默认已勾选，直接删除 → 合集与音频均被删除。
-        await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-        await tester.pumpAndSettle();
-
-        expect(collectionList.state.rawCollections, isEmpty);
-        expect(audioLib.state.audioItems, isEmpty);
+        expect(collectionList.state.rawCollections, [otherCollection]);
+        expect(collectionList.state.audioIdsMap['2'], ['a1']);
+        expect(audioLib.state.audioItems, [sharedAudio]);
+        keepAudioLibraryAlive.close();
       });
 
       testWidgets('Podcast 合集菜单显示重命名和详情，不显示刷新', (tester) async {
