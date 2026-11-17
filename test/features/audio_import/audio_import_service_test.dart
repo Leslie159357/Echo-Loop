@@ -208,8 +208,9 @@ void main() {
         ),
       );
 
-      await expect(
-        () => service.resolveUrl('https://example.com/setup.exe'),
+      // resolveUrl 返回 Future，必须用 expectLater 等待，否则异常逃逸出用例。
+      await expectLater(
+        service.resolveUrl('https://example.com/setup.exe'),
         throwsA(
           isA<AudioImportException>().having(
             (e) => e.code,

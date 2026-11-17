@@ -257,7 +257,7 @@
   "deleteCollectionConfirm": "แน่ใจหรือไม่ว่าต้องการลบ \"{name}\"?",
   "deleteCollectionAlsoDeleteAudio": "ลบไฟล์เสียงด้วยหรือไม่?",
   "deleteCollectionKeepAudioHint": "จะเก็บไฟล์เสียง {count} ไฟล์ในคอลเลกชันนี้ไว้",
-  "deleteCollectionDeleteAudioHint": "ไฟล์เสียง {count} ไฟล์ในคอลเลกชันนี้จะถูกลบด้วย",
+  "deleteCollectionDeleteAudioHint": "สื่อการเรียนรู้ในคอลเลกชันนี้และบันทึกการเรียนรู้จะถูกลบไปด้วย สื่อที่อยู่ในคอลเลกชันอื่นจะไม่ได้รับผลกระทบ",
   "renameCollection": "เปลี่ยนชื่อ",
   "pinCollection": "ปักหมุดไว้ด้านบน",
   "unpinCollection": "เลิกปักหมุด",

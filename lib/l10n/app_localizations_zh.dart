@@ -512,6 +512,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageChinese => '简体中文';
 
   @override
+  String get languageThai => '泰语';
+
+  @override
   String get nativeLanguage => '母语';
 
   @override

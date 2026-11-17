@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_th.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -95,6 +96,7 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
+    Locale('th'),
     Locale('zh'),
   ];
 
@@ -1027,6 +1029,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'简体中文'**
   String get languageChinese;
+
+  /// No description provided for @languageThai.
+  ///
+  /// In en, this message translates to:
+  /// **'ไทย'**
+  String get languageThai;
 
   /// No description provided for @nativeLanguage.
   ///
@@ -2681,7 +2689,7 @@ abstract class AppLocalizations {
   /// No description provided for @listenAndRepeatRecognitionNoEnglish.
   ///
   /// In en, this message translates to:
-  /// **'No spoken English detected'**
+  /// **'No spoken German detected'**
   String get listenAndRepeatRecognitionNoEnglish;
 
   /// No description provided for @listenAndRepeatRecognitionPermissionDenied.
@@ -2861,7 +2869,7 @@ abstract class AppLocalizations {
   /// No description provided for @retellBriefingSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Listen and retell segment by segment. Follow the original transcript or use your own words. Visible words help you recall what you heard.'**
+  /// **'Listen and retell in German segment by segment. Follow the original transcript or use your own words. Visible words help you recall what you heard.'**
   String get retellBriefingSubtitle;
 
   /// No description provided for @retellBriefingSentenceLevel.
@@ -2987,7 +2995,7 @@ abstract class AppLocalizations {
   /// No description provided for @retellPromptLanguageOriginal.
   ///
   /// In en, this message translates to:
-  /// **'English'**
+  /// **'German'**
   String get retellPromptLanguageOriginal;
 
   /// No description provided for @retellPromptLanguageTranslation.
@@ -2999,7 +3007,7 @@ abstract class AppLocalizations {
   /// No description provided for @retellPromptLanguageTranslationDesc.
   ///
   /// In en, this message translates to:
-  /// **'Shows the AI translation instead of the English text, so you can retell in English from the translation.'**
+  /// **'Shows the AI translation instead of the German text, so you can retell in German from the translation.'**
   String get retellPromptLanguageTranslationDesc;
 
   /// No description provided for @sentenceTranslationLoadFailed.
@@ -6065,7 +6073,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideRetellSkipDescription.
   ///
   /// In en, this message translates to:
-  /// **'Retelling builds spoken English fast. If you want to focus on listening for now, tap here to skip this step.'**
+  /// **'Retelling builds spoken German fast. If you want to focus on listening for now, tap here to skip this step.'**
   String get guideRetellSkipDescription;
 
   /// No description provided for @learningProgressLoadFailed.
@@ -6515,7 +6523,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingSummaryHeadline.
   ///
   /// In en, this message translates to:
-  /// **'Improving listening & speaking\nisn\'t about practicing with more materials,\nit\'s about practicing more thoroughly.'**
+  /// **'Improving German listening & speaking\nisn\'t about practicing with more materials,\nit\'s about practicing more thoroughly.'**
   String get onboardingSummaryHeadline;
 
   /// No description provided for @onboardingSummaryPoint1.
@@ -6533,7 +6541,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingSummaryPoint3.
   ///
   /// In en, this message translates to:
-  /// **'Develop a natural feel for English through extensive close listening and repetition.'**
+  /// **'Develop a natural feel for German through extensive close listening and repetition.'**
   String get onboardingSummaryPoint3;
 
   /// No description provided for @onboardingSummaryPoint4.
@@ -6551,7 +6559,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingQ1Prompt.
   ///
   /// In en, this message translates to:
-  /// **'What\'s your main goal for improving your listening and speaking?'**
+  /// **'What\'s your main goal for improving your German listening and speaking?'**
   String get onboardingQ1Prompt;
 
   /// No description provided for @onboardingQ1OptionExam.
@@ -8417,7 +8425,7 @@ abstract class AppLocalizations {
   /// No description provided for @lookupSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter an English word or phrase'**
+  /// **'Enter a German word or phrase'**
   String get lookupSearchHint;
 
   /// No description provided for @lookupRecentTitle.
@@ -9884,7 +9892,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+      <String>['en', 'th', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -9895,6 +9903,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'th':
+      return AppLocalizationsTh();
     case 'zh':
       return AppLocalizationsZh();
   }

@@ -532,6 +532,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageChinese => '简体中文';
 
   @override
+  String get languageThai => 'ไทย';
+
+  @override
   String get nativeLanguage => 'Native Language';
 
   @override
@@ -1467,8 +1470,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get listenAndRepeatRatingKeepGoing => 'Keep going';
 
   @override
-  String get listenAndRepeatRecognitionNoEnglish =>
-      'No spoken German detected';
+  String get listenAndRepeatRecognitionNoEnglish => 'No spoken German detected';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied =>
@@ -1651,8 +1653,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retellPromptLanguage => 'Retell with';
 
   @override
-  String get retellPromptLanguageOriginal =>
-      'German';
+  String get retellPromptLanguageOriginal => 'German';
 
   @override
   String get retellPromptLanguageTranslation => 'Translation';
@@ -4777,8 +4778,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lookupAutoSpeak => 'Auto-play pronunciation';
 
   @override
-  String get lookupSearchHint =>
-      'Enter a German word or phrase';
+  String get lookupSearchHint => 'Enter a German word or phrase';
 
   @override
   String get lookupRecentTitle => 'Recent';

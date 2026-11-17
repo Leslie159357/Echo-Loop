@@ -8,8 +8,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../database/providers.dart';
+import '../features/chatbot/sentence_passage.dart';
 import '../features/chatbot/widgets/sentence_chat_button.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/dictionary/lookup_history_provider.dart';
