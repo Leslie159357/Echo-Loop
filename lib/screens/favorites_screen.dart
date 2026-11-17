@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:echo_loop/widgets/common/svg_action_icon.dart';
 
 import '../analytics/models/event_names.dart';
 import '../features/usage/usage_event.dart';
@@ -202,7 +203,6 @@ Future<AudioPlaybackResult> _playSourceSentence(
   WidgetRef ref, {
   required String key,
   required String? audioItemId,
-  required int? sentenceIndex,
   required String? sentenceText,
   required int? sentenceStartMs,
   required int? sentenceEndMs,
@@ -220,7 +220,6 @@ Future<AudioPlaybackResult> _playSourceSentence(
   );
   return player.play(
     audioItemId: audioItemId,
-    sentenceIndex: sentenceIndex,
     sentenceText: sentenceText,
     sentenceStartMs: sentenceStartMs,
     sentenceEndMs: sentenceEndMs,
@@ -408,7 +407,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 appPopupMenuItem(
                   context,
                   value: _FavoritesMoreAction.export,
-                  icon: const Icon(Icons.ios_share),
+                  icon: const SvgActionIcon(
+                    assetName: 'assets/icon/upload.svg',
+                  ),
                   label: l10n.favoritesExportMenu,
                 ),
                 appPopupMenuItem(
@@ -906,7 +907,6 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
         ref: ref,
         audioItemId: widget.audioId,
         sentenceText: bm.sentenceText,
-        sentenceIndex: bm.sentenceIndex,
         sentenceStartMs: (bm.startTime * 1000).round(),
         sentenceEndMs: (bm.endTime * 1000).round(),
       ),
@@ -931,7 +931,7 @@ class _BookmarkSentenceTileState extends ConsumerState<_BookmarkSentenceTile> {
         child: Icon(Icons.bookmark_remove, color: theme.colorScheme.onError),
       ),
       onDismissed: (_) {
-        unawaited(sentenceLifecycle.remove(widget.audioId, {bm.sentenceIndex}));
+        unawaited(sentenceLifecycle.removeBookmark(bm));
       },
       child: _FavoriteSourceSentenceTile(
         sentenceText: bm.sentenceText,
@@ -1099,7 +1099,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
         'FavoritesTts',
         'scroll start session=$startedSession: cancel prewarm',
       );
-      _ttsController?.cancelTextsPrewarm();
+      _ttsController?.cancelTextsPrewarm(owner: this);
       // 让已创建的 tile 收到 isScrolling=true 并清除提交标记；滚动停止后
       // 才能对当前视口重新提交预热。通知在布局期派发，延后重建避免 frame 异常。
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1148,7 +1148,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
     // 切离词汇 tab（IndexedStack 不销毁本视图）→ 停在途预热；重置签名使重新
     // 激活时可再次触发（届时已缓存的命中即跳过，未完成的续上）。
     if (oldWidget.isActive && !widget.isActive) {
-      _ttsController?.cancelTextsPrewarm();
+      _ttsController?.cancelTextsPrewarm(owner: this);
       _hasWarmedCurrentEngine = false;
     }
   }
@@ -1156,7 +1156,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
   @override
   void dispose() {
     // 离开收藏页即停在途预热，避免继续占用 CPU 合成用不到的发音。
-    _ttsController?.cancelTextsPrewarm();
+    _ttsController?.cancelTextsPrewarm(owner: this);
     super.dispose();
   }
 
@@ -1239,6 +1239,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
               expansionController: null,
               isActive: widget.isActive,
               isScrolling: _isScrolling,
+              prewarmOwner: this,
             ),
             _VocabularyPhrase(phrase: final p) => _SavedPhraseTile(
               key: ValueKey('p_${p.id}'),
@@ -1246,6 +1247,7 @@ class _WordsViewState extends ConsumerState<_WordsView> {
               expansionController: null,
               isActive: widget.isActive,
               isScrolling: _isScrolling,
+              prewarmOwner: this,
             ),
           };
           return tile;
@@ -1377,6 +1379,9 @@ class _SavedPhraseTile extends ConsumerStatefulWidget {
   final bool isActive;
   final bool isScrolling;
 
+  /// 预热所有者（词汇列表）：列表离开词汇 tab 时只取消自己的预热。
+  final Object prewarmOwner;
+
   /// 展开控制器（可选）：用于新手引导时由外部主动展开
   final ExpansibleController? expansionController;
 
@@ -1386,6 +1391,7 @@ class _SavedPhraseTile extends ConsumerStatefulWidget {
     this.expansionController,
     required this.isActive,
     required this.isScrolling,
+    required this.prewarmOwner,
   });
 
   @override
@@ -1441,7 +1447,7 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
           _isInScrollableViewport(context)) {
         ref.read(ttsControllerProvider.notifier).prewarmTextsIncremental([
           text,
-        ]);
+        ], owner: widget.prewarmOwner);
       }
     });
   }
@@ -1468,7 +1474,6 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
         preferredSourceId: AiDictionarySource.sourceId,
         bookmarkKind: DictionaryBookmarkKind.senseGroup,
         audioItemId: phrase.audioItemId,
-        sentenceIndex: phrase.sentenceIndex,
         sentenceText: phrase.sentenceText,
         sentenceStartMs: phrase.sentenceStartMs,
         sentenceEndMs: phrase.sentenceEndMs,
@@ -1476,7 +1481,7 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
     );
   }
 
-  /// 打开来源句讲解；历史收藏缺少定位字段时由共享解析器回填。
+  /// 打开来源句讲解：讲解页按收藏区间定位到当前字幕。
   Future<void> _openSourceSentenceDetail() {
     final phrase = widget.savedPhrase;
     final audioItemId = phrase.audioItemId;
@@ -1487,7 +1492,6 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
       ref: ref,
       audioItemId: audioItemId,
       sentenceText: sentenceText,
-      sentenceIndex: phrase.sentenceIndex,
       sentenceStartMs: phrase.sentenceStartMs,
       sentenceEndMs: phrase.sentenceEndMs,
     );
@@ -1516,7 +1520,6 @@ class _SavedPhraseTileState extends ConsumerState<_SavedPhraseTile> {
       ref,
       key: key,
       audioItemId: phrase.audioItemId,
-      sentenceIndex: phrase.sentenceIndex,
       sentenceText: phrase.sentenceText,
       sentenceStartMs: phrase.sentenceStartMs,
       sentenceEndMs: phrase.sentenceEndMs,
@@ -1664,6 +1667,9 @@ class _SavedWordTile extends ConsumerStatefulWidget {
   /// 由父组件批量预加载的字典条目，避免每个 tile 独立异步查询
   final DictEntry? dictEntry;
 
+  /// 预热所有者（词汇列表）：列表离开词汇 tab 时只取消自己的预热。
+  final Object prewarmOwner;
+
   /// 展开控制器（可选）：用于新手引导时由外部主动展开
   final ExpansibleController? expansionController;
 
@@ -1674,6 +1680,7 @@ class _SavedWordTile extends ConsumerStatefulWidget {
     this.expansionController,
     required this.isActive,
     required this.isScrolling,
+    required this.prewarmOwner,
   });
 
   @override
@@ -1731,7 +1738,9 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
           !_isInScrollableViewport(context)) {
         return;
       }
-      ref.read(textPlaybackProvider.notifier).prewarmWord(word);
+      ref
+          .read(textPlaybackProvider.notifier)
+          .prewarmWord(word, owner: widget.prewarmOwner);
     });
   }
 
@@ -1749,7 +1758,7 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
     }
   }
 
-  /// 打开来源句讲解；历史收藏缺少定位字段时由共享解析器回填。
+  /// 打开来源句讲解：讲解页按收藏区间定位到当前字幕。
   Future<void> _openSourceSentenceDetail() {
     final word = widget.savedWord;
     final audioItemId = word.audioItemId;
@@ -1760,7 +1769,6 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       ref: ref,
       audioItemId: audioItemId,
       sentenceText: sentenceText,
-      sentenceIndex: word.sentenceIndex,
       sentenceStartMs: word.sentenceStartMs,
       sentenceEndMs: word.sentenceEndMs,
     );
@@ -1774,7 +1782,6 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
         word: word.word,
         preferredSourceId: AiDictionarySource.sourceId,
         audioItemId: word.audioItemId,
-        sentenceIndex: word.sentenceIndex,
         sentenceText: word.sentenceText,
         sentenceStartMs: word.sentenceStartMs,
         sentenceEndMs: word.sentenceEndMs,
@@ -1802,7 +1809,6 @@ class _SavedWordTileState extends ConsumerState<_SavedWordTile> {
       ref,
       key: key,
       audioItemId: word.audioItemId,
-      sentenceIndex: word.sentenceIndex,
       sentenceText: word.sentenceText,
       sentenceStartMs: word.sentenceStartMs,
       sentenceEndMs: word.sentenceEndMs,

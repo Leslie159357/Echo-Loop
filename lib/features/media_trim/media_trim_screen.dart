@@ -3,20 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/audio_item.dart';
+import '../../models/practice_media_split.dart';
 import '../../providers/audio_library_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../router/app_router.dart';
 import '../../services/app_logger.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/common/media_split_divider.dart';
+import '../../widgets/common/practice_media_split_geometry.dart';
+import '../../widgets/common/video_toggle_icon.dart';
 import 'media_trim_clip.dart';
 import 'media_trim_editor_controller.dart';
 import 'media_trim_exporter.dart';
 import 'media_trim_repository.dart';
+import 'media_trim_split_geometry.dart';
+import 'media_trim_split_provider.dart';
 import 'widgets/media_trim_clip_panel.dart';
 import 'widgets/media_trim_dialogs.dart';
 import 'widgets/media_trim_format.dart';
@@ -53,6 +58,9 @@ class _MediaTrimScreenState extends ConsumerState<MediaTrimScreen>
 
   /// 剪辑主要看波形和片段，画面默认收起，把高度留给时间轴和列表；只影响本页。
   bool _isVideoVisible = false;
+
+  /// 拖动分隔条过程中的左栏宽度，只存在于拖动期间；松手后写入偏好并清空。
+  double? _dragTimelineWidth;
 
   /// 时间轴在宽 / 窄 / 矮布局间、以及展开收起画面时会换位置；用 GlobalKey 让它
   /// 搬家而不重建，保住缩放倍数和平移位置。
@@ -298,7 +306,20 @@ class _MediaTrimScreenState extends ConsumerState<MediaTrimScreen>
     );
   }
 
+  /// 松手后按可用宽度记住左栏比例；算不出有效比例时保留原偏好，不当作恢复默认。
+  void _commitTimelineDrag(PracticeMediaExtentRange range) {
+    // 分隔条在拖动中被移除时会在帧结束后补发，此时页面可能已关闭。
+    if (!mounted) return;
+    final width = _dragTimelineWidth;
+    setState(() => _dragTimelineWidth = null);
+    if (width == null) return;
+    final fraction = range.fractionOf(range.clamp(width));
+    if (fraction == null) return;
+    unawaited(ref.read(mediaTrimSplitProvider.notifier).setFraction(fraction));
+  }
+
   Widget _buildEditor(BuildContext context) {
+    final savedFraction = ref.watch(mediaTrimSplitProvider);
     final hasSentences = ref.watch(
       mediaTrimEditorProvider(_source)
           .select((s) => s.boundaries?.hasSentences ?? false),
@@ -335,10 +356,23 @@ class _MediaTrimScreenState extends ConsumerState<MediaTrimScreen>
             _TimelineSection(key: _timelineKey, source: _source),
           ];
           if (isWide) {
+            final splitRange = MediaTrimSplitGeometry.range(
+              constraints.maxWidth,
+            );
+            // 拖动中的宽度也按当前范围限制：拖动期间窗口变化不会让右栏被挤出最小宽度。
+            final timelineWidth = splitRange.clamp(
+              _dragTimelineWidth ??
+                  MediaTrimSplitGeometry.resolveTimelineWidth(
+                    width: constraints.maxWidth,
+                    fraction: savedFraction,
+                  ),
+            );
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
+                SizedBox(
+                  key: const ValueKey('trim-timeline-column'),
+                  width: timelineWidth,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(_gutter, 8, _gutter, 0),
                     child: Column(
@@ -359,9 +393,22 @@ class _MediaTrimScreenState extends ConsumerState<MediaTrimScreen>
                     ),
                   ),
                 ),
-                const VerticalDivider(width: 1),
-                SizedBox(
-                  width: 400,
+                MediaSplitDivider(
+                  axis: PracticeMediaSplitAxis.sideBySide,
+                  onDragStart: () =>
+                      setState(() => _dragTimelineWidth = timelineWidth),
+                  onDragUpdate: (delta) => setState(
+                    () => _dragTimelineWidth = splitRange.clamp(
+                      (_dragTimelineWidth ?? timelineWidth) + delta,
+                    ),
+                  ),
+                  onDragEnd: () => _commitTimelineDrag(splitRange),
+                  onReset: () => unawaited(
+                    ref.read(mediaTrimSplitProvider.notifier).setFraction(null),
+                  ),
+                ),
+                Expanded(
+                  key: const ValueKey('trim-clip-column'),
                   child: CustomScrollView(
                     key: const ValueKey('trim-editor'),
                     slivers: [
@@ -578,76 +625,12 @@ class _TransportBar extends ConsumerWidget {
                   ? l10n.mediaTrimHideVideo
                   : l10n.mediaTrimShowVideo,
               onPressed: onToggleVideo,
-              icon: _VideoToggleIcon(isVisible: isVisible),
+              icon: VideoToggleIcon(isVisible: isVisible),
             ),
         ],
       ),
     );
   }
-}
-
-/// 画面开关图标：显示中为视频图标，收起时在图标上加斜线。
-class _VideoToggleIcon extends StatelessWidget {
-  const _VideoToggleIcon({required this.isVisible});
-
-  final bool isVisible;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = IconTheme.of(context).color ?? Colors.black;
-    // video-2.svg 线宽约为视框的 1/13，22px 时约 1.67px，与页面其它线条图标一致。
-    return SizedBox.square(
-      dimension: 22,
-      child: CustomPaint(
-        foregroundPainter: isVisible
-            ? null
-            : _SlashPainter(
-                color: color,
-                gapColor: Theme.of(context).scaffoldBackgroundColor,
-              ),
-        child: SvgPicture.asset(
-          'assets/icon/video-2.svg',
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-        ),
-      ),
-    );
-  }
-}
-
-class _SlashPainter extends CustomPainter {
-  const _SlashPainter({required this.color, required this.gapColor});
-
-  final Color color;
-
-  /// 斜线两侧描一圈背景色，让斜线与图标线条分开，和系统「关闭」图标一致。
-  final Color gapColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final from = Offset(size.width * 0.12, size.height * 0.1);
-    final to = Offset(size.width * 0.88, size.height * 0.9);
-    canvas
-      ..drawLine(
-        from,
-        to,
-        Paint()
-          ..color = gapColor
-          ..strokeWidth = 4.7
-          ..strokeCap = StrokeCap.round,
-      )
-      ..drawLine(
-        from,
-        to,
-        Paint()
-          ..color = color
-          ..strokeWidth = 1.67
-          ..strokeCap = StrokeCap.round,
-      );
-  }
-
-  @override
-  bool shouldRepaint(_SlashPainter old) =>
-      old.color != color || old.gapColor != gapColor;
 }
 
 class _TimelineSection extends ConsumerWidget {

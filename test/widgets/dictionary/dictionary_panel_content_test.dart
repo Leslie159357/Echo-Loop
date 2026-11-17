@@ -58,17 +58,20 @@ class _StubTtsController extends TtsController {
   }
 
   @override
-  Future<void> prewarmTexts(List<String> texts) async {
+  Future<void> prewarmTexts(List<String> texts, {required Object owner}) async {
     _prewarmCalls.add(texts);
   }
 
   @override
-  Future<void> prewarmTextsIncremental(List<String> texts) async {
+  Future<void> prewarmTextsIncremental(
+    List<String> texts, {
+    required Object owner,
+  }) async {
     _prewarmCalls.add(texts);
   }
 
   @override
-  void cancelTextsPrewarm() {}
+  void cancelTextsPrewarm({required Object owner}) {}
   @override
   Future<void> stop() async {
     _ttsStopCalls++;
@@ -97,7 +100,7 @@ class _StubTextPlaybackController extends TextPlaybackController {
   }
 
   @override
-  Future<void> prewarmWord(String word) async {
+  Future<void> prewarmWord(String word, {required Object owner}) async {
     _headwordPrewarmCalls.add(word);
   }
 
@@ -234,7 +237,6 @@ class _FakeSavedWordTexts extends SavedWordTexts {
 }
 
 void main() {
-
   setUp(() async {
     // 德语版默认词典源是 dehelper（网页源）；本文件验证本地词典渲染，
     // 显式注入 local 作为默认源，避免 WebDictionaryView 拉起 InAppWebView。
@@ -252,7 +254,6 @@ void main() {
     _forwardTextPlaybackToTts = false;
     _dictionaryService = _createTestDictionaryService();
   });
-
 
   group('DictionaryPanel', () {
     testWidgets('关闭面板不会停止宿主页正在播放的句子', (tester) async {

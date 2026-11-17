@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:echo_loop/database/enums.dart';
@@ -24,6 +26,8 @@ import 'package:echo_loop/widgets/learning_progress_bar.dart';
 import 'package:echo_loop/widgets/media_type_icon.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../helpers/svg_icon_finder.dart';
 
 import '../helpers/mock_providers.dart';
 import '../helpers/test_app.dart';
@@ -511,6 +515,22 @@ void main() {
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
+      expect(find.byType(SubmenuButton), findsNWidgets(2));
+      final anchor = tester.widget<MenuAnchor>(find.byType(MenuAnchor).first);
+      final popupTheme = Theme.of(tester.element(find.byType(MenuAnchor).first))
+          .popupMenuTheme;
+      expect(anchor.style?.backgroundColor?.resolve({}), popupTheme.color);
+      expect(anchor.style?.surfaceTintColor?.resolve({}), Colors.transparent);
+      expect(anchor.style?.shape?.resolve({}), popupTheme.shape);
+      for (final submenu in tester.widgetList<SubmenuButton>(
+        find.byType(SubmenuButton),
+      )) {
+        expect(submenu.menuStyle, anchor.style);
+      }
+
+      expect(find.text('Export PDF'), findsNothing);
+      await tester.tap(find.text('Export'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Export PDF'), findsOneWidget);
     });
@@ -525,6 +545,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();
 
       expect(find.text('Export PDF'), findsNothing);
@@ -568,6 +590,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Export'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Export Video'), findsOneWidget);
       expect(find.text('Export Audio'), findsNothing);
@@ -579,6 +603,8 @@ void main() {
       await tester.pumpWidget(buildTile(item));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();
 
       expect(find.text('Export Audio'), findsOneWidget);
@@ -1270,7 +1296,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Manage Subtitles'));
+      await tester.tap(find.text('Subtitles'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Cloud Transcription'));
@@ -1322,6 +1348,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('More actions'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Episode Info'));
       await tester.pumpAndSettle();
@@ -1380,6 +1408,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('More actions'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Episode Info'));
       await tester.pumpAndSettle();
 
@@ -1433,8 +1463,8 @@ void main() {
         find.byKey(const Key('audio_list_tile_menu_hit_area')),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.push_pin_outlined), findsNothing);
-      expect(find.byIcon(Icons.push_pin), findsNothing);
+      expect(svgIcon('assets/icon/pin.svg'), findsNothing);
+      expect(svgIcon('assets/icon/pin.svg'), findsNothing);
     });
 
     testWidgets('已置顶时使用淡背景色标记', (tester) async {
@@ -1489,6 +1519,88 @@ void main() {
       expect(find.text('Unpin'), findsOneWidget);
     });
 
+    testWidgets('菜单展开时点击外部只关闭菜单，不穿透触发下方控件', (tester) async {
+      var outsideTaps = 0;
+      await tester.pumpWidget(
+        createTestApp(
+          Column(
+            children: [
+              const SizedBox(width: 360, child: _AudioListTileWrapper()),
+              TextButton(
+                onPressed: () => outsideTaps++,
+                child: const Text('Outside'),
+              ),
+            ],
+          ),
+          overrides: dedupeOverrides([
+            audioLibraryProvider.overrideWith(
+              () => TestAudioLibrary(AudioLibraryState(audioItems: [baseItem])),
+            ),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      expect(find.text('Pin to Top'), findsOneWidget);
+
+      await tester.tap(find.text('Outside'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pin to Top'), findsNothing);
+      expect(outsideTaps, 0);
+    });
+
+    testWidgets('鼠标悬停菜单项后关闭菜单，卡片不残留 focus 高亮', (tester) async {
+      // 桌面端鼠标交互走 traditional 高亮模式，focus 高亮才会被绘制。
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(
+        () => FocusManager.instance.highlightStrategy =
+            FocusHighlightStrategy.automatic,
+      );
+      await tester.pumpWidget(
+        buildCompactTile(AudioLibraryState(audioItems: [baseItem])),
+      );
+      await tester.pumpAndSettle();
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      final menuButton = tester.getCenter(
+        find.byKey(const Key('audio_list_tile_menu_hit_area')),
+      );
+      await mouse.moveTo(menuButton);
+      await mouse.down(menuButton);
+      await mouse.up();
+      await tester.pumpAndSettle();
+      // 悬停菜单项会让该项获焦（MenuItemButton.requestFocusOnHover）。
+      await mouse.moveTo(tester.getCenter(find.text('Pin to Top')));
+      await tester.pumpAndSettle();
+
+      List<InkHighlight> activeCardHighlights() {
+        final cardInk = Material.of(tester.element(find.text('Star Audio')));
+        // debugInkFeatures 仅在 MaterialInkController 的渲染实现上可见，测试内窄范围 dynamic 访问；
+        // 尚未创建过任何墨水效果时为 null。
+        final features =
+            ((cardInk as dynamic).debugInkFeatures as List<InkFeature>?) ??
+            const <InkFeature>[];
+        return features
+            .whereType<InkHighlight>()
+            .where((InkHighlight h) => h.active)
+            .toList();
+      }
+
+      expect(activeCardHighlights(), isEmpty, reason: '菜单展开时卡片不应整卡变灰');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await mouse.moveTo(Offset.zero);
+      await tester.pumpAndSettle();
+
+      expect(activeCardHighlights(), isEmpty, reason: '菜单关闭后卡片不应残留灰底');
+    });
+
     testWidgets('社区音频菜单显示更新字幕，不显示管理字幕', (tester) async {
       final communityItem = baseItem.copyWith(
         remoteAudioId: 'remote-audio-1',
@@ -1503,11 +1615,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Update Subtitles'), findsOneWidget);
-      expect(find.text('Manage Subtitles'), findsNothing);
+      expect(find.text('Subtitles'), findsNothing);
       expect(find.text('Edit subtitles'), findsNothing);
     });
 
-    testWidgets('用户音频有字幕时显示编辑字幕菜单', (tester) async {
+    testWidgets('用户音频有字幕时仅显示统一字幕菜单', (tester) async {
       final item = baseItem.copyWith(transcriptPath: 'transcripts/user.srt');
       await tester.pumpWidget(
         buildCompactTile(AudioLibraryState(audioItems: [item])),
@@ -1517,8 +1629,8 @@ void main() {
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Manage Subtitles'), findsOneWidget);
-      expect(find.text('Edit subtitles'), findsOneWidget);
+      expect(find.text('Subtitles'), findsOneWidget);
+      expect(find.text('Edit subtitles'), findsNothing);
     });
 
     testWidgets('用户音频无字幕时不显示编辑字幕菜单', (tester) async {
@@ -1534,7 +1646,7 @@ void main() {
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Manage Subtitles'), findsOneWidget);
+      expect(find.text('Subtitles'), findsOneWidget);
       expect(find.text('Edit subtitles'), findsNothing);
     });
 
@@ -1551,6 +1663,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('More actions'));
       await tester.pumpAndSettle();
 
       // 单集由 feed 统一管理，删除后刷新会重新插回，故隐藏删除项。
@@ -1574,7 +1688,7 @@ void main() {
 
       expect(find.text('Delete'), findsOneWidget);
       expect(find.text('Episode Info'), findsNothing);
-      expect(find.byType(PopupMenuDivider), findsOneWidget);
+      expect(find.byType(Divider), findsOneWidget);
     });
 
     testWidgets('点击社区更新字幕先弹出清空进度确认框', (tester) async {
@@ -1641,8 +1755,8 @@ void main() {
       expect(card.color, isNull, reason: '当前播放态不应持久保留卡片背景色');
       expect(find.text('Last'), findsNothing);
       expect(find.text('上次'), findsNothing);
-      expect(find.byIcon(Icons.push_pin_outlined), findsNothing);
-      expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+      expect(svgIcon('assets/icon/pin.svg'), findsNothing);
+      expect(find.byType(MenuAnchor), findsOneWidget);
     });
   });
 
@@ -1686,6 +1800,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('More actions'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Pause'), findsOneWidget);
       expect(find.text('Resume Learning'), findsNothing);
@@ -1708,6 +1824,8 @@ void main() {
       expect(find.text('Paused'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('audio_list_tile_menu_hit_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('More actions'));
       await tester.pumpAndSettle();
 
       expect(find.text('Resume Learning'), findsOneWidget);

@@ -193,14 +193,21 @@ class _DictionaryLookupScreenState
 
   /// 详情态右上角的 AI 助手入口：与收藏来源句关联，便于在语境中继续提问。
   Widget _buildChatAction(String query) {
-    final savedWord = ref
-        .watch(activeSavedWordProvider(normalizeWord(query)))
-        .value;
+    final savedWordAsync = ref.watch(
+      activeSavedWordProvider(normalizeWord(query)),
+    );
+    // 收藏记录读出前不知道来源句，此时打开对话会按无上下文建立另一会话，先不显示入口。
+    if (!savedWordAsync.hasValue && !savedWordAsync.hasError) {
+      return const SizedBox.shrink();
+    }
+    final savedWord = savedWordAsync.value;
     return SentenceChatButton(
       target: SentenceChatTarget(
         text: query,
         audioItemId: savedWord?.audioItemId,
-        sentenceIndex: savedWord?.sentenceIndex,
+        // 收藏不存编号：打开对话时按来源句区间定位。
+        sentenceStartMs: savedWord?.sentenceStartMs,
+        sentenceEndMs: savedWord?.sentenceEndMs,
       ),
     );
   }
@@ -265,7 +272,9 @@ class _DictionaryLookupScreenState
         for (final entry in history)
           ListTile(
             // 与上方「最近查询」标题同为 AppSpacing.m 左边距，图标左边界才能对齐
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.m,
+            ),
             leading: SvgActionIcon(
               assetName: 'assets/icon/history.svg',
               color: theme.colorScheme.outline,

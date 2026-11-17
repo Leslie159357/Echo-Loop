@@ -414,6 +414,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get waveformZoom => '缩放';
 
   @override
+  String get waveformZoomIn => '放大波形';
+
+  @override
+  String get waveformZoomOut => '缩小波形';
+
+  @override
+  String get subtitleEditorVideoLoadFailed => '画面加载失败，仍可正常编辑字幕。';
+
+  @override
   String waveformLoading(int progress) {
     return '正在加载波形 $progress%';
   }
@@ -4027,9 +4036,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deleteSentence => '删除句子';
 
   @override
-  String get sentenceDeleted => '已删除句子';
-
-  @override
   String get playSentence => '播放句子';
 
   @override
@@ -4048,10 +4054,43 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wordSplitBeforeAction => '断句';
 
   @override
-  String get saveSubtitleEdits => '保存字幕修改';
+  String get redo => '重做';
 
   @override
-  String get subtitleStructureChangedWarning => '这会清除该音频的学习进度和收藏句子。';
+  String get mergeWithPreviousSentence => '合并上一句';
+
+  @override
+  String get subtitleEditSentenceText => '编辑文字';
+
+  @override
+  String get subtitleInsertSentenceAbove => '在上方插入句子';
+
+  @override
+  String get subtitleInsertSentenceBelow => '在下方插入句子';
+
+  @override
+  String get subtitleInsertSentenceNoGap => '这里没有空隙，可先拖动边界留出位置';
+
+  @override
+  String get subtitleAddSentenceHere => '添加句子';
+
+  @override
+  String get subtitleNewSentenceHint => '输入新句子';
+
+  @override
+  String get subtitleTextEditHint => '回车保存 · Esc 取消';
+
+  @override
+  String get insertWordBefore => '在前面插入词';
+
+  @override
+  String get insertWordAfter => '在后面插入词';
+
+  @override
+  String get deleteWord => '删除单词';
+
+  @override
+  String get subtitleNewWordHint => '新词';
 
   @override
   String get subtitleEditsSaved => '字幕修改已保存。';
@@ -5308,4 +5347,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mediaTrimFailureUnexpected => '出现未知错误，请重试';
+
+  @override
+  String get audioMenuExport => '导出';
+
+  @override
+  String get audioMenuMoreActions => '更多操作';
 }

@@ -761,7 +761,7 @@
 
 - 现象：剪辑页时间轴的波形几乎是一条细线，正常音量的音频也看不出起伏。
 - 根因：just_waveform 0.0.7 的 `JustWaveform.parse` 对 16 位数据用 `Int16List.view(bytes, headerLength ~/ 2)`，偏移是 10 字节而非规范的 20 字节头。`getPixelMin/Max` 整体错位 5 个采样，开头还混入头部字段（采样率 44100 被读成 -21436），按峰值归一化时真实波形被压扁。另外它的头部视图按 20 个 uint32 读取，文件小于 80 字节会抛 RangeError。
-- 解法：用 `WaveformSamples` 从原始 buffer 第 20 字节重新建立 16 位视图；8 位数据偏移本身正确。不修改插件源码。字幕编辑器的波形同样受影响，尚未切换。
+- 解法：用 `WaveformSamples` 从原始 buffer 第 20 字节重新建立 16 位视图；8 位数据偏移本身正确。不修改插件源码。字幕编辑器的波形同样受影响，已于 2026-11-17 切换到 `WaveformSamples`（`lib/features/subtitle_editor/subtitle_waveform_view.dart`）。
 - 验证：`test/utils/waveform_samples_test.dart` 构造带头部的波形文件，确认 min/max 与峰值正确；macOS 集成测试截图中波形恢复正常高度。
 - 相关代码：`lib/utils/waveform_samples.dart`、`lib/features/media_trim/widgets/media_trim_timeline.dart`。
 - 记录时间：2026-11-16。
@@ -812,3 +812,13 @@
   3. catalog 的 `sha256` 换成实际归档摘要（zip 头信息不同，字节数与旧值相同但哈希不同），`asr_model_manager_test.dart` 里钉的摘要同步更新。
 - **验证**：公网 `https://echoloop.1122275.xyz/model/asr/whisper-*-int8-v1.zip` HEAD 200 带正确 Content-Length、`Range: bytes=0-31` 返回 206、整包下载后 sha256 与 catalog 一致。
 - **相关文件**：`lib/services/asr/asr_model_catalog.dart`、`workspace/echoloop-gateway/server_std.py`（`_serve_file_range` / `do_HEAD`）。
+
+### 7.59 列表项菜单关闭后卡片残留灰底；菜单展开时点击外部穿透到列表
+
+- 现象：macOS 上音频列表项「…」菜单展开时整张卡片变灰；关闭菜单后部分卡片灰底一直不消失（截图取色 224 = 白底叠 12% 黑，即 InkWell `focusColor`）。另外菜单展开时点击其他列表项会直接触发跳转。
+- 根因（灰底）：`MenuAnchor` 嵌在卡片 `InkWell` 内，其浮层（OverlayPortal）在焦点树上挂在卡片 Focus 节点之下；`MenuItemButton` 默认 `requestFocusOnHover`，鼠标悬停菜单项即获焦，而 `Focus.onFocusChange` 按 `hasFocus`（含子孙）回调，卡片显示 focus 高亮。菜单关闭时获焦的菜单项随浮层同帧销毁，`FocusManager._markDetached` 把 `_primaryFocus` 置空，`applyFocusChangesIfNeeded` 用空的旧焦点路径计算失焦节点，卡片 Focus 收不到 `onFocusChange(false)`，InkWell 的 `_hasFocus` 停在 true。debug 日志可见 `Updating focus from null to ...`。列表无 key、按位置复用元素，残留会落到同位置的其他条目上。
+- 根因（穿透）：由 `PopupMenuButton`（模态路由拦截点击）改为 `MenuAnchor` 后，`consumeOutsideTap` 默认 false，点击外部关闭菜单的同时事件继续传给下方控件。
+- 解法：菜单与 InkWell 改为 Stack 兄弟节点（Row 里保留等宽占位），隔离焦点；`MenuAnchor` 设 `consumeOutsideTap: true`（学习计划页 AppBar「更多」菜单同步）。
+- 验证：`audio_list_tile_test.dart`「鼠标悬停菜单项后关闭菜单，卡片不残留 focus 高亮」「菜单展开时点击外部只关闭菜单，不穿透触发下方控件」，修复前均失败。
+- 相关代码：`lib/widgets/audio_list_tile.dart`、`lib/screens/learning_plan_screen.dart`。
+- 记录时间：2026-11-18。

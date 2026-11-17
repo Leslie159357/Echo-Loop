@@ -2,6 +2,8 @@ import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../models/sentence.dart';
+import '../../services/source_sentence_anchor.dart';
 import '../app_database.dart';
 import '../tables/saved_words.dart';
 import 'bookmark_dao.dart' show RecycleBinSortMode;
@@ -39,7 +41,7 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
   Future<SavedWord?> getByWord(String word) =>
       (select(savedWords)..where((t) => t.word.equals(word))).getSingleOrNull();
 
-  /// 获取指定音频关联的未删除收藏单词（按来源句子索引升序）
+  /// 获取指定音频关联的未删除收藏单词（按来源句时间升序）
   ///
   /// 用于学习材料导出 PDF 时将收藏词归到所属句子。
   /// audioItemId 指向「最新一次收藏来源」（MVP 单来源设计），
@@ -49,18 +51,17 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
           ..where(
             (t) => t.audioItemId.equals(audioItemId) & t.deletedAt.isNull(),
           )
-          ..orderBy([(t) => OrderingTerm.asc(t.sentenceIndex)]))
+          ..orderBy([(t) => OrderingTerm.asc(t.sentenceStartMs)]))
         .get();
   }
 
   /// 保存单词（冲突时更新来源信息和更新时间）
   ///
   /// [word] 必须是小写 lemmatized 形式。
-  /// [audioItemId]、[sentenceIndex]、[sentenceText] 为可选来源信息。
+  /// [audioItemId]、[sentenceText] 与来源句起止时间为可选来源信息。
   Future<void> saveWord({
     required String word,
     String? audioItemId,
-    int? sentenceIndex,
     String? sentenceText,
     int? sentenceStartMs,
     int? sentenceEndMs,
@@ -71,7 +72,6 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
         word: Value(word),
         memorySubjectId: Value(const Uuid().v4()),
         audioItemId: Value(audioItemId),
-        sentenceIndex: Value(sentenceIndex),
         sentenceText: Value(sentenceText),
         sentenceStartMs: Value(sentenceStartMs),
         sentenceEndMs: Value(sentenceEndMs),
@@ -81,7 +81,6 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
       onConflict: DoUpdate(
         (old) => SavedWordsCompanion(
           audioItemId: Value(audioItemId),
-          sentenceIndex: Value(sentenceIndex),
           sentenceText: Value(sentenceText),
           sentenceStartMs: Value(sentenceStartMs),
           sentenceEndMs: Value(sentenceEndMs),
@@ -112,7 +111,7 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
 
   /// 清除指定音频关联的上下文信息（音频删除时调用）
   ///
-  /// 将 sentenceIndex、sentenceText 和时间信息置 NULL，保留单词本身。
+  /// 将 sentenceText 置 NULL，保留单词本身。
   /// audioItemId 由 FK SET NULL 自动处理，此方法处理非外键字段。
   /// 注意：sentenceStartMs/sentenceEndMs 保留不清除，确保删除字幕后仍可播放。
   Future<void> clearContextForAudio(String audioItemId) {
@@ -125,14 +124,56 @@ class SavedWordDao extends DatabaseAccessor<AppDatabase>
   /// audioItemId 定位这些冗余上下文字段。
   Future<void> clearContextForAudios(Set<String> audioItemIds) {
     if (audioItemIds.isEmpty) return Future.value();
-    return (update(
+    return (update(savedWords)..where((t) => t.audioItemId.isIn(audioItemIds)))
+        .write(const SavedWordsCompanion(sentenceText: Value(null)));
+  }
+
+  /// 字幕替换后，把来源为该音频的收藏词（含回收站）的来源句改写为当前字幕中
+  /// 对应那一句的文字与区间；定位不到（来源句已删除）的保持原样。
+  ///
+  /// 只依据收藏自身的来源句区间，重复执行结果不变。返回改写的条数。
+  Future<int> relinkSourceSentences(
+    String audioItemId,
+    List<Sentence> sentences,
+  ) async {
+    final rows = await (select(
       savedWords,
-    )..where((t) => t.audioItemId.isIn(audioItemIds))).write(
-      const SavedWordsCompanion(
-        sentenceIndex: Value(null),
-        sentenceText: Value(null),
-      ),
-    );
+    )..where((t) => t.audioItemId.equals(audioItemId))).get();
+    final now = DateTime.now();
+    var relinked = 0;
+    await batch((batch) {
+      for (final row in rows) {
+        final index = resolveVocabularySourceSentenceIndex(
+          SourceSentenceAnchor.fromMilliseconds(
+            startMs: row.sentenceStartMs,
+            endMs: row.sentenceEndMs,
+          ),
+          sentences,
+          row.word,
+        );
+        if (index == null) continue;
+        final target = sentences[index];
+        final startMs = target.startTime.inMilliseconds;
+        final endMs = target.endTime.inMilliseconds;
+        if (row.sentenceText == target.text &&
+            row.sentenceStartMs == startMs &&
+            row.sentenceEndMs == endMs) {
+          continue;
+        }
+        batch.update(
+          savedWords,
+          SavedWordsCompanion(
+            sentenceText: Value(target.text),
+            sentenceStartMs: Value(startMs),
+            sentenceEndMs: Value(endMs),
+            updatedAt: Value(now),
+          ),
+          where: (t) => t.id.equals(row.id),
+        );
+        relinked++;
+      }
+    });
+    return relinked;
   }
 
   /// 更新 Flashcard 练习统计

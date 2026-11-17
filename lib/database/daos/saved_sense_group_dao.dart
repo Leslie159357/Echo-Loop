@@ -2,6 +2,8 @@ import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../models/sentence.dart';
+import '../../services/source_sentence_anchor.dart';
 import '../app_database.dart';
 import '../tables/saved_sense_groups.dart';
 import 'bookmark_dao.dart' show RecycleBinSortMode;
@@ -40,7 +42,7 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
     savedSenseGroups,
   )..where((t) => t.phraseText.equals(phraseText))).getSingleOrNull();
 
-  /// 获取指定音频关联的未删除收藏意群（按来源句子索引升序）
+  /// 获取指定音频关联的未删除收藏意群（按来源句时间升序）
   ///
   /// 用于学习材料导出 PDF 时将收藏意群归到所属句子。
   Future<List<SavedSenseGroup>> getByAudioId(String audioItemId) {
@@ -48,7 +50,7 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
           ..where(
             (t) => t.audioItemId.equals(audioItemId) & t.deletedAt.isNull(),
           )
-          ..orderBy([(t) => OrderingTerm.asc(t.sentenceIndex)]))
+          ..orderBy([(t) => OrderingTerm.asc(t.sentenceStartMs)]))
         .get();
   }
 
@@ -60,7 +62,6 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
     required String phraseText,
     required String displayText,
     String? audioItemId,
-    int? sentenceIndex,
     String? sentenceText,
     int? sentenceStartMs,
     int? sentenceEndMs,
@@ -74,7 +75,6 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
         memorySubjectId: Value(const Uuid().v4()),
         displayText: Value(displayText),
         audioItemId: Value(audioItemId),
-        sentenceIndex: Value(sentenceIndex),
         sentenceText: Value(sentenceText),
         sentenceStartMs: Value(sentenceStartMs),
         sentenceEndMs: Value(sentenceEndMs),
@@ -141,6 +141,54 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
         .distinct(const SetEquality<String>().equals);
   }
 
+  /// 字幕替换后，把来源为该音频的收藏意群（含回收站）的来源句改写为当前字幕中
+  /// 对应那一句的文字与区间；定位不到（来源句已删除）的保持原样。
+  ///
+  /// 只依据收藏自身的来源句区间，重复执行结果不变。返回改写的条数。
+  Future<int> relinkSourceSentences(
+    String audioItemId,
+    List<Sentence> sentences,
+  ) async {
+    final rows = await (select(
+      savedSenseGroups,
+    )..where((t) => t.audioItemId.equals(audioItemId))).get();
+    final now = DateTime.now();
+    var relinked = 0;
+    await batch((batch) {
+      for (final row in rows) {
+        final index = resolveVocabularySourceSentenceIndex(
+          SourceSentenceAnchor.fromMilliseconds(
+            startMs: row.sentenceStartMs,
+            endMs: row.sentenceEndMs,
+          ),
+          sentences,
+          row.phraseText,
+        );
+        if (index == null) continue;
+        final target = sentences[index];
+        final startMs = target.startTime.inMilliseconds;
+        final endMs = target.endTime.inMilliseconds;
+        if (row.sentenceText == target.text &&
+            row.sentenceStartMs == startMs &&
+            row.sentenceEndMs == endMs) {
+          continue;
+        }
+        batch.update(
+          savedSenseGroups,
+          SavedSenseGroupsCompanion(
+            sentenceText: Value(target.text),
+            sentenceStartMs: Value(startMs),
+            sentenceEndMs: Value(endMs),
+            updatedAt: Value(now),
+          ),
+          where: (t) => t.id.equals(row.id),
+        );
+        relinked++;
+      }
+    });
+    return relinked;
+  }
+
   /// 更新 Flashcard 练习统计
   ///
   /// 每次翻转到背面时调用：practiceCount +1，累加学习时长，
@@ -191,7 +239,6 @@ class SavedSenseGroupDao extends DatabaseAccessor<AppDatabase>
       savedSenseGroups,
     )..where((t) => t.audioItemId.isIn(audioItemIds))).write(
       const SavedSenseGroupsCompanion(
-        sentenceIndex: Value(null),
         sentenceText: Value(null),
         sentenceStartMs: Value(null),
         sentenceEndMs: Value(null),

@@ -24,6 +24,7 @@ import '../providers/learning_session/bookmark_review_provider.dart';
 import '../providers/sentence_ai_prewarm.dart';
 import '../providers/sentence_ai_provider.dart';
 import '../providers/sense_group_range_playback_provider.dart';
+import '../providers/source_sentence_index_provider.dart';
 import '../services/pronunciation/local_audio_sense_group_range_playback.dart';
 import '../router/app_router.dart';
 import '../theme/app_theme.dart';
@@ -191,7 +192,9 @@ class _BookmarkReviewScreenState extends ConsumerState<BookmarkReviewScreen>
                   target: SentenceChatTarget(
                     text: card?.sentence.text ?? '',
                     audioItemId: card?.audioItemId,
-                    sentenceIndex: card?.originalSentenceIndex,
+                    // 收藏不存编号：打开对话时按收藏区间定位，不依赖页面异步现算结果。
+                    sentenceStartMs: card?.sentence.startTime.inMilliseconds,
+                    sentenceEndMs: card?.sentence.endTime.inMilliseconds,
                   ),
                   onBeforeOpen: () => unawaited(player.interruptPlayback()),
                 ),
@@ -559,6 +562,24 @@ class _ReviewAnswer extends ConsumerWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final sentenceSettings = ref.watch(bookmarkReviewSettingsProvider);
+    // 收藏不存句子编号：AI 翻译取前后句前，先按收藏区间在当前字幕里算出编号。
+    // 当前卡片首次算出前告知讲解视图编号待定，由其暂停翻译与预热，避免先发无上下文请求；
+    // 后续卡片编号算出后才加入预热，不影响当前卡片已显示的译文。
+    final cardIndex = ref.watch(sourceSentenceIndexProvider(_sourceOf(card)));
+    final prewarmTargets = <SentenceAiPrewarmTarget>[];
+    for (final upcoming in upcomingCards) {
+      final upcomingIndex = ref.watch(
+        sourceSentenceIndexProvider(_sourceOf(upcoming)),
+      );
+      if (!_isSentenceIndexResolved(upcomingIndex)) continue;
+      prewarmTargets.add(
+        SentenceAiPrewarmTarget(
+          text: upcoming.sentence.text,
+          audioItemId: upcoming.audioItemId,
+          sentenceIndex: upcomingIndex.value,
+        ),
+      );
+    }
     final actions = [
       FlashcardRatingAction(
         rating: MemoryRating.again,
@@ -604,7 +625,8 @@ class _ReviewAnswer extends ConsumerWidget {
               text: card.sentence.text,
               aiNotifier: ref.read(sentenceAiNotifierProvider),
               audioItemId: card.audioItemId,
-              sentenceIndex: card.originalSentenceIndex,
+              sentenceIndex: cardIndex.value,
+              isSentenceIndexPending: !_isSentenceIndexResolved(cardIndex),
               sentenceStartMs: card.sentence.startTime.inMilliseconds,
               sentenceEndMs: card.sentence.endTime.inMilliseconds,
               wordHighlightSource:
@@ -635,14 +657,7 @@ class _ReviewAnswer extends ConsumerWidget {
               autoShowAiAnalysis: sentenceSettings.autoShowAiAnalysis,
               autoShowAiTranslation: sentenceSettings.autoShowAiTranslation,
               autoShowAiSenseGroups: sentenceSettings.autoShowAiSenseGroups,
-              prewarmTargets: [
-                for (final upcoming in upcomingCards)
-                  SentenceAiPrewarmTarget(
-                    text: upcoming.sentence.text,
-                    audioItemId: upcoming.audioItemId,
-                    sentenceIndex: upcoming.originalSentenceIndex,
-                  ),
-              ],
+              prewarmTargets: prewarmTargets,
             ),
           ),
         ),
@@ -690,3 +705,14 @@ class _ReviewAnswer extends ConsumerWidget {
     );
   }
 }
+
+/// 句子编号是否已算完；定位不到来源句（null）或读取失败也算算完，按无上下文处理。
+bool _isSentenceIndexResolved(AsyncValue<int?> sentenceIndex) =>
+    sentenceIndex.hasValue || sentenceIndex.hasError;
+
+/// 收藏复习卡片的来源（音频 + 收藏区间）。
+SourceSentenceRef _sourceOf(BookmarkSentence card) => (
+  audioItemId: card.audioItemId,
+  startMs: card.sentence.startTime.inMilliseconds,
+  endMs: card.sentence.endTime.inMilliseconds,
+);
