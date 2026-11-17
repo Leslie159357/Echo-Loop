@@ -34,7 +34,9 @@ class SpeechTranscriptMatcher {
 
   final Lemmatizer _lemmatizer;
 
-  static final RegExp _englishWordPattern = RegExp(r"[A-Za-z]+(?:'[A-Za-z]+)?");
+  static final RegExp _wordPattern = RegExp(
+    r"[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+(?:'[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+)?",
+  );
 
   /// 计算识别文本与目标文本的覆盖率，并输出 transcript 高亮片段。
   ///
@@ -98,7 +100,7 @@ class SpeechTranscriptMatcher {
   }
 
   List<_IndexedToken> _tokenize(String text) {
-    return _englishWordPattern
+    return _wordPattern
         .allMatches(text)
         .map(
           (match) => _IndexedToken(

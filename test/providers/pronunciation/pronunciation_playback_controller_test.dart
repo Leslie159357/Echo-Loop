@@ -173,7 +173,7 @@ void main() {
   String cachedPathFor(String word) => p.join(
     tempDir.path,
     'word_audio',
-    'en-US',
+    'de-DE',
     wordAudioFileName(word)!,
   );
 

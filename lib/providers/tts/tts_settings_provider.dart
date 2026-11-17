@@ -63,6 +63,23 @@ Future<void> migrateAndroidPlatformTtsPreference(
   await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.kokoro.name);
 }
 
+class GermanTtsVoice {
+  final String id;
+  final String name;
+  final String description;
+  const GermanTtsVoice({required this.id, required this.name, required this.description});
+}
+
+const kGermanVoices = [
+  GermanTtsVoice(id: 'de1', name: '男声 · 清晰朗读 (Vorlesen)', description: '推荐：字正腔圆，最接近教材标准录音'),
+  GermanTtsVoice(id: 'de2', name: '女声 · 清亮播读 (Christa)', description: '年轻清亮女声，自然流畅'),
+  GermanTtsVoice(id: 'de3', name: '男声 · 专业平稳 (German)', description: '成熟稳重男中音，纪录片风格'),
+  GermanTtsVoice(id: 'de4', name: '女声 · 播报清晰 (Ansagestimme)', description: '德国电台新闻播报腔'),
+  GermanTtsVoice(id: 'de5', name: '中性 · Catrinja', description: '现代德语口语声线'),
+  GermanTtsVoice(id: 'de6', name: '女声 · C13', description: '自然德语女声'),
+];
+
+
 /// 升级后将所有用户的默认引擎统一切换为 Edge 在线 TTS（含已下载本地模型的老用户）。
 ///
 /// 产品决策：Edge 效果明显更好，故不再区分老用户的本地模型或平台 TTS 偏好。
@@ -75,6 +92,59 @@ Future<void> migrateDefaultTtsEngineToEdge(SharedPreferences prefs) async {
     '默认引擎迁移：原偏好=${stored ?? '未设置'} → ${TtsEngineKind.edge.diagnosticName}',
   );
   await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.edge.name);
+}
+
+/// 德语版：撤销上游 v1.0.46 的「默认引擎改 Edge」强制迁移。
+///
+/// Edge 音色全部是英语（美音/英音），没有德语；本地德语链路走平台引擎
+/// + 自建 Fish Audio 网关（`de1`–`de6`）。上游 migration v10 会把所有用户
+/// 的引擎直接写成 `edge`，德语版必须在升级后把这一次性改回来。
+///
+/// 只处理 `edge`（上游强制的值），`kokoro` 等是用户主动选择，不动。
+/// 执行后写 SP 标记，之后用户手动选 Edge 不会被反复改回。
+Future<void> restoreGermanPlatformEngine(SharedPreferences prefs) async {
+  const doneKey = 'tts_engine_de_restored';
+  if (prefs.getBool(doneKey) ?? false) return;
+  final stored = prefs.getString(TtsSettingsKeys.engine);
+  if (stored == TtsEngineKind.edge.name) {
+    await prefs.setString(TtsSettingsKeys.engine, TtsEngineKind.platform.name);
+    AppLogger.log(
+      'TtsSettings',
+      '德语版还原默认引擎：edge → platform（自建 Fish 网关）',
+    );
+  }
+  await prefs.setBool(doneKey, true);
+}
+
+/// 德语版：把 SP 里残留的英语 Edge 音色 id 迁成德语对应音色。
+///
+/// 上游音色目录是 `en-US-*` / `en-GB-*`，本版整份换成 `de-DE-*`；
+/// 老用户 SP 里存的是英语 id，不迁移会让 Edge 合成请求带上不存在的音色，
+/// 表现为无声或回退系统语音。只处理 `en-` 前缀，用户已选的德语 id 不动。
+Future<void> migrateEdgeVoicesToGerman(SharedPreferences prefs) async {
+  final targets = [
+    (TtsSettingsKeys.edgeVoiceUs, edgeDefaultVoiceUs),
+    (TtsSettingsKeys.edgeVoiceUk, edgeDefaultVoiceUk),
+  ];
+  for (final (key, fallback) in targets) {
+    final v = prefs.getString(key);
+    if (v == null) continue;
+    final isEnglish = v.startsWith('en-US-') || v.startsWith('en-GB-');
+    if (!isEnglish) continue;
+    await prefs.setString(key, fallback);
+    AppLogger.log('TtsSettings', 'Edge 音色迁移：$v → $fallback');
+  }
+}
+
+/// 德语版：Piper 引擎入口已隐藏，把还停在该引擎上的用户回落到平台引擎。
+///
+/// 否则用户看不到 Piper 选项、却仍被它朗读（下英文模型读英文），无法自行退出。
+Future<void> migrateOffPiperEngine(SharedPreferences prefs) async {
+  final key = TtsSettingsKeys.engine;
+  final stored = prefs.getString(key);
+  if (stored != 'piper') return;
+  await prefs.setString(key, TtsEngineKind.platform.name);
+  AppLogger.log('TtsSettings', 'Piper 已停用，引擎回落 platform（德语 Fish 网关）');
 }
 
 /// TTS 设置不可变值对象。
@@ -106,8 +176,11 @@ class TtsSettings {
   /// Edge 英音音色 id（默认 [edgeDefaultVoiceUk]）。
   final String edgeVoiceUk;
 
+  /// Fish Audio 自建德语音色（平台引擎走自建网关时使用）。
+  final String fishTtsVoice;
+
   const TtsSettings({
-    this.engine = TtsEngineKind.edge,
+    this.engine = TtsEngineKind.platform,
     this.accent = TtsAccent.us,
     this.kokoroVoiceUs = kokoroDefaultVoiceUs,
     this.kokoroVoiceUk = kokoroDefaultVoiceUk,
@@ -116,10 +189,11 @@ class TtsSettings {
     this.piperVoiceUk = piperDefaultVoiceUk,
     this.edgeVoiceUs = edgeDefaultVoiceUs,
     this.edgeVoiceUk = edgeDefaultVoiceUk,
+    this.fishTtsVoice = 'de1',
   });
 
-  /// 当前口音对应的语言标签。
-  String get languageTag => accent == TtsAccent.uk ? 'en-GB' : 'en-US';
+  /// 当前德语特化版对应的语言标签。
+  String get languageTag => 'de-DE';
 
   /// 当前口音下生效的 Kokoro 音色 id。
   String get activeKokoroVoice =>
@@ -148,14 +222,14 @@ class TtsSettings {
   /// 平台引擎不带 voiceName/modelTag（用语言标签选系统音色）。语速本期固定 0.45。
   TtsSpeechConfig toSpeechConfig() => TtsSpeechConfig(
     languageTag: languageTag,
-    voiceName: activeVoiceName,
+    voiceName: engine == TtsEngineKind.platform ? fishTtsVoice : activeVoiceName,
     modelTag: engine == TtsEngineKind.kokoro ? kokoroVariant.name : null,
   );
 
   /// 同步从 [SharedPreferences] 派生当前状态，用于启动期 override 注入。
   factory TtsSettings.fromPrefsSync(SharedPreferences prefs) {
     return TtsSettings(
-      engine: _engineFromName(prefs.getString(TtsSettingsKeys.engine)),
+      engine: TtsEngineKind.platform,
       accent: _accentFromName(prefs.getString(TtsSettingsKeys.accent)),
       kokoroVoiceUs: _voiceOrDefault(
         prefs.getString(TtsSettingsKeys.kokoroVoiceUs),
@@ -176,6 +250,8 @@ class TtsSettings {
         prefs.getString(TtsSettingsKeys.piperVoiceUk),
         TtsAccent.uk,
       ),
+      fishTtsVoice: prefs.getString('fish_tts_voice') ?? 'de1',
+
       edgeVoiceUs: _edgeVoiceOrDefault(
         prefs.getString(TtsSettingsKeys.edgeVoiceUs),
         TtsAccent.us,
@@ -221,7 +297,7 @@ class TtsSettings {
     }
     return TtsEngineKind.values.firstWhere(
       (e) => e.name == name,
-      orElse: () => TtsEngineKind.edge,
+      orElse: () => TtsEngineKind.platform,
     );
   }
 
@@ -240,6 +316,8 @@ class TtsSettings {
     KokoroModelVariant? kokoroVariant,
     String? piperVoiceUs,
     String? piperVoiceUk,
+    String? fishTtsVoice,
+
     String? edgeVoiceUs,
     String? edgeVoiceUk,
   }) {
@@ -251,6 +329,8 @@ class TtsSettings {
       kokoroVariant: kokoroVariant ?? this.kokoroVariant,
       piperVoiceUs: piperVoiceUs ?? this.piperVoiceUs,
       piperVoiceUk: piperVoiceUk ?? this.piperVoiceUk,
+      fishTtsVoice: fishTtsVoice ?? this.fishTtsVoice,
+
       edgeVoiceUs: edgeVoiceUs ?? this.edgeVoiceUs,
       edgeVoiceUk: edgeVoiceUk ?? this.edgeVoiceUk,
     );
@@ -292,6 +372,13 @@ class TtsSettings {
 class TtsSettingsNotifier extends Notifier<TtsSettings> {
   @override
   TtsSettings build() => ref.read(initialTtsSettingsProvider);
+
+  /// 切换 Fish Audio 德语音色，写 SP + 更新 state。
+  Future<void> setFishTtsVoice(String voice) async {
+    if (state.fishTtsVoice == voice) return;
+    state = state.copyWith(fishTtsVoice: voice);
+    await _persist('fish_tts_voice', voice);
+  }
 
   /// 切换合成引擎，写 SP + 更新 state。
   Future<void> setEngine(TtsEngineKind engine) async {

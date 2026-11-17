@@ -30,6 +30,9 @@ typedef AudioImportProgressCallback =
 class AudioImportService {
   static const _logTag = 'AudioImport';
 
+  static const _defaultPodcastUserAgent =
+      'Podcasts/1750.31 CFNetwork/1410.0.3 Darwin/22.4.0';
+
   AudioImportService({
     Dio? dio,
     Uuid? uuid,
@@ -39,7 +42,12 @@ class AudioImportService {
     AudioRegistrationService? registrationService,
     AudioTranscodeService? transcodeService,
     BackgroundFileDownloadService? backgroundDownloader,
-  }) : _dio = dio ?? Dio(),
+  }) : _dio = dio ??
+           Dio(
+             BaseOptions(
+               headers: {'User-Agent': _defaultPodcastUserAgent},
+             ),
+           ),
        _uuid = uuid ?? const Uuid(),
        _resolveDataDir = resolveDataDir ?? getAppDataDirectory,
        _readDurationSeconds = readDurationSeconds ?? getMediaDurationSeconds,
@@ -61,6 +69,18 @@ class AudioImportService {
   final Future<int> Function(String relativePath) _readDurationSeconds;
   final AudioRegistrationService _registrationService;
   final AudioFinalizationService _finalizationService;
+
+  static const supportedExtensions = {
+    'mp3',
+    'wav',
+    'm4a',
+    'aac',
+    'flac',
+    'mp4',
+    'mov',
+    'm4v',
+    'mkv',
+  };
 
   Future<AudioItem> importFromUrl({
     required String url,
@@ -258,7 +278,10 @@ class AudioImportService {
     final extFromUrl = _extensionFromUri(uri);
     final extFromMime = _extensionFromMimeType(mimeType);
     final extension = extFromUrl ?? extFromMime;
-    final isAudioMime = mimeType == null || mimeType.startsWith('audio/');
+    final isAudioMime = mimeType == null ||
+        mimeType.startsWith('audio/') ||
+        mimeType.startsWith('video/') ||
+        mimeType == 'application/octet-stream';
 
     if (extension == null) {
       if (!isAudioMime) {
@@ -311,24 +334,44 @@ class AudioImportService {
     );
     try {
       try {
+        await _dio.download(
+          resolved.uri.toString(),
+          downloadedFile.path,
+          cancelToken: cancelToken,
+          onReceiveProgress: (received, total) => onProgress?.call(
+            received,
+            total > 0 ? total : null,
+          ),
+          options: Options(
+            headers: {'User-Agent': _defaultPodcastUserAgent},
+            followRedirects: true,
+          ),
+        );
+      } catch (error) {
+        // 用户主动取消立即释放已落盘的部分文件；自然失败则保留，供下次继续。
+        if (error is DioException && CancelToken.isCancel(error)) {
+          await _deleteIfExists(downloadedFile);
+          throw const AudioImportException(
+            AudioImportFailureCode.canceled,
+            'Audio import canceled',
+          );
+        }
+        AppLogger.log(_logTag, 'Dio direct download failed: $error, trying fallback...');
         await _backgroundDownloader.download(
           uri: resolved.uri,
           savePath: downloadedFile.path,
           resourceKey: resourceKeyForUrl(resolved.uri),
           displayName: resolved.displayName,
+          headers: {'User-Agent': _defaultPodcastUserAgent},
           cancelToken: cancelToken,
           onProgress: (received, total) => onProgress?.call(received, total),
         );
-      } catch (error) {
-        // 用户主动取消立即释放已落盘的部分文件；自然失败则保留，供下次继续。
-        if (error is BackgroundFileDownloadException && error.isCanceled) {
-          await _deleteIfExists(downloadedFile);
-        }
-        rethrow;
       }
       return p.join('tmp', 'audio_import', p.basename(downloadedFile.path));
     } on BackgroundFileDownloadException catch (e) {
       if (e.isCanceled) {
+        // 用户主动取消：后台下载器可能已写入部分文件，这里统一清掉。
+        await _deleteIfExists(downloadedFile);
         throw const AudioImportException(
           AudioImportFailureCode.canceled,
           'Audio import canceled',

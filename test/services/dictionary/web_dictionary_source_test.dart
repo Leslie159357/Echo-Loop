@@ -17,9 +17,12 @@ void main() {
     expect(ids.indexOf('britannica'), greaterThan(ids.indexOf('collins')));
   });
 
-  test('已确认的 16 个网页源都在、Macmillan 不在', () {
+  test('德语版 19 个网页源都在、Macmillan 不在', () {
     final ids = kWebDictConfigs.map((c) => c.id).toSet();
     expect(ids, {
+      'dehelper',
+      'duden',
+      'dwds',
       'cambridge',
       'oxford',
       'longman',

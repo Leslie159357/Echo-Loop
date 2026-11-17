@@ -185,50 +185,55 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
             // 合成引擎
             _SectionLabel(text: l10n.ttsEngine),
             Card(
-              child: RadioGroup<TtsEngineKind>(
-                groupValue: settings.engine,
-                onChanged: _onEngineChanged,
-                child: Column(
-                  children: [
-                    RadioListTile<TtsEngineKind>(
-                      title: Row(
-                        children: [
-                          Flexible(child: Text(l10n.ttsEngineEdge)),
-                          const SizedBox(width: 8),
-                          _RecommendedBadge(
-                            text: l10n.ttsModelRecommended,
-                            theme: theme,
-                          ),
-                        ],
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Row(
+                      children: [
+                        Flexible(child: Text(l10n.ttsEngineEdge)),
+                        const SizedBox(width: 8),
+                        _RecommendedBadge(
+                          text: l10n.ttsModelRecommended,
+                          theme: theme,
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      l10n.ttsEngineEdgeDescription,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
+                    ),
+                    trailing: _EngineCheck(
+                      selected: settings.engine == TtsEngineKind.edge,
+                      theme: theme,
+                    ),
+                    onTap: () => _onEngineChanged(TtsEngineKind.edge),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  if (showPlatformEngine) ...[
+                    ListTile(
+                      title: Text(platformSpeechEngineName(l10n)),
                       subtitle: Text(
-                        l10n.ttsEngineEdgeDescription,
+                        l10n.ttsEnginePlatformDescription,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.6,
                           ),
                         ),
                       ),
-                      value: TtsEngineKind.edge,
-                      selected: isEdge,
+                      trailing: _EngineCheck(
+                        selected: settings.engine == TtsEngineKind.platform,
+                        theme: theme,
+                      ),
+                      onTap: () => _onEngineChanged(TtsEngineKind.platform),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
-                    if (showPlatformEngine) ...[
-                      RadioListTile<TtsEngineKind>(
-                        title: Text(platformSpeechEngineName(l10n)),
-                        subtitle: Text(
-                          l10n.ttsEnginePlatformDescription,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.6),
-                          ),
-                        ),
-                        value: TtsEngineKind.platform,
-                        selected: settings.engine == TtsEngineKind.platform,
-                      ),
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                    ],
-                    RadioListTile<TtsEngineKind>(
+                  ],
+                  if (kPiperEngineEnabled) ...[
+                    ListTile(
                       title: Text(l10n.ttsEnginePiper),
                       subtitle: Text(
                         l10n.ttsEnginePiperDescription,
@@ -238,25 +243,31 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                           ),
                         ),
                       ),
-                      value: TtsEngineKind.piper,
-                      selected: settings.engine == TtsEngineKind.piper,
+                      trailing: _EngineCheck(
+                        selected: settings.engine == TtsEngineKind.piper,
+                        theme: theme,
+                      ),
+                      onTap: () => _onEngineChanged(TtsEngineKind.piper),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
-                    RadioListTile<TtsEngineKind>(
-                      title: Text(l10n.ttsEngineEchoLoop),
-                      subtitle: Text(
-                        l10n.ttsEngineEchoLoopDescription,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.6,
-                          ),
+                  ],
+                  ListTile(
+                    title: Text(l10n.ttsEngineEchoLoop),
+                    subtitle: Text(
+                      l10n.ttsEngineEchoLoopDescription,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.6,
                         ),
                       ),
-                      value: TtsEngineKind.kokoro,
-                      selected: settings.engine == TtsEngineKind.kokoro,
                     ),
-                  ],
-                ),
+                    trailing: _EngineCheck(
+                      selected: settings.engine == TtsEngineKind.kokoro,
+                      theme: theme,
+                    ),
+                    onTap: () => _onEngineChanged(TtsEngineKind.kokoro),
+                  ),
+                ],
               ),
             ),
 
@@ -299,20 +310,48 @@ class _TtsSettingsScreenState extends ConsumerState<TtsSettingsScreen> {
                 child: _PiperVoiceList(l10n: l10n),
               ),
             ] else ...[
-              // 平台 TTS：无具名音色，仅显示口音（美/英，决定系统音色语言）。
-              // 点击口音即选中并试听该口音（进页已后台预热，多数秒播）。
+              // 德语专化：Fish Audio 自建网关音色（平台引擎走自建 TTS 时生效）。
               const SizedBox(height: AppSpacing.m),
-              // 提示弱化显示在「口音」分组标题后：部分机型/系统语音不区分美/英音。
-              _SectionLabel(text: l10n.ttsAccent, hint: l10n.ttsAccentHint),
+              _SectionLabel(text: '德语发音人 (Fish Audio)'),
               Card(
+                // 显式 ListTile + onTap，不用 RadioGroup/RadioListTile：
+                // 后者在 Flutter 3.3x 的 RadioGroup 祖先模式下点击回调不稳定，
+                // 实测出现「点了没反应、选中态卡住」。显式 onTap 行为确定。
                 child: Column(
                   children: [
-                    _AccentPreviewRow(accent: TtsAccent.us, l10n: l10n),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    _AccentPreviewRow(accent: TtsAccent.uk, l10n: l10n),
+                    for (var i = 0; i < kGermanVoices.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        title: Text(kGermanVoices[i].name),
+                        subtitle: Text(
+                          kGermanVoices[i].description,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
+                          ),
+                        ),
+                        trailing: settings.fishTtsVoice == kGermanVoices[i].id
+                            ? Icon(
+                                Icons.check_circle,
+                                color: theme.colorScheme.primary,
+                              )
+                            : null,
+                        onTap: () {
+                          ref
+                              .read(ttsSettingsProvider.notifier)
+                              .setFishTtsVoice(kGermanVoices[i].id);
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
+
+              // 德语版：平台引擎下不显示「口音」区。
+              // 上游的「美音 / 英音」对本版无意义——平台引擎实际走自建 Fish Audio
+              // 德语网关，音色由上方「德语发音人」决定，语言固定 de-DE。
+              // 保留口音区会误导：点它试听的是默认 de1（男声），与已选音色不符。
 
               // 本地仍有残留模型（非当前引擎、未在使用）：收成一行存储清理入口，
               // 不再平铺两张模型卡（避免在「平台 TTS」下误读为可选设置）。
@@ -1351,5 +1390,22 @@ class _SectionLabel extends StatelessWidget {
               ],
             ),
     );
+  }
+}
+
+/// 引擎/音色行的选中标记（替代 RadioListTile 的 radio 圆点）。
+///
+/// RadioGroup + RadioListTile 组合在 Flutter 3.3x 的祖先回调模式下点击不稳定，
+/// 设置页统一改用显式 ListTile + onTap，选中态由本组件表达。
+class _EngineCheck extends StatelessWidget {
+  const _EngineCheck({required this.selected, required this.theme});
+
+  final bool selected;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selected) return const SizedBox(width: 24);
+    return Icon(Icons.check_circle, color: theme.colorScheme.primary);
   }
 }

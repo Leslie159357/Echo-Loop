@@ -25,6 +25,10 @@ env:
 
 jobs:
   release:
+    # 德语版 tag 形如 v1.0.47-de，非纯 SemVer，上游发布流程解析版本会失败；
+    # 德语版 IPA 由 ios.yml 构建并经 dl.1122275.xyz 分发，跳过 Release 流程。
+    # 注：GHA 不允许 tags 与 tags-ignore 同时使用，故在 job 层过滤。
+    if: ${{ !endsWith(github.ref_name, '-de') }}
     timeout-minutes: 60
     strategy:
       fail-fast: false

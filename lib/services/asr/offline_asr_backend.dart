@@ -74,13 +74,13 @@ class OfflineAsrBackend implements SpeechPracticeBackend {
   }
 
   @override
-  Future<void> warmup({String locale = 'en-US'}) =>
+  Future<void> warmup({String locale = 'de-DE'}) =>
       _platform.warmup(locale: locale);
 
   @override
   Future<String> startSession({
     required String promptId,
-    String locale = 'en-US',
+    String locale = 'de-DE',
   }) async {
     _generation++;
     AppLogger.log(

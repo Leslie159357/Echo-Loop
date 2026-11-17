@@ -101,7 +101,7 @@ TtsSpeechConfig ttsVoicePreviewConfig(
   KokoroModelVariant variant,
 ) {
   return TtsSpeechConfig(
-    languageTag: voice.accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+    languageTag: 'de-DE',
     voiceName: voice.id,
     modelTag: variant.name,
   );
@@ -115,7 +115,7 @@ String ttsAccentPreviewKey(TtsAccent accent) =>
 /// 与 [TtsController.prewarmTexts] 无关；无 modelTag（Piper 缓存键按 voiceId 分桶）。
 TtsSpeechConfig ttsPiperVoicePreviewConfig(PiperVoice voice) {
   return TtsSpeechConfig(
-    languageTag: voice.accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+    languageTag: 'de-DE',
     voiceName: voice.id,
   );
 }
@@ -134,7 +134,7 @@ TtsEngineKind effectiveTtsEngine(
   required bool kokoroReady,
   required bool piperReady,
 }) {
-  return selected;
+  return TtsEngineKind.platform;
 }
 
 /// 控制器运行态。
@@ -243,7 +243,12 @@ class TtsController extends Notifier<TtsControllerState> {
     // 使下载完成后的后续发音直接落入正确缓存桶。
     final config = TtsSpeechConfig(
       languageTag: settings.languageTag,
-      voiceName: settings.copyWith(engine: effective).activeVoiceName,
+      voiceName: switch (effective) {
+        TtsEngineKind.kokoro => settings.activeKokoroVoice,
+        TtsEngineKind.piper => settings.activePiperVoice,
+        TtsEngineKind.edge => settings.activeEdgeVoice,
+        TtsEngineKind.platform => settings.fishTtsVoice,
+      },
       modelTag: effective == TtsEngineKind.kokoro
           ? settings.kokoroVariant.name
           : null,
@@ -458,8 +463,11 @@ class TtsController extends Notifier<TtsControllerState> {
   /// 实时朗读，口音仍生效）。设 [speakingKey] 为该口音试听 key，供口音行显播放态。
   /// 仅平台 TTS 场景调用（口音行只在平台引擎下显示）。
   Future<void> previewAccent(TtsAccent accent) async {
+    // 德语版：必须带上当前选中的 Fish 音色，否则 voiceName 为 null，
+    // 平台引擎会回落到默认 de1（男声），表现为「选哪个音色试听都是男声」。
     final config = TtsSpeechConfig(
-      languageTag: accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+      languageTag: 'de-DE',
+      voiceName: ref.read(ttsSettingsProvider).fishTtsVoice,
     );
     final key = ttsAccentPreviewKey(accent);
     final token = ++_speakingToken;
@@ -474,6 +482,29 @@ class TtsController extends Notifier<TtsControllerState> {
       AppLogger.log('TtsController', '✗ previewAccent 异常: $e\n$st');
     }
     // 仅当未被新发音抢占时才复位（被抢占时 speakingKey 已变）。
+    if (token == _speakingToken && state.speakingKey == key) {
+      state = _stateWithSpeaking(null);
+    }
+  }
+
+  /// 试听自建 Fish Audio 德语音色
+  Future<void> previewFishVoice(String voiceId) async {
+    final config = TtsSpeechConfig(
+      languageTag: 'de-DE',
+      voiceName: voiceId,
+    );
+    final key = ttsVoicePreviewKey(voiceId);
+    final token = ++_speakingToken;
+    state = _stateWithSpeaking(key);
+    try {
+      await _readyCoordinator.speakWith(
+        'Guten Tag! Ich lerne Deutsch mit Echo Loop.',
+        TtsEngineKind.platform,
+        config,
+      );
+    } catch (e, st) {
+      AppLogger.log('TtsController', '✗ previewFishVoice 异常: $e\n$st');
+    }
     if (token == _speakingToken && state.speakingKey == key) {
       state = _stateWithSpeaking(null);
     }
@@ -512,8 +543,10 @@ class TtsController extends Notifier<TtsControllerState> {
           return; // 已被取消/重发：停止旧批次
         }
         final accent = TtsAccent.values[i];
+        // 德语版：预热也要带 Fish 音色，保证首次播放即用户选中的音色。
         final config = TtsSpeechConfig(
-          languageTag: accent == TtsAccent.uk ? 'en-GB' : 'en-US',
+          languageTag: 'de-DE',
+          voiceName: ref.read(ttsSettingsProvider).fishTtsVoice,
         );
         AppLogger.log(
           'TtsController',
