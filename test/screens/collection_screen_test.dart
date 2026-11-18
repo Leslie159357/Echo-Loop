@@ -327,14 +327,14 @@ void main() {
           find.byKey(const ValueKey('collection-option-local')),
           findsOneWidget,
         );
-        // 德语版已移除「订阅 Podcast」入口（后端无播客目录），只剩本地合集
+        // 订阅 Podcast 入口保留：德语版走自建网关的精选列表（按级别分组）
         expect(
           find.byKey(const ValueKey('collection-option-podcast')),
-          findsNothing,
+          findsOneWidget,
         );
         expect(find.text('New Collection'), findsOneWidget);
         expect(find.text('Add audio or video'), findsOneWidget);
-        expect(find.text('Subscribe Podcast'), findsNothing);
+        expect(find.text('Subscribe Podcast'), findsOneWidget);
 
         await tester.tap(find.byKey(const ValueKey('collection-option-local')));
         await tester.pumpAndSettle();
@@ -366,6 +366,20 @@ void main() {
           find.widgetWithText(FilledButton, 'Add'),
         );
         expect(enabledButton.onPressed, isNotNull);
+      });
+
+      testWidgets('点击「订阅 Podcast」关闭 sheet 并进入统一订阅页', (tester) async {
+        await tester.pumpWidget(createTestScreen(const LibraryScreen()));
+        await tester.pumpAndSettle();
+
+        await tester.tap(svgIcon('assets/icon/plus.svg').first);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('collection-option-podcast')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Podcast Subscribe'), findsOneWidget);
       });
 
       testWidgets('点击排序按钮显示排序选项', (tester) async {

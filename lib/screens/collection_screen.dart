@@ -210,6 +210,7 @@ class _CreateCollectionTypeSheet extends StatelessWidget {
             _CollectionTypePanel(
               key: const ValueKey('choose-collection-type'),
               onLocal: () => _openLocalCollectionDialog(context),
+              onPodcast: () => _openPodcastSubscribe(context),
             ),
           ],
         ),
@@ -218,6 +219,12 @@ class _CreateCollectionTypeSheet extends StatelessWidget {
   }
 
   /// 「新建合集」：关闭本 sheet，在其所在 Navigator 上弹出名称 + 封面对话框。
+  /// 「订阅 Podcast」：关闭本 sheet 并进入统一的 Podcast 搜索与订阅页。
+  void _openPodcastSubscribe(BuildContext context) {
+    Navigator.pop(context);
+    context.push(AppRoutes.podcastSubscribe);
+  }
+
   void _openLocalCollectionDialog(BuildContext context) {
     final navigator = Navigator.of(context);
     navigator.pop();
@@ -267,9 +274,11 @@ class _CollectionTypePanel extends StatelessWidget {
   const _CollectionTypePanel({
     super.key,
     required this.onLocal,
+    required this.onPodcast,
   });
 
   final VoidCallback onLocal;
+  final VoidCallback onPodcast;
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +293,15 @@ class _CollectionTypePanel extends StatelessWidget {
           title: l10n.newCollectionOptionTitle,
           description: l10n.newCollectionOptionDescription,
           onTap: onLocal,
+        ),
+        const SizedBox(height: 12),
+        // 德语播客订阅：走自建网关的精选列表（按 A0/A1/A2/B1 分组）
+        _CollectionOptionTile(
+          key: const ValueKey('collection-option-podcast'),
+          icon: Icons.podcasts_rounded,
+          title: l10n.subscribePodcast,
+          description: l10n.subscribePodcastOptionDescription,
+          onTap: onPodcast,
         ),
       ],
     );
