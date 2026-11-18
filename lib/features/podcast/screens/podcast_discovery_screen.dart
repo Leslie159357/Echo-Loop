@@ -42,6 +42,9 @@ class PodcastDiscoveryScreen extends ConsumerStatefulWidget {
 
 class _PodcastDiscoveryScreenState
     extends ConsumerState<PodcastDiscoveryScreen> {
+  /// 级别筛选：null = 全部。选中某级时列表只显示该级，并自动把全量分页拉完。
+  String? _levelFilter;
+
   static const _loadMoreThreshold = 200.0;
 
   final _searchController = TextEditingController();
@@ -323,9 +326,17 @@ class _PodcastDiscoveryScreenState
             }
 
             final subscribed = _subscribedByFeed();
-            // 德语版：按 A0/A1/A2/B1 分组展示（服务端返回 level，未标注归到「其他」）
-            final rows = _withLevelHeaders(podcasts);
-            return RefreshIndicator(
+            // 级别筛选（null=全部）；筛选时自动把剩余分页拉完，避免只看到前 60 条里的几条
+            final filtered = _levelFilter == null
+                ? podcasts
+                : podcasts.where((p) => p.level == _levelFilter).toList();
+            if (_levelFilter != null && snapshot.nextCursor != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _loadRestForFilter();
+              });
+            }
+            final rows = _withLevelHeaders(filtered);
+            final list = RefreshIndicator(
               onRefresh: () => ref
                   .read(featuredPodcastsProvider.notifier)
                   .refreshFirstPage(),
@@ -390,8 +401,62 @@ class _PodcastDiscoveryScreenState
                 },
               ),
             );
+            return Column(
+              children: [
+                _buildLevelChips(podcasts),
+                Expanded(child: list),
+              ],
+            );
           },
         );
+  }
+
+  /// 级别筛选条。只列出目录里实际存在的级别。
+  Widget _buildLevelChips(List<FeaturedPodcast> podcasts) {
+    const order = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'];
+    final present = <String>{
+      for (final p in podcasts)
+        if (p.level.isNotEmpty) p.level,
+    };
+    final levels = [
+      for (final lv in order)
+        if (present.contains(lv)) lv,
+    ];
+    if (levels.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        children: [
+          for (final lv in <String?>[null, ...levels])
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(lv ?? '全部'),
+                selected: _levelFilter == lv,
+                visualDensity: VisualDensity.compact,
+                labelStyle: theme.textTheme.labelMedium,
+                onSelected: (_) {
+                  if (_levelFilter == lv) return;
+                  setState(() => _levelFilter = lv);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 筛选状态下把剩余分页一次性拉完（目录是静态的，全量约 900 条）。
+  void _loadRestForFilter() {
+    if (_levelFilter == null || !mounted) return;
+    final state = ref.read(featuredPodcastsProvider).asData?.value;
+    if (state == null) return;
+    if (state.snapshot?.nextCursor == null) return;
+    if (state.isLoadingMore) return;
+    unawaited(ref.read(featuredPodcastsProvider.notifier).loadMore());
   }
 
   /// Apple 搜索结果：loading/error/data(空态) 三态。
