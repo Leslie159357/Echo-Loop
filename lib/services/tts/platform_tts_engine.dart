@@ -156,7 +156,8 @@ class PlatformTtsEngine implements TtsEngine {
     required String baseName,
     TtsSpeechConfig? config,
   }) async {
-    // 优先尝试直连用户自建的 Fish Audio 德语神经语音网关
+    // 优先尝试自建网关的 Fish Audio 德语神经语音（/v1/audio/speech，
+    // 与其它 AI 接口同域，走 echoloop.1122275.xyz；旧的 tts 子域已下线）
     try {
       final mp3Path = '$outputDir/$baseName.mp3';
       final mp3File = File(mp3Path);
@@ -171,7 +172,7 @@ class PlatformTtsEngine implements TtsEngine {
       );
       final targetVoice = config?.voiceName ?? 'de1';
       final resp = await dio.post<List<int>>(
-        'https://tts.1122275.xyz/v1/audio/speech',
+        'https://echoloop.1122275.xyz/v1/audio/speech',
         data: {'input': text, 'voice': targetVoice},
         options: Options(responseType: ResponseType.bytes),
       );
