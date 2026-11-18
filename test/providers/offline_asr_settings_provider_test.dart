@@ -99,14 +99,16 @@ void main() {
     type: AsrModelType.whisper,
   );
 
-  test('推荐模型默认保持 Balanced，不依赖 availableModels 顺序', () {
+  test('推荐模型默认是 base，不依赖 availableModels 顺序', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
     final model = container.read(recommendedAsrModelProvider);
 
+    // 断言 id 而不是显示名：德语版把显示名改成了中文（均衡），
+    // 名字属于文案、会随产品调整，id 才是行为契约。
     expect(model.id, 'whisper-base-en-int8');
-    expect(model.displayName, contains('Balanced'));
+    expect(model.displayName, isNotEmpty);
   });
 
   test('旧完成标记不再恢复 downloaded，避免与安装清单漂移', () async {
