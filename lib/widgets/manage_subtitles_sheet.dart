@@ -1059,7 +1059,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
               // 语言胶囊：当前仅英文一个选项，但仍做成可点菜单，避免与下方
               // 可点的「识别模型」胶囊外观一致却点不动造成困惑。
               PopupMenuButton<String>(
-                initialValue: 'en',
+                initialValue: 'de',
                 tooltip: '',
                 position: PopupMenuPosition.under,
                 offset: const Offset(0, 4),
@@ -1069,8 +1069,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
                   _buildOfflineLanguageMenuItem(
-                    'en',
-                    l10n.languageEnglish,
+                    'de',
+                    'Deutsch',
                     theme,
                   ),
                 ],
@@ -1087,7 +1087,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        l10n.languageEnglish,
+                        'Deutsch',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurface,
                           fontWeight: FontWeight.w600,
@@ -1304,7 +1304,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     final currentLabel = switch (_selectedLanguage) {
       'de' => 'Deutsch',
       'auto' => l10n.languageAutoDetect,
-      _ => l10n.languageEnglish,
+      _ => 'Deutsch',
     };
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.s, left: 4, right: 4),
