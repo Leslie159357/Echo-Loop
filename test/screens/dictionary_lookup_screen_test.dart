@@ -10,7 +10,6 @@ import 'dart:typed_data';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/providers/dictionary/lookup_controller.dart';
 import 'package:echo_loop/providers/dictionary/lookup_history_provider.dart';
-import 'package:echo_loop/providers/dictionary/wordlist_provider.dart';
 import 'package:echo_loop/models/dictionary/dictionary_entry.dart';
 import 'package:echo_loop/models/dictionary/dictionary_lookup_result.dart';
 import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
@@ -18,7 +17,6 @@ import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
 import 'package:echo_loop/providers/saved_sense_group_provider.dart';
 import 'package:echo_loop/providers/saved_word_provider.dart';
 import 'package:echo_loop/screens/dictionary_lookup_screen.dart';
-import 'package:echo_loop/services/dictionary/wordlist_index.dart';
 import 'package:echo_loop/widgets/dictionary/lookup_detail_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,7 +170,6 @@ LookupHistory _history(String word, int id) =>
 late SharedPreferences _sharedPreferences;
 
 Widget _buildScreen({
-  Future<WordlistIndex> Function(Ref ref)? wordlist,
   List<LookupHistory> history = const [],
   DictionaryLookupController Function()? lookupController,
   bool useRealLookup = false,
@@ -184,16 +181,6 @@ Widget _buildScreen({
     const DictionaryLookupScreen(),
     overrides: [
       sharedPreferencesProvider.overrideWithValue(_sharedPreferences),
-      wordlistProvider.overrideWith(
-        wordlist ??
-            (ref) async => WordlistIndex(const [
-              'app',
-              'apple',
-              'application',
-              'apply',
-              'banana',
-            ]),
-      ),
       lookupHistoryProvider.overrideWith((ref) => Stream.value(history)),
       if (!useRealLookup)
         dictionaryLookupControllerProvider.overrideWith(
@@ -357,7 +344,6 @@ void main() {
         _buildScreen(
           useRealLookup: true,
           dictionaryService: service,
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
         ),
       );
       await _settle(tester);
@@ -390,7 +376,6 @@ void main() {
         _buildScreen(
           useRealLookup: true,
           dictionaryService: service,
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
         ),
       );
       await _settle(tester);
@@ -415,9 +400,7 @@ void main() {
 
     testWidgets('输入框失焦时不会误展示上一次的旧详情', (tester) async {
       await tester.pumpWidget(
-        _buildScreen(
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
-        ),
+        _buildScreen(),
       );
       await _settle(tester);
 

@@ -56,7 +56,7 @@ String? nonEmptyOrNull(String? value) {
 
 /// 从 AI 查词结果取第一个义项与其第一个例句
 ///
-/// 义项译文为空时回落到英文释义；义项列表为空返回 null。
+/// 义项译文为空时回落到词条自身的释义（德语版是德语单语简释）；义项列表为空返回 null。
 WordDefinition? definitionFromAiEntry(AiDictionaryEntry entry) {
   switch (entry) {
     case DictionaryEntry():

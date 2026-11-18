@@ -1345,7 +1345,6 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
                   _buildLanguageMenuItem('de', 'Deutsch (德语)', theme),
-                  _buildLanguageMenuItem('en', l10n.languageEnglish, theme),
                   _buildLanguageMenuItem(
                     'auto',
                     l10n.languageAutoDetect,

@@ -28,8 +28,6 @@ class DictEntry {
     this.examTags = const [],
   });
 
-  /// 需要显示的考试标签（仅保留 cet4/cet6/toefl/ielts/gre）
-  static const _displayableTags = {'cet4', 'cet6', 'toefl', 'ielts', 'gre'};
 
   /// 从词典 API 词条 JSON 构建。
   ///
@@ -82,13 +80,7 @@ class DictEntry {
     return lines;
   }
 
-  /// 只保留可展示的考试标签，并统一为大写
-  static List<String> _examTags(Object? tags) {
-    if (tags is! List<Object?>) return const [];
-    return [
-      for (final tag in tags)
-        if (tag is String && _displayableTags.contains(tag.toLowerCase()))
-          tag.toUpperCase(),
-    ];
-  }
+  /// 德语版不展示考试标签：上游的 CET4/CET6/TOEFL/IELTS/GRE 是英语考试体系，
+  /// 对德语学习者没有意义，所以一律返回空（UI 侧的三处展示会自动跳过）。
+  static List<String> _examTags(Object? tags) => const [];
 }

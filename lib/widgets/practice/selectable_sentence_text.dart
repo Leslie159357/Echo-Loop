@@ -366,7 +366,14 @@ class _SelectableSentenceTextState
     for (final t in _tokens) {
       // token 颜色按其起点判定（与旧版整 token 染色一致），
       // 收藏掩码只切分下划线子段，不改变染色粒度
-      final color = colorAt(t.start);
+      final tokenText = text.substring(t.start, t.end);
+      final grammarColor = _grammarColor(
+        theme,
+        tokenText,
+        isWord: t.isWord,
+        isSentenceStart: t.isWord && wordIndex == 0,
+      );
+      final color = colorAt(t.start) ?? grammarColor;
       final isActiveWord = t.isWord && wordIndex == widget.activeWordIndex;
       if (t.isWord) wordIndex++;
       for (final (subStart, subEnd, saved) in splitByMask(
@@ -392,6 +399,42 @@ class _SelectableSentenceTextState
       }
     }
     return spans;
+  }
+
+  /// 德语冠词表（含否定/物主冠词），用于词性着色。
+  static const Set<String> _articles = {
+    'der', 'die', 'das', 'den', 'dem', 'des',
+    'ein', 'eine', 'einen', 'einem', 'einer', 'eines',
+    'kein', 'keine', 'keinen', 'keinem', 'keiner', 'keines',
+    'mein', 'meine', 'meinen', 'meinem', 'meiner', 'meines',
+    'dein', 'deine', 'deinen', 'deinem', 'deiner', 'deines',
+    'sein', 'seine', 'seinen', 'seinem', 'seiner', 'seines',
+    'ihr', 'ihre', 'ihren', 'ihrem', 'ihrer', 'ihres',
+    'unser', 'unsere', 'unseren', 'unserem', 'unserer', 'unseres',
+    'euer', 'eure', 'euren', 'eurem', 'eurer', 'eures',
+  };
+
+  /// 德语词性着色：冠词 → 主题色，句中大写名词 → 紫色。
+  ///
+  /// 德语名词首字母大写本身就是词性线索，读句时被反复强化；
+  /// 句首的词一律不染（分不清是名词还是句首大写）。
+  Color? _grammarColor(
+    ThemeData theme,
+    String token, {
+    required bool isWord,
+    required bool isSentenceStart,
+  }) {
+    if (!isWord || token.isEmpty) return null;
+    final lower = token.toLowerCase();
+    if (_articles.contains(lower)) {
+      return theme.colorScheme.primary.withValues(alpha: 0.85);
+    }
+    final first = token.codeUnitAt(0);
+    final isUpper = first >= 0x41 && first <= 0x5A || first >= 0xC0 && first <= 0xDE;
+    if (isUpper && !isSentenceStart) {
+      return const Color(0xFF7B4FD1).withValues(alpha: 0.9);
+    }
+    return null;
   }
 
   /// 评分片段颜色查询：字符偏移 → 文字色（无片段时恒 null）

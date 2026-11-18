@@ -220,7 +220,7 @@ class _DictionaryLookupScreenState
   }
 
   Widget _buildSuggestions() {
-    // 德语版：拼写补全词表是英文 SCOWL（assets/dictionary/wordlist-en_US.txt），
+    // 德语版：上游的拼写补全词表是英文 SCOWL，已随资源一并移除；
     // 不用于德语查词，故不加载、不提示。
     return const SizedBox.shrink();
   }

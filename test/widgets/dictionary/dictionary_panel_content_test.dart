@@ -298,7 +298,7 @@ void main() {
       expect(_textPlaybackStopCalls, 0, reason: 'TTS 状态变化不应反向停止发起它的文本播放控制器');
     });
 
-    testWidgets('显示完整词典内容（音标、释义、星级、标签）', (tester) async {
+    testWidgets('显示完整词典内容（音标、释义、星级，德语版无考试标签）', (tester) async {
       await _openSheet(tester, 'abandon');
 
       // 单词
@@ -311,11 +311,11 @@ void main() {
       // 词性标签
       expect(find.text('vt.'), findsOneWidget);
       expect(find.text('n.'), findsOneWidget);
-      // 考试标签（只显示 cet4/cet6/toefl/gre，不显示 gk/ky）
-      expect(find.text('CET4'), findsOneWidget);
-      expect(find.text('CET6'), findsOneWidget);
-      expect(find.text('TOEFL'), findsOneWidget);
-      expect(find.text('GRE'), findsOneWidget);
+      // 德语版不展示英语考试标签（CET/TOEFL/IELTS/GRE 与德语学习无关）
+      expect(find.text('CET4'), findsNothing);
+      expect(find.text('CET6'), findsNothing);
+      expect(find.text('TOEFL'), findsNothing);
+      expect(find.text('GRE'), findsNothing);
     });
 
     testWidgets('柯林斯星级渲染正确数量的星星', (tester) async {

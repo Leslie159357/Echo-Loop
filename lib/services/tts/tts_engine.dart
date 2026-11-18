@@ -55,6 +55,9 @@ extension TtsEngineKindModelRequirement on TtsEngineKind {
 /// 引擎实现与已有缓存保留，仅隐藏入口；需要时改回 `true` 即可恢复。
 const bool kPiperEngineEnabled = false;
 
+/// 德语版关闭：Kokoro 只有英文音色（`af_*` / `bf_*`），选它等于用英语读德语。
+const bool kKokoroEngineEnabled = false;
+
 /// 发音口音。
 enum TtsAccent {
   /// 美音。

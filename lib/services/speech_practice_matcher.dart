@@ -2,7 +2,6 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lemmatizerx/lemmatizerx.dart';
 
 import '../models/speech_practice_models.dart';
 
@@ -30,18 +29,17 @@ class _IndexedToken {
 
 /// 将识别文本与目标句子做宽松词级比对。
 class SpeechTranscriptMatcher {
-  /// [german] 为 true 时（德语版）跳过英文词形还原，只做小写归一化：
-  /// 英文 lemmatizerx 对德语变位词（gegangen、ging 等）不可靠，且可能误映射。
-  SpeechTranscriptMatcher({Lemmatizer? lemmatizer, bool german = false})
-    : _lemmatizer = lemmatizer ?? Lemmatizer(),
-      _german = german;
-
-  final Lemmatizer _lemmatizer;
-  final bool _german;
+  /// 德语版：不再引入英文词形还原（lemmatizerx 对德语变位词不可靠，也会把
+  /// 德语词误映射成英文 lemma）。`german`/`lemmatizer` 形参保留只为兼容旧调用点。
+  SpeechTranscriptMatcher({bool german = true, Object? lemmatizer});
 
   static final RegExp _wordPattern = RegExp(
-    r"[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+(?:'[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+)?",
+    r"[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+(?:'[A-Za-zäöüÄÖÜß\u00C0-\u024F\u1E00-\u1EFF]+)?"
+    r"|\d+(?:[.,]\d+)?",
   );
+
+  static final RegExp _digitStart = RegExp(r'^\d');
+  static final RegExp _hasLetter = RegExp(r'[A-Za-zäöüÄÖÜß]');
 
   /// 计算识别文本与目标文本的覆盖率，并输出 transcript 高亮片段。
   ///
@@ -105,31 +103,83 @@ class SpeechTranscriptMatcher {
   }
 
   List<_IndexedToken> _tokenize(String text) {
+    // 没有任何字母（纯数字/纯中文）视为「没识别出德语」，交给上层报未检测到。
+    if (!_hasLetter.hasMatch(text)) return const [];
     return _wordPattern
         .allMatches(text)
-        .map(
-          (match) => _IndexedToken(
-            rawText: match.group(0) ?? '',
-            normalizedText: _lemmatize((match.group(0) ?? '').toLowerCase()),
+        .map((match) {
+          final raw = match.group(0) ?? '';
+          // 数字就地转成德语数词（21 → einundzwanzig），索引仍与原文对齐，
+          // 高亮片段不会因为替换而错位。
+          final normalized = _digitStart.hasMatch(raw)
+              ? _numberToWords(raw)
+              : _lemmatize(raw);
+          return _IndexedToken(
+            rawText: raw,
+            normalizedText: normalized,
             start: match.start,
             end: match.end,
-          ),
-        )
+          );
+        })
         .where((token) => token.normalizedText.isNotEmpty)
         .toList();
   }
 
-  String _lemmatize(String token) {
-    if (_german) return token;
-    final candidates = _lemmatizer.lemmas(token);
-    for (final candidate in candidates) {
-      for (final lemma in candidate.lemmas) {
-        if (lemma.isNotEmpty) {
-          return lemma.toLowerCase();
-        }
-      }
+  /// 「21」→ einundzwanzig，「199」→ einhundertneunundneunzig，
+  /// 「9,30」→ neun Komma drei null。
+  String _numberToWords(String raw) {
+    if (raw.contains(',') || raw.contains('.')) {
+      final parts = raw.split(RegExp(r'[,.]'));
+      final head = int.tryParse(parts.first);
+      if (head == null) return raw;
+      final decimals = parts.last
+          .split('')
+          .map((d) => _belowTwenty[int.tryParse(d) ?? 0])
+          .join(' ');
+      return '${_germanNumber(head)} Komma $decimals';
     }
-    return token;
+    final value = int.tryParse(raw);
+    if (value == null || value > 9999) return raw;
+    return _germanNumber(value);
+  }
+
+  /// 德语归一：小写 + `ß`→`ss`（ASR 对 Straße/Strasse 两种写法都会输出）。
+  String _lemmatize(String token) =>
+      token.toLowerCase().replaceAll('ß', 'ss');
+
+  static final RegExp _numberPattern = RegExp(r'\d+(?:[.,]\d+)?');
+
+  static const List<String> _belowTwenty = [
+    'null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben',
+    'acht', 'neun', 'zehn', 'elf', 'zwölf', 'dreizehn', 'vierzehn',
+    'fünfzehn', 'sechzehn', 'siebzehn', 'achtzehn', 'neunzehn',
+  ];
+
+  static const List<String> _tens = [
+    '', '', 'zwanzig', 'dreißig', 'vierzig', 'fünfzig',
+    'sechzig', 'siebzig', 'achtzig', 'neunzig',
+  ];
+
+
+  String _germanNumber(int value) {
+    if (value < 20) return _belowTwenty[value];
+    if (value < 100) {
+      final tens = value ~/ 10;
+      final ones = value % 10;
+      if (ones == 0) return _tens[tens];
+      final one = ones == 1 ? 'ein' : _belowTwenty[ones];
+      return '${one}und${_tens[tens]}';
+    }
+    if (value < 1000) {
+      final hundreds = value ~/ 100;
+      final rest = value % 100;
+      final head = '${hundreds == 1 ? 'ein' : _belowTwenty[hundreds]}hundert';
+      return rest == 0 ? head : '$head${_germanNumber(rest)}';
+    }
+    final thousands = value ~/ 1000;
+    final rest = value % 1000;
+    final head = '${thousands == 1 ? 'ein' : _germanNumber(thousands)}tausend';
+    return rest == 0 ? head : '$head${_germanNumber(rest)}';
   }
 
   ({Set<int> referenceIndexes, Set<int> transcriptIndexes}) _findMatchedIndexes(

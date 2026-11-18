@@ -83,7 +83,6 @@ dependencies:
   # 用 JsonCacheInfoRepository 替代默认 sqflite 仓库，避免 sqflite 全局 factory 警告
   cached_network_image: ^3.4.1
   sqlite3: ^3.8.0
-  lemmatizerx: ^1.0.0
   flutter_tts: ^4.2.0
   wakelock_plus: ^1.4.0
   url_launcher: ^6.3.1
@@ -244,7 +243,6 @@ flutter:
     # 手动查词最近查询图标（fill 未指定，由 SvgActionIcon 着色）
     - assets/icon/history.svg
     # 手动查词的本地英文词表（查词页按需加载，离开页面即释放引用）
-    - assets/dictionary/wordlist-en_US.txt
     - assets/icon/sort.svg
     - assets/icon/plus.svg
     - assets/icon/edit.svg
