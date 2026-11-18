@@ -210,7 +210,6 @@ class _CreateCollectionTypeSheet extends StatelessWidget {
             _CollectionTypePanel(
               key: const ValueKey('choose-collection-type'),
               onLocal: () => _openLocalCollectionDialog(context),
-              onPodcast: () => _openPodcastSubscribe(context),
             ),
           ],
         ),
@@ -225,11 +224,6 @@ class _CreateCollectionTypeSheet extends StatelessWidget {
     showLocalCollectionDialog(navigator.context);
   }
 
-  /// 「订阅 Podcast」：关闭本 sheet 并进入统一的 Podcast 搜索与订阅页。
-  void _openPodcastSubscribe(BuildContext context) {
-    Navigator.pop(context);
-    context.push(AppRoutes.podcastSubscribe);
-  }
 }
 
 class _CollectionSheetHeader extends StatelessWidget {
@@ -273,11 +267,9 @@ class _CollectionTypePanel extends StatelessWidget {
   const _CollectionTypePanel({
     super.key,
     required this.onLocal,
-    required this.onPodcast,
   });
 
   final VoidCallback onLocal;
-  final VoidCallback onPodcast;
 
   @override
   Widget build(BuildContext context) {
@@ -292,14 +284,6 @@ class _CollectionTypePanel extends StatelessWidget {
           title: l10n.newCollectionOptionTitle,
           description: l10n.newCollectionOptionDescription,
           onTap: onLocal,
-        ),
-        const SizedBox(height: 12),
-        _CollectionOptionTile(
-          key: const ValueKey('collection-option-podcast'),
-          icon: Icons.podcasts_rounded,
-          title: l10n.subscribePodcast,
-          description: l10n.subscribePodcastOptionDescription,
-          onTap: onPodcast,
         ),
       ],
     );
