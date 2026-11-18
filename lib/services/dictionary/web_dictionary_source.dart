@@ -91,6 +91,10 @@ String _dwdsUrl(String w) => 'https://www.dwds.de/wb/$w';
 
 /// 全部网页词典配置（顺序即切换器排列顺序）。
 const List<WebDictConfig> kWebDictConfigs = [
+  // 德语版：只保留能查德语词的源，按学习价值排序。
+  // 英文专用站（Cambridge / Oxford / Longman / M-W / Collins / Britannica /
+  // Vocabulary / OZDIC / PlayPhrase / Etymonline、Forvo #en、WordReference en）
+  // 在德语版是纯噪音，已移除；对应 URL 函数一并删掉。
   WebDictConfig(
     id: 'dehelper',
     displayName: '德语助手',
@@ -101,153 +105,50 @@ const List<WebDictConfig> kWebDictConfigs = [
   WebDictConfig(
     id: 'duden',
     displayName: 'Duden',
-    icon: Icons.auto_stories_rounded,
-    color: Color(0xFFE2001A),
+    icon: Icons.menu_book_rounded,
+    color: Color(0xFFD32F2F),
     buildUrl: _dudenUrl,
   ),
   WebDictConfig(
     id: 'dwds',
     displayName: 'DWDS',
     icon: Icons.library_books_rounded,
-    color: Color(0xFF1B5E20),
+    color: Color(0xFF00897B),
     buildUrl: _dwdsUrl,
   ),
   WebDictConfig(
-    id: 'cambridge',
-    displayName: 'Cambridge',
-    icon: Icons.school_rounded,
-    color: Color(0xFF00BDB6), // 站点导航栏青绿
-    buildUrl: _cambridgeUrl,
-  ),
-  WebDictConfig(
-    id: 'oxford',
-    displayName: 'Oxford',
+    id: 'eudic',
+    displayName: '欧路德语',
     icon: Icons.menu_book_rounded,
-    color: Color(0xFF002147), // Oxford Blue（黑顶栏官方色）
-    buildUrl: _oxfordUrl,
-  ),
-  WebDictConfig(
-    id: 'longman',
-    displayName: 'Longman',
-    icon: Icons.auto_stories_rounded,
-    color: Color(0xFF3B4CB8), // 站点靛蓝（提亮区分其余蓝）
-    buildUrl: _longmanUrl,
-  ),
-  WebDictConfig(
-    id: 'merriamWebster',
-    displayName: 'Merriam-Webster',
-    icon: Icons.import_contacts_rounded,
-    color: Color(0xFFD7191F), // M-W 品牌红
-    buildUrl: _merriamWebsterUrl,
-  ),
-  WebDictConfig(
-    id: 'collins',
-    displayName: 'Collins',
-    icon: Icons.local_library_rounded,
-    color: Color(0xFF0073E6), // 站点主色蓝
-    buildUrl: _collinsUrl,
-  ),
-  WebDictConfig(
-    id: 'britannica',
-    displayName: 'Britannica',
-    icon: Icons.menu_book_rounded,
-    color: Color(0xFF2D5B9A), // Britannica 蓝
-    buildUrl: _britannicaUrl,
-  ),
-  WebDictConfig(
-    id: 'vocabulary',
-    displayName: 'Vocabulary.com',
-    icon: Icons.book_rounded,
-    color: Color(0xFF2D4D80), // 站点导航栏钢藏蓝
-    buildUrl: _vocabularyUrl,
+    color: Color(0xFF1E6FB8),
+    buildUrl: _eudicUrl,
   ),
   WebDictConfig(
     id: 'wiktionary',
-    displayName: 'Wiktionary',
+    displayName: '德语维基词典',
     icon: Icons.public_rounded,
-    color: Color(0xFF54595D), // Wikimedia 灰
+    color: Color(0xFF607D8B),
     buildUrl: _wiktionaryUrl,
   ),
   WebDictConfig(
-    id: 'ozdic',
-    displayName: 'OZDIC',
-    icon: Icons.hub_rounded,
-    color: Color(0xFF00897B), // 搭配词典主打词间关系，用青绿色区分
-    buildUrl: _ozdicUrl,
-  ),
-  WebDictConfig(
-    id: 'playPhrase',
-    displayName: 'PlayPhrase',
-    icon: Icons.movie_filter_rounded,
-    color: Color(0xFF6D4C41), // 影院语料场景，用暖棕与传统词典区分
-    buildUrl: _playPhraseUrl,
-  ),
-  WebDictConfig(
-    id: 'youglish',
-    displayName: 'YouGlish',
-    icon: Icons.ondemand_video_rounded,
-    color: Color(0xFFFF0000), // YouTube 系视频语料红
-    buildUrl: _youglishUrl,
-  ),
-  WebDictConfig(
-    id: 'forvo',
-    displayName: 'Forvo',
-    icon: Icons.record_voice_over_rounded,
-    color: Color(0xFF2E7D32), // 发音社区语料，用稳定绿色表示语音来源
-    buildUrl: _forvoUrl,
-  ),
-  WebDictConfig(
-    id: 'wordReference',
-    displayName: 'WordReference',
-    icon: Icons.forum_rounded,
-    color: Color(0xFF0D47A1), // 站点常见深蓝识别色
-    buildUrl: _wordReferenceUrl,
-  ),
-  WebDictConfig(
-    id: 'etymonline',
-    displayName: 'Etymonline',
-    icon: Icons.history_edu_rounded,
-    color: Color(0xFF795548), // 词源资料场景，用低饱和棕色区分
-    buildUrl: _etymonlineUrl,
-  ),
-  WebDictConfig(
     id: 'youdao',
-    displayName: '有道',
+    displayName: '有道德语',
     icon: Icons.translate_rounded,
-    color: Color(0xFFEA4B35), // 有道暖红（与 M-W 冷红拉开）
+    color: Color(0xFFEA4B35),
     buildUrl: _youdaoUrl,
   ),
   WebDictConfig(
-    id: 'eudic',
-    displayName: '欧路词典',
-    icon: Icons.menu_book_rounded,
-    color: Color(0xFF2D6FA3), // 欧路词典蓝
-    buildUrl: _eudicUrl,
+    id: 'youglish',
+    displayName: 'YouGlish 德语',
+    icon: Icons.ondemand_video_rounded,
+    color: Color(0xFFFF0000),
+    buildUrl: _youglishUrl,
   ),
 ];
 
-// URL 模板（顶层函数，便于 const 配置引用）。`w` 为已 URL 编码的查询词。
-String _cambridgeUrl(String w) =>
-    'https://dictionary.cambridge.org/dictionary/english-chinese-simplified/$w';
-String _oxfordUrl(String w) =>
-    'https://www.oxfordlearnersdictionaries.com/definition/english/$w';
-String _longmanUrl(String w) => 'https://www.ldoceonline.com/dictionary/$w';
-String _britannicaUrl(String w) => 'https://www.britannica.com/dictionary/$w';
-String _merriamWebsterUrl(String w) =>
-    'https://www.merriam-webster.com/dictionary/$w';
-String _collinsUrl(String w) =>
-    'https://www.collinsdictionary.com/dictionary/english/$w';
-String _vocabularyUrl(String w) => 'https://www.vocabulary.com/dictionary/$w';
-String _wiktionaryUrl(String w) => 'https://en.m.wiktionary.org/wiki/$w';
-String _ozdicUrl(String w) => 'https://ozdic.com/word/$w';
-String _playPhraseUrl(String w) => 'https://www.playphrase.me/#/search?q=$w';
-String _youglishUrl(String w) => 'https://youglish.com/pronounce/$w/english';
-String _forvoUrl(String w) => 'https://forvo.com/word/$w/#en';
-String _wordReferenceUrl(String w) =>
-    'https://www.wordreference.com/definition/$w';
-String _etymonlineUrl(String w) => 'https://www.etymonline.com/search?q=$w';
-
-/// 构造有道移动网页版查询地址，`w` 已由调用方进行 URL 编码。
+// 德语版网页源 URL（dehelper/duden/dwds 已在文件上方定义）。
+String _eudicUrl(String w) => 'https://dict.eudic.net/mdicts/de/$w';
+String _wiktionaryUrl(String w) => 'https://de.m.wiktionary.org/wiki/$w';
 String _youdaoUrl(String w) =>
-    'https://dict.youdao.com/m/result?word=$w&lang=en';
-String _eudicUrl(String w) => 'https://dict.eudic.net/mdicts/en/$w';
+    'https://dict.youdao.com/result?word=$w&lang=de';
+String _youglishUrl(String w) => 'https://youglish.com/pronounce/$w/german';

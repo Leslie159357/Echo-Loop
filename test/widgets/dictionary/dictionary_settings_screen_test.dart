@@ -42,7 +42,7 @@ void main() {
   final fakeSources = <DictionarySource>[
     _FakeSource('local', canBeDisabled: false),
     _FakeSource('ai', canBeDisabled: false),
-    _FakeSource('cambridge', canBeDisabled: true),
+    _FakeSource('duden', canBeDisabled: true),
   ];
 
   (ProviderContainer, Widget) build() {
@@ -72,14 +72,14 @@ void main() {
     );
   }
 
-  testWidgets('本地/AI 锁定，Cambridge 可开关', (tester) async {
+  testWidgets('本地/AI 锁定，Duden 可开关', (tester) async {
     final (_, widget) = build();
     await tester.pumpWidget(widget);
     await tester.pumpAndSettle();
 
     // local + ai 显示「Always on」锁定
     expect(find.text('Always on'), findsNWidgets(2));
-    // 自动发音、网页广告过滤、Cambridge 三个 Switch
+    // 自动发音、网页广告过滤、Duden 三个 Switch
     expect(find.byType(Switch), findsNWidgets(3));
   });
 
@@ -135,21 +135,21 @@ void main() {
     );
   });
 
-  testWidgets('禁用 Cambridge → 移出默认区选项', (tester) async {
+  testWidgets('禁用 Duden → 移出默认区选项', (tester) async {
     final (container, widget) = build();
     await tester.pumpWidget(widget);
     await tester.pumpAndSettle();
 
-    // 初始：默认区 + 词典源区各一个 Cambridge
-    expect(find.text('Cambridge'), findsNWidgets(2));
+    // 初始：默认区 + 词典源区各一个 Duden
+    expect(find.text('Duden'), findsNWidgets(2));
 
     await tester.tap(find.byType(Switch).last);
     await tester.pumpAndSettle();
 
     expect(container.read(dictionarySettingsProvider).disabledIds, {
-      'cambridge',
+      'duden',
     });
-    // 默认区不再列出 Cambridge，仅词典源区保留
-    expect(find.text('Cambridge'), findsOneWidget);
+    // 默认区不再列出 Duden，仅词典源区保留
+    expect(find.text('Duden'), findsOneWidget);
   });
 }
