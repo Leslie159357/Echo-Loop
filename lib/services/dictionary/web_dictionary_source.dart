@@ -85,7 +85,7 @@ class WebDictionarySource implements DictionarySource {
 }
 
 // URL 模板（顶层函数，便于 const 配置引用）。`w` 为已 URL 编码的查询词。
-String _dehelperUrl(String w) => 'https://dict.eudic.net/mdicts/de/$w';
+String _dehelperUrl(String w) => 'https://dict.eudic.net/dicts/de/$w';
 String _dudenUrl(String w) => 'https://www.duden.de/suchen/dudenonline/$w';
 String _dwdsUrl(String w) => 'https://www.dwds.de/wb/$w';
 
@@ -138,17 +138,16 @@ const List<WebDictConfig> kWebDictConfigs = [
     buildUrl: _youdaoUrl,
   ),
   WebDictConfig(
-    id: 'youglish',
-    displayName: 'YouGlish 德语',
-    icon: Icons.ondemand_video_rounded,
-    color: Color(0xFFFF0000),
-    buildUrl: _youglishUrl,
+    id: 'zhwiktionary',
+    displayName: '中文维基词典',
+    icon: Icons.public_rounded,
+    color: Color(0xFF9E9E9E),
+    buildUrl: _zhWiktionaryUrl,
   ),
 ];
 
 // 德语版网页源 URL（dehelper/duden/dwds 已在文件上方定义）。
 String _eudicUrl(String w) => 'https://dict.eudic.net/mdicts/de/$w';
 String _wiktionaryUrl(String w) => 'https://de.m.wiktionary.org/wiki/$w';
-String _youdaoUrl(String w) =>
-    'https://dict.youdao.com/result?word=$w&lang=de';
-String _youglishUrl(String w) => 'https://youglish.com/pronounce/$w/german';
+String _youdaoUrl(String w) => 'https://dict.youdao.com/w/deu/$w';
+String _zhWiktionaryUrl(String w) => 'https://zh.m.wiktionary.org/wiki/$w';

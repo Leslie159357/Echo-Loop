@@ -21,7 +21,7 @@ void main() {
       'eudic',
       'wiktionary',
       'youdao',
-      'youglish',
+      'zhwiktionary',
     ]);
     // 顺序即底栏展示顺序：德语权威源在前
     expect(ids.take(3), ['dehelper', 'duden', 'dwds']);
@@ -49,7 +49,7 @@ void main() {
       'duden': 'https://www.duden.de/suchen/dudenonline/Haus',
       'dwds': 'https://www.dwds.de/wb/Haus',
       'wiktionary': 'https://de.m.wiktionary.org/wiki/Haus',
-      'youglish': 'https://youglish.com/pronounce/Haus/german',
+      'zhwiktionary': 'https://zh.m.wiktionary.org/wiki/Haus',
     }.entries) {
       final source = WebDictionarySource(
         kWebDictConfigs.singleWhere((config) => config.id == entry.key),
