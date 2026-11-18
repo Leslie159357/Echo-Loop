@@ -59,12 +59,20 @@ jobs:
           path: EchoLoop-de-unsigned.ipa
           retention-days: 14
 
+      - name: Resolve version
+        id: ver
+        run: |
+          v=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          test -n "$v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "resolved version=$v"
+
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.45-de
-          name: Echo Loop 德语版 (v1.0.45-de)
+          tag_name: v${{ steps.ver.outputs.version }}-de
+          name: Echo Loop 德语版 (v${{ steps.ver.outputs.version }}-de)
           body: |
             ### Echo Loop 德语特化版
             - 默认识别语言设为 Deutsch (德语)，支持转录语言选择
