@@ -32,8 +32,8 @@ class DictionarySettings {
   /// 手动查词详情打开时是否自动朗读单词（仅作用于查词页，与词典面板的 [autoSpeakOnLookup] 独立）。
   final bool autoSpeakOnLookupPage;
 
-  /// 默认源 id 缺省值
-  static const defaultId = 'local';
+  /// 默认源 id 缺省值（德语优先德语助手，其次本地离线）
+  static const defaultId = 'dehelper';
 
   DictionarySettings({
     this.defaultSourceId = defaultId,

@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../features/community_collections/widgets/discover_entry_banner.dart';
 import '../providers/new_user_guide_provider.dart';
 import '../providers/collection_provider.dart';
 import '../l10n/app_localizations.dart';
@@ -153,13 +152,8 @@ class _CollectionListBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final collectionState = ref.watch(collectionListProvider);
-    // Banner 在 loading / empty / data 三态下都显示，让新用户一进来就看到入口。
-    return Column(
-      children: [
-        const DiscoverEntryBanner(),
-        Expanded(child: _buildInner(collectionState)),
-      ],
-    );
+    // 德语版：社区合集后端不存在，发现资源入口已移除（点进去只会报加载失败）。
+    return _buildInner(collectionState);
   }
 
   Widget _buildInner(CollectionState state) {

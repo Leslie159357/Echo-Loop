@@ -521,6 +521,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageChinese => '简体中文';
 
   @override
+  String get languageThai => '泰语';
+
+  @override
   String get nativeLanguage => '母语';
 
   @override
@@ -837,7 +840,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoverEntryTitleA => '发现资源';
 
   @override
-  String get discoverEntrySubtitleA => '播客、托福、雅思、四六级、口译...';
+  String get discoverEntrySubtitleA => '播客、新闻、慢速德语、儿童节目...';
 
   @override
   String get communityCollectionEmpty => '该合集暂无文件';
@@ -1422,7 +1425,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get listenAndRepeatRatingKeepGoing => '继续加油';
 
   @override
-  String get listenAndRepeatRecognitionNoEnglish => '未检测到英语';
+  String get listenAndRepeatRecognitionNoEnglish => '未检测到德语';
 
   @override
   String get listenAndRepeatRecognitionPermissionDenied => '需要麦克风和语音识别权限。';
@@ -1526,7 +1529,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retellBriefingTitle => '段落复述';
 
   @override
-  String get retellBriefingSubtitle => '先盲听一段，再用英语复述大意。';
+  String get retellBriefingSubtitle => '先盲听一段，再用德语复述大意。';
 
   @override
   String get retellBriefingSentenceLevel => '逐句';
@@ -1595,13 +1598,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get retellPromptLanguage => '复述模式';
 
   @override
-  String get retellPromptLanguageOriginal => '看英文';
+  String get retellPromptLanguageOriginal => '看德语';
 
   @override
   String get retellPromptLanguageTranslation => '看译文';
 
   @override
-  String get retellPromptLanguageTranslationDesc => '字幕显示 AI 译文而非英文，对照译文用英文复述。';
+  String get retellPromptLanguageTranslationDesc => '字幕显示 AI 译文而非德语，对照译文用德语复述。';
 
   @override
   String get sentenceTranslationLoadFailed => '翻译失败，点击重试';
@@ -3505,22 +3508,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingContinue => '继续';
 
   @override
-  String get onboardingExamPrompt => '你当前在备考哪一类考试？';
+  String get onboardingExamPrompt => '你在准备哪一类德语考试？';
 
   @override
-  String get onboardingExamGaokao => '中高考';
+  String get onboardingExamGaokao => 'Goethe-Zertifikat';
 
   @override
-  String get onboardingExamCet => '大学四六级';
+  String get onboardingExamCet => 'TestDaF';
 
   @override
-  String get onboardingExamTem => '专四专八';
+  String get onboardingExamTem => 'telc / ÖSD';
 
   @override
-  String get onboardingExamIelts => '雅思 IELTS';
+  String get onboardingExamIelts => 'DSD I/II';
 
   @override
-  String get onboardingExamToefl => '托福 TOEFL';
+  String get onboardingExamToefl => 'DTZ（融合考试）';
 
   @override
   String get onboardingExamOther => '其他';
@@ -3529,7 +3532,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingSummaryEyebrow => '你知道么？';
 
   @override
-  String get onboardingSummaryHeadline => '提升英语听说，\n关键不在听得更多，\n而在练得更透';
+  String get onboardingSummaryHeadline => '提升德语听说，\n关键不在听得更多，\n而在练得更透';
 
   @override
   String get onboardingSummaryPoint1 => '选择适合你水平的音频反复练习';
@@ -3547,7 +3550,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingStart => '开始学习';
 
   @override
-  String get onboardingQ1Prompt => '你练习英语听说的主要目标是什么？';
+  String get onboardingQ1Prompt => '你练习德语听说的主要目标是什么？';
 
   @override
   String get onboardingQ1OptionExam => '应对考试';
@@ -4496,13 +4499,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ttsAccent => '口音';
 
   @override
-  String get ttsAccentUs => '美音';
+  String get ttsAccentUs => '德语女声';
 
   @override
-  String get ttsAccentUk => '英音';
+  String get ttsAccentUk => '德语男声';
 
   @override
-  String get ttsAccentHint => '（部分机型不区分美音和英音）';
+  String get ttsAccentHint => '（德语版：按男声 / 女声分组）';
 
   @override
   String get ttsVoice => '音色';
@@ -4572,7 +4575,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lookupAutoSpeak => '自动发音';
 
   @override
-  String get lookupSearchHint => '输入英文单词或短语';
+  String get lookupSearchHint => '输入德语单词或短语';
 
   @override
   String get lookupRecentTitle => '最近查询';

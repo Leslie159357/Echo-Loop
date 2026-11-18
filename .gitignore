@@ -58,3 +58,7 @@ METHOD.md
 
 # Test artifacts
 test-results.json
+
+# Local fork test artifacts
+.logs/
+.testfiles.txt

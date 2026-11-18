@@ -43,7 +43,7 @@ void main() {
   final fakeSources = <DictionarySource>[
     _FakeSource('local', canBeDisabled: false),
     _FakeSource('ai', canBeDisabled: false),
-    _FakeSource('cambridge', canBeDisabled: true),
+    _FakeSource('duden', canBeDisabled: true),
   ];
 
   Widget wrap(Widget child, {List<Override> overrides = const []}) =>
@@ -82,11 +82,11 @@ void main() {
 
     // AI 已提到下拉菜单外，不再出现在切换器里
     expect(find.text('AI Dictionary'), findsNothing);
-    expect(find.text('Cambridge'), findsOneWidget);
+    expect(find.text('Duden'), findsOneWidget);
 
-    await tester.tap(find.text('Cambridge'));
+    await tester.tap(find.text('Duden'));
     await tester.pumpAndSettle();
-    expect(picked, 'cambridge');
+    expect(picked, 'duden');
   });
 
   testWidgets('选中 AI 时点 chip 直接切到显示的源（不展开菜单）', (tester) async {
@@ -117,7 +117,7 @@ void main() {
     addTearDown(container.dispose);
     await container
         .read(dictionarySettingsProvider.notifier)
-        .setDisabled('cambridge', true);
+        .setDisabled('duden', true);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -168,7 +168,7 @@ void main() {
         overrides: dedupeOverrides([
           dictionarySourcesProvider.overrideWithValue(<DictionarySource>[
             _FakeSource('local', canBeDisabled: false),
-            _FakeSource('cambridge', canBeDisabled: true),
+            _FakeSource('duden', canBeDisabled: true),
           ]),
           sharedPreferencesProvider.overrideWithValue(prefs),
         ]),

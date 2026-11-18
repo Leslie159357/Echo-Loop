@@ -143,6 +143,11 @@ void main() {
         _TestFavoriteSentenceLifecycle(bookmarkDao),
       ),
       mediaSplitOverride(mediaSplit),
+      // 收藏句会渲染 AI 译文；真实 provider 在测试里永不返回，骨架屏的
+      // 无限动画会让 pumpAndSettle 超时。给一个立即返回的假译文。
+      sentenceTranslationProvider.overrideWith(
+        (ref, target) => Stream.value('译文:${target.sentenceIndex}'),
+      ),
       if (withTranscript) ...[
         audioItemDaoProvider.overrideWithValue(audioItemDao),
         audioEngineProvider.overrideWith(

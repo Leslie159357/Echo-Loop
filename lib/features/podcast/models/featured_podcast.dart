@@ -7,6 +7,9 @@ class FeaturedPodcast {
   final String title;
   final String? description;
 
+  /// 难度分级（A0/A1/A2/B1…），空串表示未标注。
+  final String level;
+
   const FeaturedPodcast({
     required this.id,
     required this.applePodcastUrl,
@@ -14,6 +17,7 @@ class FeaturedPodcast {
     required this.imageUrl,
     required this.title,
     required this.description,
+    this.level = '',
   });
 
   factory FeaturedPodcast.fromJson(Map<String, dynamic> json) {
@@ -24,6 +28,7 @@ class FeaturedPodcast {
       imageUrl: json['imageUrl'] as String?,
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
+      level: json['level'] as String? ?? '',
     );
   }
 

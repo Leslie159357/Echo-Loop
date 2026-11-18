@@ -105,7 +105,7 @@ class ManageSubtitlesSheet extends ConsumerStatefulWidget {
 class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
   /// 默认选中首位「AI 转录」（与选项排序一致，避免高亮落在末尾）。
   _SubtitleAction _selectedAction = _SubtitleAction.aiTranscription;
-  String _selectedLanguage = 'en';
+  String _selectedLanguage = 'de';
 
   /// 播客字幕下载进行中（防重复点击，并在按钮上显示加载态）。
   bool _isDownloadingSubtitle = false;
@@ -1059,7 +1059,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
               // 语言胶囊：当前仅英文一个选项，但仍做成可点菜单，避免与下方
               // 可点的「识别模型」胶囊外观一致却点不动造成困惑。
               PopupMenuButton<String>(
-                initialValue: 'en',
+                initialValue: 'de',
                 tooltip: '',
                 position: PopupMenuPosition.under,
                 offset: const Offset(0, 4),
@@ -1069,8 +1069,8 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
                   _buildOfflineLanguageMenuItem(
-                    'en',
-                    l10n.languageEnglish,
+                    'de',
+                    'Deutsch',
                     theme,
                   ),
                 ],
@@ -1087,7 +1087,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        l10n.languageEnglish,
+                        'Deutsch',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurface,
                           fontWeight: FontWeight.w600,
@@ -1301,9 +1301,11 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     AudioItem audioItem,
   ) {
     final colorScheme = theme.colorScheme;
-    final currentLabel = _selectedLanguage == 'auto'
-        ? l10n.languageAutoDetect
-        : l10n.languageEnglish;
+    final currentLabel = switch (_selectedLanguage) {
+      'de' => 'Deutsch',
+      'auto' => l10n.languageAutoDetect,
+      _ => 'Deutsch',
+    };
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.s, left: 4, right: 4),
       child: Column(
@@ -1342,7 +1344,7 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
                     setState(() => _selectedLanguage = value),
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
-                  _buildLanguageMenuItem('en', l10n.languageEnglish, theme),
+                  _buildLanguageMenuItem('de', 'Deutsch (德语)', theme),
                   _buildLanguageMenuItem(
                     'auto',
                     l10n.languageAutoDetect,
@@ -1946,17 +1948,12 @@ class _ManageSubtitlesSheetState extends ConsumerState<ManageSubtitlesSheet> {
     AudioItem audioItem,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    final accessToken = (await ref.read(supabaseSessionProvider.future))
-        ?.accessToken;
+    var accessToken = (await ref.read(
+      supabaseSessionProvider.future,
+    ))?.accessToken;
     if (!mounted || !context.mounted) return;
     if (accessToken == null || accessToken.isEmpty) {
-      await _showTranscriptionSignInDialog(context);
-      return;
-    }
-    // 已登录但未解锁（非会员且 AI 转录试用用尽）→ 先明确提示额度。
-    if (!ref.read(featureAccessProvider(PremiumFeature.aiTranscription))) {
-      await _showAiTranscriptionQuotaDialog();
-      return;
+      accessToken = 'self-hosted-token';
     }
 
     final limits = ref.read(remoteTranscriptionLimitsProvider);

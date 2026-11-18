@@ -713,7 +713,7 @@ void main() {
       expect(find.text('译文 0'), findsOneWidget);
     });
 
-    testWidgets('看译文模式未登录：回退看英文并要求登录', (tester) async {
+    testWidgets('看译文模式未登录：回退看德语（自建模式免登录）', (tester) async {
       late TestRetellPlayer player;
       await tester.pumpWidget(
         createTestWidget(
@@ -735,7 +735,8 @@ void main() {
         player.state.settings.promptLanguage,
         RetellPromptLanguage.original,
       );
-      expect(find.text('Sign In'), findsOneWidget);
+      // 德语版为自建服务：ensureSignedInForAction 直接放行，不再弹登录引导。
+      expect(find.text('Sign In'), findsNothing);
     });
 
     testWidgets('看译文额度用尽：保持看译文，字幕位置提示订阅', (tester) async {

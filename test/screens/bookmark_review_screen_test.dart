@@ -397,6 +397,10 @@ void main() {
     expect(chat.target.sentenceIndex, isNull);
     expect(chat.target.sentenceStartMs, 1000);
     expect(chat.target.sentenceEndMs, 3500);
+
+    // 德语版平台引擎下，卡片渲染会登记 TTS/AI 预热定时器；推进时钟让它们落地，
+    // 避免用例结束时报 !timersPending。
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('unsaving the final sentence shows the completion summary', (

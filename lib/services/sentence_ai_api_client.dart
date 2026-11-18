@@ -558,7 +558,7 @@ class SentenceAiApiClient {
           filename: 'retell-review.m4a',
         ),
         'originalText': originalText,
-        'language': 'en',
+        'language': 'de',
         'targetLanguage': targetLanguage,
       }),
       options: Options(

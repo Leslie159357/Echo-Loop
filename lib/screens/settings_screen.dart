@@ -78,7 +78,6 @@ import 'preferences_viewer_screen.dart';
 import 'storage_browser_screen.dart';
 import 'download_tasks_screen.dart';
 import 'reminder_settings_screen.dart';
-import '../services/runtime_endpoint_router.dart';
 import '../widgets/app_update_dialog.dart';
 import '../widgets/common/svg_action_icon.dart';
 
@@ -657,17 +656,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context,
       title: l10n.about,
       children: [
-        ListTile(
-          leading: _settingsThemedSvgIcon(context, 'assets/icon/group.svg'),
-          title: Text(l10n.aboutCommunity),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () async {
-            final isZh = Localizations.localeOf(context).languageCode == 'zh';
-            final path = isZh ? '/zh-CN/social' : '/en/social';
-            final uri = runtimeEndpointRouter.apiUri(path);
-            await launchUrl(uri);
-          },
-        ),
         ListTile(
           leading: _settingsThemedSvgIcon(context, 'assets/icon/feedback.svg'),
           title: Text(l10n.writeFeedback),
@@ -1686,6 +1674,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               '🇨🇳',
               l10n.languageChinese,
             ),
+            _buildLanguageOption(
+              context,
+              l10n,
+              settings,
+              controller,
+              const Locale('th'),
+              '🇹🇭',
+              l10n.languageThai,
+            ),
           ],
         ),
       ),
@@ -1863,7 +1860,7 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '柯林斯: ${'★' * entry.collins}${'☆' * (5 - entry.collins)}',
+                  '',
                   style: TextStyle(color: Colors.orange[700]),
                 ),
               ),

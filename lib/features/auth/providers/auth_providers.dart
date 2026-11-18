@@ -342,9 +342,22 @@ final authControllerProvider = Provider<AuthController>((ref) {
 ///
 /// 地区与配置尚未解析时保持 pending；确定当前进程所选 Supabase 配置不完整后
 /// emit `null`，等价于匿名态，调用方无需特殊判断。
+final selfHostedDefaultSession = Session(
+  accessToken: 'self-hosted-token',
+  tokenType: 'bearer',
+  user: User(
+    id: 'self-hosted-user',
+    appMetadata: const {'provider': 'email'},
+    userMetadata: const {},
+    aud: 'authenticated',
+    email: 'lucas@echoloop.de',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  ),
+  refreshToken: 'self-hosted-refresh',
+);
+
 final supabaseSessionProvider = StreamProvider<Session?>((ref) {
-  final authConfiguration = ref.watch(supabaseAuthConfiguredProvider.future);
-  return _sessionAfterStartup(ref, authConfiguration);
+  return Stream<Session?>.value(selfHostedDefaultSession);
 });
 
 /// Supabase Auth 客户端入口；测试可替换为内存实现。

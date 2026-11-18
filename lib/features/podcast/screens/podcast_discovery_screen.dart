@@ -25,6 +25,7 @@ import '../../../widgets/common/form_input_style.dart';
 import '../../../widgets/common/svg_action_icon.dart';
 import '../../auth/sign_in_required_dialog.dart';
 import '../providers/featured_podcasts_provider.dart';
+import '../models/featured_podcast.dart';
 import '../podcast_models.dart';
 import '../podcast_preview_provider.dart';
 import '../podcast_repository.dart';
@@ -41,6 +42,9 @@ class PodcastDiscoveryScreen extends ConsumerStatefulWidget {
 
 class _PodcastDiscoveryScreenState
     extends ConsumerState<PodcastDiscoveryScreen> {
+  /// 级别筛选：null = 全部。选中某级时列表只显示该级，并自动把全量分页拉完。
+  String? _levelFilter;
+
   static const _loadMoreThreshold = 200.0;
 
   final _searchController = TextEditingController();
@@ -322,7 +326,17 @@ class _PodcastDiscoveryScreenState
             }
 
             final subscribed = _subscribedByFeed();
-            return RefreshIndicator(
+            // 级别筛选（null=全部）；筛选时自动把剩余分页拉完，避免只看到前 60 条里的几条
+            final filtered = _levelFilter == null
+                ? podcasts
+                : podcasts.where((p) => p.level == _levelFilter).toList();
+            if (_levelFilter != null && snapshot.nextCursor != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _loadRestForFilter();
+              });
+            }
+            final rows = _withLevelHeaders(filtered);
+            final list = RefreshIndicator(
               onRefresh: () => ref
                   .read(featuredPodcastsProvider.notifier)
                   .refreshFirstPage(),
@@ -332,10 +346,9 @@ class _PodcastDiscoveryScreenState
                 padding: EdgeInsets.zero,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                itemCount:
-                    podcasts.length + (snapshot.nextCursor == null ? 0 : 1),
+                itemCount: rows.length + (snapshot.nextCursor == null ? 0 : 1),
                 itemBuilder: (context, index) {
-                  if (index == podcasts.length) {
+                  if (index == rows.length) {
                     if (state.isLoadingMore) {
                       return const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -358,7 +371,11 @@ class _PodcastDiscoveryScreenState
                     }
                     return const SizedBox(height: 12);
                   }
-                  final podcast = podcasts[index];
+                  final row = rows[index];
+                  if (row is String) {
+                    return _LevelHeader(level: row);
+                  }
+                  final podcast = row as FeaturedPodcast;
                   final local = subscribed[podcast.rssUrl];
                   return PodcastSubscribeTile(
                     imageUrl: podcast.imageUrl,
@@ -384,8 +401,62 @@ class _PodcastDiscoveryScreenState
                 },
               ),
             );
+            return Column(
+              children: [
+                _buildLevelChips(podcasts),
+                Expanded(child: list),
+              ],
+            );
           },
         );
+  }
+
+  /// 级别筛选条。只列出目录里实际存在的级别。
+  Widget _buildLevelChips(List<FeaturedPodcast> podcasts) {
+    const order = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'];
+    final present = <String>{
+      for (final p in podcasts)
+        if (p.level.isNotEmpty) p.level,
+    };
+    final levels = [
+      for (final lv in order)
+        if (present.contains(lv)) lv,
+    ];
+    if (levels.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        children: [
+          for (final lv in <String?>[null, ...levels])
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(lv ?? '全部'),
+                selected: _levelFilter == lv,
+                visualDensity: VisualDensity.compact,
+                labelStyle: theme.textTheme.labelMedium,
+                onSelected: (_) {
+                  if (_levelFilter == lv) return;
+                  setState(() => _levelFilter = lv);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 筛选状态下把剩余分页一次性拉完（目录是静态的，全量约 900 条）。
+  void _loadRestForFilter() {
+    if (_levelFilter == null || !mounted) return;
+    final state = ref.read(featuredPodcastsProvider).asData?.value;
+    if (state == null) return;
+    if (state.snapshot?.nextCursor == null) return;
+    if (state.isLoadingMore) return;
+    unawaited(ref.read(featuredPodcastsProvider.notifier).loadMore());
   }
 
   /// Apple 搜索结果：loading/error/data(空态) 三态。
@@ -557,6 +628,66 @@ class _PodcastListMessage extends StatelessWidget {
             const SizedBox(height: 8),
             TextButton(onPressed: onAction, child: Text(actionLabel)),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+
+/// 按难度分组的行序列：`String` 是分组标题，`FeaturedPodcast` 是条目。
+List<Object> _withLevelHeaders(List<FeaturedPodcast> podcasts) {
+  const order = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1'];
+  final buckets = <String, List<FeaturedPodcast>>{};
+  for (final p in podcasts) {
+    final key = p.level.trim().isEmpty ? '其他' : p.level.trim().toUpperCase();
+    buckets.putIfAbsent(key, () => []).add(p);
+  }
+  final keys = buckets.keys.toList()
+    ..sort((a, b) {
+      final ai = order.indexOf(a);
+      final bi = order.indexOf(b);
+      if (ai == -1 && bi == -1) return a.compareTo(b);
+      if (ai == -1) return 1;
+      if (bi == -1) return -1;
+      return ai.compareTo(bi);
+    });
+  return [
+    for (final key in keys) ...[key, ...buckets[key]!],
+  ];
+}
+
+/// 分级标题行。
+class _LevelHeader extends StatelessWidget {
+  const _LevelHeader({required this.level});
+
+  final String level;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: .5),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              level,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Divider(color: theme.dividerColor.withValues(alpha: .5)),
+          ),
         ],
       ),
     );

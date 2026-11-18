@@ -37,11 +37,11 @@ class ReviewReminderTexts {
     );
   }
 
-  /// 英文文案，作为文案解析失败时的兜底。
+  /// 兜底文案（德语版：界面为中文，解析失败时回落中文而非英文）。
   factory ReviewReminderTexts.english() {
     return ReviewReminderTexts.fromL10n(
-      lookupAppLocalizations(const Locale('en')),
-      localeTag: 'en',
+      lookupAppLocalizations(const Locale('zh')),
+      localeTag: 'zh',
     );
   }
 

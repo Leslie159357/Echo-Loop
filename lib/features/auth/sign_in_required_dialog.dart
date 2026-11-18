@@ -24,28 +24,6 @@ Future<bool> ensureSignedInForAction({
   required String title,
   required String message,
 }) async {
-  if (ref.read(isAuthenticatedProvider)) return true;
-
-  final l10n = AppLocalizations.of(context);
-  final shouldOpenLogin = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(l10n?.cancel ?? 'Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(l10n?.authSignInButton ?? 'Sign In'),
-        ),
-      ],
-    ),
-  );
-  if (!context.mounted || shouldOpenLogin != true) return false;
-
-  openSignInPage(context);
-  return false;
+  // 自建模式下全面免登录放行
+  return true;
 }

@@ -803,6 +803,17 @@
 - 相关代码：`lib/features/media_trim/media_trim_clip.dart`。
 - 记录时间：2026-11-16。
 
+### 7.21 离线 ASR 模型归档：多语种权重由网关本地托管（2026-11-17）
+
+- **现象**：`/model/asr/whisper-{tiny,base,small}-int8-v1.zip` 全部 404（`silero-vad-v1.zip` 正常 206），德语版离线识别无法下载模型；且 app 侧 `language: 'de'` 与「英文模型」的命名冲突，容易误判成「只有英文权重」。
+- **真相**：catalog 里的 `whisper-*-en-int8` 是**历史 id**，归档内容一直是 sherpa-onnx 的**多语种** int8 权重（`sherpa-onnx-whisper-{tiny,base,small}`，非 `.en` 版）。三个归档解压后的字节数（60,745,245 / 94,464,537 / 232,673,926）与 catalog 的 `estimatedDownloadBytes` 完全一致，可反证同源。
+- **解法**：
+  1. 按官方 tar.bz2 只取 `*-encoder.int8.onnx` / `*-decoder.int8.onnx` / `*-tokens.txt` 三个文件重新打包成 zip（归档内是单一顶层目录，安装器会扁平化）。
+  2. 归档放 `<gateway>/data/static/model/asr/`，网关 `/model/*` 新增「本地文件优先 + Range 206 断点续传 + HEAD 探测」；本地缺失才回落 `cdn.echo-loop.top` 的 302。
+  3. catalog 的 `sha256` 换成实际归档摘要（zip 头信息不同，字节数与旧值相同但哈希不同），`asr_model_manager_test.dart` 里钉的摘要同步更新。
+- **验证**：公网 `https://echoloop.1122275.xyz/model/asr/whisper-*-int8-v1.zip` HEAD 200 带正确 Content-Length、`Range: bytes=0-31` 返回 206、整包下载后 sha256 与 catalog 一致。
+- **相关文件**：`lib/services/asr/asr_model_catalog.dart`、`workspace/echoloop-gateway/server_std.py`（`_serve_file_range` / `do_HEAD`）。
+
 ### 7.59 列表项菜单关闭后卡片残留灰底；菜单展开时点击外部穿透到列表
 
 - 现象：macOS 上音频列表项「…」菜单展开时整张卡片变灰；关闭菜单后部分卡片灰底一直不消失（截图取色 224 = 白底叠 12% 黑，即 InkWell `focusColor`）。另外菜单展开时点击其他列表项会直接触发跳转。

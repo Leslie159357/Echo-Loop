@@ -1235,14 +1235,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.2"
-  lemmatizerx:
-    dependency: "direct main"
-    description:
-      name: lemmatizerx
-      sha256: "96fa82dec6eb8198515f87603f49c974346b2eabb3b1e21db52c16821a9162fd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   lints:
     dependency: transitive
     description:

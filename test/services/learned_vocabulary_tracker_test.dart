@@ -11,6 +11,26 @@ void main() {
       );
     });
 
+    test('德语变音字母不被切断（ä/ö/ü/ß）', () {
+      // [A-Za-z] 会把 über 切成 ber、schön 切成 sch+n、Äpfel 切成 pfel。
+      expect(
+        LearnedVocabularyTracker.extractWordForms(
+          'Über die Straße gehen, schöne Äpfel und größere Häuser.',
+        ),
+        {
+          'über',
+          'die',
+          'straße',
+          'gehen',
+          'schöne',
+          'äpfel',
+          'und',
+          'größere',
+          'häuser',
+        },
+      );
+    });
+
     test('保留内部撇号和连字符，忽略数字与符号', () {
       expect(
         LearnedVocabularyTracker.extractWordForms(
