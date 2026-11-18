@@ -30,10 +30,11 @@ void main() {
       expect(entry.phonetic, 'rʌn');
       expect(entry.translation, 'vi. 跑, 奔\n运行');
       expect(entry.collins, 5);
-      expect(entry.examTags, ['CET4']);
+      // 德语版不展示英语考试标签
+      expect(entry.examTags, isEmpty);
     });
 
-    test('只保留可展示的考试标签，忽略其它来源标签', () {
+    test('德语版丢弃所有考试标签（CET/TOEFL/GRE 与德语学习无关）', () {
       final entry = DictEntry.fromApiJson({
         'headword': 'a',
         'definitions': [
@@ -42,10 +43,10 @@ void main() {
             'translations': ['一个'],
           },
         ],
-        'tags': ['zk', 'gk', 'ky', 'gre', 'toefl'],
+        'tags': ['zk', 'gk', 'ky', 'gre', 'toefl', 'cet4', 'ielts'],
       });
 
-      expect(entry.examTags, ['GRE', 'TOEFL']);
+      expect(entry.examTags, isEmpty);
     });
 
     test('忽略未知字段与未知词性，后端新增结构不影响解析', () {
