@@ -318,12 +318,10 @@ void main() {
       expect(find.text('GRE'), findsNothing);
     });
 
-    testWidgets('柯林斯星级渲染正确数量的星星', (tester) async {
+    testWidgets('德语版不渲染柯林斯星级（数据里的 collins 被忽略）', (tester) async {
+      // 假数据里 collins=3，但德语版 fromApiJson 恒置 0，星星区块不会出现
       await _openSheet(tester, 'abandon');
-
-      // collins=3，应有 5 个星星图标
-      final starIcons = find.byIcon(Icons.star_rounded);
-      expect(starIcons, findsNWidgets(5));
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
     });
 
     testWidgets('无星级时不显示星星', (tester) async {
