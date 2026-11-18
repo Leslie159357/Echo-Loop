@@ -277,10 +277,10 @@ void main() {
     await tester.tap(find.text('应对考试'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
-    expect(find.text('你当前在备考哪一类考试？'), findsOneWidget);
-    expect(find.text('雅思 IELTS'), findsOneWidget);
+    expect(find.text('你在准备哪一类德语考试？'), findsOneWidget);
+    expect(find.text('DSD I/II'), findsOneWidget);
 
-    await tester.tap(find.text('雅思 IELTS'));
+    await tester.tap(find.text('DSD I/II'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
 
     expect(find.text('你计划每天练习多久？'), findsOneWidget);
@@ -436,7 +436,7 @@ void main() {
 
     await tester.tap(find.text('应对考试'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
-    await tester.tap(find.text('雅思 IELTS'));
+    await tester.tap(find.text('DSD I/II'));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
     await tester.tap(find.text('约 20 分钟'));
     await tester.pumpAndSettle(const Duration(milliseconds: 600));

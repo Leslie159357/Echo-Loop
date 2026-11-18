@@ -52,7 +52,8 @@ class DictEntry {
       word: headword,
       phonetic: phonetic is String ? phonetic : '',
       translation: lines.join('\n'),
-      collins: collins is int ? collins.clamp(0, 5) : 0,
+      // 柯林斯是英语词典的星级体系，德语版不用：恒 0，UI 自动跳过该区块
+      collins: 0,
       examTags: _examTags(json['tags']),
     );
   }

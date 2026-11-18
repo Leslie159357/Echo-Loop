@@ -840,7 +840,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoverEntryTitleA => '发现资源';
 
   @override
-  String get discoverEntrySubtitleA => '播客、托福、雅思、四六级、口译...';
+  String get discoverEntrySubtitleA => '播客、新闻、慢速德语、儿童节目...';
 
   @override
   String get communityCollectionEmpty => '该合集暂无文件';
@@ -3508,22 +3508,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingContinue => '继续';
 
   @override
-  String get onboardingExamPrompt => '你当前在备考哪一类考试？';
+  String get onboardingExamPrompt => '你在准备哪一类德语考试？';
 
   @override
-  String get onboardingExamGaokao => '中高考';
+  String get onboardingExamGaokao => 'Goethe-Zertifikat';
 
   @override
-  String get onboardingExamCet => '大学四六级';
+  String get onboardingExamCet => 'TestDaF';
 
   @override
-  String get onboardingExamTem => '专四专八';
+  String get onboardingExamTem => 'telc / ÖSD';
 
   @override
-  String get onboardingExamIelts => '雅思 IELTS';
+  String get onboardingExamIelts => 'DSD I/II';
 
   @override
-  String get onboardingExamToefl => '托福 TOEFL';
+  String get onboardingExamToefl => 'DTZ（融合考试）';
 
   @override
   String get onboardingExamOther => '其他';

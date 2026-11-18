@@ -1872,7 +1872,7 @@ class _DictionaryLookupDialogState extends State<_DictionaryLookupDialog> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '柯林斯: ${'★' * entry.collins}${'☆' * (5 - entry.collins)}',
+                  '',
                   style: TextStyle(color: Colors.orange[700]),
                 ),
               ),

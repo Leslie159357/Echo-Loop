@@ -29,7 +29,8 @@ void main() {
       expect(entry.word, 'run');
       expect(entry.phonetic, 'rʌn');
       expect(entry.translation, 'vi. 跑, 奔\n运行');
-      expect(entry.collins, 5);
+      // 德语版不用柯林斯星级
+      expect(entry.collins, 0);
       // 德语版不展示英语考试标签
       expect(entry.examTags, isEmpty);
     });

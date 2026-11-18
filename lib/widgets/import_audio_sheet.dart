@@ -14,6 +14,7 @@ import '../features/baidu_netdisk/providers/baidu_netdisk_import_tasks_provider.
 import '../features/baidu_netdisk/providers/baidu_netdisk_providers.dart';
 import '../features/remote_config/remote_config.dart';
 import '../features/remote_config/remote_config_providers.dart';
+import '../features/podcast/german_podcast_presets.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'add_audio_dialog.dart';
@@ -1497,6 +1498,25 @@ class _DirectUrlPanelState extends State<_DirectUrlPanel> {
           ),
           onChanged: (_) => setState(() {}),
           onSubmitted: busy ? null : (_) => widget.onSubmit(),
+        ),
+        const SizedBox(height: 8),
+        // 德语播客预设：点一下填入 RSS，不自动提交（用户可改 URL）
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final preset in kGermanPodcastPresets)
+              ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(preset.name),
+                onPressed: busy
+                    ? null
+                    : () {
+                        widget.controller.text = preset.url;
+                        setState(() {});
+                      },
+              ),
+          ],
         ),
         const SizedBox(height: 6),
         Row(

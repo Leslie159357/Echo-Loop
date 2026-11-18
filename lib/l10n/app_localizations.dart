@@ -1645,7 +1645,7 @@ abstract class AppLocalizations {
   /// No description provided for @discoverEntrySubtitleA.
   ///
   /// In en, this message translates to:
-  /// **'Podcasts, TOEFL, IELTS, CET-4/6, Interpreting...'**
+  /// **'Podcasts, news, slow German, kids\' shows...'**
   String get discoverEntrySubtitleA;
 
   /// No description provided for @communityCollectionEmpty.
@@ -6493,37 +6493,37 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingExamPrompt.
   ///
   /// In en, this message translates to:
-  /// **'Which exam are you currently preparing for?'**
+  /// **'Which German exam are you preparing for?'**
   String get onboardingExamPrompt;
 
   /// No description provided for @onboardingExamGaokao.
   ///
   /// In en, this message translates to:
-  /// **'China\'s Gaokao'**
+  /// **'Goethe-Zertifikat'**
   String get onboardingExamGaokao;
 
   /// No description provided for @onboardingExamCet.
   ///
   /// In en, this message translates to:
-  /// **'CET-4 / CET-6'**
+  /// **'TestDaF'**
   String get onboardingExamCet;
 
   /// No description provided for @onboardingExamTem.
   ///
   /// In en, this message translates to:
-  /// **'TEM-4 / TEM-8'**
+  /// **'telc / ÖSD'**
   String get onboardingExamTem;
 
   /// No description provided for @onboardingExamIelts.
   ///
   /// In en, this message translates to:
-  /// **'IELTS'**
+  /// **'DSD I/II'**
   String get onboardingExamIelts;
 
   /// No description provided for @onboardingExamToefl.
   ///
   /// In en, this message translates to:
-  /// **'TOEFL'**
+  /// **'DTZ (integration course)'**
   String get onboardingExamToefl;
 
   /// No description provided for @onboardingExamOther.

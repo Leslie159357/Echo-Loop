@@ -870,7 +870,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get discoverEntrySubtitleA =>
-      'Podcasts, TOEFL, IELTS, CET-4/6, Interpreting...';
+      'Podcasts, news, slow German, kids\' shows...';
 
   @override
   String get communityCollectionEmpty => 'This collection has no audio yet';
@@ -3696,23 +3696,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingContinue => 'Continue';
 
   @override
-  String get onboardingExamPrompt =>
-      'Which exam are you currently preparing for?';
+  String get onboardingExamPrompt => 'Which German exam are you preparing for?';
 
   @override
-  String get onboardingExamGaokao => 'China\'s Gaokao';
+  String get onboardingExamGaokao => 'Goethe-Zertifikat';
 
   @override
-  String get onboardingExamCet => 'CET-4 / CET-6';
+  String get onboardingExamCet => 'TestDaF';
 
   @override
-  String get onboardingExamTem => 'TEM-4 / TEM-8';
+  String get onboardingExamTem => 'telc / ÖSD';
 
   @override
-  String get onboardingExamIelts => 'IELTS';
+  String get onboardingExamIelts => 'DSD I/II';
 
   @override
-  String get onboardingExamToefl => 'TOEFL';
+  String get onboardingExamToefl => 'DTZ (integration course)';
 
   @override
   String get onboardingExamOther => 'Other';
