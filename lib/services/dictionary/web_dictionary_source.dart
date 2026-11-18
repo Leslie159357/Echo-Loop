@@ -131,13 +131,6 @@ const List<WebDictConfig> kWebDictConfigs = [
     buildUrl: _wiktionaryUrl,
   ),
   WebDictConfig(
-    id: 'youdao',
-    displayName: '有道德语',
-    icon: Icons.translate_rounded,
-    color: Color(0xFFEA4B35),
-    buildUrl: _youdaoUrl,
-  ),
-  WebDictConfig(
     id: 'zhwiktionary',
     displayName: '中文维基词典',
     icon: Icons.public_rounded,
@@ -149,5 +142,4 @@ const List<WebDictConfig> kWebDictConfigs = [
 // 德语版网页源 URL（dehelper/duden/dwds 已在文件上方定义）。
 String _eudicUrl(String w) => 'https://dict.eudic.net/mdicts/de/$w';
 String _wiktionaryUrl(String w) => 'https://de.m.wiktionary.org/wiki/$w';
-String _youdaoUrl(String w) => 'https://dict.youdao.com/w/deu/$w';
 String _zhWiktionaryUrl(String w) => 'https://zh.m.wiktionary.org/wiki/$w';

@@ -12,7 +12,7 @@ void main() {
     expect(ids.toSet().length, ids.length, reason: 'id 必须唯一');
   });
 
-  test('德语版只保留 7 个德语网页源，英文专用站全部移除', () {
+  test('德语版只保留 6 个德语网页源，英文专用站与有道全部移除', () {
     final ids = kWebDictConfigs.map((c) => c.id).toList();
     expect(ids, [
       'dehelper',
@@ -20,7 +20,6 @@ void main() {
       'dwds',
       'eudic',
       'wiktionary',
-      'youdao',
       'zhwiktionary',
     ]);
     // 顺序即底栏展示顺序：德语权威源在前
@@ -37,6 +36,7 @@ void main() {
       'playPhrase',
       'forvo',
       'wordReference',
+      'youdao',
       'etymonline',
       'macmillan',
     ]) {
