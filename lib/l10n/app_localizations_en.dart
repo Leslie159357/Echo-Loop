@@ -1308,10 +1308,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get intensiveListenWordDictNotFound => 'Word not found in dictionary';
 
   @override
-  String get intensiveListenReplayingWithSubtitle =>
-      'Listen again to help it stick';
-
-  @override
   String get intensiveListenCompleteTitle =>
       'Listening sentence by sentence Complete';
 

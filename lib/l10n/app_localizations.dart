@@ -2410,12 +2410,6 @@ abstract class AppLocalizations {
   /// **'Word not found in dictionary'**
   String get intensiveListenWordDictNotFound;
 
-  /// No description provided for @intensiveListenReplayingWithSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Listen again to help it stick'**
-  String get intensiveListenReplayingWithSubtitle;
-
   /// No description provided for @intensiveListenCompleteTitle.
   ///
   /// In en, this message translates to:

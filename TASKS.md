@@ -2,6 +2,26 @@
 
 > 仅列未完成事项。已完成记录见 [2026-11-12 归档](./docs/tasks-archive/tasks-2026-11-12-completed.md)、[2026-10-29 归档](./docs/tasks-archive/tasks-2026-10-29-completed.md)、[2026-09-29 归档](./docs/tasks-archive/tasks-2026-09-29-completed.md)。
 
+- [x] 修复视频全屏时播放控件不会自动隐藏：共享 `MediaVisualSurface` 不再因全屏状态强制显示控件；用户点击 / 触屏、鼠标移动或操作控件后显示并重置 3 秒计时，静止后自动隐藏。保留开启字幕遮罩后立即收起控件的行为。新增全屏隐藏、点击恢复、鼠标移动恢复与按钮重置计时回归用例。**完成时间**: 2026-11-20
+- [x] 随心听加入循环间隙环形倒计时：整篇循环每遍之间、单句循环每次重复之间，主播放按钮外圈显示 `PlaybackCountdownRing`，时长取自循环间隔设置；间隔期间图标仍为暂停，点击即暂停并取消续播。`MediaPlaybackState` 新增 `playbackInterval`，间隔开始时写入、走完后清除（播放态仍保持到下一遍真正起播）。新增 2 个 provider 用例（间隔时长暴露并在暂停后清除；间隔走完后收起圆环且播放态保持）。相关 177 项测试与新增用例通过。未覆盖：屏幕层圆环渲染未加测试，需真机目测。**完成时间**: 2026-11-20
+- [x] 循环页面统一为“间隙保持播放态 + 主按钮环形倒计时”：全文盲听、精听盲听、难句补练盲听、跟读、难句跟读、复述的遍间 / 句间 / 段间倒计时，主按钮显示暂停图标，圆环与秒数统一画在主播放按钮上（`PlaybackCountdownRing`），`CountdownChip` 删除。点击间隙主按钮 = 停止自动推进、进入等待用户（与原 chip 点击一致），热键与主按钮同入口。跟读 / 难句跟读 / 复述的间隙保留录音按钮（间隙内可直接点录音，打断倒计时）；盲听卡片下方倒计时行在间隙期间留空，布局高度不变。手动模式不显示圆环、图标仍为播放。新增圆环、盲听、精听、难句补练回归测试；相关 232 项测试通过。未运行：`integration_test/groups/blind_listen_tests.dart`；未在真机目测各页间隙的圆环、秒数与布局。后续：provider 层 `pauseCountdown` / `resumeCountdown` / `pauseInterval` / `resumeInterval` 已无 UI 调用，待单独清理。**完成时间**: 2026-11-20
+- [x] 讲解页循环间隙主播放按钮环形倒计时：按钮外侧绕一圈 64pt 圆环（与句子卡片倒计时同源，随时长推进），圆环顶部压一枚秒数胶囊（tabular 数字，随文字撑开）。圆环与动画抽为共享 `CountdownRing`，`CountdownChip` 改为复用它；修复 `CountdownRing` 在总时长变化时重建动画控制器触发的 ticker 冲突（原 `CountdownChip` 同样存在，未被测试覆盖）。仅讲解页自动循环间隙显示，手动模式与盲听不显示。新增 `test/widgets/countdown_ring_test.dart` 与讲解页主按钮秒数测试；相关 292+ 项测试通过。**完成时间**: 2026-11-20
+  - 修正：圆环外径由 64 改为与按钮同尺寸（56，贴合按钮外缘），秒数标签仍压在顶边；64 时在窄屏带速度按钮的控制栏右侧溢出 4px。新增窄屏回归测试（修复前失败）。**完成时间**: 2026-11-20
+- [x] 逐句精听讲解页循环播放间隙图标：开启「讲解页按循环次数播放」后，遍与遍之间的倒计时期间播放按钮变为播放图标（`isPlaying` 被置 false），点击会立即重播而非停止。改为循环未结束时（含间隙）保持播放态：图标为暂停，点击走 `pause()` 停止循环；间隙中暂停不记录续播位置，循环最后一遍播完后才变回播放图标。“继续”流程的倒计时行为不变。新增 2 个 provider 回归用例（间隙保持播放态且暂停后不再起播；最后一遍播完后结束），第一个在修复前失败。相关测试 124 项通过；改动文件 `dart format` 与 `flutter analyze` 无问题。**完成时间**: 2026-11-20
+  - 补充修复：讲解重播在异步设置速度前未置位播放态，快速连续点击时第二次点击被当作“播放”而重新开始、显示倒计时。启动时立即置为播放态，第二次点击改为暂停；新增回归用例（修复前失败）。**完成时间**: 2026-11-20
+  - 清理已删除“继续”流程的残留代码：`_finishAnnotationReplay`、`advanceAfterReplay`、`WaitingAnnotationPageTransition` 及其页面自动翻页逻辑、`commitPendingAnnotationAdvance`；`replayDuringCountdown` 仅保留盲听分支。行为不变，相关测试 123 项通过（删除依赖旧流程的两个翻页用例）。**完成时间**: 2026-11-20
+  - 暂停后继续播放不再显示“再听一遍，巩固记忆”，与播放按钮循环保持一致：移除 `ReplayingWithSubtitle` 阶段、`isAnnotationReplay` 与 `annotationReplay*` 状态、`showReplayStatus` 参数、提示文案（arb 与生成文件）以及讲解页主体倒计时（仅旧路径可达）。相关测试 117 项通过；`integration_test/groups/intensive_listen_tests.dart` 未在本机运行。**完成时间**: 2026-11-20
+
+- [x] 升级应用版本至 1.0.49：将 `pubspec.yaml` 中的版本从 1.0.48 提升至 1.0.49。纯版本元数据变更，无需运行测试。**完成时间**: 2026-11-20
+
+- [x] 备份 / 恢复进度弹窗内容未垂直居中：无标题无按钮的 `AlertDialog` 默认上 16 / 下 24 内边距，卡片内容偏上。进度弹窗抽为 `BackupProgressDialog`，统一为上下 24 对称内边距。新增 `test/screens/backup_progress_content_test.dart` 校验卡片上下留白对称、图标与文案垂直对齐（去掉修复后失败：上 16 / 下 24）。**完成时间**: 2026-11-19
+
+- [x] 修复同一版本导出的备份恢复时提示「此备份由更新版本的应用创建」：升级迁移链已到 v12（1.0.46 起），但 `currentAppUpdateMigrationVersion` 仍为 11，备份 manifest 记录的 12 被判定为更新版本。常量改为 12，并新增两类测试：迁移链末尾版本与常量一致（修复前失败）、同一应用导出的备份可直接恢复（修复前报 `Unsupported app update migration version: 12`），另补一条迁移进度超过迁移链时仍拒绝恢复的回归。相关备份与迁移测试 `All tests passed`，改动文件 `dart analyze` 仅余沿用的 `prefer_initializing_formals` info。见 [排障记录 7.63](./docs/troubleshooting.md)。**完成时间**: 2026-11-19
+
+- [x] 修复 HONOR YAL-AL00（Android 10）视频剪辑保存失败。真机对照定位到 FFmpeg 8.0 为 MP4 全局头部预探测时发送 EOS 并 flush MediaCodec 编码器，导致后续提交帧失败或只产出一帧。Android 跳过预探测，由 MP4 封装器从实际码流提取 H.264 配置，并单独校验视频轨时长。原真机集成用例修复前失败，修复后音频/视频、有/无字幕四种场景全部通过，视频保留 H.264 并验证应用播放器出画；剪辑相关单元和组件测试 56 项通过。见 [排障记录](./docs/troubleshooting.md#762-honor-上视频剪辑保存失败或视频轨只有一帧)。**完成时间**: 2026-11-19
+
+- [x] 评价提醒埋点：真正向系统发起原生评分请求时上报 `rating_prompt_requested`（已加入 PostHog 白名单），参数 `check_in_days`（上次提醒之后的打卡天数）与 `is_repeat`（0 / 1）。埋点放在冷却落盘与二次条件检查之后、`requestReview` 之前，条件不满足或冷却回滚的请求不上报；`RatingPromptCoordinator` 注入 `AnalyticsService`。新增 3 个埋点用例（首次 / 冷却后再次 / 条件未满足）并在冷却回滚用例中断言不上报；白名单测试同步。复审修复：`main_shell_rating_prompt_test` 的 `_RecordingCoordinator` 未传入新增的 `analytics` 参数导致编译失败，已补测试替身。回归范围（router、评价提醒、analytics、四类学习页与收藏复习页测试）共 445 项全部通过；改动文件 `dart format` 无变更，`flutter analyze` 无 error / warning（仅沿用的 `prefer_initializing_formals` info）。**完成时间**: 2026-11-18
+
 - [x] 底部导航与侧边栏「资源库」图标改用 `assets/icon/library.svg`（替换 Material `library_music`，选中态仍为 `navActiveColor`）；「学习」图标改用 `assets/icon/book-open.svg`（替换 Material `school`）；「收藏」改用 `assets/icon/bookmark.svg`、「我的」改用 `assets/icon/account-round.svg`（激活态与未激活态同形，仅靠颜色区分，VIP 角标保留）；同步更新 `main_shell_navigation_rail_test` 的图标查找方式。格式、分析与相关测试通过。**完成时间**: 2026-11-18
 
 - [x] 波形流式生成：FFmpeg 解码期间每 300ms 跟随增长中的 PCM 文件增量计算峰值（`WaveformPeaksBuilder`，`computeWaveformPeaksFromPcmFile` 复用同一实现），通过 `onPartial` 把已完成像素的快照推给剪辑页与字幕编辑页，边生成边显示；快照的 `length` 恒为整段像素数，`readyLength` 之后不绘制。只有完整波形写入缓存，解码失败或取消仍走原失败 / 取消路径。日志行由 `decode=…ms total=…ms` 简化为 `total=…ms`（解码与峰值已交织，不再单独计时）。单测 3 项（分段喂入与整文件一致、快照只含完整像素、未完成不能编码）；macOS 集成测试 6 种格式与取消 / 静音检测全部通过，新增 30 分钟音频流式用例（解码期间收到未完成快照，前缀与最终结果逐像素一致）。iOS / Android / Windows 真机待验证：边解码边读取 PCM 文件在 Windows 上的文件共享行为未验证。**完成时间**: 2026-11-18

@@ -13,7 +13,11 @@ import 'storage_migration_service.dart';
 /// SharedPreferences 中记录应用升级迁移链进度的 key。
 const appUpdateMigrationVersionKey = 'app_update_migration_version';
 
-/// 当前已注册的应用升级迁移版本。
+/// 当前已注册的应用升级迁移版本，必须与 [buildAppUpdateMigrations] 末尾的版本一致。
+///
+/// 备份会记录该进度，恢复时若备份进度超过此值会被判定为更新版本的备份而拒绝；
+/// 新增迁移时若忘记同步此常量，同一应用生成的备份也会无法恢复。
+/// 德语 fork 在 12 之后追加 13/14/15（德语 TTS / 引擎迁移），故此处为 15。
 const currentAppUpdateMigrationVersion = 15;
 
 /// 删除已废弃的 TTS 模型下载状态缓存；模型状态现在以安装清单和文件校验为准。
@@ -267,6 +271,11 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
       name: 'migrate_off_piper_engine',
       action: () => migrateOffPiperEngine(prefs),
     ),
+    // 新增迁移时必须：
+    // 1. version 取末尾版本 + 1，不能跳号（运行时校验会拒绝断档）；
+    // 2. 同步更新 currentAppUpdateMigrationVersion 为新的末尾版本，
+    //    否则同一应用导出的备份会被判定为"更新版本"而无法恢复（见 docs/troubleshooting.md 7.63）。
+    // test/services/app_update_migration_test.dart 会校验两者一致。
   ];
 }
 
