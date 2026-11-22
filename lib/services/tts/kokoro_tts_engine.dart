@@ -142,5 +142,5 @@ class KokoroTtsEngine implements TtsEngine {
 
   /// 由语言标签推导口音（`en-GB`→英音，其余→美音），决定缺省音色。
   TtsAccent _accentFromLanguageTag(String? tag) =>
-      tag == 'en-GB' ? TtsAccent.uk : TtsAccent.us;
+      TtsAccent.us;
 }

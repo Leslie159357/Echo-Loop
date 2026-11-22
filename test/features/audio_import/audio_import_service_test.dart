@@ -167,6 +167,60 @@ void main() {
       expect(resolved.fileName, 'audio.m4a');
     });
 
+    test('德语版：URL 视频直链（.mp4）按 fork 视频扩展放行', () async {
+      when(
+        () => dio.head<Object>(
+          any(),
+          options: any(named: 'options'),
+          cancelToken: any(named: 'cancelToken'),
+        ),
+      ).thenAnswer(
+        (_) async => Response<Object>(
+          requestOptions: RequestOptions(path: ''),
+          statusCode: 200,
+          headers: Headers.fromMap({
+            Headers.contentTypeHeader: ['video/mp4'],
+          }),
+        ),
+      );
+
+      final resolved = await service.resolveUrl(
+        'https://example.com/lesson-1.mp4',
+      );
+
+      expect(resolved.extension, 'mp4');
+    });
+
+    test('德语版：非音频且非视频扩展（.exe）仍被拒绝（并集不是放开一切）', () async {
+      when(
+        () => dio.head<Object>(
+          any(),
+          options: any(named: 'options'),
+          cancelToken: any(named: 'cancelToken'),
+        ),
+      ).thenAnswer(
+        (_) async => Response<Object>(
+          requestOptions: RequestOptions(path: ''),
+          statusCode: 200,
+          headers: Headers.fromMap({
+            Headers.contentTypeHeader: ['application/octet-stream'],
+          }),
+        ),
+      );
+
+      // resolveUrl 返回 Future，必须用 expectLater 等待，否则异常逃逸出用例。
+      await expectLater(
+        service.resolveUrl('https://example.com/setup.exe'),
+        throwsA(
+          isA<AudioImportException>().having(
+            (e) => e.code,
+            'code',
+            AudioImportFailureCode.unsupportedFormat,
+          ),
+        ),
+      );
+    });
+
     test('非 http/https URL 被拒绝', () async {
       expect(
         () => service.resolveUrl('ftp://example.com/a.mp3'),

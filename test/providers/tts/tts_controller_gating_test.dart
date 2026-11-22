@@ -7,9 +7,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('effectiveTtsEngine 生效规则', () {
-    test('始终使用所选引擎，本地模型未就绪也不回退平台', () {
+    test('德语版统一走平台引擎，所选引擎不影响结果', () {
       for (final kind in TtsEngineKind.values) {
-        expect(effectiveTtsEngine(kind), kind, reason: '所选 $kind');
+        expect(
+          effectiveTtsEngine(kind),
+          TtsEngineKind.platform,
+          reason: '所选 $kind 应统一落到平台引擎（自建 Fish 网关）',
+        );
       }
     });
   });

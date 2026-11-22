@@ -680,7 +680,7 @@ class _OnboardingSurveyScreenState
   ) {
     final selected = answers.examType;
     // 中文用户保留全部考试；其它语言用户只展示国际通用考试 + Other，
-    // 因为中高考 / 四六级 / 专四专八 都是中国国内考试。
+    // 德语版：选项是德语考试体系（歌德 / TestDaF / telc / DSD / DTZ）。
     final isChinese = Localizations.localeOf(context).languageCode == 'zh';
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,

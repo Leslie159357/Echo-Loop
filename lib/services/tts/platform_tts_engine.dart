@@ -17,6 +17,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -155,6 +156,34 @@ class PlatformTtsEngine implements TtsEngine {
     required String baseName,
     TtsSpeechConfig? config,
   }) async {
+    // 优先尝试自建网关的 Fish Audio 德语神经语音（/v1/audio/speech，
+    // 与其它 AI 接口同域，走 echoloop.1122275.xyz；旧的 tts 子域已下线）
+    try {
+      final mp3Path = '$outputDir/$baseName.mp3';
+      final mp3File = File(mp3Path);
+      if (await mp3File.exists() && await mp3File.length() > 0) {
+        return TtsSynthesisResult(filePath: mp3Path, format: 'mp3');
+      }
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+      final targetVoice = config?.voiceName ?? 'de1';
+      final resp = await dio.post<List<int>>(
+        'https://echoloop.1122275.xyz/v1/audio/speech',
+        data: {'input': text, 'voice': targetVoice},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (resp.statusCode == 200 && resp.data != null && resp.data!.isNotEmpty) {
+        await mp3File.writeAsBytes(resp.data!);
+        return TtsSynthesisResult(filePath: mp3Path, format: 'mp3');
+      }
+    } catch (e) {
+      AppLogger.log('PlatformTtsEngine', 'Fish Audio 网关合成回退: $e');
+    }
+
     await initialize();
     // 显式配置优先：按本次 config 设定口音，使产物与缓存键一致——支持「试听非当前
     // 口音」「并发预热不同口音」（见 TtsCoordinator）。为 null 时沿用上次配置。
@@ -193,7 +222,7 @@ class PlatformTtsEngine implements TtsEngine {
     String fullPath,
     TtsSpeechConfig? cfg,
   ) async {
-    final c = cfg ?? const TtsSpeechConfig(languageTag: 'en-US');
+    final c = cfg ?? const TtsSpeechConfig(languageTag: 'de-DE');
     try {
       final ok = await _nativeMacosSynth(
         text: text,

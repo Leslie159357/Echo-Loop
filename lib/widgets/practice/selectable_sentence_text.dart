@@ -362,11 +362,13 @@ class _SelectableSentenceTextState
     final colorAt = _segmentColorLookup();
     final text = _fullText;
     final spans = <InlineSpan>[];
+    final grammarColors = _buildGrammarColors(text);
     var wordIndex = 0;
-    for (final t in _tokens) {
+    for (var tokenIndex = 0; tokenIndex < _tokens.length; tokenIndex++) {
+      final t = _tokens[tokenIndex];
       // token 颜色按其起点判定（与旧版整 token 染色一致），
       // 收藏掩码只切分下划线子段，不改变染色粒度
-      final color = colorAt(t.start);
+      final color = colorAt(t.start) ?? grammarColors[tokenIndex];
       final isActiveWord = t.isWord && wordIndex == widget.activeWordIndex;
       if (t.isWord) wordIndex++;
       for (final (subStart, subEnd, saved) in splitByMask(
@@ -392,6 +394,80 @@ class _SelectableSentenceTextState
       }
     }
     return spans;
+  }
+
+  /// 定冠词 → 性别色：der/den/dem/des 阳性蓝、die 阴性红、das 中性绿。
+  /// 复数三性同形（die），这里统一按阴性红显示，靠上下文自行判断。
+  static const Map<String, Color> _definiteArticles = {
+    'der': _genderMasculine,
+    'den': _genderMasculine,
+    'dem': _genderMasculine,
+    'des': _genderMasculine,
+    'die': _genderFeminine,
+    'das': _genderNeuter,
+  };
+
+  /// 不定冠词/否定冠词/物主冠词：性别有歧义（ein 可阳可中），统一灰色。
+  static const Set<String> _indefiniteArticles = {
+    'ein', 'eine', 'einen', 'einem', 'einer', 'eines',
+    'kein', 'keine', 'keinen', 'keinem', 'keiner', 'keines',
+    'mein', 'meine', 'meinen', 'meinem', 'meiner', 'meines',
+    'dein', 'deine', 'deinen', 'deinem', 'deiner', 'deines',
+    'sein', 'seine', 'seinen', 'seinem', 'seiner', 'seines',
+    'ihr', 'ihre', 'ihren', 'ihrem', 'ihrer', 'ihres',
+    'unser', 'unsere', 'unseren', 'unserem', 'unserer', 'unseres',
+    'euer', 'eure', 'euren', 'eurem', 'eurer', 'eures',
+  };
+
+  static const Color _genderMasculine = Color(0xFF2F6FEB);
+  static const Color _genderFeminine = Color(0xFFD14343);
+  static const Color _genderNeuter = Color(0xFF2E9B51);
+  static const Color _indefiniteColor = Color(0xFF8A8F98);
+  static const Color _nounFallback = Color(0xFF7B4FD1);
+
+  /// 逐 token 计算语法颜色。
+  ///
+  /// 规则：
+  /// - 定冠词按性别上色，并把该颜色传给紧随其后的名词（跳过形容词等小写词）；
+  /// - 不定/否定/物主冠词灰色（性别有歧义），不传色；
+  /// - 其余大写名词用最近一个定冠词的颜色，没有则用紫色；
+  /// - 句首词不上色（分不清是名词还是句首大写）；
+  /// - 逗号、句号、分号等断句标点清空待继承颜色。
+  List<Color?> _buildGrammarColors(String text) {
+    final colors = List<Color?>.filled(_tokens.length, null);
+    Color? pendingNounColor;
+    var wordIndex = 0;
+    for (var i = 0; i < _tokens.length; i++) {
+      final token = _tokens[i];
+      final raw = text.substring(token.start, token.end);
+      if (!token.isWord) {
+        if (RegExp(r'^[,.;:!?。，；]$').hasMatch(raw)) pendingNounColor = null;
+        continue;
+      }
+      final lower = raw.toLowerCase();
+      final isSentenceStart = wordIndex == 0;
+      wordIndex++;
+
+      final definite = _definiteArticles[lower];
+      if (definite != null) {
+        colors[i] = definite.withValues(alpha: 0.9);
+        pendingNounColor = definite;
+        continue;
+      }
+      if (_indefiniteArticles.contains(lower)) {
+        colors[i] = _indefiniteColor.withValues(alpha: 0.9);
+        pendingNounColor = null;
+        continue;
+      }
+      final first = raw.codeUnitAt(0);
+      final isUpper =
+          (first >= 0x41 && first <= 0x5A) || (first >= 0xC0 && first <= 0xDE);
+      if (isUpper && !isSentenceStart) {
+        colors[i] = (pendingNounColor ?? _nounFallback).withValues(alpha: 0.9);
+        pendingNounColor = null;
+      }
+    }
+    return colors;
   }
 
   /// 评分片段颜色查询：字符偏移 → 文字色（无片段时恒 null）

@@ -219,17 +219,18 @@ class _CreateCollectionTypeSheet extends StatelessWidget {
   }
 
   /// 「新建合集」：关闭本 sheet，在其所在 Navigator 上弹出名称 + 封面对话框。
+  /// 「订阅 Podcast」：关闭本 sheet 并进入统一的 Podcast 搜索与订阅页。
+  void _openPodcastSubscribe(BuildContext context) {
+    Navigator.pop(context);
+    context.push(AppRoutes.podcastSubscribe);
+  }
+
   void _openLocalCollectionDialog(BuildContext context) {
     final navigator = Navigator.of(context);
     navigator.pop();
     showLocalCollectionDialog(navigator.context);
   }
 
-  /// 「订阅 Podcast」：关闭本 sheet 并进入统一的 Podcast 搜索与订阅页。
-  void _openPodcastSubscribe(BuildContext context) {
-    Navigator.pop(context);
-    context.push(AppRoutes.podcastSubscribe);
-  }
 }
 
 class _CollectionSheetHeader extends StatelessWidget {
@@ -294,6 +295,7 @@ class _CollectionTypePanel extends StatelessWidget {
           onTap: onLocal,
         ),
         const SizedBox(height: 12),
+        // 德语播客订阅：走自建网关的精选列表（按 A0/A1/A2/B1 分组）
         _CollectionOptionTile(
           key: const ValueKey('collection-option-podcast'),
           icon: Icons.podcasts_rounded,

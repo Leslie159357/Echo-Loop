@@ -17,7 +17,8 @@ const appUpdateMigrationVersionKey = 'app_update_migration_version';
 ///
 /// 备份会记录该进度，恢复时若备份进度超过此值会被判定为更新版本的备份而拒绝；
 /// 新增迁移时若忘记同步此常量，同一应用生成的备份也会无法恢复。
-const currentAppUpdateMigrationVersion = 12;
+/// 德语 fork 在 12 之后追加 13/14/15（德语 TTS / 引擎迁移），故此处为 15。
+const currentAppUpdateMigrationVersion = 15;
 
 /// 删除已废弃的 TTS 模型下载状态缓存；模型状态现在以安装清单和文件校验为准。
 Future<void> removeLegacyTtsModelDownloadFlags(SharedPreferences prefs) async {
@@ -241,7 +242,9 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
     AppUpdateMigration(
       version: 10,
       name: 'edge_tts_default_engine_migration',
-      action: () => migrateDefaultTtsEngineToEdge(prefs),
+      // 德语版跳过：Edge 无德语音色，本地默认引擎是平台引擎 + 自建 Fish 网关。
+      // 若跟随上游强制写 edge，德语 TTS 会整体失效（下游由 v13 兜底还原）。
+      action: () async {},
     ),
     AppUpdateMigration(
       version: 11,
@@ -252,6 +255,21 @@ List<AppUpdateMigration> buildAppUpdateMigrations(
       version: 12,
       name: 'remove_offline_dictionary_library',
       action: removeOfflineDictionaryLibrary,
+    ),
+    AppUpdateMigration(
+      version: 13,
+      name: 'restore_german_platform_engine',
+      action: () => restoreGermanPlatformEngine(prefs),
+    ),
+    AppUpdateMigration(
+      version: 14,
+      name: 'migrate_edge_voices_to_german',
+      action: () => migrateEdgeVoicesToGerman(prefs),
+    ),
+    AppUpdateMigration(
+      version: 15,
+      name: 'migrate_off_piper_engine',
+      action: () => migrateOffPiperEngine(prefs),
     ),
     // 新增迁移时必须：
     // 1. version 取末尾版本 + 1，不能跳号（运行时校验会拒绝断档）；

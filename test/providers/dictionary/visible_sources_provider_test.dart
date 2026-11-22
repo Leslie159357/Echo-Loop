@@ -92,7 +92,7 @@ void main() {
           .any((source) => source.id == 'eudic'),
       isFalse,
     );
-    expect(c.read(dictionarySettingsProvider).defaultSourceId, 'local');
+    expect(c.read(dictionarySettingsProvider).defaultSourceId, 'dehelper');
   });
 
   test('禁用 cambridge → 可见列表排除它', () async {

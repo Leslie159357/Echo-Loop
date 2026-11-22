@@ -1,0 +1,25 @@
+# 德语特化版的测试排除清单（fork 自有，非上游文件）
+#
+# 这些上游用例断言的是原版英语产品的行为，德语版在产品层是刻意不同，
+# 因此永不适用于本 fork。格式：相对路径 + `#` 原因；空行与注释忽略。
+# 新增排除项时必须写清原因，禁止"失败了就加进来"。
+
+test/features/auth/auth_providers_test.dart                  # 免登录：supabaseSessionProvider 固定返回自建 self-hosted session，不再有匿名 null 分支
+test/features/auth/sign_in_required_dialog_test.dart         # 免登录：登录引导弹窗不再触发
+test/widgets/sentence_explanation_view_auth_test.dart        # 免登录：AI 功能不再要求登录
+test/features/subscription/feature_access_provider_test.dart # 德语版 featureAccess() 恒为 true（免登录全开）
+test/features/subscription/paywall_screen_test.dart          # 免登录：付费墙未登录分支不可达
+test/features/chatbot/feature_access_ai_chat_test.dart       # 免登录全开：AI 聊天无配额与登录门禁
+test/features/chatbot/providers/chat_session_controller_test.dart # 免登录全开：quotaExceeded 分支不可达
+test/features/chatbot/widgets/chat_view_test.dart            # 免登录全开：升级引导不再出现
+test/widgets/manage_subtitles_sheet_test.dart                # 免登录全开：AI 字幕的登录/额度提示不可达
+test/providers/retell_review_evaluation_provider_test.dart   # 免登录全开：未登录直接失败分支不可达
+test/features/podcast/podcast_discovery_screen_test.dart     # 免登录全开：精选播客不再弹登录提示
+test/screens/bookmark_review_screen_test.dart                # 固定已登录会触发句子解析预热定时器；上游用例按未登录编写
+test/screens/tts_settings_screen_test.dart                    # 德语版默认平台 Fish 引擎、Edge 音色整表换 de-DE、Piper 入口隐藏
+test/screens/settings_screen_test.dart                       # 德语版隐藏离线 ASR 区块与 Piper，设置页排版/文案与上游不同
+test/screens/tts_voice_preview_row_test.dart                 # 德语版音色表与上游英语音色不同
+test/providers/tts/tts_controller_edge_prompt_test.dart      # 德语版 Edge 引擎不再触发英语音色缺失提示
+test/providers/tts/tts_controller_preview_test.dart          # 德语版语言标签固定 de-DE、平台引擎走自建 Fish
+test/services/tts/kokoro_tts_engine_test.dart                # 德语版 Kokoro 音色表裁剪为德语可用的 3 个
+test/services/tts/piper_tts_engine_test.dart                 # 德语版 Piper 默认音色/入口与上游不同

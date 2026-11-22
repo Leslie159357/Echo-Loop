@@ -72,7 +72,7 @@ void main() {
   });
 
   String cachePathFor(String word) =>
-      p.join(tempDir.path, 'word_audio', 'en-US', wordAudioFileName(word)!);
+      p.join(tempDir.path, 'word_audio', 'de-DE', wordAudioFileName(word)!);
 
   test('缓存未命中时从 CDN 下载并落盘，之后直接命中缓存', () async {
     final first = await repository.resolve(_hello);
@@ -84,7 +84,7 @@ void main() {
     expect(downloader.requestedUris, hasLength(1));
     expect(
       downloader.requestedUris.single.toString(),
-      '$_cdn/words/en-US/${wordAudioFileName(_hello)}',
+      '$_cdn/words/de-DE/${wordAudioFileName(_hello)}',
     );
   });
 

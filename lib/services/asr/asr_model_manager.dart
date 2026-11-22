@@ -102,20 +102,22 @@ const defaultLegacyModelFileRegistry = <String, AsrModelManifest>{
   ),
 };
 
+/// 离线识别模型清单（归档均为 sherpa-onnx **多语种** int8 权重，
+/// 引擎以 language:'de' 调用；id 里的 `-en-` 是历史命名，不代表只认英文）。
 final List<AsrModelInfo> availableModels = [
   const AsrModelInfo(
     id: 'whisper-tiny-en-int8',
-    displayName: 'Echo Loop AI (Fast)',
+    displayName: 'Echo Loop AI（快速）',
     type: AsrModelType.whisper,
   ),
   const AsrModelInfo(
     id: 'whisper-base-en-int8',
-    displayName: 'Echo Loop AI (Balanced)',
+    displayName: 'Echo Loop AI（均衡）',
     type: AsrModelType.whisper,
   ),
   const AsrModelInfo(
     id: 'whisper-small-en-int8',
-    displayName: 'Echo Loop AI (Accurate)',
+    displayName: 'Echo Loop AI（精确）',
     type: AsrModelType.whisper,
   ),
 ];

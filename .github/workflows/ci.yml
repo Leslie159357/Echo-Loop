@@ -65,8 +65,8 @@ jobs:
         run: |
           # 多个测试文件共享平台插件、全局 provider 和测试数据库；串行执行避免
           # 文件级并发导致的跨测试污染。单个文件内的 testWidgets 仍按测试框架顺序执行。
-          flutter test \
-            --concurrency=1 \
+          # 德语版 fork 的用例集合：排除清单见 tool/fork_test_exclusions.txt
+          bash tool/run_fork_tests.sh \
             --file-reporter=json:test-results.json || true
           python3 - <<'PY'
           import json, sys
@@ -135,17 +135,21 @@ jobs:
           retention-days: 14
 
   build:
+    # macOS runner 在免费额度/可用性不足时会排队约 15 分钟后被取消（runner_name 为空），
+    # 把整条 CI 拖成 failure，掩盖 analyze/test 的真实结果。收包已由 ios.yml 负责，
+    # 这里只在手动触发时保留一次「能编译」的确认。
+    if: github.event_name == 'workflow_dispatch'
     needs: [analyze, test]
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # 只做 iOS：Android 打包用的 upload-keystore 已损坏（Tag number over 30），
+      # 且本 fork 只交付 iOS 未签名包，Android job 纯属噪音。
       matrix:
-        platform: [ios, android]
+        platform: [ios]
         include:
           - platform: ios
             runner: macos-latest
-          - platform: android
-            runner: ubuntu-latest
 
     runs-on: ${{ matrix.runner }}
 

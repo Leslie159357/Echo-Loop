@@ -176,8 +176,12 @@ void main() {
     return result;
   }
 
-  String cachedPathFor(String word) =>
-      p.join(tempDir.path, 'word_audio', 'en-US', wordAudioFileName(word)!);
+  String cachedPathFor(String word) => p.join(
+    tempDir.path,
+    'word_audio',
+    'de-DE',
+    wordAudioFileName(word)!,
+  );
 
   group('speakWithResult', () {
     test('CDN 有音频时下载缓存并播放，不调用 TTS', () async {

@@ -12,50 +12,56 @@ void main() {
     expect(ids.toSet().length, ids.length, reason: 'id 必须唯一');
   });
 
-  test('Britannica 排在主要词典之后', () {
-    final ids = kWebDictConfigs.map((config) => config.id).toList();
-    expect(ids.indexOf('britannica'), greaterThan(ids.indexOf('collins')));
-  });
-
-  test('已确认的 16 个网页源都在、Macmillan 不在', () {
-    final ids = kWebDictConfigs.map((c) => c.id).toSet();
-    expect(ids, {
+  test('德语版只保留 6 个德语网页源，英文专用站与有道全部移除', () {
+    final ids = kWebDictConfigs.map((c) => c.id).toList();
+    expect(ids, [
+      'dehelper',
+      'duden',
+      'dwds',
+      'eudic',
+      'wiktionary',
+      'zhwiktionary',
+    ]);
+    // 顺序即底栏展示顺序：德语权威源在前
+    expect(ids.take(3), ['dehelper', 'duden', 'dwds']);
+    for (final removed in [
       'cambridge',
       'oxford',
       'longman',
-      'britannica',
       'merriamWebster',
       'collins',
+      'britannica',
       'vocabulary',
-      'wiktionary',
       'ozdic',
       'playPhrase',
-      'youglish',
       'forvo',
       'wordReference',
-      'etymonline',
       'youdao',
-      'eudic',
-    });
-    expect(ids.contains('macmillan'), isFalse);
+      'etymonline',
+      'macmillan',
+    ]) {
+      expect(ids.contains(removed), isFalse, reason: '$removed 应已移除');
+    }
   });
 
-  test('Britannica Dictionary 使用词条页 URL 模板', () async {
-    final source = WebDictionarySource(
-      kWebDictConfigs.singleWhere((config) => config.id == 'britannica'),
-    );
-    final result = await source.lookup(
-      const DictionaryLookupRequest(word: 'ice cream'),
-    );
-
-    expect(result, isA<WebDictResult>());
-    expect(
-      (result! as WebDictResult).url.toString(),
-      'https://www.britannica.com/dictionary/ice%20cream',
-    );
+  test('德语源使用德语词条 URL 模板', () async {
+    for (final entry in {
+      'duden': 'https://www.duden.de/suchen/dudenonline/Haus',
+      'dwds': 'https://www.dwds.de/wb/Haus',
+      'wiktionary': 'https://de.m.wiktionary.org/wiki/Haus',
+      'zhwiktionary': 'https://zh.m.wiktionary.org/wiki/Haus',
+    }.entries) {
+      final source = WebDictionarySource(
+        kWebDictConfigs.singleWhere((config) => config.id == entry.key),
+      );
+      final result =
+          await source.lookup(const DictionaryLookupRequest(word: 'Haus'))
+              as WebDictResult;
+      expect(result.url.toString(), entry.value, reason: entry.key);
+    }
   });
 
-  test('欧路词典使用英汉词条 URL 并编码词组空格', () async {
+  test('欧路德语使用德汉词条 URL 并编码词组空格', () async {
     final source = WebDictionarySource(
       kWebDictConfigs.singleWhere((config) => config.id == 'eudic'),
     );
@@ -65,7 +71,7 @@ void main() {
 
     if (result case WebDictResult(:final sourceId, :final url)) {
       expect(sourceId, 'eudic');
-      expect(url.toString(), 'https://dict.eudic.net/mdicts/en/ice%20cream');
+      expect(url.toString(), 'https://dict.eudic.net/mdicts/de/ice%20cream');
     } else {
       fail('Expected an Eudic web dictionary result.');
     }

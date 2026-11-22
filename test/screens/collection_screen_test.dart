@@ -327,6 +327,7 @@ void main() {
           find.byKey(const ValueKey('collection-option-local')),
           findsOneWidget,
         );
+        // 订阅 Podcast 入口保留：德语版走自建网关的精选列表（按级别分组）
         expect(
           find.byKey(const ValueKey('collection-option-podcast')),
           findsOneWidget,
@@ -334,7 +335,6 @@ void main() {
         expect(find.text('New Collection'), findsOneWidget);
         expect(find.text('Add audio or video'), findsOneWidget);
         expect(find.text('Subscribe Podcast'), findsOneWidget);
-        expect(find.text('Add with Apple Podcasts or RSS'), findsOneWidget);
 
         await tester.tap(find.byKey(const ValueKey('collection-option-local')));
         await tester.pumpAndSettle();
@@ -379,12 +379,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // sheet 关闭并跳转到统一的 Podcast 搜索与订阅页（stub）。
         expect(find.text('Podcast Subscribe'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('collection-option-podcast')),
-          findsNothing,
-        );
       });
 
       testWidgets('点击排序按钮显示排序选项', (tester) async {

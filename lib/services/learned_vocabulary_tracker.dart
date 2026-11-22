@@ -103,15 +103,20 @@ class LearnedVocabularyTracker {
     return future;
   }
 
-  /// 从句子中提取唯一英文词形。
+  /// 从句子中提取唯一词形（德语版：含 ä/ö/ü/ß 等变音字母）。
   ///
   /// 规则：
   /// - 统一转小写
   /// - 保留内部撇号和连字符
   /// - 忽略数字和纯符号
+  /// - 用 Unicode 字母类而非 `[A-Za-z]`：后者会把 über/schön/Äpfel 切成
+  ///   ber/sch+n/pfel，导致已学词汇库与进度统计存的是残词。
   static Set<String> extractWordForms(String text) => _extractWordForms(text);
 
-  static final RegExp _wordPattern = RegExp(r"[A-Za-z]+(?:['’-][A-Za-z]+)*");
+  static final RegExp _wordPattern = RegExp(
+    r"[\p{L}]+(?:['’-][\p{L}]+)*",
+    unicode: true,
+  );
 
   static Set<String> _extractWordForms(String text) {
     if (text.isEmpty) return <String>{};

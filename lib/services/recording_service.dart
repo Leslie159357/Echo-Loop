@@ -41,8 +41,8 @@ class RecordingResult {
   });
 }
 
-/// 等待 final transcript 的超时时长。
-const _finalTranscriptTimeout = Duration(seconds: 5);
+/// 等待 final transcript 的超时时长（兼顾独服云端大模型与本地复杂句，放宽到 25 秒）。
+const _finalTranscriptTimeout = Duration(seconds: 25);
 
 /// 通用录音服务。
 ///

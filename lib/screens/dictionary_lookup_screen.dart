@@ -1,8 +1,7 @@
 /// 手动查词页（全屏）。
 ///
-/// 顶部搜索框自动聚焦；输入时用本地词表做前缀建议，空输入显示最近查询。
-/// 查询一律走词典 API：词表只负责建议，不限制用户只能查词表内的词。
-/// 词表在页面存活期间加载，退出即释放（见 [wordlistProvider]）。
+/// 顶部搜索框自动聚焦；空输入显示最近查询。
+/// 查询一律走词典 API。德语版不使用英文拼写词表做前缀建议（见 _buildSuggestions）。
 library;
 
 import 'dart:async';
@@ -16,10 +15,8 @@ import '../features/chatbot/sentence_passage.dart';
 import '../features/chatbot/widgets/sentence_chat_button.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/dictionary/lookup_history_provider.dart';
-import '../providers/dictionary/wordlist_provider.dart';
 import '../services/app_logger.dart';
 import '../providers/saved_word_provider.dart';
-import '../services/dictionary/wordlist_index.dart';
 import '../theme/app_theme.dart';
 import '../utils/text_normalize.dart';
 import '../widgets/common/search_app_bar.dart';
@@ -151,8 +148,6 @@ class _DictionaryLookupScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    // 进入页面即开始加载词表；页面退出后无监听者，autoDispose 释放引用。
-    ref.watch(wordlistProvider);
     final isShowingDetail = _lookedUpQuery != null && !_focusNode.hasFocus;
     final lookedUpQuery = _lookedUpQuery;
 
@@ -221,44 +216,13 @@ class _DictionaryLookupScreenState
     if (_controller.text.trim().isEmpty) {
       return _buildHistory(theme, l10n);
     }
-    return _buildSuggestions(theme, l10n);
+    return _buildSuggestions();
   }
 
-  Widget _buildSuggestions(ThemeData theme, AppLocalizations l10n) {
-    final wordlist = ref.watch(wordlistProvider);
-    final WordlistIndex? index = wordlist.value;
-    final suggestions = index?.suggest(_controller.text) ?? const <String>[];
-    if (suggestions.isEmpty) {
-      // 无建议不阻止回车查询；仅在词表加载失败时提示用户建议不可用。
-      if (!wordlist.hasError) return const SizedBox.shrink();
-      return Padding(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        child: Text(
-          l10n.lookupWordlistUnavailable,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-    return ListView.builder(
-      key: const Key('dictionary-lookup-suggestions'),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      itemCount: suggestions.length,
-      itemBuilder: (context, index) {
-        final word = suggestions[index];
-        return ListTile(
-          leading: SvgActionIcon(
-            assetName: 'assets/icon/search.svg',
-            size: 20,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          title: Text(word),
-          onTap: () => _openLookup(word, source: '建议点击'),
-        );
-      },
-    );
+  Widget _buildSuggestions() {
+    // 德语版：上游的拼写补全词表是英文 SCOWL，已随资源一并移除；
+    // 不用于德语查词，故不加载、不提示。
+    return const SizedBox.shrink();
   }
 
   Widget _buildHistory(ThemeData theme, AppLocalizations l10n) {

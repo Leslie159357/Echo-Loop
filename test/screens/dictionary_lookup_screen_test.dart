@@ -10,7 +10,6 @@ import 'dart:typed_data';
 import 'package:echo_loop/features/onboarding_survey/providers/onboarding_survey_provider.dart';
 import 'package:echo_loop/providers/dictionary/lookup_controller.dart';
 import 'package:echo_loop/providers/dictionary/lookup_history_provider.dart';
-import 'package:echo_loop/providers/dictionary/wordlist_provider.dart';
 import 'package:echo_loop/models/dictionary/dictionary_entry.dart';
 import 'package:echo_loop/models/dictionary/dictionary_lookup_result.dart';
 import 'package:echo_loop/providers/pronunciation/pronunciation_providers.dart';
@@ -18,7 +17,6 @@ import 'package:echo_loop/providers/tts/tts_controller_provider.dart';
 import 'package:echo_loop/providers/saved_sense_group_provider.dart';
 import 'package:echo_loop/providers/saved_word_provider.dart';
 import 'package:echo_loop/screens/dictionary_lookup_screen.dart';
-import 'package:echo_loop/services/dictionary/wordlist_index.dart';
 import 'package:echo_loop/widgets/dictionary/lookup_detail_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,7 +170,6 @@ LookupHistory _history(String word, int id) =>
 late SharedPreferences _sharedPreferences;
 
 Widget _buildScreen({
-  Future<WordlistIndex> Function(Ref ref)? wordlist,
   List<LookupHistory> history = const [],
   DictionaryLookupController Function()? lookupController,
   bool useRealLookup = false,
@@ -184,16 +181,6 @@ Widget _buildScreen({
     const DictionaryLookupScreen(),
     overrides: [
       sharedPreferencesProvider.overrideWithValue(_sharedPreferences),
-      wordlistProvider.overrideWith(
-        wordlist ??
-            (ref) async => WordlistIndex(const [
-              'app',
-              'apple',
-              'application',
-              'apply',
-              'banana',
-            ]),
-      ),
       lookupHistoryProvider.overrideWith((ref) => Stream.value(history)),
       if (!useRealLookup)
         dictionaryLookupControllerProvider.overrideWith(
@@ -254,18 +241,23 @@ void main() {
       expect(find.byType(LookupDetailView), findsOneWidget);
     });
 
-    testWidgets('输入前缀时显示词表建议，最多 8 条且大小写不敏感', (tester) async {
+    testWidgets('德语版不显示英文拼写词表建议', (tester) async {
+      // 德语版不使用英文 SCOWL 词表做补全，输入前缀不出现英文建议。
       await tester.pumpWidget(_buildScreen());
       await _settle(tester);
 
       await _typeQuery(tester, 'APP');
       await _settle(tester);
 
-      expect(find.text('app'), findsOneWidget);
-      expect(find.text('apple'), findsOneWidget);
-      expect(find.text('application'), findsOneWidget);
-      expect(find.text('apply'), findsOneWidget);
-      expect(find.text('banana'), findsNothing);
+      // 正向：输入已生效，否则下面的 findsNothing 是空真
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'APP',
+      );
+      expect(find.text('app'), findsNothing);
+      expect(find.text('apple'), findsNothing);
+      expect(find.text('application'), findsNothing);
+      expect(find.text('apply'), findsNothing);
     });
 
     testWidgets('无建议时仍可直接回车查询输入内容', (tester) async {
@@ -281,26 +273,6 @@ void main() {
         find.byType(LookupDetailView),
       );
       expect(detail.query, 'Zyzzyva');
-    });
-
-    testWidgets('词表加载失败时提示建议不可用，但仍可回车查询', (tester) async {
-      await tester.pumpWidget(
-        _buildScreen(wordlist: (ref) => Future.error('词表缺失')),
-      );
-      await _settle(tester);
-
-      await _typeQuery(tester, 'app');
-      await _settle(tester);
-      expect(
-        find.text(
-          'Word list unavailable. You can still look up words directly.',
-        ),
-        findsOneWidget,
-      );
-
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      await _settle(tester);
-      expect(find.byType(LookupDetailView), findsOneWidget);
     });
 
     testWidgets('未收录的词提交后同样写入查词历史', (tester) async {
@@ -355,7 +327,7 @@ void main() {
       );
     });
 
-    testWidgets('点击屈折形建议 hellos 时显示 hellos 自己的词条', (tester) async {
+    testWidgets('查询屈折形 hellos 时显示 hellos 自己的词条', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
@@ -372,14 +344,14 @@ void main() {
         _buildScreen(
           useRealLookup: true,
           dictionaryService: service,
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
         ),
       );
       await _settle(tester);
 
-      await _typeQuery(tester, 'hello');
+      // 德语版不显示英文词表建议，改为直接键入并提交屈折形。
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -387,7 +359,7 @@ void main() {
       expect(find.text('喂, 嘿'), findsNothing);
     });
 
-    testWidgets('重复点击屈折形建议 hellos 仍显示 hellos 自己的词条', (tester) async {
+    testWidgets('重复查询屈折形 hellos 仍显示 hellos 自己的词条', (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final dio = Dio(BaseOptions(baseUrl: 'https://example.test'))
@@ -404,23 +376,22 @@ void main() {
         _buildScreen(
           useRealLookup: true,
           dictionaryService: service,
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
         ),
       );
       await _settle(tester);
 
-      await _typeQuery(tester, 'hello');
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
       expect(find.textContaining('hello的复数形式'), findsOneWidget);
 
-      // 回到输入框，重新输入 hello，再次点击 hellos。
+      // 回到输入框，重新输入同一个屈折形并再次提交。
       await tester.tap(find.byType(TextField));
       await _settle(tester);
-      await _typeQuery(tester, 'hello');
+      await _typeQuery(tester, 'hellos');
       await _settle(tester);
-      await tester.tap(find.text('hellos'));
+      await tester.testTextInput.receiveAction(TextInputAction.search);
       await _settle(tester);
 
       expect(find.textContaining('hello的复数形式'), findsOneWidget);
@@ -429,9 +400,7 @@ void main() {
 
     testWidgets('输入框失焦时不会误展示上一次的旧详情', (tester) async {
       await tester.pumpWidget(
-        _buildScreen(
-          wordlist: (ref) async => WordlistIndex(const ['hello', 'hellos']),
-        ),
+        _buildScreen(),
       );
       await _settle(tester);
 
@@ -447,7 +416,11 @@ void main() {
       await _settle(tester);
 
       expect(find.byType(LookupDetailView), findsNothing);
-      expect(find.text('hellos'), findsOneWidget);
+      // 德语版不显示英文词表建议，此处只校验输入文本未被清空、无旧详情残留。
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'hello',
+      );
     });
 
     testWidgets('词组详情同样显示收藏按钮', (tester) async {

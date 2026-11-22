@@ -30,8 +30,8 @@ import '../services/recording_service.dart';
 import '../services/speech_completion_detector.dart';
 import '../services/speech_practice_matcher.dart';
 import '../services/speech_practice_platform.dart';
-import 'offline_asr_settings_provider.dart';
 import 'learning_settings_provider.dart';
+import 'offline_asr_settings_provider.dart';
 import '../services/text_embedding_platform.dart';
 import '../widgets/common/speech_rating_badge.dart';
 
@@ -299,10 +299,16 @@ class RetellRecordingController extends Notifier<RetellRecordingState> {
       final retellRatingEnabled = ref
           .read(learningSettingsProvider)
           .retellRatingEnabled;
+      // 以实际后端为准：离线模型未就绪时 provider 会回落成平台引擎，
+      // 若仍按设置里的 offline 关掉识别，录完永远等不到 final transcript
+      // （10s + 录音时长后报 Final transcript timed out）。
+      // 同时保留设置判断：测试用 fake backend 时也能按 platform 设置启用。
       await _recordingService.startRecording(
         promptId: promptId,
         recognitionEnabled:
-            retellRatingEnabled && asrSettings.backend == AsrBackend.platform,
+            retellRatingEnabled &&
+            (backend is SpeechPracticePlatform ||
+                asrSettings.backend == AsrBackend.platform),
       );
       // 页面可能在 warmup 或原生启动期间切段；旧回合不得接管事件流。
       if (generation != _roundGeneration) {
